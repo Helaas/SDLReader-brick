@@ -4,6 +4,7 @@
 #include <stdexcept> 
 #include <algorithm> 
 
+
 void SDL_Window_Deleter::operator()(SDL_Window* window) const {
     if (window) SDL_DestroyWindow(window);
 }
@@ -13,12 +14,10 @@ void SDL_Renderer_Deleter::operator()(SDL_Renderer* renderer) const {
 }
 
 
-
 // --- Renderer Class ---
 
-
 Renderer::Renderer(int width, int height, const std::string& title) {
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) < 0) {
         throw std::runtime_error("SDL could not initialize! SDL_Error: " + std::string(SDL_GetError()));
     }
 
@@ -43,7 +42,6 @@ Renderer::Renderer(int width, int height, const std::string& title) {
         throw std::runtime_error("Renderer could not be created! SDL_Error: " + std::string(SDL_GetError()));
     }
 
-    // Create a streaming texture. This texture will hold the pixel data of the rendered page.
     // SDL_PIXELFORMAT_ARGB8888: The pixel format we expect (Alpha, Red, Green, Blue, 8 bits each).
     // SDL_TEXTUREACCESS_STREAMING: Allows us to lock and update the texture's pixel data frequently.
     m_texture.reset(SDL_CreateTexture(
@@ -51,7 +49,7 @@ Renderer::Renderer(int width, int height, const std::string& title) {
         SDL_PIXELFORMAT_ARGB8888,
         SDL_TEXTUREACCESS_STREAMING,
         width,  // Initial texture width 
-        height  // Initial texture height 
+        height  // Initial texture height
     ));
     if (!m_texture) {
         throw std::runtime_error("Texture could not be created! SDL_Error: " + std::string(SDL_GetError()));
@@ -59,13 +57,12 @@ Renderer::Renderer(int width, int height, const std::string& title) {
 
     SDL_SetRenderDrawColor(m_renderer.get(), 255, 255, 255, 255);
     SDL_RenderClear(m_renderer.get());
-    SDL_RenderPresent(m_renderer.get());
+    SDL_RenderPresent(m_renderer.get()); // Present the empty white screen
 }
 
-
+// SDL_Quit() is called in main.cpp for proper shutdown order.
 Renderer::~Renderer() {
-    // No SDL_Quit() here
-    // SDL_Quit() is called in main.cpp for proper shutdown order.
+    // No SDL_Quit() here, unless you like segfaults
 }
 
 void Renderer::clear(Uint8 r, Uint8 g, Uint8 b, Uint8 a) {
@@ -106,7 +103,6 @@ void Renderer::renderPage(const std::vector<uint8_t>& pixelData, int srcWidth, i
     void* pixels; // Pointer to the raw pixel data within the locked texture
     int pitch;    // Pitch (bytes per row) of the locked texture
 
-    // Lock the texture for direct pixel access.
     if (SDL_LockTexture(m_texture.get(), NULL, &pixels, &pitch) != 0) {
         std::cerr << "Error: Failed to lock texture: " << SDL_GetError() << std::endl;
         return;
@@ -122,11 +118,9 @@ void Renderer::renderPage(const std::vector<uint8_t>& pixelData, int srcWidth, i
         }
     }
 
-    SDL_UnlockTexture(m_texture.get()); // Unlock the texture after pixel data is updated
+    SDL_UnlockTexture(m_texture.get()); 
 
-    // Define the destination rectangle on the renderer where the texture will be copied.
     SDL_Rect destRect = { destX, destY, destWidth, destHeight };
-    // Copy the entire texture (NULL for source rectangle) to the specified destination rectangle on the renderer.
     SDL_RenderCopy(m_renderer.get(), m_texture.get(), NULL, &destRect);
 }
 
@@ -138,7 +132,7 @@ int Renderer::getWindowWidth() const {
 
 int Renderer::getWindowHeight() const {
     int w, h;
-    SDL_GetWindowSize(m_window.get(), &w, &h);
+    SDL_GetWindowSize(m_window.get(), &h, &w);
     return h;
 }
 

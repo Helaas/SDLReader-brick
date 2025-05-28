@@ -65,7 +65,6 @@ std::vector<uint8_t> PdfDocument::renderPage(int pageNum, int& outWidth, int& ou
         double img_width = bounds.x1 - bounds.x0;
         double img_height = bounds.y1 - bounds.y0;
 
-        // Calculate scaled dimensions
         int dpi = 72; // Standard PDF DPI
         outWidth = static_cast<int>(img_width * scale / dpi);
         outHeight = static_cast<int>(img_height * scale / dpi);
