@@ -58,23 +58,23 @@ or
 ## User Inputs
 The SDL Reader supports the following keyboard and mouse inputs:
 
-| Input                  | Action                                  | Notes                                                              |
-| :--------------------- | :-------------------------------------- | :----------------------------------------------------------------- |
-| **Keyboard** |                                         |                                                                    |
-| `Q` or `Esc`           | Quit application                        | Closes the reader window.                                          |
-| `Right Arrow`          | Scroll right                            | Moves the view 32 pixels to the right.                             |
-| `Left Arrow`           | Scroll left                             | Moves the view 32 pixels to the left.                              |
-| `Up Arrow`             | Scroll up                               | Moves the view 32 pixels up.                                       |
-| `Down Arrow`           | Scroll down                             | Moves the view 32 pixels down.                                     |
-| `Page Down`            | Go to next page                         | Displays the subsequent page; resets scroll position to top-left.  |
-| `Page Up`              | Go to previous page                     | Displays the preceding page; resets scroll position to top-left.   |
-| `=` (Equals)           | Zoom in                                 | Increases zoom by 10%.                                             |
-| `-` (Minus)            | Zoom out                                | Decreases zoom by 10%.                                             |
-| `F`                    | Toggle Fullscreen                       | Switches between windowed and fullscreen desktop modes.            |
-| `G`                    | Jump to Page (Not Implemented)          | Currently a placeholder; does not perform any action.              |
-| **Mouse** |                                         |                                                                    |
-| `Mouse Wheel Up`       | Scroll up                               | Scrolls vertically up by 32 pixels.                                |
-| `Mouse Wheel Down`     | Scroll down                             | Scrolls vertically down by 32 pixels.                              |
-| `Ctrl + Mouse Wheel Up`| Zoom in                                 | Increases zoom by 5% per scroll tick.                              |
-| `Ctrl + Mouse Wheel Down`| Zoom out                              | Decreases zoom by 5% per scroll tick.                              |
-| `Left Click + Drag`    | Pan/Scroll                              | Drags the page view around (useful when zoomed in).                |
+| Input                  | Action                                  |
+| :--------------------- | :-------------------------------------- |
+| **Keyboard** |                                         |
+| `Q` or `Esc`           | Quit application                        |
+| `Right Arrow`          | Scroll right                            |
+| `Left Arrow`           | Scroll left                             |
+| `Up Arrow`             | Scroll up                               |
+| `Down Arrow`           | Scroll down                             |
+| `Page Down`            | Go to next page                         |
+| `Page Up`              | Go to previous page                     |
+| `=` (Equals)           | Zoom in                                 |
+| `-` (Minus)            | Zoom out                                |
+| `F`                    | Toggle Fullscreen                       |
+| `G`                    | Jump to Page (Not Implemented)          |
+| **Mouse** |                                         |
+| `Mouse Wheel Up`       | Scroll up                               |
+| `Mouse Wheel Down`     | Scroll down                             |
+| `Ctrl + Mouse Wheel Up`| Zoom in                                 |
+| `Ctrl + Mouse Wheel Down`| Zoom out                              |
+| `Left Click + Drag`    | Pan/Scroll                              |
