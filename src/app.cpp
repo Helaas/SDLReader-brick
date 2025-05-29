@@ -63,45 +63,63 @@ void App::run() {
 
 // --- Event Handling ---
 
-
 void App::handleEvent(const SDL_Event& event) {
-    bool needsRender = false; 
+    bool needsRender = false;
+    AppAction action = AppAction::None;
+    int deltaValue = 0; // Used for scroll/zoom deltas
 
     switch (event.type) {
-        case SDL_QUIT: 
-            m_running = false;
+        case SDL_QUIT:
+            action = AppAction::Quit;
             break;
-        case SDL_WINDOWEVENT: 
+        case SDL_WINDOWEVENT:
             if (event.window.event == SDL_WINDOWEVENT_RESIZED ||
                 event.window.event == SDL_WINDOWEVENT_EXPOSED) {
-                needsRender = true; 
+                action = AppAction::Resize;
             }
             break;
-        case SDL_KEYDOWN: 
-            handleKeyDown(event.key.keysym.sym, static_cast<SDL_Keymod>(event.key.keysym.mod));
+        case SDL_KEYDOWN:
+        // clang-format off
+            switch (event.key.keysym.sym) {
+                case SDLK_q:            action = AppAction::Quit; break;
+                case SDLK_ESCAPE:       action = AppAction::Quit; break;
+                case SDLK_RIGHT:        action = AppAction::ScrollRight; break;
+                case SDLK_LEFT:         action = AppAction::ScrollLeft; break;
+                case SDLK_UP:           action = AppAction::ScrollUp; break;
+                case SDLK_DOWN:         action = AppAction::ScrollDown; break;
+                case SDLK_PAGEDOWN:     action = AppAction::PageNext; break;
+                case SDLK_PAGEUP:       action = AppAction::PagePrevious; break;
+                case SDLK_EQUALS:       action = AppAction::ZoomIn; break;
+                case SDLK_MINUS:        action = AppAction::ZoomOut; break;
+                case SDLK_f:            action = AppAction::ToggleFullscreen; break;
+                default: break;
+            }
+        // clang-format on
             break;
-        case SDL_MOUSEWHEEL: 
-            handleMouseWheel(event.wheel.y, SDL_GetModState()); 
+        case SDL_MOUSEWHEEL:
+            action = mapMouseWheelToAppAction(event.wheel.y, SDL_GetModState(), deltaValue);
             break;
-        case SDL_MOUSEBUTTONDOWN: 
+        case SDL_MOUSEBUTTONDOWN:
             if (event.button.button == SDL_BUTTON_LEFT) {
                 m_isDragging = true;
                 m_lastTouchX = static_cast<float>(event.button.x);
                 m_lastTouchY = static_cast<float>(event.button.y);
+                action = AppAction::DragStart; // Or simply set m_isDragging
             }
             break;
-        case SDL_MOUSEBUTTONUP: 
+        case SDL_MOUSEBUTTONUP:
             if (event.button.button == SDL_BUTTON_LEFT) {
                 m_isDragging = false;
+                action = AppAction::DragEnd; // Or simply clear m_isDragging
             }
             break;
-        case SDL_MOUSEMOTION: 
+        case SDL_MOUSEMOTION:
             if (m_isDragging) {
                 int x_rel = event.motion.x - static_cast<int>(m_lastTouchX);
                 int y_rel = event.motion.y - static_cast<int>(m_lastTouchY);
-                handleMouseMotion(x_rel, y_rel, event.motion.state);
+                needsRender = changeScroll(-x_rel, -y_rel); // Invert for natural drag direction
                 m_lastTouchX = static_cast<float>(event.motion.x);
-                m_lastTouchY = static_cast<float>(event.motion.y);
+                m_lastTouchY = static_cast<float>(event.button.y);
             }
             break;
 
@@ -159,145 +177,99 @@ void App::handleEvent(const SDL_Event& event) {
             }
             break;
         }
-        case SDL_CONTROLLERBUTTONDOWN: {
-            bool controllerNeedsRender = false;
+        case SDL_CONTROLLERBUTTONDOWN:
+        // clang-format off
             switch (event.cbutton.button) {
-                case SDL_CONTROLLER_BUTTON_DPAD_UP:
-                    controllerNeedsRender = changeScroll(0, -32);
-                    break;
-                case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-                    controllerNeedsRender = changeScroll(0, 32);
-                    break;
-                case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-                    controllerNeedsRender = changeScroll(-32, 0);
-                    break;
-                case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-                    controllerNeedsRender = changeScroll(32, 0);
-                    break;
-                case SDL_CONTROLLER_BUTTON_A: // Next Page
-                    controllerNeedsRender = changePage(1);
-                    break;
-                case SDL_CONTROLLER_BUTTON_B: // Previous Page
-                    controllerNeedsRender = changePage(-1);
-                    break;
-                case SDL_CONTROLLER_BUTTON_X: // Zoom Out
-                    controllerNeedsRender = changeScale(-10);
-                    break;
-                case SDL_CONTROLLER_BUTTON_Y: // Zoom In
-                    controllerNeedsRender = changeScale(10);
-                    break;
-                default:
-                    break;
+                case SDL_CONTROLLER_BUTTON_DPAD_UP:     action = AppAction::ScrollUp; break;
+                case SDL_CONTROLLER_BUTTON_DPAD_DOWN:   action = AppAction::ScrollDown; break;
+                case SDL_CONTROLLER_BUTTON_DPAD_LEFT:   action = AppAction::ScrollLeft; break;
+                case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:  action = AppAction::ScrollRight; break;
+                case SDL_CONTROLLER_BUTTON_A:           action = AppAction::PageNext; break;
+                case SDL_CONTROLLER_BUTTON_B:           action = AppAction::PagePrevious; break;
+                case SDL_CONTROLLER_BUTTON_X:           action = AppAction::ZoomOut; deltaValue = -10; break;
+                case SDL_CONTROLLER_BUTTON_Y:           action = AppAction::ZoomIn; deltaValue = 10; break;
+                default: break;
             }
-            if (controllerNeedsRender) {
-                render();
-            }
+        // clang-format on
             break;
-        }
         case SDL_CONTROLLERAXISMOTION: {
-            bool controllerNeedsRender = false;
             // Axis values range from -32768 to 32767
             const int AXIS_DEAD_ZONE = 8000; // Adjust as needed
-
-            if (event.caxis.axis == SDL_CONTROLLER_AXIS_LEFTY) { // Left Stick Y-axis for vertical scroll
-                if (event.caxis.value < -AXIS_DEAD_ZONE) {
-                    controllerNeedsRender = changeScroll(0, -32); // Scroll up
-                } else if (event.caxis.value > AXIS_DEAD_ZONE) {
-                    controllerNeedsRender = changeScroll(0, 32); // Scroll down
-                }
-            } else if (event.caxis.axis == SDL_CONTROLLER_AXIS_LEFTX) { // Left Stick X-axis for horizontal scroll
-                if (event.caxis.value < -AXIS_DEAD_ZONE) {
-                    controllerNeedsRender = changeScroll(-32, 0); // Scroll left
-                } else if (event.caxis.value > AXIS_DEAD_ZONE) {
-                    controllerNeedsRender = changeScroll(32, 0); // Scroll right
-                }
-            } else if (event.caxis.axis == SDL_CONTROLLER_AXIS_RIGHTY) { // Right Stick Y-axis for zoom
-                 if (event.caxis.value < -AXIS_DEAD_ZONE) {
-                    controllerNeedsRender = changeScale(5); // Zoom in
-                } else if (event.caxis.value > AXIS_DEAD_ZONE) {
-                    controllerNeedsRender = changeScale(-5); // Zoom out
-                }
-            }
-            if (controllerNeedsRender) {
-                render();
+            if (std::abs(event.caxis.value) > AXIS_DEAD_ZONE) {
+                action = mapControllerAxisToAppAction(static_cast<SDL_GameControllerAxis>(event.caxis.axis), event.caxis.value, deltaValue);
             }
             break;
         }
         default:
             break;
     }
+
+    if (action != AppAction::None) {
+        needsRender = processAppAction(action, deltaValue);
+    }
+
     if (needsRender) {
-        render(); 
+        render();
     }
 }
 
-// Handles keyboard key down events.
-void App::handleKeyDown(SDL_Keycode key, SDL_Keymod mod) {
-    (void)mod; // Suppress unused parameter warning for 'mod'
-    bool needsRender = false; 
-    switch (key) {
-        case SDLK_q: // 'Q' key to quit
-        case SDLK_ESCAPE: // Escape key to quit
-            m_running = false;
-            break;
-        case SDLK_RIGHT: // Right arrow to scroll right
-            needsRender = changeScroll(32, 0);
-            break;
-        case SDLK_LEFT: // Left arrow to scroll left
-            needsRender = changeScroll(-32, 0);
-            break;
-        case SDLK_UP: // Up arrow to scroll up
-            needsRender = changeScroll(0, -32);
-            break;
-        case SDLK_DOWN: // Down arrow to scroll down
-            needsRender = changeScroll(0, 32);
-            break;
-        case SDLK_PAGEDOWN: // Page Down key for next page
-            needsRender = changePage(1);
-            break;
-        case SDLK_PAGEUP: // Page Up key for previous page
-            needsRender = changePage(-1);
-            break;
-        case SDLK_EQUALS: // '=' key (often for '+') to zoom in
-            needsRender = changeScale(10);
-            break;
-        case SDLK_MINUS: // '-' key to zoom out
-            needsRender = changeScale(-10);
-            break;
-        case SDLK_f: // 'F' key to toggle fullscreen
-            m_renderer->toggleFullscreen();
-            needsRender = true; // Always re-render after fullscreen change
-            break;
-        default:
-            break;
-    }
-    if (needsRender) {
-        render(); 
-    }
-}
-
-// mouse wheel for scroll, CTRL mouse wheel for zoom
-void App::handleMouseWheel(int y_delta, SDL_Keymod mod) {
-    bool needsRender = false;
-    if (mod & (KMOD_LCTRL | KMOD_RCTRL)) {  
-        needsRender = changeScale(y_delta * 5); // Zoom sensitivity
+// Maps mouse wheel event to AppAction and returns associated delta
+App::AppAction App::mapMouseWheelToAppAction(int y_delta, SDL_Keymod mod, int& deltaValue) {
+    if (mod & (KMOD_LCTRL | KMOD_RCTRL)) {
+        deltaValue = y_delta * 5; // Zoom sensitivity
+        return (y_delta > 0) ? AppAction::ZoomIn : AppAction::ZoomOut;
     } else {
-        needsRender = changeScroll(0, -y_delta * 32); // Vertical scroll sensitivity
-    }
-    if (needsRender) {
-        render();
+        deltaValue = -y_delta * 32; // Vertical scroll sensitivity
+        return (y_delta > 0) ? AppAction::ScrollUp : AppAction::ScrollDown;
     }
 }
 
-void App::handleMouseMotion(int x_rel, int y_rel, Uint32 mouse_state) {
-    (void)mouse_state; // Suppress unused parameter warning for 'mouse_state'
-    // The m_isDragging flag now controls if this function is called.
-    // The mouse_state is passed for completeness but its primary check (left button)
-    // is now done in SDL_MOUSEBUTTONDOWN/UP.
-    bool needsRender = changeScroll(-x_rel, -y_rel); // Invert for natural drag direction
-    if (needsRender) {
-        render();
+// Maps controller axis motion to AppAction and returns associated delta
+App::AppAction App::mapControllerAxisToAppAction(SDL_GameControllerAxis axis, Sint16 value, int& deltaValue) {
+    // Determine scroll/zoom delta based on axis value (e.g., fixed step or scaled)
+    if (axis == SDL_CONTROLLER_AXIS_LEFTY) { // Left Stick Y-axis for vertical scroll
+        deltaValue = (value < 0) ? -32 : 32;
+        return (value < 0) ? AppAction::ScrollUp : AppAction::ScrollDown;
+    } else if (axis == SDL_CONTROLLER_AXIS_LEFTX) { // Left Stick X-axis for horizontal scroll
+        deltaValue = (value < 0) ? -32 : 32;
+        return (value < 0) ? AppAction::ScrollLeft : AppAction::ScrollRight;
+    } else if (axis == SDL_CONTROLLER_AXIS_RIGHTY) { // Right Stick Y-axis for zoom
+        deltaValue = (value < 0) ? 5 : -5;
+        return (value < 0) ? AppAction::ZoomIn : AppAction::ZoomOut;
     }
+    return AppAction::None;
+}
+
+// Processes an AppAction
+bool App::processAppAction(AppAction action, int deltaValue) {
+    bool needsRender = false;
+    // clang-format off
+    switch (action) {
+        case AppAction::Quit:           m_running = false; break;
+        case AppAction::Resize:         needsRender = true; break; // Window resized/exposed, force re-render
+        case AppAction::ScrollLeft:     needsRender = changeScroll(-32, 0); break;
+        case AppAction::ScrollRight:    needsRender = changeScroll(32, 0); break;
+        case AppAction::ScrollUp:       needsRender = changeScroll(0, -32); break;
+        case AppAction::ScrollDown:     needsRender = changeScroll(0, 32); break;
+        case AppAction::PageNext:       needsRender = changePage(1); break;
+        case AppAction::PagePrevious:   needsRender = changePage(-1); break;
+        case AppAction::ZoomIn: {
+            needsRender = changeScale(deltaValue == 0 ? 10 : deltaValue); // Use default if deltaValue not set
+            break;
+        }
+        case AppAction::ZoomOut: {
+            needsRender = changeScale(deltaValue == 0 ? -10 : deltaValue); // Use default if deltaValue not set
+            break;
+        }
+        case AppAction::ToggleFullscreen: {
+            m_renderer->toggleFullscreen();
+            needsRender = true;
+            break;
+        }
+        default: break;
+    }
+    // clang-format on
+    return needsRender;
 }
 
 // --- State Update Methods ---
@@ -332,7 +304,7 @@ bool App::changeScale(int delta) {
     // Clamp the new scale within a reasonable range (e.g., 10% to 500%).
     if (newScale >= 10 && newScale <= 500) {
         m_currentScale = newScale;
-        m_textRenderer->setFontSize(m_currentScale);
+        m_textRenderer->setFontSize(m_currentScale / 10); // Adjust font size more reasonably
         renderCurrentPage(); 
         m_scrollX = std::min(m_scrollX, std::max(0, m_pageWidth - m_renderer->getWindowWidth()));
         m_scrollY = std::min(m_scrollY, std::max(0, m_pageHeight - m_renderer->getWindowHeight()));
@@ -414,9 +386,13 @@ void App::renderCurrentPage() {
 // Renders the UI overlay (page number and scale information).
 void App::renderUIOverlay() {
     // Ensure the font size is updated based on the current scale before rendering text.
-    m_textRenderer->setFontSize(m_currentScale);
+    // Consider scaling the font size more reasonably, e.g., for 100% zoom, a default font size.
+    // The current approach `m_currentScale` directly will make the font huge at high zooms.
+    // Let's set a base font size and apply a smaller scaling factor or a fixed size.
+    int baseFontSize = 16;
+    m_textRenderer->setFontSize(baseFontSize); // Keep font size consistent regardless of document zoom
 
-    SDL_Color textColor = { 0, 0, 0, 255 }; 
+    SDL_Color textColor = { 0, 0, 0, 255 };
     std::string pageInfo = "Page: " + std::to_string(m_currentPage + 1) + "/" + std::to_string(m_pageCount);
     std::string scaleInfo = "Scale: " + std::to_string(m_currentScale) + "%";
 
