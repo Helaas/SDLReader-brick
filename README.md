@@ -78,3 +78,7 @@ The SDL Reader supports the following keyboard and mouse inputs:
 | `Ctrl + Mouse Wheel Up`| Zoom in                                 |
 | `Ctrl + Mouse Wheel Down`| Zoom out                              |
 | `Left Click + Drag`    | Pan/Scroll                              |
+
+# Acknowledgements
+
+This project was inspired by SDLBook.
