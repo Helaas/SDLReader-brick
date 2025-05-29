@@ -213,7 +213,6 @@ void App::handleEvent(const SDL_Event& event) {
     }
 }
 
-// Maps mouse wheel event to AppAction and returns associated delta
 App::AppAction App::mapMouseWheelToAppAction(int y_delta, SDL_Keymod mod, int& deltaValue) {
     if (mod & (KMOD_LCTRL | KMOD_RCTRL)) {
         deltaValue = y_delta * 5; // Zoom sensitivity
@@ -224,23 +223,22 @@ App::AppAction App::mapMouseWheelToAppAction(int y_delta, SDL_Keymod mod, int& d
     }
 }
 
-// Maps controller axis motion to AppAction and returns associated delta
 App::AppAction App::mapControllerAxisToAppAction(SDL_GameControllerAxis axis, Sint16 value, int& deltaValue) {
-    // Determine scroll/zoom delta based on axis value (e.g., fixed step or scaled)
-    if (axis == SDL_CONTROLLER_AXIS_LEFTY) { // Left Stick Y-axis for vertical scroll
-        deltaValue = (value < 0) ? -32 : 32;
-        return (value < 0) ? AppAction::ScrollUp : AppAction::ScrollDown;
-    } else if (axis == SDL_CONTROLLER_AXIS_LEFTX) { // Left Stick X-axis for horizontal scroll
-        deltaValue = (value < 0) ? -32 : 32;
-        return (value < 0) ? AppAction::ScrollLeft : AppAction::ScrollRight;
-    } else if (axis == SDL_CONTROLLER_AXIS_RIGHTY) { // Right Stick Y-axis for zoom
-        deltaValue = (value < 0) ? 5 : -5;
-        return (value < 0) ? AppAction::ZoomIn : AppAction::ZoomOut;
+    switch (axis) {
+        case SDL_CONTROLLER_AXIS_LEFTY: 
+            deltaValue = (value < 0) ? -32 : 32;
+            return (value < 0) ? AppAction::ScrollUp : AppAction::ScrollDown;
+        case SDL_CONTROLLER_AXIS_LEFTX: 
+            deltaValue = (value < 0) ? -32 : 32;
+            return (value < 0) ? AppAction::ScrollLeft : AppAction::ScrollRight;
+        case SDL_CONTROLLER_AXIS_RIGHTY: 
+            deltaValue = (value < 0) ? 5 : -5; 
+            return (value < 0) ? AppAction::ZoomIn : AppAction::ZoomOut;
+        default:
+            return AppAction::None;
     }
-    return AppAction::None;
 }
 
-// Processes an AppAction
 bool App::processAppAction(AppAction action, int deltaValue) {
     bool needsRender = false;
     // clang-format off
@@ -336,7 +334,8 @@ bool App::changeScroll(int deltaX, int deltaY) {
     return false;
 }
 
-// Placeholder for continuous update logic. Progress bars, cute animations?
+// Placeholder for continuous update logic. 
+// reloads to fix render & scaling artifacts,  Progress bars, cute animations?
 void App::update() {
     // For a static book reader, there are typically no continuous updates needed.
     // All changes are driven by user input events.
