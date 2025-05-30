@@ -31,6 +31,10 @@ public:
 
     std::vector<uint8_t> renderPage(int pageNum, int& outWidth, int& outHeight, int scale) override;
 
+    // New: Override the native dimension methods
+    int getPageWidthNative(int pageNum) override;
+    int getPageHeightNative(int pageNum) override;
+
 private:
     std::unique_ptr<ddjvu_context_t, DdjvuContextDeleter> m_ctx;
     std::unique_ptr<ddjvu_document_t, DdjvuDocumentDeleter> m_doc;
@@ -38,4 +42,3 @@ private:
     // Helper to process DjVu messages (errors, warnings, etc.)
     void processDjvuMessages();
 };
-

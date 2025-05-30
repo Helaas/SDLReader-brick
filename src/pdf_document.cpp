@@ -46,66 +46,127 @@ int PdfDocument::getPageCount() const {
 }
 
 std::vector<uint8_t> PdfDocument::renderPage(int pageNum, int& outWidth, int& outHeight, int scale) {
-    std::cout << "Pdf DEBUG:renderPage() pagenum:" << pageNum << " outWidth:" << outWidth << " outHeight:" << outHeight << " scale " << scale << std::endl;
-    std::cout << "Pdf DEBUG:renderPage() pageCount:" << getPageCount() << std::endl;
     std::vector<uint8_t> pixelData;
-    if (!m_doc || pageNum < 0 || pageNum >= getPageCount()) {
-        return pixelData;
-    }
-
     fz_page* page = nullptr;
     fz_pixmap* pix = nullptr;
+
+    if (!m_doc || pageNum < 0 || pageNum >= getPageCount()) {
+        std::cerr << "Pdf ERROR: Invalid page number or document not open." << std::endl;
+        return pixelData;
+    }
 
     fz_try(m_ctx.get()) {
         page = fz_load_page(m_ctx.get(), m_doc, pageNum);
         if (!page) {
-            std::cerr << "Error: Failed to load PDF page " << pageNum << std::endl;
-            fz_throw(m_ctx.get(), FZ_ERROR_GENERIC, "Failed to load page"); 
+            std::cerr << "Pdf ERROR: Failed to load PDF page " << pageNum << std::endl;
+            fz_throw(m_ctx.get(), FZ_ERROR_GENERIC, "Failed to load page");
         }
 
         fz_rect bounds = fz_bound_page(m_ctx.get(), page);
-        std::cout << "Pdf DEBUG:renderPage() Page bounds: x0=" << bounds.x0 << ", y0=" << bounds.y0 << ", x1=" << bounds.x1 << ", y1=" << bounds.y1 << std::endl;
+        double img_width_native = bounds.x1 - bounds.x0;
+        double img_height_native = bounds.y1 - bounds.y0;
 
-        double img_width = bounds.x1 - bounds.x0;
-        double img_height = bounds.y1 - bounds.y0;
+        // Calculate output dimensions based on native size and the requested scale percentage.
+        // DO NOT MODIFY THIS - This is the core scaling logic.
+        outWidth = static_cast<int>(img_width_native * (static_cast<double>(scale) / 100.0));
+        outHeight = static_cast<int>(img_height_native * (static_cast<double>(scale) / 100.0));
 
-        int dpi = 72; // Standard PDF DPI
-        outWidth = static_cast<int>(img_width * scale / dpi);
-        outHeight = static_cast<int>(img_height * scale / dpi);
+        // Ensure dimensions are at least 1x1 to prevent issues with very small scales
+        if (outWidth <= 0) outWidth = 1;
+        if (outHeight <= 0) outHeight = 1;
 
-        std::cout << "Pdf DEBUG:renderPage()  Image dimensions: img_width=" << img_width << ", img_height=" << img_height << std::endl;
-        std::cout << "Pdf DEBUG:renderPage()  DPI=" << dpi << ", Calculated output dimensions: outWidth=" << outWidth << ", outHeight=" << outHeight << std::endl;
-
-        fz_matrix ctm = fz_scale(static_cast<double>(outWidth) / img_width, static_cast<double>(outHeight) / img_height);
-        std::cout << "Pdf DEBUG: CTM matrix: a=" << ctm.a << ", b=" << ctm.b << ", c=" << ctm.c << ", d=" << ctm.d << ", e=" << ctm.e << ", f=" << ctm.f << std::endl;
-
+        // Create the transformation matrix to scale the native page to the calculated output dimensions
+        fz_matrix ctm = fz_scale(static_cast<double>(outWidth) / img_width_native, static_cast<double>(outHeight) / img_height_native);
+ 
         pix = fz_new_pixmap_from_page(m_ctx.get(), page, ctm, fz_device_rgb(m_ctx.get()), 0);
 
         if (!pix) {
-            std::cerr << "Error: Failed to create pixmap for PDF page " << pageNum << std::endl;
+            std::cerr << "Pdf ERROR: Failed to create pixmap for PDF page " << pageNum << std::endl;
             fz_throw(m_ctx.get(), FZ_ERROR_GENERIC, "Failed to create pixmap");
         }
 
-        // gemini -  DO NOT MODIFY THIS CODE - it definitely works.
         pixelData.resize(static_cast<size_t>(pix->w) * pix->h * 3); // RGB24
         uint8_t* dest = pixelData.data();
         uint8_t* src = pix->samples;
 
         // Copy pixel data directly. MuPDF pixmaps are typically top-to-bottom, BGR(A) or RGB(A)
         // We requested RGB, so just copy the 3 bytes per pixel.
-        // gemini -  DO NOT MODIFY THIS CODE - it definitely works.
         for (int y = 0; y < pix->h; ++y) {
             // Ensure proper byte-wise copy, stride accounts for padding if any
-            memcpy(dest + static_cast<size_t>(y) * pix->w * 3, src + static_cast<size_t>(y) * pix->stride, static_cast<size_t>(pix->w) * 3);
+            memcpy(dest + static_cast<size_t>(y) * pix->w * 3, src + static_cast<size_t>(y) * pix->stride, pix->w * 3);
         }
+ 
 
     } fz_catch(m_ctx.get()) {
-        std::cerr << "Error rendering PDF page." << std::endl;
-        pixelData.clear(); 
+        std::cerr << "Pdf ERROR: An error occurred during PDF rendering for page " << pageNum << ": " << fz_caught(m_ctx.get()) << std::endl;
+        pixelData.clear();
     }
 
-    if (page) fz_drop_page(m_ctx.get(), page);
-    if (pix) fz_drop_pixmap(m_ctx.get(), pix);
+    if (pix) {
+        fz_drop_pixmap(m_ctx.get(), pix);
+    }
+    if (page) {
+        fz_drop_page(m_ctx.get(), page);
+    }
 
-    return pixelData; // Returns RGB24 data
+    return pixelData;
+}
+
+int PdfDocument::getPageWidthNative(int pageNum) {
+    if (!m_doc || pageNum < 0 || pageNum >= getPageCount()) {
+        std::cerr << "Pdf ERROR: Invalid page number or document not open for getPageWidthNative." << std::endl;
+        return 0;
+    }
+
+    fz_page* page = nullptr;
+    fz_rect bounds;
+    int width = 0;
+
+    fz_try(m_ctx.get()) {
+        page = fz_load_page(m_ctx.get(), m_doc, pageNum);
+        if (!page) {
+            std::cerr << "Pdf ERROR: Failed to load page " << pageNum << " for native width." << std::endl;
+            fz_throw(m_ctx.get(), FZ_ERROR_GENERIC, "Failed to load page");
+        }
+        bounds = fz_bound_page(m_ctx.get(), page);
+        width = static_cast<int>(bounds.x1 - bounds.x0);
+    } fz_catch(m_ctx.get()) {
+        std::cerr << "Pdf ERROR: Exception getting native page width for page " << pageNum << ": " << fz_caught(m_ctx.get()) << std::endl;
+        width = 0;
+    }
+
+    if (page) {
+        fz_drop_page(m_ctx.get(), page);
+    }
+    return width;
+}
+
+// New: Get the native (unscaled) height of a specific page
+int PdfDocument::getPageHeightNative(int pageNum) {
+    if (!m_doc || pageNum < 0 || pageNum >= getPageCount()) {
+        std::cerr << "Pdf ERROR: Invalid page number or document not open for getPageHeightNative." << std::endl;
+        return 0;
+    }
+
+    fz_page* page = nullptr;
+    fz_rect bounds;
+    int height = 0;
+
+    fz_try(m_ctx.get()) {
+        page = fz_load_page(m_ctx.get(), m_doc, pageNum);
+        if (!page) {
+            std::cerr << "Pdf ERROR: Failed to load page " << pageNum << " for native height." << std::endl;
+            fz_throw(m_ctx.get(), FZ_ERROR_GENERIC, "Failed to load page");
+        }
+        bounds = fz_bound_page(m_ctx.get(), page);
+        height = static_cast<int>(bounds.y1 - bounds.y0);
+    } fz_catch(m_ctx.get()) {
+        std::cerr << "Pdf ERROR: Exception getting native page height for page " << pageNum << ": " << fz_caught(m_ctx.get()) << std::endl;
+        height = 0;
+    }
+
+    if (page) {
+        fz_drop_page(m_ctx.get(), page);
+    }
+    return height;
 }

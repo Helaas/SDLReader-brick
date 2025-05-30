@@ -56,6 +56,8 @@ private:
     void renderUIOverlay();
     void render();
 
+    void fitPageToWindow();
+    
     bool m_running;
     std::unique_ptr<Renderer> m_renderer;
     std::unique_ptr<Document> m_document;
@@ -66,15 +68,25 @@ private:
     int m_currentScale;
     int m_scrollX;
     int m_scrollY;
-    int m_pageWidth;
-    int m_pageHeight;
+    int m_pageWidth;        // Scaled width of the current page
+    int m_pageHeight;       // Scaled height of the current page
+    int m_pageWidthNative;  // Native (unscaled) width of the current page
+    int m_pageHeightNative; // Native (unscaled) height of the current page
 
     bool m_isDragging;
     float m_lastTouchX; // Store normalized coordinates for touch, pixel for mouse
     float m_lastTouchY;
 
+    // Game Controller
     SDL_GameController* m_gameController;
     SDL_JoystickID m_gameControllerInstanceID;
+
+    // Helper to initialize and close game controllers
+    void initializeGameControllers();
+    void closeGameControllers();
+
+    // Debugging utility
+    void logCurrentState();
 };
 
 #endif // APP_H

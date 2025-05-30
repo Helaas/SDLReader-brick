@@ -10,7 +10,6 @@ typedef struct fz_page fz_page;
 typedef struct fz_pixmap fz_pixmap;
 
 
-
 struct FzContextDeleter {
     void operator()(fz_context* ctx) const; // Definition in .cpp
 };
@@ -28,6 +27,10 @@ public:
     int getPageCount() const override;
 
     std::vector<uint8_t> renderPage(int pageNum, int& outWidth, int& outHeight, int scale) override;
+
+    // New: Override the native dimension methods
+    int getPageWidthNative(int pageNum) override;
+    int getPageHeightNative(int pageNum) override;
 
 private:
     std::unique_ptr<fz_context, FzContextDeleter> m_ctx;

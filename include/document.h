@@ -23,5 +23,9 @@ public:
     // scale is a percentage (e.g., 100 for 100% original size).
     virtual std::vector<uint8_t> renderPage(int pageNum, int& outWidth, int& outHeight, int scale) = 0;
 
+    // New: Get the native (unscaled) width and height of a specific page.
+    virtual int getPageWidthNative(int pageNum) = 0;
+    virtual int getPageHeightNative(int pageNum) = 0;
+
     virtual ~Document() = default;
 };
