@@ -1,6 +1,6 @@
 # SDL Reader
 
-A minimal document reader built using SDL2, MuPDF, and DjVuLibre, supporting PDF and DjVu file formats.
+A minimal document reader built using SDL2 and  MuPDF supporting PDF 
 
 ## Table of Contents
 * [Features](#features)
@@ -20,7 +20,6 @@ A minimal document reader built using SDL2, MuPDF, and DjVuLibre, supporting PDF
 
 ## Supported Document Types
 * **PDF** (`.pdf`)
-* **DjVu** (`.djvu`)
 
 ## Build Instructions
 To build this project, you will need:
@@ -28,14 +27,13 @@ To build this project, you will need:
 * `SDL2` development libraries.
 * `SDL2_ttf` development libraries.
 * `MuPDF` development libraries.
-* `DjVuLibre` development libraries.
 * `pkg-config` (to find library paths automatically).
 * `make` (for the provided Makefile).
 
 **On macOS (using Homebrew):**
 1.  Install dependencies:
     ```bash
-    brew install sdl2 sdl2_ttf mupdf-tools djvulibre pkg-config
+    brew install sdl2 sdl2_ttf mupdf-tools pkg-config
     ```
 2.  Navigate to the project root directory.
 3.  Build the project:
@@ -49,10 +47,6 @@ After building, run the executable from your project root, providing the path to
 
 ```bash
 ./bin/sdl_reader path/to/your_document.pdf
-```
-or
-```bash
-./bin/sdl_reader path/to/your_document.djvu
 ```
 
 ## User Inputs
