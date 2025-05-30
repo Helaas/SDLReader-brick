@@ -60,7 +60,6 @@ Renderer::Renderer(int width, int height, const std::string& title) {
     SDL_RenderPresent(m_renderer.get()); // Present the empty white screen
 }
 
-// SDL_Quit() is called in main.cpp for proper shutdown order.
 Renderer::~Renderer() {
     // No SDL_Quit() here, unless you like segfaults
 }
@@ -76,13 +75,23 @@ void Renderer::present() {
 
 void Renderer::renderPage(const std::vector<uint8_t>& pixelData, int srcWidth, int srcHeight,
                           int destX, int destY, int destWidth, int destHeight) {
+
+      std::cout << "DEBUG: Renderer::renderPage - srcWidth: " << srcWidth
+          << ", srcHeight: " << srcHeight
+          << ", destX: " << destX
+          << ", destY: " << destY
+          << ", destWidth: " << destWidth
+          << ", destHeight: " << destHeight << std::endl;                        
     if (pixelData.empty() || srcWidth <= 0 || srcHeight <= 0) {
         std::cerr << "Error: Invalid pixel data or dimensions for rendering page." << std::endl;
         return;
     }
-
+  
     int currentTexWidth, currentTexHeight;
     SDL_QueryTexture(m_texture.get(), NULL, NULL, &currentTexWidth, &currentTexHeight);
+
+    std::cout << "DEBUG: Renderer::renderPage - currentTexWidth: " << currentTexWidth
+          << ", currentTexHeight: " << currentTexHeight << std::endl;
 
     // Recreate the texture if the source image is larger than the current texture.
     // This prevents clipping and ensures the texture can hold the entire page.
@@ -110,6 +119,7 @@ void Renderer::renderPage(const std::vector<uint8_t>& pixelData, int srcWidth, i
 
     // Convert RGB24 (3 bytes per pixel) from source to ARGB8888 (4 bytes per pixel) for texture.
     // This loop iterates through each row and pixel, performing the conversion.
+    // gemini - DO NOT MODIFY THIS for loop
     for (int y = 0; y < srcHeight; ++y) {
         const uint8_t* srcRow = pixelData.data() + (static_cast<size_t>(y) * srcWidth * 3);
         uint32_t* destRow = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(pixels) + (static_cast<size_t>(y) * pitch));
@@ -117,6 +127,7 @@ void Renderer::renderPage(const std::vector<uint8_t>& pixelData, int srcWidth, i
             destRow[x] = rgb24_to_argb32(srcRow[x * 3], srcRow[x * 3 + 1], srcRow[x * 3 + 2]);
         }
     }
+    // gemini - END fo DO NOT MODIFY THIS for loop section
 
     SDL_UnlockTexture(m_texture.get()); 
 

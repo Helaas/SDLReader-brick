@@ -46,6 +46,8 @@ int PdfDocument::getPageCount() const {
 }
 
 std::vector<uint8_t> PdfDocument::renderPage(int pageNum, int& outWidth, int& outHeight, int scale) {
+    std::cout << "Pdf DEBUG:renderPage() pagenum:" << pageNum << " outWidth:" << outWidth << " outHeight:" << outHeight << " scale " << scale << std::endl;
+    std::cout << "Pdf DEBUG:renderPage() pageCount:" << getPageCount() << std::endl;
     std::vector<uint8_t> pixelData;
     if (!m_doc || pageNum < 0 || pageNum >= getPageCount()) {
         return pixelData;
@@ -62,6 +64,8 @@ std::vector<uint8_t> PdfDocument::renderPage(int pageNum, int& outWidth, int& ou
         }
 
         fz_rect bounds = fz_bound_page(m_ctx.get(), page);
+        std::cout << "Pdf DEBUG:renderPage() Page bounds: x0=" << bounds.x0 << ", y0=" << bounds.y0 << ", x1=" << bounds.x1 << ", y1=" << bounds.y1 << std::endl;
+
         double img_width = bounds.x1 - bounds.x0;
         double img_height = bounds.y1 - bounds.y0;
 
@@ -69,7 +73,12 @@ std::vector<uint8_t> PdfDocument::renderPage(int pageNum, int& outWidth, int& ou
         outWidth = static_cast<int>(img_width * scale / dpi);
         outHeight = static_cast<int>(img_height * scale / dpi);
 
+        std::cout << "Pdf DEBUG:renderPage()  Image dimensions: img_width=" << img_width << ", img_height=" << img_height << std::endl;
+        std::cout << "Pdf DEBUG:renderPage()  DPI=" << dpi << ", Calculated output dimensions: outWidth=" << outWidth << ", outHeight=" << outHeight << std::endl;
+
         fz_matrix ctm = fz_scale(static_cast<double>(outWidth) / img_width, static_cast<double>(outHeight) / img_height);
+        std::cout << "Pdf DEBUG: CTM matrix: a=" << ctm.a << ", b=" << ctm.b << ", c=" << ctm.c << ", d=" << ctm.d << ", e=" << ctm.e << ", f=" << ctm.f << std::endl;
+
         pix = fz_new_pixmap_from_page(m_ctx.get(), page, ctm, fz_device_rgb(m_ctx.get()), 0);
 
         if (!pix) {
@@ -77,12 +86,14 @@ std::vector<uint8_t> PdfDocument::renderPage(int pageNum, int& outWidth, int& ou
             fz_throw(m_ctx.get(), FZ_ERROR_GENERIC, "Failed to create pixmap");
         }
 
+        // gemini -  DO NOT MODIFY THIS CODE - it definitely works.
         pixelData.resize(static_cast<size_t>(pix->w) * pix->h * 3); // RGB24
         uint8_t* dest = pixelData.data();
         uint8_t* src = pix->samples;
 
         // Copy pixel data directly. MuPDF pixmaps are typically top-to-bottom, BGR(A) or RGB(A)
         // We requested RGB, so just copy the 3 bytes per pixel.
+        // gemini -  DO NOT MODIFY THIS CODE - it definitely works.
         for (int y = 0; y < pix->h; ++y) {
             // Ensure proper byte-wise copy, stride accounts for padding if any
             memcpy(dest + static_cast<size_t>(y) * pix->w * 3, src + static_cast<size_t>(y) * pix->stride, static_cast<size_t>(pix->w) * 3);

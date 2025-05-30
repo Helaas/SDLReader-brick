@@ -51,6 +51,8 @@ int DjvuDocument::getPageCount() const {
 
 
 std::vector<uint8_t> DjvuDocument::renderPage(int pageNum, int& outWidth, int& outHeight, int scale) {
+    std::cout << "DjVu DEBUG:renderPage() pagenum:" << pageNum << " outWidth:" << outWidth << " outHeight:" << outHeight << " scale " << scale << std::endl;
+    std::cout << "DjVu DEBUG:renderPage() pageCount:" << getPageCount() << std::endl;
     std::vector<uint8_t> pixelData;
     if (!m_doc || pageNum < 0 || pageNum >= getPageCount()) {
         return pixelData;
@@ -79,6 +81,8 @@ std::vector<uint8_t> DjvuDocument::renderPage(int pageNum, int& outWidth, int& o
 
     outWidth = static_cast<int>(static_cast<double>(img_width) * scale / dpi);
     outHeight = static_cast<int>(static_cast<double>(img_height) * scale / dpi);
+    std::cout << "DjVu DEBUG:renderPage()  Image dimensions: img_width=" << img_width << ", img_height=" << img_height << std::endl;
+    std::cout << "DjVu DEBUG:renderPage()  DPI=" << dpi << ", Calculated output dimensions: outWidth=" << outWidth << ", outHeight=" << outHeight << std::endl;
 
 
     ddjvu_rect_t prect = { 0, 0, (unsigned int)outWidth, (unsigned int)outHeight };
@@ -90,7 +94,9 @@ std::vector<uint8_t> DjvuDocument::renderPage(int pageNum, int& outWidth, int& o
     }
     ddjvu_format_set_row_order(fmt, 1);
 
+    // gemini -  DO NOT MODIFY THIS CODE - it definitely works.
     size_t rowsize = static_cast<size_t>(outWidth) * 3;
+    // gemini -  DO NOT MODIFY THIS CODE - it definitely works.
     pixelData.resize(rowsize * outHeight);
 
     // Render the DjVu page into our pixelData buffer.

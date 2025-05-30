@@ -1,0 +1,16 @@
+https://gemini.google.com/app/242442f045f9b7aa
+
+
+Regarding your request, here's a summary of the key changes we've made to src/pdf_document.cpp compared to the original version you provided:
+
+MuPDF Error and Warning Callbacks: We added mupdf_error_callback and mupdf_warning_callback functions. These are registered with MuPDF's context (fz_set_error_callback, fz_set_warning_callback) to capture any internal errors or warnings that MuPDF might report during document processing or rendering.
+Detailed Debug Prints: We re-introduced std::cerr statements to output crucial values just before the fz_new_pixmap_from_page call. These include:
+Original page bounds (bounds.x0, y0, x1, y1).
+Effective scale factor.
+Transformed bounds after applying the CTM.
+Calculated outWidth and outHeight for the pixmap.
+Robust Pixmap Creation Check: The check for !pix (whether fz_new_pixmap_from_page returns nullptr) now also verifies that the pixmap's width and height are valid (> 0). It provides more specific error messages if the pixmap is NULL or has invalid dimensions.
+Color Device Specification: We changed the color device used in fz_new_pixmap_from_page from fz_device_rgb(m_ctx.get()) to fz_device_bgr(m_ctx.get()). This was an attempt to see if a different byte order for pixel data would resolve the rendering issue.
+Refined Transformation Matrix (CTM) Calculation: The way fz_matrix ctm is constructed has been updated to first translate the page to the origin and then apply the scale. This ensures that scaling occurs relative to the page's top-left corner.
+Pixel Data Copying: The loop for copying MuPDF's pixel data to pixelData has been updated to explicitly handle MuPDF's internal n (number of components, e.g., 3 for RGB, 4 for RGBA) to ensure correct byte access, ignoring alpha if present.
+
