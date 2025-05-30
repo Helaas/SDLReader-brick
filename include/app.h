@@ -10,8 +10,6 @@
 #include <string>
 #include <vector>
 
-// Define AppAction enum outside the class for global scope or within a namespace
-// if not preferred as a nested enum. For simplicity, nesting it here.
 class App {
 public:
     // Define an enum for high-level application actions
@@ -28,37 +26,45 @@ public:
         ZoomIn,
         ZoomOut,
         ToggleFullscreen,
-        DragStart, // Indicate a drag operation has started
-        DragEnd    // Indicate a drag operation has ended
+        DragStart,
+        DragEnd
     };
 
-    App(const std::string& filename, int initialWidth, int initialHeight);
-    ~App() = default; // Use default destructor for smart pointers
+    // Constructor now accepts pre-initialized SDL_Window* and SDL_Renderer*
+    App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer);
+    ~App();
 
     void run();
 
 private:
+    // Document and Rendering Management
+    void loadDocument();
+    void renderCurrentPage();
+    void renderUI();
+
     // Event Handling
     void handleEvent(const SDL_Event& event);
-    AppAction mapMouseWheelToAppAction(int y_delta, SDL_Keymod mod, int& deltaValue);
-    AppAction mapControllerAxisToAppAction(SDL_GameControllerAxis axis, Sint16 value, int& deltaValue);
-    bool processAppAction(AppAction action, int deltaValue);
 
-    // State Update Methods
-    bool changePage(int delta);
-    bool jumpToPage(int pageNum); // Added for completeness, though not currently used in event handling
-    bool changeScale(int delta);
-    bool changeScroll(int deltaX, int deltaY);
-    void update(); // Placeholder for continuous update logic
+    // Page Navigation
+    void goToNextPage();
+    void goToPreviousPage();
+    void goToPage(int pageNum);
 
-    // Rendering Methods
-    void renderCurrentPage();
-    void renderUIOverlay();
-    void render();
-
+    // Zoom and Scaling
+    void zoom(int delta);
+    void zoomTo(int scale);
     void fitPageToWindow();
-    
+    void recenterScrollOnZoom(int oldScale, int newScale);
+
+    // Scrolling
+    void clampScroll();
+
+    // State Management
+    void resetPageView();
+    void printAppState();
+
     bool m_running;
+    // Renderer now owns a unique_ptr to Renderer, which internally holds raw pointers
     std::unique_ptr<Renderer> m_renderer;
     std::unique_ptr<Document> m_document;
     std::unique_ptr<TextRenderer> m_textRenderer;
@@ -68,13 +74,11 @@ private:
     int m_currentScale;
     int m_scrollX;
     int m_scrollY;
-    int m_pageWidth;        // Scaled width of the current page
-    int m_pageHeight;       // Scaled height of the current page
-    int m_pageWidthNative;  // Native (unscaled) width of the current page
-    int m_pageHeightNative; // Native (unscaled) height of the current page
+    int m_pageWidth;
+    int m_pageHeight;
 
     bool m_isDragging;
-    float m_lastTouchX; // Store normalized coordinates for touch, pixel for mouse
+    float m_lastTouchX;
     float m_lastTouchY;
 
     // Game Controller
@@ -84,9 +88,6 @@ private:
     // Helper to initialize and close game controllers
     void initializeGameControllers();
     void closeGameControllers();
-
-    // Debugging utility
-    void logCurrentState();
 };
 
 #endif // APP_H
