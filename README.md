@@ -46,7 +46,7 @@ To build this project, you will need:
 After building, run the executable from your project root, providing the path to a PDF or DjVu file as an argument:
 
 ```bash
-./bin/sdl_reader path/to/your_document.pdf
+./bin/sdl_reader_cli path/to/your_document.pdf
 ```
 
 ## User Inputs
