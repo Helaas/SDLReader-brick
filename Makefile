@@ -22,7 +22,6 @@ TARGET = $(BIN_DIR)/sdl_reader
 # IMPORTANT: If Homebrew is installed in /opt/homebrew (Apple Silicon),
 # replace /usr/local/opt with /opt/homebrew/opt
 MUPDF_OPT_PATH = /usr/local/opt/mupdf-tools
-DJVULIBRE_OPT_PATH = /usr/local/opt/djvulibre
 
 # Compiler flags
 # -std=c++17: Use C++17 standard
@@ -32,19 +31,15 @@ DJVULIBRE_OPT_PATH = /usr/local/opt/djvulibre
 # -I$(SRC_DIR): Include path for project's own header files (e.g., app.h, document.h)
 CXXFLAGS = -std=c++17 -Wall -Wextra -g -I$(MUPDF_OPT_PATH)/include -I$(SRC_DIR) -Iinclude
 
-# Include paths for SDL2, SDL2_ttf, and DjVuLibre (using ddjvuapi pkg-config)
 # pkg-config --cflags SDL2_ttf added for explicit SDL_ttf header paths
-INC_PATHS = $(shell sdl2-config --cflags) $(shell pkg-config --cflags ddjvuapi SDL2_ttf)
+INC_PATHS = $(shell pkg-config --cflags  SDL2_ttf sdl2)
 
 # Library paths and libraries to link
 # -L$(MUPDF_OPT_PATH)/lib: Manual library path for MuPDF static libs via opt symlink
 # -lmupdf -lmupdf-third: Link against MuPDF's main and third-party libraries
-# -L$(DJVULIBRE_OPT_PATH)/lib: Manual library path for DjVuLibre dynamic libs via opt symlink
-# -ldjvulibre: Link against DjVuLibre
 # pkg-config --libs SDL2_ttf added for explicit SDL_ttf library linking
-LIB_PATHS = $(shell sdl2-config --libs) $(shell pkg-config --libs SDL2_ttf) \
-            -L$(MUPDF_OPT_PATH)/lib -lmupdf -lmupdf-third \
-            -L$(DJVULIBRE_OPT_PATH)/lib -ldjvulibre
+LIB_PATHS = $(shell pkg-config --libs SDL2_ttf sdl2) \
+            -L$(MUPDF_OPT_PATH)/lib -lmupdf -lmupdf-third 
 
 # All object files (will be placed in the build directory)
 # Transforms src/file.cpp into build/file.o
