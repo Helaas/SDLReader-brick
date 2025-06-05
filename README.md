@@ -11,12 +11,13 @@ A minimal document reader built using SDL2 and  MuPDF supporting PDF
 * [Project Structure](#project-structure)
 
 ## Features
-* View PDF and DjVu documents.
+* View PDF documents.
 * Page navigation (next/previous page).
 * Zoom in/out.
 * Scroll within pages (if zoomed in or page is larger than window).
 * Toggle fullscreen mode.
 * Basic UI overlay showing current page and zoom level.
+* Planned: CBZ, EPUB (supported by mupdf)
 
 ## Supported Document Types
 * **PDF** (`.pdf`)
