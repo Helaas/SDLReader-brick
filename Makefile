@@ -1,28 +1,29 @@
-# Makefile for SDL Reader on macOS
+# Makefile for SDL Reader on macOS (Top-Level - No Explicit Library Build)
 
 # Compiler
 CXX = g++
 
-# Source directory
+# Source directories
 SRC_DIR = src
+CLI_DIR = cli
 
-# Build directory for object files
+# Build directory for all object files
 BUILD_DIR = build
 
 # Final executable directory
 BIN_DIR = bin
 
-# Source files (all .cpp files in the src directory)
-SRCS = $(wildcard $(SRC_DIR)/*.cpp)
+# Name of the final executable
+TARGET_NAME = sdl_reader_cli
+TARGET = $(BIN_DIR)/$(TARGET_NAME)
 
-# Executable name (including its final path)
-TARGET = $(BIN_DIR)/sdl_reader
+# Source files: Combine all .cpp files from src/ and cli/
+SRCS = $(wildcard $(SRC_DIR)/*.cpp) $(wildcard $(CLI_DIR)/*.cpp)
 
 # Homebrew Opt Paths (These symlinks always point to the currently active version)
 # IMPORTANT: If Homebrew is installed in /opt/homebrew (Apple Silicon),
 # replace /usr/local/opt with /opt/homebrew/opt
 MUPDF_OPT_PATH = /usr/local/opt/mupdf-tools
-DJVULIBRE_OPT_PATH = /usr/local/opt/djvulibre
 
 # Compiler flags
 # -std=c++17: Use C++17 standard
@@ -32,23 +33,21 @@ DJVULIBRE_OPT_PATH = /usr/local/opt/djvulibre
 # -I$(SRC_DIR): Include path for project's own header files (e.g., app.h, document.h)
 CXXFLAGS = -std=c++17 -Wall -Wextra -g -I$(MUPDF_OPT_PATH)/include -I$(SRC_DIR) -Iinclude
 
-# Include paths for SDL2, SDL2_ttf, and DjVuLibre (using ddjvuapi pkg-config)
+# Include paths for SDL2 and SDL2_ttf
 # pkg-config --cflags SDL2_ttf added for explicit SDL_ttf header paths
-INC_PATHS = $(shell sdl2-config --cflags) $(shell pkg-config --cflags ddjvuapi SDL2_ttf)
+INC_PATHS = $(shell pkg-config --cflags SDL2_ttf sdl2)
 
 # Library paths and libraries to link
 # -L$(MUPDF_OPT_PATH)/lib: Manual library path for MuPDF static libs via opt symlink
 # -lmupdf -lmupdf-third: Link against MuPDF's main and third-party libraries
-# -L$(DJVULIBRE_OPT_PATH)/lib: Manual library path for DjVuLibre dynamic libs via opt symlink
-# -ldjvulibre: Link against DjVuLibre
 # pkg-config --libs SDL2_ttf added for explicit SDL_ttf library linking
-LIB_PATHS = $(shell sdl2-config --libs) $(shell pkg-config --libs SDL2_ttf) \
-            -L$(MUPDF_OPT_PATH)/lib -lmupdf -lmupdf-third \
-            -L$(DJVULIBRE_OPT_PATH)/lib -ldjvulibre
+LIBS = $(shell pkg-config --libs SDL2_ttf sdl2) \
+       -L$(MUPDF_OPT_PATH)/lib -lmupdf -lmupdf-third
 
 # All object files (will be placed in the build directory)
-# Transforms src/file.cpp into build/file.o
-OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(SRCS))
+# Transforms src/file.cpp into build/file.o and cli/file.cpp into build/file.o
+OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS))) \
+       $(patsubst $(CLI_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(CLI_DIR)/%,$(SRCS)))
 
 .PHONY: all clean
 
@@ -64,15 +63,17 @@ $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
 # Link the executable
-$(TARGET): $(OBJS)
-	$(CXX) $(OBJS) $(LIB_PATHS) -o $@
+$(TARGET): $(OBJS) | $(BIN_DIR)
+	$(CXX) $(OBJS) $(LIBS) -o $@
 
 # Compile source files into object files in the build directory
-# The -Iinclude flag is added here to ensure headers in the 'include' directory are found.
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
+# This rule handles both src/ and cli/ cpp files
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+
+$(BUILD_DIR)/%.o: $(CLI_DIR)/%.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
 
 # Clean up compiled files and directories
 clean:
 	rm -rf $(BUILD_DIR) $(BIN_DIR)
-

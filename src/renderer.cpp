@@ -124,7 +124,6 @@ void Renderer::toggleFullscreen() {
     }
 }
 
-// Static method implementation
 Uint32 Renderer::getRequiredSDLInitFlags() {
     return SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER;
 }
