@@ -83,12 +83,12 @@ LIBS		+=	$(SDL_LDFLAGS)
 # romfs - make sure you download, build & do a make install per instructions
 #---------------------------------------------------------------------------------
 # fonts and images in ROMFS will packaged into a romfs and read by the homebrew app
-#ROMFS		:= ./romfs
-#include $(PORTLIBS_PATH)/wiiu/share/romfs-wiiu.mk
-#CFLAGS		+=	$(ROMFS_CFLAGS)
-#CXXFLAGS	+=	$(ROMFS_CFLAGS)
-#LIBS		+=	$(ROMFS_LIBS)
-#OFILES		+=	$(ROMFS_TARGET)
+ROMFS		:= ./romfs
+include $(PORTLIBS_PATH)/wiiu/share/romfs-wiiu.mk
+CFLAGS		+=	$(ROMFS_CFLAGS)
+CXXFLAGS	+=	$(ROMFS_CFLAGS)
+LIBS		+=	$(ROMFS_LIBS)
+OFILES		+=	$(ROMFS_TARGET)
 
 #-------------------------------------------------------------------------------
 # no real need to edit anything past this point unless you need to add additional
@@ -145,7 +145,7 @@ export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 all: $(BUILD)
 
 dist: all
-	@cp $(TARGET).rpx $(TARGET).wuhb dist/wiiu/apps/onekosdl/
+	@cp $(TARGET).rpx $(TARGET).wuhb dist/wiiu/apps/SDLReader/
 
 $(BUILD):
 	@[ -d $@ ] || mkdir -p $@
