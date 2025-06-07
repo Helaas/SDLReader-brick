@@ -10,7 +10,7 @@ TOPDIR ?= $(CURDIR)
 
 include $(DEVKITPRO)/wut/share/wut_rules
 
-MUPDF_ROOT	:=	/project/mupdf
+MUPDF_ROOT	:=	/project/mupdf-devkitppc
 
 #-------------------------------------------------------------------------------
 # TARGET is the name of the output
