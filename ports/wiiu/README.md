@@ -4,7 +4,7 @@
 
 Largely notes to myself at this point.
 
-* mupdf builds, 
+* [mupdf-devkitppc](https://github.com/hito16/mupdf-devkitppc) builds
 * resolved multiple and undefined references.
 * created a main wrapper so the WiiU code can call the SLDReader code.
 
