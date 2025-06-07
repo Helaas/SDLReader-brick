@@ -8,7 +8,7 @@ Largely notes to myself at this point.
 * resolved multiple and undefined references.
 * created a main wrapper so the WiiU code can call the SLDReader code.
 
-Latest issue
+## Latest issue
 
 * mupdf has its own harfbuzz and freetype under "thirdparty"
 * Wiiu portlibs SDL_ttf has its on harfbuzz and freetype
@@ -41,7 +41,7 @@ make: *** [Makefile:152: build] Error 2
 ```
 
 What made me think this would work?
-* libmupdf.a and libmupdf-third.a compile, meaning their static build and link depdencies were satisfied.  Hopefully the missing symbols are not in any code path we are using.
+* libmupdf.a and libmupdf-third.a compile, meaning their static build and link depdencies were satisfied. 
 
 ## Building
 
