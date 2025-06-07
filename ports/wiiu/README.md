@@ -1,8 +1,10 @@
 # SDLReader PDF document reader for WIIU
 
+SDLReader compiles and runs on MacOS.  It uses a library called mupdf for loading PDF files.
+
 # Status
 
-Largely notes to myself at this point.
+Largely notes to myself at this point porting this to WiiU.
 
 * [mupdf-devkitppc](https://github.com/hito16/mupdf-devkitppc) builds
 * resolved multiple and undefined references.
@@ -12,7 +14,7 @@ Largely notes to myself at this point.
 
 * mupdf has its own harfbuzz and freetype under "thirdparty"
 * Wiiu portlibs SDL_ttf has its on harfbuzz and freetype
-* SDLReader uses generic SDL_ttf.  
+* the working SDL app "SDLReader" builds on MacOS with generic SDL_ttf, but for WiiU, we will use the portlibs version. 
 
 To get mupdf to compile with conpatible harfbuzz versions, I did the following
 * instruct mupdf to NOT build harfbuzz and freetype
