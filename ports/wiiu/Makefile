@@ -25,9 +25,6 @@ SOURCES		:=	. ../../src
 
 INCLUDES	:=	. ../../include 
 
-export APP_ICON		:=	$(TOPDIR)/res/wuhb/iconTex.png
-export APP_TV_SPLASH	:=	$(TOPDIR)/res/wuhb/bootTvTex.png
-export APP_DRC_SPLASH	:=	$(TOPDIR)/res/wuhb/bootDrcTex.png	
 
 #-------------------------------------------------------------------------------
 # options for code generation
@@ -158,6 +155,8 @@ clean:
 
 #-------------------------------------------------------------------------------
 else
+
+$(info info- ensure path $(ROMFS) exists)
 
 
 .PHONY:	all
