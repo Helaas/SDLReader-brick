@@ -9,41 +9,8 @@ Largely notes to myself at this point porting this to WiiU.
 * [mupdf-devkitppc](https://github.com/hito16/mupdf-devkitppc) builds
 * resolved multiple and undefined references.
 * created a main wrapper so the WiiU code can call the SLDReader code.
+* boots to blank screen.   Need to add logging
 
-## Latest issue
-
-* mupdf has its own harfbuzz and freetype under "thirdparty"
-* Wiiu portlibs SDL_ttf has its on harfbuzz and freetype
-* the working SDL app "SDLReader" builds on MacOS with generic SDL_ttf, but for WiiU, we will use the portlibs version. 
-
-To get mupdf to compile with conpatible harfbuzz versions, I did the following
-* instruct mupdf to NOT build harfbuzz and freetype
-* add headers to address missing symbols from mupdf harfbuzz wrappers and from harfbuzz version incompatibility
-
-
-
-```
-root@72d6ab053451:/project/SDLReader/ports/wiiu# make
-main_wiiu.cpp
-app.cpp
-pdf_document.cpp
-renderer.cpp
-text_renderer.cpp
-wiiu_mupdf_hb_wrappers.c
-wiiu_time_utils.c
-ROMFS app.romfs.o
-./
-linking ... SDLReader-wiiu.elf
-/opt/devkitpro/devkitPPC/bin/../lib/gcc/powerpc-eabi/14.2.0/../../../../powerpc-eabi/bin/ld: warning: /opt/devkitpro/devkitPPC/bin/../lib/gcc/powerpc-eabi/14.2.0/ecrtn.o: missing .note.GNU-stack section implies executable stack
-/opt/devkitpro/devkitPPC/bin/../lib/gcc/powerpc-eabi/14.2.0/../../../../powerpc-eabi/bin/ld: NOTE: This behaviour is deprecated and will be removed in a future version of the linker
-Failed to calculate offset for section .note.GNU-stack (21)
-ERROR: calculateSectionOffsets failed.
-make[1]: *** [/opt/devkitpro/wut/share/wut_rules:67: /project/SDLReader/ports/wiiu/SDLReader-wiiu.rpx] Error 255
-make: *** [Makefile:152: build] Error 2
-```
-
-What made me think this would work?
-* libmupdf.a and libmupdf-third.a compile, meaning their static build and link depdencies were satisfied. 
 
 ## Building
 
