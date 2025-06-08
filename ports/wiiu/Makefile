@@ -54,7 +54,7 @@ LIBS := -lmupdf -lmupdf-third  -lpng -lz -ljpeg -lSDL2 -lwut -lc -lm
 
 # adding -L$(DEVKITPRO)/portlibs/wiiu/lib is redundant.  already added with pkgconfig --libs SDL2
 LDFLAGS += -L$(MUPDF_ROOT)/build/release \
-	-L$(DEVKITPRO)/portlibs/wiiu/lib
+	-L$(DEVKITPRO)/portlibs/wiiu/lib 
 
 #-------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd /project/mupdf
+cd /project/mupdf-devkitppc
 
 pwd
 
@@ -18,7 +18,7 @@ HAVE_X11=no \
 HAVE_GL=no \
 HAVE_GLUT=no \
 HAVE_CURL=no \
-HAVE_OBJCOPY=yes \
+HAVE_OBJCOPY=no \
 HAVE_HARFBUZZ=yes \
 html=yes \
 shared=no \
