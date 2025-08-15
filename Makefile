@@ -1,79 +1,46 @@
-# Makefile for SDL Reader on macOS (Top-Level - No Explicit Library Build)
+# Compiler and flags
+CXX      := g++
+CXXFLAGS := -std=c++17 -Wall -Wextra -g \
+            -Isrc -Iinclude -D_REENTRANT -I/usr/include/SDL2
 
-# Compiler
-CXX = g++
+# Output locations
+BIN_DIR  := $(HOME)/SDLReader/bin
+TARGET   := $(BIN_DIR)/sdl_reader_cli
 
-# Source directories
-SRC_DIR = src
-CLI_DIR = cli
+# Object files
+OBJS := build/pdf_document.o build/renderer.o build/text_renderer.o build/app.o build/main.o
 
-# Build directory for all object files
-BUILD_DIR = build
-
-# Final executable directory
-BIN_DIR = bin
-
-# Name of the final executable
-TARGET_NAME = sdl_reader_cli
-TARGET = $(BIN_DIR)/$(TARGET_NAME)
-
-# Source files: Combine all .cpp files from src/ and cli/
-SRCS = $(wildcard $(SRC_DIR)/*.cpp) $(wildcard $(CLI_DIR)/*.cpp)
-
-# Homebrew Opt Paths (These symlinks always point to the currently active version)
-# IMPORTANT: If Homebrew is installed in /opt/homebrew (Apple Silicon),
-# replace /usr/local/opt with /opt/homebrew/opt
-MUPDF_OPT_PATH = /usr/local/opt/mupdf-tools
-
-# Compiler flags
-# -std=c++17: Use C++17 standard
-# -Wall -Wextra: Enable common warnings
-# -g: Include debugging information
-# -I$(MUPDF_OPT_PATH)/include: Manual include path for MuPDF headers via opt symlink
-# -I$(SRC_DIR): Include path for project's own header files (e.g., app.h, document.h)
-CXXFLAGS = -std=c++17 -Wall -Wextra -g -I$(MUPDF_OPT_PATH)/include -I$(SRC_DIR) -Iinclude
-
-# Include paths for SDL2 and SDL2_ttf
-# pkg-config --cflags SDL2_ttf added for explicit SDL_ttf header paths
-INC_PATHS = $(shell pkg-config --cflags SDL2_ttf sdl2)
-
-# Library paths and libraries to link
-# -L$(MUPDF_OPT_PATH)/lib: Manual library path for MuPDF static libs via opt symlink
-# -lmupdf -lmupdf-third: Link against MuPDF's main and third-party libraries
-# pkg-config --libs SDL2_ttf added for explicit SDL_ttf library linking
-LIBS = $(shell pkg-config --libs SDL2_ttf sdl2) \
-       -L$(MUPDF_OPT_PATH)/lib -lmupdf -lmupdf-third
-
-# All object files (will be placed in the build directory)
-# Transforms src/file.cpp into build/file.o and cli/file.cpp into build/file.o
-OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS))) \
-       $(patsubst $(CLI_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(CLI_DIR)/%,$(SRCS)))
+# Libraries (link order matters)
+LIBS := -lSDL2_ttf -lSDL2 \
+  -L/usr/local/opt/mupdf-tools/lib \
+  -lmupdf -lmupdf-third \
+  -ljpeg -lopenjp2 -lharfbuzz -ljbig2dec \
+  -lfreetype -lz -lm -lpthread -ldl
 
 .PHONY: all clean
 
-# Default target
-all: $(BIN_DIR) $(BUILD_DIR) $(TARGET)
+# Default goal
+all: $(TARGET)
 
-# Rule to create the bin directory
+# Ensure bin/ exists before linking
 $(BIN_DIR):
-	mkdir -p $(BIN_DIR)
+	@mkdir -p $(BIN_DIR)
 
-# Rule to create the build directory
-$(BUILD_DIR):
-	mkdir -p $(BUILD_DIR)
-
-# Link the executable
+# Link final binary
 $(TARGET): $(OBJS) | $(BIN_DIR)
 	$(CXX) $(OBJS) $(LIBS) -o $@
 
-# Compile source files into object files in the build directory
-# This rule handles both src/ and cli/ cpp files
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+# Compile source to object files
+build/%.o: src/%.cpp
+	 @mkdir -p build
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/%.o: $(CLI_DIR)/%.cpp | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+# Compile sources from cli/
+build/%.o: cli/%.cpp
+	@mkdir -p build
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Clean up compiled files and directories
+# Clean build artifacts
 clean:
-	rm -rf $(BUILD_DIR) $(BIN_DIR)
+	@echo "Cleaning build artifacts..."
+	rm -rf build/*.o $(BIN_DIR)/*

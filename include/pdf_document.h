@@ -1,40 +1,34 @@
-#pragma once
+#ifndef PDF_DOCUMENT_H
+#define PDF_DOCUMENT_H
 
-#include "document.h" // Include the base Document interface
-#include <memory>      // For std::unique_ptr
+#include "document.h"
+#include <mupdf/fitz.h>
+#include <vector>
 
-
-typedef struct fz_context fz_context;
-typedef struct fz_document fz_document;
-typedef struct fz_page fz_page;
-typedef struct fz_pixmap fz_pixmap;
-
-
-struct FzContextDeleter {
-    void operator()(fz_context* ctx) const; // Definition in .cpp
-};
-
-// --- PdfDocument Class (MuPDF Implementation) ---
 class PdfDocument : public Document {
 public:
-
     PdfDocument();
-
-    ~PdfDocument() override;
-
-    bool open(const std::string& filename) override;
-
-    int getPageCount() const override;
-
-    std::vector<uint8_t> renderPage(int pageNum, int& outWidth, int& outHeight, int scale) override;
-
-    // New: Override the native dimension methods
-    int getPageWidthNative(int pageNum) override;
-    int getPageHeightNative(int pageNum) override;
+    ~PdfDocument() override = default;  // Ensure override
+    std::vector<unsigned char> renderPage(int page, int& width, int& height, int scale) override;
+    int getPageWidthNative(int page) override;
+    int getPageHeightNative(int page) override;
 
 private:
-    std::unique_ptr<fz_context, FzContextDeleter> m_ctx;
-    // Raw pointer for MuPDF document. Managed manually in destructor because
-    // fz_drop_document requires the fz_context, which unique_ptr would drop first.
-    fz_document* m_doc;
+    // Use smart pointers to manage MuPDF types safely
+    struct ContextDeleter {
+        void operator()(fz_context* ctx) const { if (ctx) fz_drop_context(ctx); }
+    };
+    struct DocumentDeleter {
+        fz_context* ctx;
+        void operator()(fz_document* doc) const { if (doc) fz_drop_document(ctx, doc); }
+    };
+    struct PixmapDeleter {
+        fz_context* ctx;
+        void operator()(fz_pixmap* pix) const { if (pix) fz_drop_pixmap(ctx, pix); }
+    };
+
+    std::unique_ptr<fz_context, ContextDeleter> m_ctx;
+    std::unique_ptr<fz_document, DocumentDeleter> m_doc;
 };
+
+#endif // PDF_DOCUMENT_H
