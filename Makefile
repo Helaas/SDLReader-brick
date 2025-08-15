@@ -4,11 +4,12 @@ CXXFLAGS := -std=c++17 -Wall -Wextra -g \
             -Isrc -Iinclude -D_REENTRANT -I/usr/include/SDL2
 
 # Output locations
-BIN_DIR  := $(HOME)/SDLReader/bin
+BIN_DIR  := bin
+BUILD_DIR  := build
 TARGET   := $(BIN_DIR)/sdl_reader_cli
 
 # Object files
-OBJS := build/pdf_document.o build/renderer.o build/text_renderer.o build/app.o build/main.o
+OBJS := $(BUILD_DIR)/pdf_document.o $(BUILD_DIR)/renderer.o $(BUILD_DIR)/text_renderer.o $(BUILD_DIR)/app.o $(BUILD_DIR)/main.o
 
 # Libraries (link order matters)
 LIBS := -lSDL2_ttf -lSDL2 \
@@ -31,16 +32,16 @@ $(TARGET): $(OBJS) | $(BIN_DIR)
 	$(CXX) $(OBJS) $(LIBS) -o $@
 
 # Compile source to object files
-build/%.o: src/%.cpp
-	 @mkdir -p build
+$(BUILD_DIR)/%.o: src/%.cpp
+	 @mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # Compile sources from cli/
-build/%.o: cli/%.cpp
-	@mkdir -p build
+$(BUILD_DIR)/%.o: cli/%.cpp
+	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
-	rm -rf build/*.o $(BIN_DIR)/*
+	rm -rf $(BUILD_DIR)/*.o $(BIN_DIR)/*

@@ -53,7 +53,7 @@ std::vector<unsigned char> PdfDocument::renderPage(int pageNumber, int& width, i
     fz_try(ctx) {
         fz_page* page = fz_load_page(ctx, doc, pageNumber);
 
-        fz_rect bounds = fz_bound_page(ctx, page); // returns fz_rect in this version
+        //fz_rect bounds = fz_bound_page(ctx, page); // returns fz_rect in this version
 
         pix = fz_new_pixmap_from_page(ctx, page, transform, fz_device_rgb(ctx), 0);
 
