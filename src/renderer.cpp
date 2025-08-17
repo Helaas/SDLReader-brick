@@ -17,11 +17,6 @@
 
 // --- Renderer Class ---
 
-// Pack 24-bit RGB into 32-bit ARGB with opaque alpha (255).
-static inline Uint32 rgb24_to_argb32(Uint8 r, Uint8 g, Uint8 b) {
-    return (Uint32(0xFF) << 24) | (Uint32(r) << 16) | (Uint32(g) << 8) | Uint32(b);
-}
-
 // Constructor now accepts pre-initialized SDL_Window and SDL_Renderer
 Renderer::Renderer(SDL_Window* window, SDL_Renderer* renderer)
     : m_window(window), m_renderer(renderer),

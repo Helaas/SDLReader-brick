@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BIN=./sdl_reader_cli
+BIN=./bin/sdl_reader_cli
 DEST=./bundle
 mkdir -p "$DEST/bin" "$DEST/lib"
 
