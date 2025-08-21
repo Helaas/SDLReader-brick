@@ -30,6 +30,8 @@ $(BIN_DIR):
 # Link final binary
 $(TARGET): $(OBJS) | $(BIN_DIR)
 	$(CXX) $(OBJS) $(LIBS) -o $@
+	@patchelf --remove-rpath "$@" 2>/dev/null || true
+	@patchelf --set-rpath '$$ORIGIN/../lib' "$@"
 
 # Compile source to object files
 $(BUILD_DIR)/%.o: src/%.cpp

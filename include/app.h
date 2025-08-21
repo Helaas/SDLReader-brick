@@ -64,6 +64,7 @@ private:
     void printAppState();
 
     bool m_running;
+
     // Renderer now owns a unique_ptr to Renderer, which internally holds raw pointers
     std::unique_ptr<Renderer> m_renderer;
     std::unique_ptr<Document> m_document;
@@ -80,6 +81,9 @@ private:
     bool m_isDragging;
     float m_lastTouchX;
     float m_lastTouchY;
+
+    // R2 State
+    bool m_r2Held;
 
     // Game Controller
     SDL_GameController* m_gameController;

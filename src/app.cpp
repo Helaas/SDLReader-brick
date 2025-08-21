@@ -12,29 +12,38 @@
 // --- App Class ---
 
 // Constructor now accepts pre-initialized SDL_Window* and SDL_Renderer*
-App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer)
+App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer)
     : m_running(true), m_currentPage(0), m_currentScale(100),
       m_scrollX(0), m_scrollY(0), m_pageWidth(0), m_pageHeight(0),
       m_isDragging(false), m_lastTouchX(0.0f), m_lastTouchY(0.0f),
-      m_gameController(nullptr), m_gameControllerInstanceID(-1) {
+      m_gameController(nullptr), m_gameControllerInstanceID(-1)
+{
 
     // Pass the pre-initialized window and renderer to the Renderer object
     m_renderer = std::make_unique<Renderer>(window, renderer);
 
     m_textRenderer = std::make_unique<TextRenderer>(m_renderer->getSDLRenderer(), "res/Roboto-Regular.ttf", 16);
 
-    if (filename.length() >= 4 && filename.substr(filename.length() - 4) == ".pdf") {
+    // R2 State
+    m_r2Held = false;
+
+    if (filename.length() >= 4 && filename.substr(filename.length() - 4) == ".pdf")
+    {
         m_document = std::make_unique<PdfDocument>();
-    } else {
+    }
+    else
+    {
         throw std::runtime_error("Unsupported file format: " + filename);
     }
 
-    if (!m_document->open(filename)) {
+    if (!m_document->open(filename))
+    {
         throw std::runtime_error("Failed to open document: " + filename);
     }
 
     m_pageCount = m_document->getPageCount();
-    if (m_pageCount == 0) {
+    if (m_pageCount == 0)
+    {
         throw std::runtime_error("Document contains no pages: " + filename);
     }
 
@@ -45,16 +54,20 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     initializeGameControllers();
 }
 
-App::~App() {
+App::~App()
+{
     closeGameControllers();
     // SDL_Quit() and TTF_Quit() are now handled in main.cpp
 }
 
-void App::run() {
+void App::run()
+{
     SDL_Event event;
-    while (m_running) {
+    while (m_running)
+    {
         // Event handling
-        while (SDL_PollEvent(&event) != 0) {
+        while (SDL_PollEvent(&event) != 0)
+        {
             handleEvent(event);
         }
 
@@ -65,188 +78,270 @@ void App::run() {
     }
 }
 
-void App::handleEvent(const SDL_Event& event) {
+void App::handleEvent(const SDL_Event &event)
+{
     AppAction action = AppAction::None;
 
-    switch (event.type) {
-        case SDL_QUIT:
+    switch (event.type)
+    {
+    case SDL_QUIT:
+        action = AppAction::Quit;
+        break;
+    case SDL_WINDOWEVENT:
+        if (event.window.event == SDL_WINDOWEVENT_RESIZED ||
+            event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
+        {
+            action = AppAction::Resize;
+        }
+        break;
+    case SDL_KEYDOWN:
+        switch (event.key.keysym.sym)
+        {
+        case SDLK_ESCAPE:
             action = AppAction::Quit;
             break;
-        case SDL_WINDOWEVENT:
-            if (event.window.event == SDL_WINDOWEVENT_RESIZED ||
-                event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
-                action = AppAction::Resize;
-            }
+        case SDLK_RIGHT:
+            goToNextPage();
             break;
-        case SDL_KEYDOWN:
-            switch (event.key.keysym.sym) {
-                case SDLK_ESCAPE:
-                    action = AppAction::Quit;
-                    break;
-                case SDLK_RIGHT:
-                    goToNextPage();
-                    break;
-                case SDLK_LEFT:
-                    goToPreviousPage();
-                    break;
-                case SDLK_HOME:
-                    goToPage(0);
-                    break;
-                case SDLK_END:
-                    goToPage(m_pageCount - 1);
-                    break;
-                case SDLK_UP:
-                    zoom(10);
-                    break;
-                case SDLK_DOWN:
-                    zoom(-10);
-                    break;
-                case SDLK_0:
-                    zoomTo(100);
-                    break;
-                case SDLK_f:
-                    m_renderer->toggleFullscreen();
-                    fitPageToWindow();
-                    break;
-                case SDLK_p:
-                    printAppState();
-                    break;
-                case SDLK_r:
-                    resetPageView();
-                    break;
-                case SDLK_c:
-                    clampScroll();
-                    break;
-            }
+        case SDLK_LEFT:
+            goToPreviousPage();
             break;
-        case SDL_MOUSEWHEEL:
-            if (event.wheel.y > 0) {
-                if (SDL_GetModState() & KMOD_CTRL) {
-                    zoom(10);
-                } else {
-                    m_scrollY += 50;
-                }
-            } else if (event.wheel.y < 0) {
-                if (SDL_GetModState() & KMOD_CTRL) {
-                    zoom(-10);
-                } else {
-                    m_scrollY -= 50;
-                }
-            }
+        case SDLK_HOME:
+            goToPage(0);
+            break;
+        case SDLK_END:
+            goToPage(m_pageCount - 1);
+            break;
+        case SDLK_UP:
+            zoom(10);
+            break;
+        case SDLK_DOWN:
+            zoom(-10);
+            break;
+        case SDLK_0:
+            zoomTo(100);
+            break;
+        case SDLK_f:
+            m_renderer->toggleFullscreen();
+            fitPageToWindow();
+            break;
+        case SDLK_p:
+            printAppState();
+            break;
+        case SDLK_r:
+            resetPageView();
+            break;
+        case SDLK_c:
             clampScroll();
             break;
-        case SDL_MOUSEBUTTONDOWN:
-            if (event.button.button == SDL_BUTTON_LEFT) {
-                m_isDragging = true;
-                m_lastTouchX = static_cast<float>(event.button.x);
-                m_lastTouchY = static_cast<float>(event.button.y);
+        }
+        break;
+    case SDL_MOUSEWHEEL:
+        if (event.wheel.y > 0)
+        {
+            if (SDL_GetModState() & KMOD_CTRL)
+            {
+                zoom(10);
             }
-            break;
-        case SDL_MOUSEBUTTONUP:
-            if (event.button.button == SDL_BUTTON_LEFT) {
-                m_isDragging = false;
+            else
+            {
+                m_scrollY += 50;
             }
-            break;
-        case SDL_MOUSEMOTION:
-            if (m_isDragging) {
-                float dx = static_cast<float>(event.motion.x) - m_lastTouchX;
-                float dy = static_cast<float>(event.motion.y) - m_lastTouchY;
-                m_scrollX += static_cast<int>(dx);
-                m_scrollY += static_cast<int>(dy);
-                m_lastTouchX = static_cast<float>(event.motion.x);
-                m_lastTouchY = static_cast<float>(event.motion.y);
-                clampScroll();
+        }
+        else if (event.wheel.y < 0)
+        {
+            if (SDL_GetModState() & KMOD_CTRL)
+            {
+                zoom(-10);
             }
-            break;
-        case SDL_CONTROLLERAXISMOTION:
-            if (event.caxis.which == m_gameControllerInstanceID) {
-                const Sint16 AXIS_DEAD_ZONE = 8000;
+            else
+            {
+                m_scrollY -= 50;
+            }
+        }
+        clampScroll();
+        break;
+    case SDL_MOUSEBUTTONDOWN:
+        if (event.button.button == SDL_BUTTON_LEFT)
+        {
+            m_isDragging = true;
+            m_lastTouchX = static_cast<float>(event.button.x);
+            m_lastTouchY = static_cast<float>(event.button.y);
+        }
+        break;
+    case SDL_MOUSEBUTTONUP:
+        if (event.button.button == SDL_BUTTON_LEFT)
+        {
+            m_isDragging = false;
+        }
+        break;
+    case SDL_MOUSEMOTION:
+        if (m_isDragging)
+        {
+            float dx = static_cast<float>(event.motion.x) - m_lastTouchX;
+            float dy = static_cast<float>(event.motion.y) - m_lastTouchY;
+            m_scrollX += static_cast<int>(dx);
+            m_scrollY += static_cast<int>(dy);
+            m_lastTouchX = static_cast<float>(event.motion.x);
+            m_lastTouchY = static_cast<float>(event.motion.y);
+            clampScroll();
+        }
+        break;
+    case SDL_CONTROLLERAXISMOTION:
+        if (event.caxis.which == m_gameControllerInstanceID)
+        {
+            const Sint16 AXIS_DEAD_ZONE = 8000;
+            if (event.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT)
+            {
+                // R2 is analog: consider pressed if > ~50% (16000)
+                m_r2Held = (event.caxis.value > 16000);
+            }
 
-                switch (event.caxis.axis) {
-                    case SDL_CONTROLLER_AXIS_LEFTX:
-                    case SDL_CONTROLLER_AXIS_RIGHTX:
-                        if (event.caxis.value < -AXIS_DEAD_ZONE) {
-                            m_scrollX += 20;
-                        } else if (event.caxis.value > AXIS_DEAD_ZONE) {
-                            m_scrollX -= 20;
-                        }
-                        break;
-                    case SDL_CONTROLLER_AXIS_LEFTY:
-                    case SDL_CONTROLLER_AXIS_RIGHTY:
-                        if (event.caxis.value < -AXIS_DEAD_ZONE) {
-                            m_scrollY += 20;
-                        } else if (event.caxis.value > AXIS_DEAD_ZONE) {
-                            m_scrollY -= 20;
-                        }
-                        break;
+            switch (event.caxis.axis)
+            {
+            case SDL_CONTROLLER_AXIS_LEFTX:
+            case SDL_CONTROLLER_AXIS_RIGHTX:
+                if (event.caxis.value < -AXIS_DEAD_ZONE)
+                {
+                    m_scrollX += 20;
+                }
+                else if (event.caxis.value > AXIS_DEAD_ZONE)
+                {
+                    m_scrollX -= 20;
+                }
+                break;
+            case SDL_CONTROLLER_AXIS_LEFTY:
+            case SDL_CONTROLLER_AXIS_RIGHTY:
+                if (event.caxis.value < -AXIS_DEAD_ZONE)
+                {
+                    m_scrollY += 20;
+                }
+                else if (event.caxis.value > AXIS_DEAD_ZONE)
+                {
+                    m_scrollY -= 20;
+                }
+                break;
+            }
+            clampScroll();
+        }
+        break;
+    case SDL_CONTROLLERBUTTONDOWN:
+        if (event.cbutton.which == m_gameControllerInstanceID)
+        {
+
+            // If either shoulder is pressed, check if both are currently held.
+            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_LEFTSHOULDER ||
+                event.cbutton.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
+            {
+
+                const bool l1Down = SDL_GameControllerGetButton(
+                    m_gameController, SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
+                const bool r1Down = SDL_GameControllerGetButton(
+                    m_gameController, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
+
+                if (l1Down && r1Down)
+                {
+                    action = AppAction::Quit; // Exit when L1+R1 are held together
+                    break;                    // skip other button handling
+                }
+            }
+
+            if (m_r2Held)
+            {
+                // R2 is held: remap dpad to pan instead of page/zoom
+                switch (event.cbutton.button)
+                {
+                case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+                    m_scrollX -= 50;
+                    break; // pan right
+                case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+                    m_scrollX += 50;
+                    break; // pan left
+                case SDL_CONTROLLER_BUTTON_DPAD_UP:
+                    m_scrollY += 50;
+                    break; // pan up
+                case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+                    m_scrollY -= 50;
+                    break; // pan down
                 }
                 clampScroll();
             }
-            break;
-        case SDL_CONTROLLERBUTTONDOWN:
-            if (event.cbutton.which == m_gameControllerInstanceID) {
-                switch (event.cbutton.button) {
-                    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-                        goToNextPage();
-                        break;
-                    case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-                        goToPreviousPage();
-                        break;
-                    case SDL_CONTROLLER_BUTTON_DPAD_UP:
-                        zoom(10);
-                        break;
-                    case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-                        zoom(-10);
-                        break;
-                    case SDL_CONTROLLER_BUTTON_A:
-                        resetPageView();
-                        break;
-                    case SDL_CONTROLLER_BUTTON_B:
-                        printAppState();
-                        break;
-                    case SDL_CONTROLLER_BUTTON_X:
-                        goToPage(0);
-                        break;
-                    case SDL_CONTROLLER_BUTTON_Y:
-                        goToPage(m_pageCount - 1);
-                        break;
+            else
+            {
+                switch (event.cbutton.button)
+                {
+                case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+                    goToNextPage();
+                    break;
+                case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+                    goToPreviousPage();
+                    break;
+                case SDL_CONTROLLER_BUTTON_DPAD_UP:
+                    zoom(10);
+                    break;
+                case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+                    zoom(-10);
+                    break;
+                case SDL_CONTROLLER_BUTTON_A:
+                    resetPageView();
+                    break;
+                case SDL_CONTROLLER_BUTTON_B:
+                    printAppState();
+                    break;
+                case SDL_CONTROLLER_BUTTON_X:
+                    goToPage(0);
+                    break;
+                case SDL_CONTROLLER_BUTTON_Y:
+                    goToPage(m_pageCount - 1);
+                    break;
                 }
             }
-            break;
-        case SDL_CONTROLLERDEVICEADDED:
-            if (m_gameController == nullptr) {
-                m_gameController = SDL_GameControllerOpen(event.cdevice.which);
-                if (m_gameController) {
-                    m_gameControllerInstanceID = SDL_JoystickGetDeviceInstanceID(event.cdevice.which);
-                    std::cout << "Opened game controller: " << SDL_GameControllerName(m_gameController) << std::endl;
-                } else {
-                    std::cerr << "Could not open game controller: " << SDL_GetError() << std::endl;
-                }
+        }
+        break;
+    case SDL_CONTROLLERDEVICEADDED:
+        if (m_gameController == nullptr)
+        {
+            m_gameController = SDL_GameControllerOpen(event.cdevice.which);
+            if (m_gameController)
+            {
+                m_gameControllerInstanceID = SDL_JoystickGetDeviceInstanceID(event.cdevice.which);
+                std::cout << "Opened game controller: " << SDL_GameControllerName(m_gameController) << std::endl;
             }
-            break;
-        case SDL_CONTROLLERDEVICEREMOVED:
-            if (m_gameController != nullptr && event.cdevice.which == m_gameControllerInstanceID) {
-                SDL_GameControllerClose(m_gameController);
-                m_gameController = nullptr;
-                m_gameControllerInstanceID = -1;
-                std::cout << "Game controller disconnected." << std::endl;
+            else
+            {
+                std::cerr << "Could not open game controller: " << SDL_GetError() << std::endl;
             }
-            break;
+        }
+        break;
+    case SDL_CONTROLLERDEVICEREMOVED:
+        if (m_gameController != nullptr && event.cdevice.which == m_gameControllerInstanceID)
+        {
+            SDL_GameControllerClose(m_gameController);
+            m_gameController = nullptr;
+            m_gameControllerInstanceID = -1;
+            std::cout << "Game controller disconnected." << std::endl;
+        }
+        break;
     }
 
-    if (action == AppAction::Quit) {
+    if (action == AppAction::Quit)
+    {
         m_running = false;
-    } else if (action == AppAction::Resize) {
+    }
+    else if (action == AppAction::Resize)
+    {
         fitPageToWindow();
     }
 }
 
-void App::loadDocument() {
+void App::loadDocument()
+{
     m_currentPage = 0;
     fitPageToWindow();
 }
 
-void App::renderCurrentPage() {
+void App::renderCurrentPage()
+{
     m_renderer->clear(255, 255, 255, 255);
 
     int currentWindowWidth = m_renderer->getWindowWidth();
@@ -264,11 +359,12 @@ void App::renderCurrentPage() {
     m_renderer->renderPage(pixelData, renderedWidth, renderedHeight, posX, posY, m_pageWidth, m_pageHeight);
 }
 
-void App::renderUI() {
+void App::renderUI()
+{
     int baseFontSize = 16;
     m_textRenderer->setFontSize(baseFontSize);
 
-    SDL_Color textColor = { 0, 0, 0, 255 };
+    SDL_Color textColor = {0, 0, 0, 255};
     std::string pageInfo = "Page: " + std::to_string(m_currentPage + 1) + "/" + std::to_string(m_pageCount);
     std::string scaleInfo = "Scale: " + std::to_string(m_currentScale) + "%";
 
@@ -284,56 +380,69 @@ void App::renderUI() {
                                10, textColor);
 }
 
-void App::goToNextPage() {
-    if (m_currentPage < m_pageCount - 1) {
+void App::goToNextPage()
+{
+    if (m_currentPage < m_pageCount - 1)
+    {
         m_currentPage++;
         fitPageToWindow();
     }
 }
 
-void App::goToPreviousPage() {
-    if (m_currentPage > 0) {
+void App::goToPreviousPage()
+{
+    if (m_currentPage > 0)
+    {
         m_currentPage--;
         fitPageToWindow();
     }
 }
 
-void App::goToPage(int pageNum) {
-    if (pageNum >= 0 && pageNum < m_pageCount) {
+void App::goToPage(int pageNum)
+{
+    if (pageNum >= 0 && pageNum < m_pageCount)
+    {
         m_currentPage = pageNum;
         fitPageToWindow();
     }
 }
 
-void App::zoom(int delta) {
+void App::zoom(int delta)
+{
     int oldScale = m_currentScale;
     m_currentScale += delta;
-    if (m_currentScale < 10) m_currentScale = 10;
-    if (m_currentScale > 500) m_currentScale = 500;
+    if (m_currentScale < 10)
+        m_currentScale = 10;
+    if (m_currentScale > 500)
+        m_currentScale = 500;
 
     recenterScrollOnZoom(oldScale, m_currentScale);
     clampScroll();
 }
 
-void App::zoomTo(int scale) {
+void App::zoomTo(int scale)
+{
     int oldScale = m_currentScale;
     m_currentScale = scale;
-    if (m_currentScale < 10) m_currentScale = 10;
-    if (m_currentScale > 500) m_currentScale = 500;
+    if (m_currentScale < 10)
+        m_currentScale = 10;
+    if (m_currentScale > 500)
+        m_currentScale = 500;
 
     recenterScrollOnZoom(oldScale, m_currentScale);
     clampScroll();
 }
 
-
-void App::fitPageToWindow() {
+void App::fitPageToWindow()
+{
     int windowWidth = m_renderer->getWindowWidth();
     int windowHeight = m_renderer->getWindowHeight();
 
     int nativeWidth = m_document->getPageWidthNative(m_currentPage);
     int nativeHeight = m_document->getPageHeightNative(m_currentPage);
 
-    if (nativeWidth == 0 || nativeHeight == 0) {
+    if (nativeWidth == 0 || nativeHeight == 0)
+    {
         std::cerr << "App ERROR: Native page dimensions are zero for page " << m_currentPage << std::endl;
         return;
     }
@@ -343,19 +452,22 @@ void App::fitPageToWindow() {
 
     m_currentScale = std::min(scaleToFitWidth, scaleToFitHeight);
 
-    if (m_currentScale < 10) m_currentScale = 10;
-    if (m_currentScale > 500) m_currentScale = 500;
+    if (m_currentScale < 10)
+        m_currentScale = 10;
+    if (m_currentScale > 500)
+        m_currentScale = 500;
 
     m_pageWidth = static_cast<int>(nativeWidth * (m_currentScale / 100.0));
     m_pageHeight = static_cast<int>(nativeHeight * (m_currentScale / 100.0));
 
     m_scrollX = 0;
     m_scrollY = 0;
-
 }
 
-void App::recenterScrollOnZoom(int oldScale, int newScale) {
-    if (oldScale == 0 || newScale == 0) return;
+void App::recenterScrollOnZoom(int oldScale, int newScale)
+{
+    if (oldScale == 0 || newScale == 0)
+        return;
 
     int nativeWidth = m_document->getPageWidthNative(m_currentPage);
     int nativeHeight = m_document->getPageHeightNative(m_currentPage);
@@ -380,11 +492,10 @@ void App::recenterScrollOnZoom(int oldScale, int newScale) {
 
     m_scrollX = (windowWidth / 2) - newRelativeX - (windowWidth - newPageWidth) / 2;
     m_scrollY = (windowHeight / 2) - newRelativeY - (windowHeight - newPageHeight) / 2;
-
 }
 
-
-void App::clampScroll() {
+void App::clampScroll()
+{
     int windowWidth = m_renderer->getWindowWidth();
     int windowHeight = m_renderer->getWindowHeight();
 
@@ -395,13 +506,15 @@ void App::clampScroll() {
     m_scrollY = std::max(-maxScrollY, std::min(maxScrollY, m_scrollY));
 }
 
-void App::resetPageView() {
+void App::resetPageView()
+{
     m_currentPage = 0;
     m_currentScale = 100;
     fitPageToWindow();
 }
 
-void App::printAppState() {
+void App::printAppState()
+{
     std::cout << "--- App State ---" << std::endl;
     std::cout << "Current Page: " << (m_currentPage + 1) << "/" << m_pageCount << std::endl;
     std::cout << "Native Page Dimensions: "
@@ -414,24 +527,31 @@ void App::printAppState() {
     std::cout << "-----------------" << std::endl;
 }
 
-
-void App::initializeGameControllers() {
-    for (int i = 0; i < SDL_NumJoysticks(); ++i) {
-        if (SDL_IsGameController(i)) {
+void App::initializeGameControllers()
+{
+    for (int i = 0; i < SDL_NumJoysticks(); ++i)
+    {
+        if (SDL_IsGameController(i))
+        {
             m_gameController = SDL_GameControllerOpen(i);
-            if (m_gameController) {
+            if (m_gameController)
+            {
                 m_gameControllerInstanceID = SDL_JoystickGetDeviceInstanceID(i);
                 std::cout << "Opened game controller: " << SDL_GameControllerName(m_gameController) << std::endl;
                 break;
-            } else {
+            }
+            else
+            {
                 std::cerr << "Could not open game controller: " << SDL_GetError() << std::endl;
             }
         }
     }
 }
 
-void App::closeGameControllers() {
-    if (m_gameController) {
+void App::closeGameControllers()
+{
+    if (m_gameController)
+    {
         SDL_GameControllerClose(m_gameController);
         m_gameController = nullptr;
         m_gameControllerInstanceID = -1;
