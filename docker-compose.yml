@@ -1,0 +1,10 @@
+services:
+  dev:
+    build:
+      context: ./ports/tg5040
+      dockerfile: Dockerfile
+    image: sdlreader:latest
+    volumes:
+      - ./:/root/workspace
+    stdin_open: true
+    tty: true
