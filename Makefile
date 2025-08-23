@@ -1,6 +1,6 @@
 # Compiler and flags
 CXX      := g++
-CXXFLAGS := -std=c++17 -Wall -Wextra -g \
+CXXFLAGS := -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG\
             -Isrc -Iinclude -D_REENTRANT -I/usr/include/SDL2
 
 # Output locations

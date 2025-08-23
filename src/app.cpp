@@ -8,6 +8,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>
+#include <cmath>
 
 // --- App Class ---
 
@@ -24,10 +25,13 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
 
     m_textRenderer = std::make_unique<TextRenderer>(m_renderer->getSDLRenderer(), "res/Roboto-Regular.ttf", 16);
 
-    // R2 State
-    m_r2Held = false;
-
-    if (filename.length() >= 4 && filename.substr(filename.length() - 4) == ".pdf")
+    if (filename.size() >= 4 &&
+        std::equal(filename.end() - 4, filename.end(),
+                   ".pdf",
+                   [](unsigned char a, unsigned char b)
+                   {
+                       return std::tolower(a) == std::tolower(b);
+                   }))
     {
         m_document = std::make_unique<PdfDocument>();
     }
@@ -62,16 +66,22 @@ App::~App()
 
 void App::run()
 {
+    m_prevTick = SDL_GetTicks();
+
     SDL_Event event;
     while (m_running)
     {
-        // Event handling
         while (SDL_PollEvent(&event) != 0)
         {
             handleEvent(event);
         }
 
-        // Rendering
+        Uint32 now = SDL_GetTicks();
+        float dt = (now - m_prevTick) / 1000.0f;
+        m_prevTick = now;
+
+        updateHeldPanning(dt);
+
         renderCurrentPage();
         renderUI();
         m_renderer->present();
@@ -97,6 +107,9 @@ void App::handleEvent(const SDL_Event &event)
     case SDL_KEYDOWN:
         switch (event.key.keysym.sym)
         {
+        case SDLK_AC_HOME:
+            action = AppAction::Quit;
+            break;
         case SDLK_ESCAPE:
             action = AppAction::Quit;
             break;
@@ -191,10 +204,16 @@ void App::handleEvent(const SDL_Event &event)
         if (event.caxis.which == m_gameControllerInstanceID)
         {
             const Sint16 AXIS_DEAD_ZONE = 8000;
-            if (event.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT)
+            // --- L2 / R2 as analog axes: jump ±10 pages on a strong press ---
+            if (event.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT &&
+                event.caxis.value > AXIS_DEAD_ZONE)
             {
-                // R2 is analog: consider pressed if > ~50% (16000)
-                m_r2Held = (event.caxis.value > 16000);
+                jumpPages(-10);
+            }
+            if (event.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT &&
+                event.caxis.value > AXIS_DEAD_ZONE)
+            {
+                jumpPages(+10);
             }
 
             switch (event.caxis.axis)
@@ -228,73 +247,89 @@ void App::handleEvent(const SDL_Event &event)
     case SDL_CONTROLLERBUTTONDOWN:
         if (event.cbutton.which == m_gameControllerInstanceID)
         {
-
-            // If either shoulder is pressed, check if both are currently held.
-            if (event.cbutton.button == SDL_CONTROLLER_BUTTON_LEFTSHOULDER ||
-                event.cbutton.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
+            switch (event.cbutton.button)
             {
+            // --- D-Pad pans (Move) ---
+            case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+                m_dpadRightHeld = true;
+                handleDpadNudgeRight();
+                break;
+            case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+                m_dpadLeftHeld = true;
+                handleDpadNudgeLeft();
+                break;
+            case SDL_CONTROLLER_BUTTON_DPAD_UP:
+                m_dpadUpHeld = true;
+                handleDpadNudgeUp();
+                break;
+            case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+                m_dpadDownHeld = true;
+                handleDpadNudgeDown();
+                break;
 
-                const bool l1Down = SDL_GameControllerGetButton(
-                    m_gameController, SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
-                const bool r1Down = SDL_GameControllerGetButton(
-                    m_gameController, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
+            // --- L1 / R1: page up (previous) ---
+            case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
+                goToPreviousPage();
+                break;
+            case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
+                goToNextPage();
+                break;
 
-                if (l1Down && r1Down)
-                {
-                    action = AppAction::Quit; // Exit when L1+R1 are held together
-                    break;                    // skip other button handling
-                }
+            // --- Y / B: zoom in/out ---
+            case SDL_CONTROLLER_BUTTON_Y:
+                zoom(10);
+                break;
+            case SDL_CONTROLLER_BUTTON_B:
+                zoom(-10);
+                break;
+
+            // --- X: Best fit width (stub -> fits width) ---
+            case SDL_CONTROLLER_BUTTON_X:
+                fitPageToWidth();
+                break;
+
+            // --- A: Rotate (stub) ---
+            case SDL_CONTROLLER_BUTTON_A:
+                rotateClockwise();
+                break;
+
+            // --- MENU/START: Quit ---
+            case SDL_CONTROLLER_BUTTON_GUIDE:
+                action = AppAction::Quit;
+                break; // MENU on Brick
+            case SDL_CONTROLLER_BUTTON_START:
+                action = AppAction::Quit;
+                break; // convenience
+
+            // --- SELECT/START for mirroring (stubs) ---
+            case SDL_CONTROLLER_BUTTON_BACK:
+                toggleMirrorVertical();
+                break; // SELECT
+            // note: START already used for Quit above; change if you prefer mirroring there
+            default:
+                break;
             }
-
-            if (m_r2Held)
+        }
+        break;
+    case SDL_CONTROLLERBUTTONUP:
+        if (event.cbutton.which == m_gameControllerInstanceID)
+        {
+            switch (event.cbutton.button)
             {
-                // R2 is held: remap dpad to pan instead of page/zoom
-                switch (event.cbutton.button)
-                {
-                case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-                    m_scrollX -= 50;
-                    break; // pan right
-                case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-                    m_scrollX += 50;
-                    break; // pan left
-                case SDL_CONTROLLER_BUTTON_DPAD_UP:
-                    m_scrollY += 50;
-                    break; // pan up
-                case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-                    m_scrollY -= 50;
-                    break; // pan down
-                }
-                clampScroll();
-            }
-            else
-            {
-                switch (event.cbutton.button)
-                {
-                case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-                    goToNextPage();
-                    break;
-                case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-                    goToPreviousPage();
-                    break;
-                case SDL_CONTROLLER_BUTTON_DPAD_UP:
-                    zoom(10);
-                    break;
-                case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-                    zoom(-10);
-                    break;
-                case SDL_CONTROLLER_BUTTON_A:
-                    resetPageView();
-                    break;
-                case SDL_CONTROLLER_BUTTON_B:
-                    printAppState();
-                    break;
-                case SDL_CONTROLLER_BUTTON_X:
-                    goToPage(0);
-                    break;
-                case SDL_CONTROLLER_BUTTON_Y:
-                    goToPage(m_pageCount - 1);
-                    break;
-                }
+            case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+                m_dpadRightHeld = false;
+                break;
+            case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+                m_dpadLeftHeld = false;
+                break;
+            case SDL_CONTROLLER_BUTTON_DPAD_UP:
+                m_dpadUpHeld = false;
+                break;
+            case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+                m_dpadDownHeld = false;
+                break;
+            default:
+                break;
             }
         }
         break;
@@ -344,19 +379,44 @@ void App::renderCurrentPage()
 {
     m_renderer->clear(255, 255, 255, 255);
 
-    int currentWindowWidth = m_renderer->getWindowWidth();
-    int currentWindowHeight = m_renderer->getWindowHeight();
+    int winW = m_renderer->getWindowWidth();
+    int winH = m_renderer->getWindowHeight();
 
-    int renderedWidth, renderedHeight;
-    std::vector<uint8_t> pixelData = m_document->renderPage(m_currentPage, renderedWidth, renderedHeight, m_currentScale);
+    int srcW, srcH;
+    std::vector<uint8_t> pixelData = m_document->renderPage(m_currentPage, srcW, srcH, m_currentScale);
 
-    m_pageWidth = renderedWidth;
-    m_pageHeight = renderedHeight;
+    // displayed page size after rotation
+    if (m_rotation % 180 == 0)
+    {
+        m_pageWidth = srcW;
+        m_pageHeight = srcH;
+    }
+    else
+    {
+        m_pageWidth = srcH;
+        m_pageHeight = srcW;
+    }
 
-    int posX = (currentWindowWidth - m_pageWidth) / 2 + m_scrollX;
-    int posY = (currentWindowHeight - m_pageHeight) / 2 + m_scrollY;
+    int posX = (winW - m_pageWidth) / 2 + m_scrollX;
 
-    m_renderer->renderPage(pixelData, renderedWidth, renderedHeight, posX, posY, m_pageWidth, m_pageHeight);
+    int posY;
+    if (m_pageHeight <= winH)
+    {
+        if (m_topAlignWhenFits || m_forceTopAlignNextRender)
+            posY = 0;
+        else
+            posY = (winH - m_pageHeight) / 2;
+    }
+    else
+    {
+        posY = (winH - m_pageHeight) / 2 + m_scrollY;
+    }
+    m_forceTopAlignNextRender = false;
+
+    m_renderer->renderPageEx(pixelData, srcW, srcH,
+                             posX, posY, m_pageWidth, m_pageHeight,
+                             static_cast<double>(m_rotation),
+                             currentFlipFlags());
 }
 
 void App::renderUI()
@@ -385,7 +445,8 @@ void App::goToNextPage()
     if (m_currentPage < m_pageCount - 1)
     {
         m_currentPage++;
-        fitPageToWindow();
+        onPageChangedKeepZoom();
+        alignToTopOfCurrentPage();
     }
 }
 
@@ -394,7 +455,8 @@ void App::goToPreviousPage()
     if (m_currentPage > 0)
     {
         m_currentPage--;
-        fitPageToWindow();
+        onPageChangedKeepZoom();
+        alignToTopOfCurrentPage();
     }
 }
 
@@ -403,7 +465,8 @@ void App::goToPage(int pageNum)
     if (pageNum >= 0 && pageNum < m_pageCount)
     {
         m_currentPage = pageNum;
-        fitPageToWindow();
+        onPageChangedKeepZoom();
+        alignToTopOfCurrentPage();
     }
 }
 
@@ -438,12 +501,14 @@ void App::fitPageToWindow()
     int windowWidth = m_renderer->getWindowWidth();
     int windowHeight = m_renderer->getWindowHeight();
 
-    int nativeWidth = m_document->getPageWidthNative(m_currentPage);
-    int nativeHeight = m_document->getPageHeightNative(m_currentPage);
+    // Use effective sizes so 90/270 rotation swaps W/H
+    int nativeWidth = effectiveNativeWidth();
+    int nativeHeight = effectiveNativeHeight();
 
     if (nativeWidth == 0 || nativeHeight == 0)
     {
-        std::cerr << "App ERROR: Native page dimensions are zero for page " << m_currentPage << std::endl;
+        std::cerr << "App ERROR: Native page dimensions are zero for page "
+                  << m_currentPage << std::endl;
         return;
     }
 
@@ -451,7 +516,6 @@ void App::fitPageToWindow()
     int scaleToFitHeight = static_cast<int>((static_cast<double>(windowHeight) / nativeHeight) * 100.0);
 
     m_currentScale = std::min(scaleToFitWidth, scaleToFitHeight);
-
     if (m_currentScale < 10)
         m_currentScale = 10;
     if (m_currentScale > 500)
@@ -469,8 +533,8 @@ void App::recenterScrollOnZoom(int oldScale, int newScale)
     if (oldScale == 0 || newScale == 0)
         return;
 
-    int nativeWidth = m_document->getPageWidthNative(m_currentPage);
-    int nativeHeight = m_document->getPageHeightNative(m_currentPage);
+    int nativeWidth = effectiveNativeWidth();
+    int nativeHeight = effectiveNativeHeight();
 
     int oldPageWidth = static_cast<int>(nativeWidth * (oldScale / 100.0));
     int oldPageHeight = static_cast<int>(nativeHeight * (oldScale / 100.0));
@@ -511,6 +575,39 @@ void App::resetPageView()
     m_currentPage = 0;
     m_currentScale = 100;
     fitPageToWindow();
+}
+
+// ---- helpers (stubs where noted) ----
+void App::jumpPages(int delta)
+{
+    int target = std::clamp(m_currentPage + delta, 0, m_pageCount - 1);
+    goToPage(target);
+}
+
+void App::rotateClockwise()
+{
+    m_rotation = (m_rotation + 90) % 360;
+    onPageChangedKeepZoom();
+    alignToTopOfCurrentPage();
+}
+
+void App::toggleMirrorVertical()
+{
+    m_mirrorV = !m_mirrorV;
+}
+
+void App::toggleMirrorHorizontal()
+{
+    m_mirrorH = !m_mirrorH;
+}
+
+void App::fitPageToWidth()
+{
+    // Approximate: compute scale so page width == window width (height may overflow).
+    // You already have 'fitPageToWindow()' for full-page; width-fit is complementary.
+    // Implement by measuring page width at 100% and window width, then set m_currentScale.
+    // For now, call fitPageToWindow() as a placeholder:
+    fitPageToWindow(); // TODO: replace with width-only fit.
 }
 
 void App::printAppState()
@@ -557,4 +654,284 @@ void App::closeGameControllers()
         m_gameControllerInstanceID = -1;
         std::cout << "Closed game controller." << std::endl;
     }
+}
+
+void App::updateHeldPanning(float dt)
+{
+    float dx = 0.0f, dy = 0.0f;
+
+    if (m_dpadLeftHeld)
+        dx += 1.0f;
+    if (m_dpadRightHeld)
+        dx -= 1.0f;
+    if (m_dpadUpHeld)
+        dy += 1.0f;
+    if (m_dpadDownHeld)
+        dy -= 1.0f;
+
+    if (dx != 0.0f || dy != 0.0f)
+    {
+        float len = std::sqrt(dx * dx + dy * dy);
+        dx /= len;
+        dy /= len;
+
+        m_scrollX += static_cast<int>(dx * m_dpadPanSpeed * dt);
+        m_scrollY += static_cast<int>(dy * m_dpadPanSpeed * dt);
+        clampScroll();
+    }
+
+    // --- HORIZONTAL edge → page turn ---
+    const int maxX = getMaxScrollX();
+
+    if (maxX == 0)
+    {
+        if (m_dpadRightHeld)
+            m_edgeTurnHoldRight += dt;
+        else
+            m_edgeTurnHoldRight = 0.0f;
+        if (m_dpadLeftHeld)
+            m_edgeTurnHoldLeft += dt;
+        else
+            m_edgeTurnHoldLeft = 0.0f;
+    }
+    else
+    {
+        if (m_scrollX == -maxX && m_dpadRightHeld)
+            m_edgeTurnHoldRight += dt;
+        else
+            m_edgeTurnHoldRight = 0.0f;
+        if (m_scrollX == maxX && m_dpadLeftHeld)
+            m_edgeTurnHoldLeft += dt;
+        else
+            m_edgeTurnHoldLeft = 0.0f;
+    }
+
+    if (m_edgeTurnHoldRight >= m_edgeTurnThreshold)
+    {
+        if (m_currentPage < m_pageCount - 1)
+        {
+            goToNextPage();
+            m_scrollX = getMaxScrollX(); // appear at left edge
+            clampScroll();
+        }
+        m_edgeTurnHoldRight = 0.0f;
+    }
+    else if (m_edgeTurnHoldLeft >= m_edgeTurnThreshold)
+    {
+        if (m_currentPage > 0)
+        {
+            goToPreviousPage();
+            m_scrollX = -getMaxScrollX(); // appear at right edge
+            clampScroll();
+        }
+        m_edgeTurnHoldLeft = 0.0f;
+    }
+
+    // --- VERTICAL edge → page turn (NEW) ---
+    const int maxY = getMaxScrollY();
+
+    if (maxY == 0)
+    {
+        // Page fits vertically: treat sustained up/down as page turns
+        if (m_dpadDownHeld)
+            m_edgeTurnHoldDown += dt;
+        else
+            m_edgeTurnHoldDown = 0.0f;
+        if (m_dpadUpHeld)
+            m_edgeTurnHoldUp += dt;
+        else
+            m_edgeTurnHoldUp = 0.0f;
+    }
+    else
+    {
+        // Bottom edge & still pushing down? (down moves view further down in your scheme: dy < 0)
+        if (m_scrollY == -maxY && m_dpadDownHeld)
+            m_edgeTurnHoldDown += dt;
+        else
+            m_edgeTurnHoldDown = 0.0f;
+
+        // Top edge & still pushing up?
+        if (m_scrollY == maxY && m_dpadUpHeld)
+            m_edgeTurnHoldUp += dt;
+        else
+            m_edgeTurnHoldUp = 0.0f;
+    }
+
+    if (m_edgeTurnHoldDown >= m_edgeTurnThreshold)
+    {
+        if (m_currentPage < m_pageCount - 1)
+        {
+            goToNextPage();
+            // Land at the top edge of the new page so motion feels continuous downward
+            m_scrollY = getMaxScrollY();
+            clampScroll();
+        }
+        m_edgeTurnHoldDown = 0.0f;
+    }
+    else if (m_edgeTurnHoldUp >= m_edgeTurnThreshold)
+    {
+        if (m_currentPage > 0)
+        {
+            goToPreviousPage();
+            // Land at the bottom edge of the previous page
+            m_scrollY = -getMaxScrollY();
+            clampScroll();
+        }
+        m_edgeTurnHoldUp = 0.0f;
+    }
+}
+
+int App::getMaxScrollX() const
+{
+    int windowWidth = m_renderer->getWindowWidth();
+    return std::max(0, (m_pageWidth - windowWidth) / 2);
+}
+int App::getMaxScrollY() const
+{
+    int windowHeight = m_renderer->getWindowHeight();
+    return std::max(0, (m_pageHeight - windowHeight) / 2);
+}
+
+void App::handleDpadNudgeRight()
+{
+    const int maxX = getMaxScrollX();
+    // Right nudge while already at right edge -> next page
+    if (maxX == 0 || m_scrollX == -maxX)
+    {
+        if (m_currentPage < m_pageCount - 1)
+        {
+            goToNextPage();
+            m_scrollX = getMaxScrollX(); // appear at left edge of new page
+            clampScroll();
+        }
+        return;
+    }
+    m_scrollX -= 50;
+    clampScroll();
+}
+
+void App::handleDpadNudgeLeft()
+{
+    const int maxX = getMaxScrollX();
+    // Left nudge while already at left edge -> previous page
+    if (maxX == 0 || m_scrollX == maxX)
+    {
+        if (m_currentPage > 0)
+        {
+            goToPreviousPage();
+            m_scrollX = -getMaxScrollX(); // appear at right edge of prev page
+            clampScroll();
+        }
+        return;
+    }
+    m_scrollX += 50;
+    clampScroll();
+}
+
+void App::handleDpadNudgeDown()
+{
+    const int maxY = getMaxScrollY();
+    // Down nudge while already at bottom edge -> next page
+    if (maxY == 0 || m_scrollY == -maxY)
+    {
+        if (m_currentPage < m_pageCount - 1)
+        {
+            goToNextPage();
+            m_scrollY = getMaxScrollY(); // appear at top edge of new page
+            clampScroll();
+        }
+        return;
+    }
+    m_scrollY -= 50;
+    clampScroll();
+}
+
+void App::handleDpadNudgeUp()
+{
+    const int maxY = getMaxScrollY();
+    // Up nudge while already at top edge -> previous page
+    if (maxY == 0 || m_scrollY == maxY)
+    {
+        if (m_currentPage > 0)
+        {
+            goToPreviousPage();
+            m_scrollY = -getMaxScrollY(); // appear at bottom edge of prev page
+            clampScroll();
+        }
+        return;
+    }
+    m_scrollY += 50;
+    clampScroll();
+}
+
+void App::onPageChangedKeepZoom()
+{
+    // Predict scaled size for the new page using the current zoom
+    int nativeW = effectiveNativeWidth();
+    int nativeH = effectiveNativeHeight();
+
+    // Guard against bad docs
+    if (nativeW <= 0 || nativeH <= 0)
+    {
+        std::cerr << "App ERROR: Native page dimensions are zero for page " << m_currentPage << std::endl;
+        return;
+    }
+
+    m_pageWidth = static_cast<int>(nativeW * (m_currentScale / 100.0));
+    m_pageHeight = static_cast<int>(nativeH * (m_currentScale / 100.0));
+
+    // Keep current scroll but ensure it's valid for the new page extents
+    clampScroll();
+}
+
+void App::alignToTopOfCurrentPage()
+{
+    // Recompute extents with current zoom (safe even if already set)
+    int nativeW = m_document->getPageWidthNative(m_currentPage);
+    int nativeH = m_document->getPageHeightNative(m_currentPage);
+    if (nativeW <= 0 || nativeH <= 0)
+        return;
+
+    m_pageWidth = static_cast<int>(nativeW * (m_currentScale / 100.0));
+    m_pageHeight = static_cast<int>(nativeH * (m_currentScale / 100.0));
+
+    // If the page is taller than the window, place the view at the *top edge*
+    // With your clamp scheme, "top edge" corresponds to +maxY
+    int windowH = m_renderer->getWindowHeight();
+    int maxY = std::max(0, (m_pageHeight - windowH) / 2);
+
+    if (maxY > 0)
+    {
+        m_scrollY = +maxY; // top edge visible
+        clampScroll();
+    }
+    else
+    {
+        // No vertical scroll range (fits): request a top-aligned render once
+        m_forceTopAlignNextRender = true;
+    }
+}
+
+int App::effectiveNativeWidth() const
+{
+    int w = m_document->getPageWidthNative(m_currentPage);
+    int h = m_document->getPageHeightNative(m_currentPage);
+    return (m_rotation % 180 == 0) ? w : h;
+}
+
+int App::effectiveNativeHeight() const
+{
+    int w = m_document->getPageWidthNative(m_currentPage);
+    int h = m_document->getPageHeightNative(m_currentPage);
+    return (m_rotation % 180 == 0) ? h : w;
+}
+
+SDL_RendererFlip App::currentFlipFlags() const
+{
+    SDL_RendererFlip f = SDL_FLIP_NONE;
+    if (m_mirrorH)
+        f = (SDL_RendererFlip)(f | SDL_FLIP_HORIZONTAL);
+    if (m_mirrorV)
+        f = (SDL_RendererFlip)(f | SDL_FLIP_VERTICAL);
+    return f;
 }
