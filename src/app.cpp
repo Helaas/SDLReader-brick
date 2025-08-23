@@ -298,8 +298,8 @@ void App::handleEvent(const SDL_Event &event)
                 action = AppAction::Quit;
                 break; // MENU on Brick
             case SDL_CONTROLLER_BUTTON_START:
-                action = AppAction::Quit;
-                break; // convenience
+                toggleMirrorHorizontal();
+                break;
 
             // --- SELECT/START for mirroring (stubs) ---
             case SDL_CONTROLLER_BUTTON_BACK:

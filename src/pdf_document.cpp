@@ -9,15 +9,18 @@ PdfDocument::PdfDocument()
 {
 }
 
-PdfDocument::~PdfDocument() {
+PdfDocument::~PdfDocument()
+{
     close();
 }
 
-bool PdfDocument::open(const std::string& filePath) {
+bool PdfDocument::open(const std::string &filePath)
+{
     close();
 
-    fz_context* ctx = fz_new_context(nullptr, nullptr, FZ_STORE_UNLIMITED);
-    if (!ctx) {
+    fz_context *ctx = fz_new_context(nullptr, nullptr, FZ_STORE_UNLIMITED);
+    if (!ctx)
+    {
         std::cerr << "Cannot create MuPDF context\n";
         return false;
     }
@@ -25,35 +28,40 @@ bool PdfDocument::open(const std::string& filePath) {
     m_ctx.reset(ctx);
     fz_register_document_handlers(ctx);
 
-    fz_document* doc = nullptr;
-    fz_try(ctx) {
+    fz_document *doc = nullptr;
+    fz_try(ctx)
+    {
         doc = fz_open_document(ctx, filePath.c_str());
     }
-    fz_catch(ctx) {
+    fz_catch(ctx)
+    {
         std::cerr << "Failed to open document: " << filePath << "\n";
         return false;
     }
 
-    m_doc = std::unique_ptr<fz_document, DocumentDeleter>(doc, DocumentDeleter{ ctx });
+    m_doc = std::unique_ptr<fz_document, DocumentDeleter>(doc, DocumentDeleter{ctx});
     return true;
 }
 
-std::vector<unsigned char> PdfDocument::renderPage(int pageNumber, int& width, int& height, int zoom) {
-    if (!m_ctx || !m_doc) {
+std::vector<unsigned char> PdfDocument::renderPage(int pageNumber, int &width, int &height, int zoom)
+{
+    if (!m_ctx || !m_doc)
+    {
         throw std::runtime_error("Document not open");
     }
 
-    fz_context* ctx = m_ctx.get();
-    fz_document* doc = m_doc.get();
+    fz_context *ctx = m_ctx.get();
+    fz_document *doc = m_doc.get();
 
     fz_matrix transform = fz_scale(zoom / 100.0f, zoom / 100.0f);
-    fz_pixmap* pix = nullptr;
+    fz_pixmap *pix = nullptr;
     std::vector<unsigned char> buffer;
 
-    fz_try(ctx) {
-        fz_page* page = fz_load_page(ctx, doc, pageNumber);
+    fz_try(ctx)
+    {
+        fz_page *page = fz_load_page(ctx, doc, pageNumber);
 
-        //fz_rect bounds = fz_bound_page(ctx, page); // returns fz_rect in this version
+        // fz_rect bounds = fz_bound_page(ctx, page); // returns fz_rect in this version
 
         pix = fz_new_pixmap_from_page(ctx, page, transform, fz_device_rgb(ctx), 0);
 
@@ -69,69 +77,86 @@ std::vector<unsigned char> PdfDocument::renderPage(int pageNumber, int& width, i
         fz_drop_pixmap(ctx, pix);
         pix = nullptr;
     }
-    fz_catch(ctx) {
-        if (pix) fz_drop_pixmap(ctx, pix);
+    fz_catch(ctx)
+    {
+        if (pix)
+            fz_drop_pixmap(ctx, pix);
         throw std::runtime_error("Error rendering page");
     }
 
     return buffer;
 }
+int PdfDocument::getPageWidthNative(int pageNumber)
+{
+    if (!m_ctx || !m_doc)
+        return 0;
 
-int PdfDocument::getPageWidthNative(int pageNumber) {
-    if (!m_ctx || !m_doc) return 0;
+    fz_context *ctx = m_ctx.get();
+    fz_document *doc = m_doc.get();
+    volatile int width = 0; // volatile to survive longjmp across fz_try/fz_catch
 
-    fz_context* ctx = m_ctx.get();
-    fz_document* doc = m_doc.get();
-    int width = 0;
-
-    fz_try(ctx) {
-        fz_page* page = fz_load_page(ctx, doc, pageNumber);
+    fz_try(ctx)
+    {
+        fz_page *page = fz_load_page(ctx, doc, pageNumber);
         fz_rect bounds = fz_bound_page(ctx, page);
         width = static_cast<int>(bounds.x1 - bounds.x0);
         fz_drop_page(ctx, page);
     }
-    fz_catch(ctx) {
+    fz_catch(ctx)
+    {
         width = 0;
     }
 
-    return width;
+    return width; // implicit cast from volatile int to int
 }
 
-int PdfDocument::getPageHeightNative(int pageNumber) {
-    if (!m_ctx || !m_doc) return 0;
+int PdfDocument::getPageHeightNative(int pageNumber)
+{
+    if (!m_ctx || !m_doc)
+        return 0;
 
-    fz_context* ctx = m_ctx.get();
-    fz_document* doc = m_doc.get();
-    int height = 0;
+    fz_context *ctx = m_ctx.get();
+    fz_document *doc = m_doc.get();
+    volatile int height = 0; // volatile to survive longjmp
 
-    fz_try(ctx) {
-        fz_page* page = fz_load_page(ctx, doc, pageNumber);
+    fz_try(ctx)
+    {
+        fz_page *page = fz_load_page(ctx, doc, pageNumber);
         fz_rect bounds = fz_bound_page(ctx, page);
         height = static_cast<int>(bounds.y1 - bounds.y0);
         fz_drop_page(ctx, page);
     }
-    fz_catch(ctx) {
+    fz_catch(ctx)
+    {
         height = 0;
     }
 
     return height;
 }
 
-int PdfDocument::getPageCount() const {
-    if (!m_ctx || !m_doc) return 0;
+int PdfDocument::getPageCount() const
+{
+    if (!m_ctx || !m_doc)
+        return 0;
 
-    int count = 0;
-    fz_try(m_ctx.get()) {
-        count = fz_count_pages(m_ctx.get(), m_doc.get());
+    fz_context *ctx = m_ctx.get();
+    fz_document *doc = m_doc.get();
+    volatile int count = 0; // volatile to survive longjmp
+
+    fz_try(ctx)
+    {
+        count = fz_count_pages(ctx, doc);
     }
-    fz_catch(m_ctx.get()) {
+    fz_catch(ctx)
+    {
         count = 0;
     }
 
     return count;
-}  
+}
 
-void PdfDocument::close() {
+void PdfDocument::close()
+{
     m_doc.reset();
     m_ctx.reset();
 }
