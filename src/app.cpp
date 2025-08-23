@@ -3,7 +3,7 @@
 #include "text_renderer.h"
 #include "document.h"
 #include "pdf_document.h"
-// #include "djvu_document.h" // Removed for DjVu support removal
+#include "power_watcher.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -11,6 +11,7 @@
 #include <cmath>
 
 // --- App Class ---
+PowerWatcher g_power; // global watcher
 
 // Constructor now accepts pre-initialized SDL_Window* and SDL_Renderer*
 App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer)
@@ -61,12 +62,23 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
 App::~App()
 {
     closeGameControllers();
-    // SDL_Quit() and TTF_Quit() are now handled in main.cpp
+    g_power.stop();
 }
 
 void App::run()
 {
     m_prevTick = SDL_GetTicks();
+    static bool watcher_started = false;
+    if (!watcher_started)
+    {
+        PowerWatcherConfig cfg;
+        cfg.long_press_ms = 2000; // 2s hold = shutdown
+        if (!g_power.start(cfg))
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "PowerWatcher: no KEY_POWER device found");
+        }
+        watcher_started = true;
+    }
 
     SDL_Event event;
     while (m_running)
@@ -357,6 +369,50 @@ void App::handleEvent(const SDL_Event &event)
             std::cout << "Game controller disconnected." << std::endl;
         }
         break;
+    }
+
+    // Handle PowerWatcher SDL user event
+    if (event.type == g_power.sdlEventType())
+    {
+        auto which = static_cast<PowerEventType>(event.user.code);
+        if (which == PowerEventType::ShortPress)
+        {
+            // Save state, pause audio if needed
+            PowerWatcher::requestDeepSleep(); // ask OS to sleep
+        }
+        else if (which == PowerEventType::LongPress)
+        {
+            // Save state, pause audio if needed
+            PowerWatcher::requestShutdown(); // ask OS to shutdown
+            action = AppAction::Quit;        // exit loop cleanly
+        }
+    }
+
+    // Optionally react to focus changes (pause-friendly hooks)
+    if (event.type == SDL_WINDOWEVENT &&
+        (event.window.event == SDL_WINDOWEVENT_FOCUS_LOST ||
+         event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED))
+    {
+        if (event.window.event == SDL_WINDOWEVENT_FOCUS_LOST)
+        {
+            SDL_Log("Focus lost: pausing / ready for sleep");
+        }
+        else
+        {
+            SDL_Log("Focus gained: resuming");
+        }
+        // on focus gained, need to restart watcher or the button stops working
+        // Focus gained: resuming
+        g_power.stop();
+        SDL_Delay(150); // brief settle after resume
+        PowerWatcherConfig _pw_cfg;
+        _pw_cfg.long_press_ms = 2000;
+        // OPTIONAL: if you know the exact node, set a stable by-path hint:
+        _pw_cfg.device_hint = "/dev/input/event1";
+        g_power.start(_pw_cfg);
+
+        // Tell the watcher to ignore stray events for ~400ms after resume
+        g_power.resumeKick(400);
     }
 
     if (action == AppAction::Quit)
