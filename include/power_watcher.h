@@ -4,52 +4,60 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <chrono>
 #include <SDL.h>
 
-enum class PowerEventType
-{
-    ShortPress = 1,
-    LongPress = 2
-};
+enum class PowerEventType { ShortPress = 1, LongPress = 2 };
 
-struct PowerWatcherConfig
-{
-    // Duration (ms) that qualifies as a "long" press (default 2000ms)
-    int long_press_ms = 2000;
-    // Optional: path hint to a specific input node (e.g., "/dev/input/by-path/…-gpio-keys-event")
+struct PowerWatcherConfig {
+    int long_press_ms = 1000;
     std::string device_hint;
-    // Optional callback fired on press classification (in addition to the SDL event)
     std::function<void(PowerEventType)> on_event;
+    int short_min_ms = 8;   // minimal, snappy debounce
 };
 
-class PowerWatcher
-{
+class PowerWatcher {
 public:
     PowerWatcher();
     ~PowerWatcher();
 
-    // Start background watcher; returns false if it couldn't open any input device
     bool start(const PowerWatcherConfig &cfg = {});
     void stop();
 
-    // The custom SDL event type this watcher posts (treat like any other SDL event)
     Uint32 sdlEventType() const { return m_eventType; }
 
-    // Convenience: perform system actions (best-effort; return true on success)
-    static bool requestDeepSleep(); // tries: echo mem > /sys/power/state
-    static bool requestShutdown();  // tries: /sbin/poweroff
+    static bool requestDeepSleep();
+    static bool requestShutdown();
 
-    // Public: called  when the app regains focus or after resume.
-    // The watcher will ignore key events for 'cooldown_ms' to avoid wake key noise.
-    void resumeKick(int cooldown_ms = 300);
+    // Swallow the next power-button press/release cycle (use after resume/focus if desired)
+    inline void armResumeFence() {
+        m_swallow_next_cycle.store(true, std::memory_order_relaxed);
+    }
+    
+    // More robust resume kick with extended ignore period
+    inline void resumeKick(int ignore_ms = 800) {
+        m_swallow_next_cycle.store(true, std::memory_order_relaxed);
+        // Additional delay to allow system stabilization
+        SDL_Delay(ignore_ms);
+    }
+    
+    // Force clear the fence (emergency escape hatch)
+    inline void clearFence() {
+        m_swallow_next_cycle.store(false, std::memory_order_relaxed);
+    }
+
+    static void drain_fd(int fd);
+
+    static inline int64_t now_ms() {
+        using namespace std::chrono;
+        return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
+    }
 
 private:
-    struct FD
-    {
-        int fd = -1;
-        std::string path;
-    };
+    struct FD { int fd = -1; std::string path; };
+
     bool openDevices(const std::string &hint);
+    bool openDevices(const std::string &hint, bool arm_fence);
     void threadMain();
     void postEvent(PowerEventType which);
     void closeAll();
@@ -63,6 +71,7 @@ private:
     std::thread m_thr;
     std::atomic<bool> m_running{false};
     Uint32 m_eventType{0};
-    std::atomic<long long> m_ignore_until{0}; // monotonic ms timestamp
-    static long long now_ms();
+
+    // Simple, robust fence: swallow exactly one cycle after (re)open/resume
+    std::atomic<bool> m_swallow_next_cycle{false};
 };

@@ -11,7 +11,9 @@
 #include <cmath>
 
 // --- App Class ---
-PowerWatcher g_power; // global watcher
+
+// Watch Brick Power Button events
+PowerWatcher g_power;
 
 // Constructor now accepts pre-initialized SDL_Window* and SDL_Renderer*
 App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer)
@@ -69,10 +71,15 @@ void App::run()
 {
     m_prevTick = SDL_GetTicks();
     static bool watcher_started = false;
+    static Uint32 last_focus_regain = 0;
+    
     if (!watcher_started)
     {
         PowerWatcherConfig cfg;
-        cfg.long_press_ms = 2000; // 2s hold = shutdown
+        cfg.long_press_ms = 1000; // 1s hold = shutdown
+        cfg.device_hint = "/dev/input/event1";
+        cfg.short_min_ms = 8; // minimal, snappy debounce
+
         if (!g_power.start(cfg))
         {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "PowerWatcher: no KEY_POWER device found");
@@ -86,6 +93,20 @@ void App::run()
         while (SDL_PollEvent(&event) != 0)
         {
             handleEvent(event);
+            
+            // Check if we got focus and should clear fence after delay
+            if (event.type == SDL_WINDOWEVENT && 
+                event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED)
+            {
+                last_focus_regain = SDL_GetTicks();
+            }
+        }
+        
+        // Backup fence clearing mechanism - clear fence 1 second after focus regain
+        if (last_focus_regain > 0 && (SDL_GetTicks() - last_focus_regain) > 1000)
+        {
+            g_power.clearFence();
+            last_focus_regain = 0; // Only do this once
         }
 
         Uint32 now = SDL_GetTicks();
@@ -375,17 +396,11 @@ void App::handleEvent(const SDL_Event &event)
     if (event.type == g_power.sdlEventType())
     {
         auto which = static_cast<PowerEventType>(event.user.code);
-        if (which == PowerEventType::ShortPress)
+        if (which == PowerEventType::LongPress)
         {
-            // Save state, pause audio if needed
-            PowerWatcher::requestDeepSleep(); // ask OS to sleep
+            action = AppAction::Quit; // watcher already requested shutdown
         }
-        else if (which == PowerEventType::LongPress)
-        {
-            // Save state, pause audio if needed
-            PowerWatcher::requestShutdown(); // ask OS to shutdown
-            action = AppAction::Quit;        // exit loop cleanly
-        }
+        // Note: ShortPress already put the device to sleep and armed wake fence.
     }
 
     // Optionally react to focus changes (pause-friendly hooks)
@@ -400,19 +415,28 @@ void App::handleEvent(const SDL_Event &event)
         else
         {
             SDL_Log("Focus gained: resuming");
+            
+            // More robust restart approach
+            g_power.stop();
+            SDL_Delay(500); // Longer settle time
+            
+            PowerWatcherConfig _pw_cfg;
+            _pw_cfg.long_press_ms = 1000;
+            _pw_cfg.device_hint = "/dev/input/event1";
+            _pw_cfg.short_min_ms = 8;
+            
+            // Retry mechanism for device opening
+            int retry_count = 0;
+            while (retry_count < 3 && !g_power.start(_pw_cfg))
+            {
+                SDL_Delay(200);
+                retry_count++;
+                SDL_Log("PowerWatcher restart attempt %d", retry_count);
+            }
+            
+            // Longer ignore period after resume
+            g_power.resumeKick(300); // Reduced from 800ms for faster response
         }
-        // on focus gained, need to restart watcher or the button stops working
-        // Focus gained: resuming
-        g_power.stop();
-        SDL_Delay(150); // brief settle after resume
-        PowerWatcherConfig _pw_cfg;
-        _pw_cfg.long_press_ms = 2000;
-        // OPTIONAL: if you know the exact node, set a stable by-path hint:
-        _pw_cfg.device_hint = "/dev/input/event1";
-        g_power.start(_pw_cfg);
-
-        // Tell the watcher to ignore stray events for ~400ms after resume
-        g_power.resumeKick(400);
     }
 
     if (action == AppAction::Quit)
