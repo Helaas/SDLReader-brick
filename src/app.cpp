@@ -512,15 +512,15 @@ void App::renderUI()
         SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
         SDL_RenderFillRect(m_renderer->getSDLRenderer(), &bgRect);
         
-        // Draw first line - center it properly
+        // Draw first line - center it and shift 5% to the right
         int line1Width = static_cast<int>(line1.length()) * avgCharWidth;
-        int line1X = (currentWindowWidth - line1Width) / 2;
+        int line1X = (currentWindowWidth - line1Width) / 2 + (currentWindowWidth * 0.05); // 5% shift to the right
         m_textRenderer->renderText(line1, line1X, messageY, errorColor);
         
         // Draw second line if it exists
         if (!line2.empty()) {
             int line2Width = static_cast<int>(line2.length()) * avgCharWidth;
-            int line2X = (currentWindowWidth - line2Width) / 2;
+            int line2X = (currentWindowWidth - line2Width) / 2 + (currentWindowWidth * 0.05); // 5% shift to the right
             int line2Y = messageY + actualFontSize + 10; // Space between lines
             m_textRenderer->renderText(line2, line2X, line2Y, errorColor);
         }

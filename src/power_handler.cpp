@@ -96,7 +96,7 @@ void PowerHandler::threadMain()
     const auto DEVICE_TIMEOUT = std::chrono::seconds(5); // If no successful reads for 30s, try to reopen
     const auto WAKE_GRACE_PERIOD = std::chrono::milliseconds(3000); // Extended to 3s after wake for better stability
     auto last_button_event = std::chrono::steady_clock::time_point{}; // Track last button event for debouncing
-    const auto DEBOUNCE_TIME = std::chrono::milliseconds(200); // Minimum time between processing button events
+    const auto DEBOUNCE_TIME = std::chrono::milliseconds(500); // Minimum time between processing button events
     bool grace_period_just_ended = false; // Flag to track when grace period just ended
     auto grace_end_time = std::chrono::steady_clock::time_point{}; // When grace period ended
     const auto POST_GRACE_DELAY = std::chrono::milliseconds(1000); // Extra delay after grace period ends - increased
@@ -186,16 +186,31 @@ void PowerHandler::threadMain()
             // Check wake grace period (ignore events shortly after wake/reopen)
             if (now < wake_grace_until) {
                 auto grace_remaining = std::chrono::duration_cast<std::chrono::milliseconds>(wake_grace_until - now).count();
+                
+                // Log and ignore the current event first
                 if (ev.type == EV_KEY && ev.code == POWER_KEY_CODE) {
-                    std::cout << "Ignoring power button event during startup/wake grace period (" << grace_remaining << "ms remaining)" << std::endl;
+                    std::cout << "Flushing current power button event during grace period: value=" << ev.value << " (" << grace_remaining << "ms remaining)" << std::endl;
                     
-                    // Show user message for grace period
-                    if (m_errorCallback && ev.value == 0) { // Only on button release to avoid spam
+                    // Show user message for grace period (only occasionally to avoid spam)
+                    if (m_errorCallback && ev.value == 0 && grace_remaining > 1000) { // Only show if plenty of time left
                         m_errorCallback("System just woke up. Please wait a moment.");
                     }
                 }
+                
+                // Then continuously flush ALL additional input events during grace period
+                struct input_event flush_ev;
+                int flush_count = 0;
+                while (read(m_device_fd, &flush_ev, sizeof(flush_ev)) == sizeof(flush_ev)) {
+                    flush_count++;
+                    if (flush_count > 50) break; // Safety limit for each flush cycle
+                }
+                
+                if (flush_count > 0) {
+                    std::cout << "Flushed " << flush_count << " additional events during grace period" << std::endl;
+                }
+                
                 grace_period_just_ended = false; // Reset flag while in grace period
-                continue;
+                continue; // Skip processing the current event entirely
             }
             
             // Check post-grace delay (extra protection against immediate button presses after wake)
