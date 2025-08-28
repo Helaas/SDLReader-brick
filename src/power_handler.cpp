@@ -94,12 +94,12 @@ void PowerHandler::threadMain()
     auto last_success = std::chrono::steady_clock::now();
     auto wake_grace_until = std::chrono::steady_clock::time_point{}; // No initial grace period
     const auto DEVICE_TIMEOUT = std::chrono::seconds(5); // If no successful reads for 30s, try to reopen
-    const auto WAKE_GRACE_PERIOD = std::chrono::milliseconds(1500); // Extended to 1.5s after wake for stability
+    const auto WAKE_GRACE_PERIOD = std::chrono::milliseconds(3000); // Extended to 3s after wake for better stability
     auto last_button_event = std::chrono::steady_clock::time_point{}; // Track last button event for debouncing
     const auto DEBOUNCE_TIME = std::chrono::milliseconds(200); // Minimum time between processing button events
     bool grace_period_just_ended = false; // Flag to track when grace period just ended
     auto grace_end_time = std::chrono::steady_clock::time_point{}; // When grace period ended
-    const auto POST_GRACE_DELAY = std::chrono::milliseconds(500); // Extra delay after grace period ends
+    const auto POST_GRACE_DELAY = std::chrono::milliseconds(1000); // Extra delay after grace period ends - increased
     bool came_from_wake = false; // Track if current grace period is from a wake event
     
     std::cout << "Power handler thread started - ready for power button events" << std::endl;
@@ -140,23 +140,31 @@ void PowerHandler::threadMain()
             
             // Check if we just woke up from suspend and need to set grace period
             if (m_just_woke_up.load()) {
-                std::cout << "Wake detected - setting extended grace period and resetting state" << std::endl;
+                std::cout << "Wake detected - setting extended grace period and aggressively resetting state" << std::endl;
                 
-                // Flush any stale events that might have accumulated during suspend
+                // Flush any stale events that might have accumulated during suspend - be more aggressive
                 struct input_event flush_ev;
                 int flush_count = 0;
                 while (read(m_device_fd, &flush_ev, sizeof(flush_ev)) == sizeof(flush_ev)) {
                     flush_count++;
-                    if (flush_count > 100) break; // Safety limit
+                    if (flush_count > 200) break; // Increased safety limit
                 }
+                
+                // Wait a bit more and flush again to catch any lingering events
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                while (read(m_device_fd, &flush_ev, sizeof(flush_ev)) == sizeof(flush_ev)) {
+                    flush_count++;
+                    if (flush_count > 300) break; // Safety limit
+                }
+                
                 if (flush_count > 0) {
                     std::cout << "Flushed " << flush_count << " stale events after wake" << std::endl;
                 }
                 
                 wake_grace_until = now + WAKE_GRACE_PERIOD;
                 came_from_wake = true; // Mark this grace period as coming from wake
-                press_time = std::chrono::steady_clock::time_point{};
-                cooldown_until = std::chrono::steady_clock::time_point{};
+                press_time = std::chrono::steady_clock::time_point{}; // Critical: reset any pending press
+                cooldown_until = std::chrono::steady_clock::time_point{}; // Reset cooldown
                 last_button_event = std::chrono::steady_clock::time_point{}; // Reset debounce
                 grace_period_just_ended = false; // Reset post-grace delay flag
                 grace_end_time = std::chrono::steady_clock::time_point{};
@@ -167,6 +175,11 @@ void PowerHandler::threadMain()
             if (now < cooldown_until) {
                 auto cooldown_remaining = std::chrono::duration_cast<std::chrono::milliseconds>(cooldown_until - now).count();
                 std::cout << "Event ignored - cooldown active (" << cooldown_remaining << "ms remaining)" << std::endl;
+                
+                // Show user message for cooldown
+                if (m_errorCallback && ev.type == EV_KEY && ev.code == POWER_KEY_CODE && ev.value == 0) {
+                    m_errorCallback("Power button cooling down. Please wait a moment.");
+                }
                 continue;
             }
             
@@ -175,6 +188,11 @@ void PowerHandler::threadMain()
                 auto grace_remaining = std::chrono::duration_cast<std::chrono::milliseconds>(wake_grace_until - now).count();
                 if (ev.type == EV_KEY && ev.code == POWER_KEY_CODE) {
                     std::cout << "Ignoring power button event during startup/wake grace period (" << grace_remaining << "ms remaining)" << std::endl;
+                    
+                    // Show user message for grace period
+                    if (m_errorCallback && ev.value == 0) { // Only on button release to avoid spam
+                        m_errorCallback("System just woke up. Please wait a moment.");
+                    }
                 }
                 grace_period_just_ended = false; // Reset flag while in grace period
                 continue;
@@ -185,6 +203,11 @@ void PowerHandler::threadMain()
                 auto delay_remaining = std::chrono::duration_cast<std::chrono::milliseconds>(POST_GRACE_DELAY - (now - grace_end_time)).count();
                 if (ev.type == EV_KEY && ev.code == POWER_KEY_CODE) {
                     std::cout << "Ignoring power button event during post-wake delay (" << delay_remaining << "ms remaining)" << std::endl;
+                    
+                    // Show user message for post-wake delay
+                    if (m_errorCallback && ev.value == 0) { // Only on button release to avoid spam
+                        m_errorCallback("System stabilizing after wake. Please wait.");
+                    }
                 }
                 continue;
             }
@@ -224,6 +247,11 @@ void PowerHandler::threadMain()
                             (now - last_button_event) < DEBOUNCE_TIME) {
                             auto debounce_remaining = std::chrono::duration_cast<std::chrono::milliseconds>(DEBOUNCE_TIME - (now - last_button_event)).count();
                             std::cout << "Debouncing duplicate press event (" << debounce_remaining << "ms remaining)" << std::endl;
+                            
+                            // Show user message for rapid button pressing (only occasionally to avoid spam)
+                            if (m_errorCallback && debounce_remaining > 150) { // Only show if significant time left
+                                m_errorCallback("Please don't press the button so rapidly.");
+                            }
                         } else {
                             std::cout << "Ignoring duplicate button press event" << std::endl;
                         }

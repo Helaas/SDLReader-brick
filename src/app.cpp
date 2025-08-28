@@ -460,10 +460,10 @@ void App::renderUI()
         SDL_Color errorColor = {255, 255, 255, 255}; // White text
         SDL_Color bgColor = {255, 0, 0, 180}; // Semi-transparent red background
         
-        // Use larger font for error messages (4x base size instead of 5x)
+        // Use larger font for error messages
         // TextRenderer.setFontSize expects a percentage scale, not absolute size
         // Base font is 16, we want 64, so we need 400% scale
-        int errorFontScale = 400; // 400% = 4x larger (reduced from 5x)
+        int errorFontScale = 400; // 400% = 4x larger 
         m_textRenderer->setFontSize(errorFontScale);
         
         // Calculate actual font size for positioning
@@ -471,9 +471,9 @@ void App::renderUI()
         
         // Split message into two lines if it's too long
         std::string line1, line2;
-        // Much more conservative character width estimation - most characters are quite narrow
-        int avgCharWidth = actualFontSize * 0.4; // Reduced from 0.55 to 0.4 for more accurate estimation
-        int maxCharsPerLine = (currentWindowWidth - 60) / avgCharWidth; // Reduced margin since we have more space
+        // Slightly wider character width estimation to break text into two lines earlier for better visual balance
+        int avgCharWidth = actualFontSize * 0.50; 
+        int maxCharsPerLine = (currentWindowWidth - 60) / avgCharWidth; // Increased margin from 40 to 60 to further reduce single line capacity
         
         if (static_cast<int>(m_errorMessage.length()) <= maxCharsPerLine) {
             // Single line is fine
@@ -505,8 +505,9 @@ void App::renderUI()
         int messageX = (currentWindowWidth - maxLineWidth) / 2;
         int messageY = (currentWindowHeight - totalHeight) / 2;
         
-        // Draw background rectangle with more padding on the right side
-        SDL_Rect bgRect = {messageX - 20, messageY - 10, maxLineWidth + 60, totalHeight + 20}; // Increased right padding from 40 to 60
+        // Draw background rectangle with 10% more extension on each side
+        int bgExtension = currentWindowWidth * 0.1; // 10% of screen width extension on each side
+        SDL_Rect bgRect = {messageX - 20 - bgExtension/2, messageY - 10, maxLineWidth + 60 + bgExtension, totalHeight + 20};
         SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), bgColor.r, bgColor.g, bgColor.b, bgColor.a);
         SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
         SDL_RenderFillRect(m_renderer->getSDLRenderer(), &bgRect);
