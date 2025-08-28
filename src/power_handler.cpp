@@ -81,6 +81,11 @@ void PowerHandler::stop()
     }
 }
 
+void PowerHandler::setErrorCallback(ErrorCallback callback)
+{
+    m_errorCallback = callback;
+}
+
 void PowerHandler::threadMain()
 {
     struct input_event ev;
@@ -377,6 +382,13 @@ bool PowerHandler::requestSleep()
     }
     
     std::cout << "Warning: No working suspend method found" << std::endl;
+    std::cerr << "ERROR: Could not suspend device - no working methods available" << std::endl;
+    
+    // Show error message on GUI if callback is available
+    if (m_errorCallback) {
+        m_errorCallback("Suspend failed. Please try again in a few seconds.");
+    }
+    
     return false;
 }
 

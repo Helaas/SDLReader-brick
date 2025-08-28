@@ -27,6 +27,11 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
 
     // Initialize power handler
     m_powerHandler = std::make_unique<PowerHandler>();
+    
+    // Register error callback for displaying GUI messages
+    m_powerHandler->setErrorCallback([this](const std::string& message) {
+        showErrorMessage(message);
+    });
 
     if (filename.size() >= 4 &&
         std::equal(filename.end() - 4, filename.end(),
@@ -432,7 +437,8 @@ void App::renderCurrentPage()
 void App::renderUI()
 {
     int baseFontSize = 16;
-    m_textRenderer->setFontSize(baseFontSize);
+    // setFontSize expects percentage scale, so 100% = normal base size
+    m_textRenderer->setFontSize(100);
 
     SDL_Color textColor = {0, 0, 0, 255};
     std::string pageInfo = "Page: " + std::to_string(m_currentPage + 1) + "/" + std::to_string(m_pageCount);
@@ -448,6 +454,82 @@ void App::renderUI()
     m_textRenderer->renderText(scaleInfo,
                                currentWindowWidth - static_cast<int>(scaleInfo.length()) * 8 - 10,
                                10, textColor);
+    
+    // Render error message if active
+    if (!m_errorMessage.empty() && (SDL_GetTicks() - m_errorMessageTime) < ERROR_MESSAGE_DURATION) {
+        SDL_Color errorColor = {255, 255, 255, 255}; // White text
+        SDL_Color bgColor = {255, 0, 0, 180}; // Semi-transparent red background
+        
+        // Use larger font for error messages (4x base size instead of 5x)
+        // TextRenderer.setFontSize expects a percentage scale, not absolute size
+        // Base font is 16, we want 64, so we need 400% scale
+        int errorFontScale = 400; // 400% = 4x larger (reduced from 5x)
+        m_textRenderer->setFontSize(errorFontScale);
+        
+        // Calculate actual font size for positioning
+        int actualFontSize = static_cast<int>(baseFontSize * (errorFontScale / 100.0));
+        
+        // Split message into two lines if it's too long
+        std::string line1, line2;
+        // Much more conservative character width estimation - most characters are quite narrow
+        int avgCharWidth = actualFontSize * 0.4; // Reduced from 0.55 to 0.4 for more accurate estimation
+        int maxCharsPerLine = (currentWindowWidth - 60) / avgCharWidth; // Reduced margin since we have more space
+        
+        if (static_cast<int>(m_errorMessage.length()) <= maxCharsPerLine) {
+            // Single line is fine
+            line1 = m_errorMessage;
+        } else {
+            // Split into two lines, preferably at a space
+            size_t splitPos = m_errorMessage.length() / 2;
+            
+            // Look for a space near the middle to split at
+            size_t spacePos = m_errorMessage.find_last_of(' ', splitPos + 10);
+            if (spacePos != std::string::npos && spacePos > splitPos - 10) {
+                splitPos = spacePos;
+            }
+            
+            line1 = m_errorMessage.substr(0, splitPos);
+            line2 = m_errorMessage.substr(splitPos);
+            
+            // Trim leading space from second line
+            if (!line2.empty() && line2[0] == ' ') {
+                line2 = line2.substr(1);
+            }
+        }
+        
+        // Calculate dimensions for potentially two lines using more accurate character width
+        int maxLineWidth = std::max(static_cast<int>(line1.length()), static_cast<int>(line2.length())) * avgCharWidth;
+        int totalHeight = line2.empty() ? actualFontSize : (actualFontSize * 2 + 10); // Extra spacing between lines
+        
+        // Center the message block properly
+        int messageX = (currentWindowWidth - maxLineWidth) / 2;
+        int messageY = (currentWindowHeight - totalHeight) / 2;
+        
+        // Draw background rectangle with more padding on the right side
+        SDL_Rect bgRect = {messageX - 20, messageY - 10, maxLineWidth + 60, totalHeight + 20}; // Increased right padding from 40 to 60
+        SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), bgColor.r, bgColor.g, bgColor.b, bgColor.a);
+        SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
+        SDL_RenderFillRect(m_renderer->getSDLRenderer(), &bgRect);
+        
+        // Draw first line - center it properly
+        int line1Width = static_cast<int>(line1.length()) * avgCharWidth;
+        int line1X = (currentWindowWidth - line1Width) / 2;
+        m_textRenderer->renderText(line1, line1X, messageY, errorColor);
+        
+        // Draw second line if it exists
+        if (!line2.empty()) {
+            int line2Width = static_cast<int>(line2.length()) * avgCharWidth;
+            int line2X = (currentWindowWidth - line2Width) / 2;
+            int line2Y = messageY + actualFontSize + 10; // Space between lines
+            m_textRenderer->renderText(line2, line2X, line2Y, errorColor);
+        }
+        
+        // Restore original font size for other UI elements
+        m_textRenderer->setFontSize(100);
+    } else if (!m_errorMessage.empty()) {
+        // Clear expired error message
+        m_errorMessage.clear();
+    }
 }
 
 void App::goToNextPage()
@@ -944,4 +1026,10 @@ SDL_RendererFlip App::currentFlipFlags() const
     if (m_mirrorV)
         f = (SDL_RendererFlip)(f | SDL_FLIP_VERTICAL);
     return f;
+}
+
+void App::showErrorMessage(const std::string& message)
+{
+    m_errorMessage = message;
+    m_errorMessageTime = SDL_GetTicks();
 }

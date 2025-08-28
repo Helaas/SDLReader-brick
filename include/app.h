@@ -44,6 +44,9 @@ private:
     void loadDocument();
     void renderCurrentPage();
     void renderUI();
+    
+    // Error message display
+    void showErrorMessage(const std::string& message);
 
     // Event Handling
     void handleEvent(const SDL_Event &event);
@@ -155,6 +158,11 @@ private:
 
     // Compose SDL flip flags
     SDL_RendererFlip currentFlipFlags() const;
+    
+    // Error message display
+    std::string m_errorMessage;
+    Uint32 m_errorMessageTime{0};
+    static constexpr Uint32 ERROR_MESSAGE_DURATION = 3000; // 3 seconds
 };
 
 #endif // APP_H
