@@ -18,14 +18,14 @@ public:
 
 private:
     void threadMain();
-    void requestSleep();
+    bool requestSleep();
     void requestShutdown();
     bool reopenDevice();
     
     static constexpr int POWER_KEY_CODE = 116;
     static constexpr const char* DEVICE_PATH = "/dev/input/event1";
     static constexpr auto SHORT_PRESS_MAX = std::chrono::milliseconds(2000);
-    static constexpr auto COOLDOWN_TIME = std::chrono::milliseconds(1000);
+    static constexpr auto COOLDOWN_TIME = std::chrono::milliseconds(500);
     // Wake Event → [WAKE_GRACE_PERIOD] → [POST_GRACE_DELAY]   → Normal Operation
     //             ↑                       ↑                   ↑
     //             Hardware stabilization  User stabilization  Button responsive

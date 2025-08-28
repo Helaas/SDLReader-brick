@@ -339,259 +339,59 @@ bool PowerHandler::reopenDevice()
     return true;
 }
 
-static bool commandExists(const char* cmd) {
-    std::string check = "command -v ";
-    check += cmd;
-    check += " >/dev/null 2>&1";
-    return system(check.c_str()) == 0;
-}
-
-static bool fileExists(const char* path) {
-    return access(path, F_OK) == 0;
-}
-
-static bool fileExecutable(const char* path) {
-    return access(path, X_OK) == 0;
-}
-
-void PowerHandler::requestSleep()
+bool PowerHandler::requestSleep()
 {
     std::cout << "Attempting to suspend device..." << std::endl;
     
-    // First, let's diagnose what suspend methods are available
-    std::cout << "=== Suspend Method Diagnostics ===" << std::endl;
-    system("[ -r /sys/power/state ] && echo 'Available power states:' && cat /sys/power/state || echo '/sys/power/state not readable'");
-    system("[ -x /usr/trimui/bin/MainUI ] && echo 'MainUI binary found' || echo 'MainUI binary not found'");
-    system("pgrep MainUI >/dev/null && echo 'MainUI process running' || echo 'MainUI process not running'");
-    system("which killall >/dev/null && echo 'killall command available' || echo 'killall command not available'");
-    std::cout << "==================================" << std::endl;
-    
-    // Check for wake locks that might prevent suspend
-    if (fileExists("/sys/power/wake_lock")) {
-        std::cout << "Checking wake locks..." << std::endl;
-        system("cat /sys/power/wake_lock 2>/dev/null || echo 'Cannot read wake_lock'");
-    }
-    
-    // Try to clear any wake locks that might be preventing suspend
-    if (fileExists("/sys/power/wake_unlock")) {
-        std::cout << "Attempting to clear wake locks..." << std::endl;
-        system("echo > /sys/power/wake_unlock 2>/dev/null");
-    }
-    
-    // Method 1: Try direct system suspend first (we know this works from debug)
-    if (fileExists("/sys/power/state")) {
+    // Method 1: Direct system suspend (NextUI primary method)
+    if (access("/sys/power/state", W_OK) == 0) {
         std::cout << "Using direct system suspend" << std::endl;
         int result = system("echo mem > /sys/power/state 2>/dev/null");
-        std::cout << "Direct suspend result: " << result << std::endl;
         if (result == 0) {
             std::cout << "Suspend successful, setting wake flag" << std::endl;
             m_just_woke_up.store(true);
-            return;
-        } else {
-            std::cout << "Direct suspend failed, checking system state..." << std::endl;
-            // Check what's preventing suspend
-            system("cat /sys/power/state 2>/dev/null");
-            system("dmesg | tail -3 2>/dev/null || echo 'Cannot read dmesg'");
+            return true;
         }
     }
     
-    // Method 2: Try freeze mode (lighter suspend)
-    if (fileExists("/sys/power/state")) {
+    // Method 2: Platform suspend script (NextUI secondary method)
+    if (access("/mnt/SDCARD/System/bin/suspend", X_OK) == 0) {
+        std::cout << "Using platform suspend script" << std::endl;
+        int result = system("/mnt/SDCARD/System/bin/suspend");
+        if (result == 0) {
+            std::cout << "Platform suspend successful, setting wake flag" << std::endl;
+            m_just_woke_up.store(true);
+            return true;
+        }
+    }
+    
+    // Method 3: Try freeze mode as fallback
+    if (access("/sys/power/state", W_OK) == 0) {
         std::cout << "Trying freeze mode suspend" << std::endl;
         int result = system("echo freeze > /sys/power/state 2>/dev/null");
-        std::cout << "Freeze suspend result: " << result << std::endl;
         if (result == 0) {
             std::cout << "Freeze suspend successful, setting wake flag" << std::endl;
             m_just_woke_up.store(true);
-            return;
+            return true;
         }
-    }
-    
-    // Method 3: Try with sync first (ensure all data is written)
-    std::cout << "Syncing filesystem and retrying..." << std::endl;
-    system("sync");
-    if (fileExists("/sys/power/state")) {
-        std::cout << "Retrying direct system suspend after sync" << std::endl;
-        int result = system("echo mem > /sys/power/state 2>/dev/null");
-        std::cout << "Retry suspend result: " << result << std::endl;
-        if (result == 0) {
-            std::cout << "Retry suspend successful, setting wake flag" << std::endl;
-            m_just_woke_up.store(true);
-            return;
-        }
-    }
-    
-    // Method 4: Check for NextUI-style suspend script in various locations
-    const char* suspend_paths[] = {
-        "/mnt/SDCARD/System/bin/suspend",
-        "/mnt/SDCARD/system/bin/suspend", 
-        "/tmp/suspend",
-        "/usr/bin/suspend",
-        "/bin/suspend",
-        "/usr/local/bin/suspend",
-        "/opt/bin/suspend",
-        nullptr
-    };
-    
-    for (int i = 0; suspend_paths[i] != nullptr; i++) {
-        if (fileExecutable(suspend_paths[i])) {
-            std::cout << "Using suspend script: " << suspend_paths[i] << std::endl;
-            int result = system(suspend_paths[i]);
-            std::cout << "Suspend script result: " << result << std::endl;
-            if (result == 0) {
-                std::cout << "Suspend successful, setting wake flag" << std::endl;
-                m_just_woke_up.store(true);
-                return;
-            } else {
-                std::cout << "Suspend script failed with exit code: " << result << std::endl;
-            }
-        }
-    }
-    
-    // Method 5: Try TrimUI/NextUI specific methods
-    if (commandExists("killall")) {
-        std::cout << "Trying NextUI-style suspend via killall" << std::endl;
-        // First check if MainUI is actually running
-        int check_result = system("pgrep MainUI >/dev/null 2>&1");
-        if (check_result == 0) {
-            std::cout << "MainUI process found, sending USR1 signal" << std::endl;
-            int result = system("killall -USR1 MainUI 2>/dev/null");
-            std::cout << "NextUI suspend result: " << result << std::endl;
-            if (result == 0) {
-                std::cout << "NextUI suspend successful, setting wake flag" << std::endl;
-                m_just_woke_up.store(true);
-                return;
-            }
-        } else {
-            std::cout << "MainUI process not found, skipping killall method" << std::endl;
-        }
-    }
-    
-    // Method 6: Try writing to TrimUI power control files
-    const char* power_files[] = {
-        "/sys/class/power_supply/battery/device/power_ctrl",
-        "/sys/devices/platform/power/power_ctrl", 
-        "/proc/power/suspend",
-        "/dev/power",
-        nullptr
-    };
-    
-    for (int i = 0; power_files[i] != nullptr; i++) {
-        if (fileExists(power_files[i])) {
-            std::cout << "Trying power control file: " << power_files[i] << std::endl;
-            std::string cmd = "echo suspend > ";
-            cmd += power_files[i];
-            cmd += " 2>/dev/null";
-            int result = system(cmd.c_str());
-            std::cout << "Power control result: " << result << std::endl;
-            if (result == 0) {
-                std::cout << "Power control suspend successful, setting wake flag" << std::endl;
-                m_just_woke_up.store(true);
-                return;
-            }
-        }
-    }
-    
-    // Method 7: Try systemctl suspend (if available)
-    if (commandExists("systemctl")) {
-        std::cout << "Using systemctl suspend" << std::endl;
-        int result = system("systemctl suspend");
-        std::cout << "Systemctl suspend result: " << result << std::endl;
-        if (result == 0) {
-            std::cout << "Suspend successful, setting wake flag" << std::endl;
-            m_just_woke_up.store(true);
-        } else {
-            std::cout << "Suspend failed with exit code: " << result << std::endl;
-        }
-        return;
     }
     
     std::cout << "Warning: No working suspend method found" << std::endl;
-    
-    // Final attempt: Try TrimUI-specific methods that might work
-    std::cout << "=== Final TrimUI-specific attempts ===" << std::endl;
-    
-    // Try direct echo to power management with different states
-    const char* power_states[] = {"standby", "mem", "disk", "freeze"};
-    for (const char* state : power_states) {
-        if (fileExists("/sys/power/state")) {
-            std::cout << "Trying power state: " << state << std::endl;
-            std::string cmd = "echo ";
-            cmd += state;
-            cmd += " > /sys/power/state 2>&1";
-            int result = system(cmd.c_str());
-            if (result == 0) {
-                std::cout << "Power state " << state << " successful, setting wake flag" << std::endl;
-                m_just_woke_up.store(true);
-                return;
-            } else {
-                std::cout << "Power state " << state << " failed with result: " << result << std::endl;
-            }
-        }
-    }
-    
-    // Try writing to other potential power control interfaces
-    const char* alt_power_files[] = {
-        "/sys/power/pm_async",
-        "/sys/power/pm_freeze_timeout", 
-        "/proc/sys/kernel/poweroff_cmd",
-        nullptr
-    };
-    
-    for (int i = 0; alt_power_files[i] != nullptr; i++) {
-        if (fileExists(alt_power_files[i])) {
-            std::cout << "Found alternative power file: " << alt_power_files[i] << std::endl;
-        }
-    }
-    
-    std::cout << "========================================" << std::endl;
+    return false;
 }
 
 void PowerHandler::requestShutdown()
 {
     std::cout << "Attempting to shutdown device..." << std::endl;
     
-    // Method 1: Check for NextUI-style shutdown script in various locations
-    const char* shutdown_paths[] = {
-        "/mnt/SDCARD/System/bin/shutdown",
-        "/mnt/SDCARD/system/bin/shutdown",
-        "/tmp/shutdown", 
-        "/usr/bin/shutdown",
-        "/sbin/shutdown",
-        "/bin/shutdown",
-        nullptr
-    };
-    
-    for (int i = 0; shutdown_paths[i] != nullptr; i++) {
-        if (fileExecutable(shutdown_paths[i])) {
-            std::cout << "Using shutdown script: " << shutdown_paths[i] << std::endl;
-            system(shutdown_paths[i]);
-            return;
-        }
-    }
-    
-    // Method 2: Try poweroff command
-    if (commandExists("poweroff")) {
-        std::cout << "Using poweroff command" << std::endl;
-        system("poweroff");
+    // Method 1: NextUI-style shutdown script
+    if (access("/mnt/SDCARD/System/bin/shutdown", X_OK) == 0) {
+        std::cout << "Using NextUI shutdown script" << std::endl;
+        system("/mnt/SDCARD/System/bin/shutdown");
         return;
     }
     
-    // Method 3: Try busybox poweroff
-    if (commandExists("busybox")) {
-        std::cout << "Using busybox poweroff" << std::endl;
-        system("busybox poweroff");
-        return;
-    }
-    
-    // Method 4: Try systemctl poweroff
-    if (commandExists("systemctl")) {
-        std::cout << "Using systemctl poweroff" << std::endl;
-        system("systemctl poweroff");
-        return;
-    }
-    
-    // Method 5: As last resort, exit the application
-    std::cout << "Warning: No shutdown method available, exiting application" << std::endl;
-    exit(0);
+    // Method 2: Standard poweroff command
+    std::cout << "Using poweroff command" << std::endl;
+    system("poweroff");
 }
