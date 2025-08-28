@@ -34,6 +34,9 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    // Suppress verbose SDL logging (like SDL_UDEV_DEVICEADDED messages)
+    SDL_LogSetAllPriority(SDL_LOG_PRIORITY_WARN);
+
     if (TTF_Init() == -1) {
         std::cerr << "SDL_ttf could not initialize! TTF_Error: " << TTF_GetError() << std::endl;
         cleanupSDL(window, renderer);

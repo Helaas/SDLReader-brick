@@ -4,6 +4,7 @@
 #include "renderer.h"
 #include "document.h"
 #include "text_renderer.h"
+#include "power_handler.h"
 
 #include <SDL.h>
 #include <memory>
@@ -90,6 +91,7 @@ private:
     std::unique_ptr<Renderer> m_renderer;
     std::unique_ptr<Document> m_document;
     std::unique_ptr<TextRenderer> m_textRenderer;
+    std::unique_ptr<PowerHandler> m_powerHandler;
 
     int m_currentPage;
     int m_pageCount;
