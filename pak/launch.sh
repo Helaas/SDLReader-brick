@@ -4,7 +4,7 @@
 # - Uses custom confirm_text for folder vs file
 # - Remembers last visited folder between runs
 # - Selecting a PDF exec's ./bin/sdl_reader_cli <file.pdf>
-# - DEBUG logs to /tmp/minui_browser.log (set DEBUG=0 to disable)
+# - DEBUG logs to /tmp/sdlreader_browser.log (set DEBUG=0 to disable)
 
 ###############################################################################
 # Config & environment
@@ -15,11 +15,11 @@ cd "$(dirname "$0")"
 export LD_LIBRARY_PATH="$(pwd)/lib:${LD_LIBRARY_PATH:-}"
 
 BASE="/mnt/SDCARD"
-JSON_FILE="/tmp/minui_browser.json"
-SELECTION_FILE="/tmp/minui_selection.txt"
-STATE_PATH="/tmp/minui_lastdir.txt"   # last folder persistence
-LOG="/tmp/minui_browser.log"
-DEBUG="${DEBUG:-1}"                    # set DEBUG=0 to silence logs
+JSON_FILE="/tmp/sdlreader_browser.json"
+SELECTION_FILE="/tmp/sdlreader_selection.txt"
+STATE_PATH="/tmp/sdlreader_lastdir.txt"   # last folder persistence
+LOG="/tmp/sdlreader_browser.log"
+DEBUG="${DEBUG:0}"                    # set DEBUG=-1 for logs
 
 ###############################################################################
 # Helpers
