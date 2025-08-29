@@ -1,6 +1,6 @@
 # SDLReader Main Makefile
 
-AVAILABLE_PLATFORMS := tg5040 mac wiiu
+AVAILABLE_PLATFORMS := tg5040 mac wiiu linux
 DEFAULT_PLATFORM := tg5040
 PLATFORM ?= $(DEFAULT_PLATFORM)
 
@@ -20,17 +20,24 @@ wiiu:
 	@echo "Building for Wii U..."
 	$(MAKE) -C ports/wiiu
 
+linux:
+	@echo "Building for Linux..."
+	$(MAKE) -C ports/linux
+
 clean:
 	@echo "Cleaning all platforms..."
-	@$(MAKE) -f ports/tg5040/Makefile clean
-	@$(MAKE) -f ports/mac/Makefile clean
-	@$(MAKE) -C ports/wiiu clean
+	-@$(MAKE) -f ports/tg5040/Makefile clean 2>/dev/null || true
+	-@$(MAKE) -f ports/mac/Makefile clean 2>/dev/null || true
+	-@$(MAKE) -C ports/wiiu clean 2>/dev/null || true
+	-@$(MAKE) -C ports/linux clean 2>/dev/null || true
+	@rm -rf bin/
 
 list-platforms:
 	@echo "Available platforms:"
 	@echo "  - tg5040"
 	@echo "  - mac"
 	@echo "  - wiiu"
+	@echo "  - linux"
 
 help:
 	@echo "SDLReader Build System"
@@ -39,5 +46,6 @@ help:
 	@echo "  make tg5040  - Build for TG5040"
 	@echo "  make mac     - Build for macOS"
 	@echo "  make wiiu    - Build for Wii U"
+	@echo "  make linux   - Build for Linux"
 	@echo "  make clean   - Clean build artifacts"
 	@echo "  make help    - Show this help"

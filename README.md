@@ -26,9 +26,10 @@ A minimal document reader built using SDL2 and  MuPDF supporting PDF
 This project supports multiple platforms with a unified build system.
 
 ### Supported Platforms
-- **TG5040** - Embedded Linux device (default)
+- **TG5040** - Trimui Brick - Embedded Linux device (default)
 - **macOS** - Desktop development and testing
 - **Wii U** - Nintendo Wii U homebrew (requires devkitPro)
+- **Linux** - Desktop Linux distributions (tested on Ubuntu 24.04)
 
 ### Quick Start
 ```bash
@@ -36,9 +37,10 @@ This project supports multiple platforms with a unified build system.
 make
 
 # Build for specific platform
-make tg5040    # TG5040 embedded device
+make tg5040    # TG5040 embedded device (Trimui Brick)
 make mac       # macOS
 make wiiu      # Wii U (requires devkitPro environment)
+make linux     # Linux desktop
 
 # List available platforms
 make list-platforms
@@ -67,6 +69,24 @@ make help
 brew install sdl2 sdl2_ttf mupdf-tools pkg-config
 ```
 
+#### Linux
+* A C++17 compatible compiler (e.g., g++, clang++)
+* `SDL2` and `SDL2_ttf` development libraries
+* `MuPDF` development libraries and dependencies
+* `pkg-config`
+
+**Tested on Ubuntu 24.04. Other distributions may require different packages.**
+
+**Install dependencies (Ubuntu/Debian):**
+```bash
+sudo apt install build-essential pkg-config libsdl2-dev libsdl2-ttf-dev libmupdf-dev libfreetype6-dev libharfbuzz-dev libjpeg-dev libopenjp2-7-dev libjbig2dec0-dev libgumbo-dev libmujs-dev
+```
+
+Or use the automated installer:
+```bash
+cd ports/linux && make install-deps
+```
+
 #### Wii U
 * devkitPro toolchain with WUT (Wii U Toolchain)
 * See `ports/wiiu/` for Wii U-specific build instructions
@@ -86,6 +106,12 @@ brew install sdl2 sdl2_ttf mupdf-tools pkg-config
 - **Desktop Environment**: Standard desktop window management
 - **Development Platform**: Full debugging and development tools available
 - **Cross-platform Testing**: Verify functionality before deployment
+
+### Linux
+- **Desktop Environment**: Standard Linux desktop window management
+- **Package Management**: Easy dependency installation via system package managers
+- **Development Platform**: Full debugging and development tools available
+- **Tested Platform**: Ubuntu 24.04 (other distributions may require additional setup)
 
 ### Wii U
 - **Homebrew Environment**: Nintendo Wii U specific adaptations
@@ -142,6 +168,9 @@ SDLReader-brick/
     │       └── power_handler.cpp # Power button handling implementation
     ├── mac/                    # macOS desktop
     │   └── Makefile            # macOS build configuration
+    ├── linux/                  # Linux desktop
+    │   ├── Makefile            # Linux build configuration
+    │   └── README.md           # Linux-specific instructions
     └── wiiu/                   # Nintendo Wii U homebrew
         └── Makefile            # Wii U build configuration
 ```

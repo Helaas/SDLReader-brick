@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <string>
+#include <cstdint>
 
 // Helper function: Converts 24-bit RGB (R, G, B) to 32-bit ARGB (A, R, G, B)
 // Assumes input is R G B byte order and output should be 0xAARRGGBB
