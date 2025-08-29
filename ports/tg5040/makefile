@@ -21,10 +21,15 @@ LIBS := -lSDL2_ttf -lSDL2 \
   -ljpeg -lopenjp2 -lharfbuzz -ljbig2dec \
   -lfreetype -lz -lm -lpthread -ldl
 
-.PHONY: all clean
+.PHONY: all clean export-bundle
 
 # Default goal
 all: $(TARGET)
+
+# Export complete TG5040 bundle for distribution
+export-bundle: $(TARGET)
+	@echo "Exporting TG5040 bundle..."
+	@cd ports/tg5040 && ./export_bundle.sh
 
 # Ensure bin/ exists before linking
 $(BIN_DIR):
@@ -55,3 +60,4 @@ $(BUILD_DIR)/tg5040_power_handler.o: ports/tg5040/src/power_handler.cpp
 clean:
 	@echo "Cleaning build artifacts..."
 	rm -rf $(BUILD_DIR)/*.o $(BIN_DIR)/*
+	rm -rf pak/ ../../lib/

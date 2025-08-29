@@ -1,12 +1,13 @@
 # SDL Reader
 
-A minimal document reader built using SDL2 and  MuPDF supporting PDF 
+A minimal document reader built using SDL2 and MuPDF supporting PDF 
 
 ## Table of Contents
 * [Features](#features)
 * [Supported Document Types](#supported-document-types)
 * [Build Instructions](#build-instructions)
 * [Usage](#usage)
+* [TG5040 Deployment](#tg5040-deployment)
 * [User Inputs](#user-inputs)
 * [Project Structure](#project-structure)
 * [Architecture](#architecture)
@@ -42,6 +43,9 @@ make tg5040    # TG5040 embedded device (Trimui Brick)
 make mac       # macOS
 make wiiu      # Wii U (requires devkitPro environment)
 make linux     # Linux desktop
+
+# Export TG5040 distribution bundle
+make export-tg5040    # Build and create complete TG5040 package
 
 # List available platforms
 make list-platforms
@@ -102,6 +106,11 @@ cd ports/linux && make install-deps
   - Error feedback through GUI notifications
 - **Device-specific Input**: `/dev/input/event1` monitoring for power events
 - **System Integration**: NextUI-compatible suspend/shutdown scripts
+- **Bundle Export**: Complete distribution package creation
+  - Self-contained bundle with all dependencies
+  - Automated library bundling and RPATH setup
+  - Includes utilities (jq, minui-list) and resources
+  - Ready for device deployment via `make export-tg5040`
 
 ### macOS
 - **Desktop Environment**: Standard desktop window management
@@ -124,6 +133,34 @@ After building, run the executable from your project root, providing the path to
 ```bash
 ./bin/sdl_reader_cli path/to/your_document.pdf
 ```
+
+## TG5040 Deployment
+
+For TG5040 (Trimui Brick) deployment, use the bundle export system:
+
+### Creating Distribution Package
+```bash
+# Build and create complete distribution bundle
+make export-tg5040
+
+# Or build first, then export
+make tg5040
+make export-tg5040
+```
+
+### Bundle Contents
+The exported bundle at `ports/tg5040/pak/` contains:
+- **bin/**: Main executable and utilities (sdl_reader_cli, jq, minui-list)
+- **lib/**: All shared library dependencies with proper RPATH setup
+- **res/**: Font and resource files
+- **launch.sh**: Main launcher script for the device
+
+### Deployment to Device
+1. Copy the entire `ports/tg5040/pak/` directory to your TG5040 device
+2. Ensure the package has executable permissions
+3. Run via the launch script or execute binaries directly
+
+The bundle is completely self-contained and includes all necessary dependencies for the TG5040 platform.
 
 ## User Inputs
 The SDL Reader supports the following keyboard and mouse inputs:
@@ -163,6 +200,13 @@ SDLReader-brick/
     │   ├── Makefile.docker       # Docker environment management
     │   ├── docker-compose.yml    # Docker Compose setup
     │   ├── Dockerfile            # TG5040 toolchain image
+    │   ├── export_bundle.sh      # Bundle export script
+    │   ├── make_bundle2.sh       # Library dependency bundler
+    │   ├── pak/                  # Distribution bundle (created by export)
+    │   │   ├── bin/              # Executables (jq, minui-list, sdl_reader_cli)
+    │   │   ├── lib/              # Shared libraries and dependencies
+    │   │   ├── res/              # Resources (fonts, etc.)
+    │   │   └── launch.sh         # Main launcher script
     │   ├── include/              # TG5040-specific headers
     │   │   └── power_handler.h   # Power management for TG5040
     │   └── src/                  # TG5040-specific source code
@@ -182,6 +226,7 @@ SDLReader-brick/
 - **Power management**: TG5040 includes hardware-specific power button handling and suspend/resume functionality
 - **Build system**: Each platform has its own Makefile in `ports/{platform}/`
 - **Docker development**: Use `ports/tg5040/docker-compose.yml` for containerized development
+- **TG5040 distribution**: Use `make export-tg5040` to create complete deployment package
 
 ## Architecture
 

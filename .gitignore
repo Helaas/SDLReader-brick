@@ -1,6 +1,12 @@
 *.o
 /bin
+/lib
+/lib/lib
 /build
 /bundle
 .DS_Store
 /.vscode
+
+# TG5040 bundle artifacts
+/ports/tg5040/pak/lib/*
+/ports/tg5040/pak/bin/sdl_reader_cli
