@@ -25,8 +25,10 @@ private:
         void operator()(fz_context* ctx) const { if (ctx) fz_drop_context(ctx); }
     };
     struct DocumentDeleter {
-        fz_context* ctx{};
-        void operator()(fz_document* doc) const { if (doc) fz_drop_document(ctx, doc); }
+        fz_context* ctx = nullptr;
+        DocumentDeleter() noexcept = default;
+        DocumentDeleter(fz_context* c) noexcept : ctx(c) {}
+        void operator()(fz_document* doc) const { if (doc && ctx) fz_drop_document(ctx, doc); }
     };
     struct PixmapDeleter {
         fz_context* ctx{};

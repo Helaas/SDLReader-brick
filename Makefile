@@ -1,49 +1,36 @@
-# Compiler and flags
-CXX      := g++
-CXXFLAGS := -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG\
-            -Isrc -Iinclude -D_REENTRANT -I/usr/include/SDL2
+# SDLReader Main Makefile
 
-# Output locations
-BIN_DIR  := bin
-BUILD_DIR  := build
-TARGET   := $(BIN_DIR)/sdl_reader_cli
+AVAILABLE_PLATFORMS := tg5040 mac
+DEFAULT_PLATFORM := tg5040
+PLATFORM ?= $(DEFAULT_PLATFORM)
 
-# Object files
-OBJS := $(BUILD_DIR)/pdf_document.o $(BUILD_DIR)/renderer.o $(BUILD_DIR)/text_renderer.o $(BUILD_DIR)/power_handler.o $(BUILD_DIR)/app.o $(BUILD_DIR)/main.o
+.PHONY: all clean help list-platforms $(AVAILABLE_PLATFORMS) mac
 
-# Libraries (link order matters)
-LIBS := -lSDL2_ttf -lSDL2 \
-  -L/usr/local/opt/mupdf-tools/lib \
-  -lmupdf -lmupdf-third \
-  -ljpeg -lopenjp2 -lharfbuzz -ljbig2dec \
-  -lfreetype -lz -lm -lpthread -ldl
+all: $(PLATFORM)
 
-.PHONY: all clean
+tg5040:
+	@echo "Building for TG5040..."
+	$(MAKE) -f ports/tg5040/Makefile
 
-# Default goal
-all: $(TARGET)
+mac:
+	@echo "Building for macOS..."
+	$(MAKE) -f ports/mac/Makefile
 
-# Ensure bin/ exists before linking
-$(BIN_DIR):
-	@mkdir -p $(BIN_DIR)
-
-# Link final binary
-$(TARGET): $(OBJS) | $(BIN_DIR)
-	$(CXX) $(OBJS) $(LIBS) -o $@
-	@patchelf --remove-rpath "$@" 2>/dev/null || true
-	@patchelf --set-rpath '$$ORIGIN/../lib' "$@"
-
-# Compile source to object files
-$(BUILD_DIR)/%.o: src/%.cpp
-	 @mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-# Compile sources from cli/
-$(BUILD_DIR)/%.o: cli/%.cpp
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-# Clean build artifacts
 clean:
-	@echo "Cleaning build artifacts..."
-	rm -rf $(BUILD_DIR)/*.o $(BIN_DIR)/*
+	@echo "Cleaning all platforms..."
+	@$(MAKE) -f ports/tg5040/Makefile clean
+	@$(MAKE) -f ports/mac/Makefile clean
+
+list-platforms:
+	@echo "Available platforms:"
+	@echo "  - tg5040"
+	@echo "  - mac"
+
+help:
+	@echo "SDLReader Build System"
+	@echo "Usage:"
+	@echo "  make         - Build for tg5040 (default)"
+	@echo "  make tg5040  - Build for TG5040"
+	@echo "  make mac     - Build for macOS"
+	@echo "  make clean   - Clean build artifacts"
+	@echo "  make help    - Show this help"

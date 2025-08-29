@@ -5,7 +5,7 @@
 #include <stdexcept>
 
 PdfDocument::PdfDocument()
-    : m_ctx(nullptr), m_doc(nullptr)
+    : m_ctx(nullptr), m_doc(nullptr, DocumentDeleter())
 {
 }
 

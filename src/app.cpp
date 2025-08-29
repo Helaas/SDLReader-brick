@@ -3,7 +3,9 @@
 #include "text_renderer.h"
 #include "document.h"
 #include "pdf_document.h"
+#ifdef TG5040_PLATFORM
 #include "power_handler.h"
+#endif
 
 #include <iostream>
 #include <stdexcept>
@@ -25,6 +27,7 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
 
     m_textRenderer = std::make_unique<TextRenderer>(m_renderer->getSDLRenderer(), "res/Roboto-Regular.ttf", 16);
 
+#ifdef TG5040_PLATFORM
     // Initialize power handler
     m_powerHandler = std::make_unique<PowerHandler>();
     
@@ -32,6 +35,7 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
     m_powerHandler->setErrorCallback([this](const std::string& message) {
         showErrorMessage(message);
     });
+#endif
 
     if (filename.size() >= 4 &&
         std::equal(filename.end() - 4, filename.end(),
@@ -68,9 +72,11 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
 
 App::~App()
 {
+#ifdef TG5040_PLATFORM
     if (m_powerHandler) {
         m_powerHandler->stop();
     }
+#endif
     closeGameControllers();
 }
 
@@ -78,10 +84,12 @@ void App::run()
 {
     m_prevTick = SDL_GetTicks();
 
+#ifdef TG5040_PLATFORM
     // Start power button monitoring
     if (!m_powerHandler->start()) {
         std::cerr << "Warning: Failed to start power button monitoring" << std::endl;
     }
+#endif
 
     SDL_Event event;
     while (m_running)

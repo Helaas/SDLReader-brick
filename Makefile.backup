@@ -1,9 +1,6 @@
-# TG5040-specific Makefile
-# This Makefile contains the build configuration specific to the TG5040 platform
-
 # Compiler and flags
 CXX      := g++
-CXXFLAGS := -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTG5040_PLATFORM\
+CXXFLAGS := -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG\
             -Isrc -Iinclude -D_REENTRANT -I/usr/include/SDL2
 
 # Output locations
