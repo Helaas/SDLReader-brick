@@ -71,6 +71,26 @@ brew install sdl2 sdl2_ttf mupdf-tools pkg-config
 * devkitPro toolchain with WUT (Wii U Toolchain)
 * See `ports/wiiu/` for Wii U-specific build instructions
 
+## Platform-Specific Features
+
+### TG5040 Embedded Device
+- **Power Management**: Hardware power button integration
+  - Short press: Suspend device to save battery
+  - Long press (2+ seconds): Safe shutdown
+  - Wake detection with grace period handling
+  - Error feedback through GUI notifications
+- **Device-specific Input**: `/dev/input/event1` monitoring for power events
+- **System Integration**: NextUI-compatible suspend/shutdown scripts
+
+### macOS
+- **Desktop Environment**: Standard desktop window management
+- **Development Platform**: Full debugging and development tools available
+- **Cross-platform Testing**: Verify functionality before deployment
+
+### Wii U
+- **Homebrew Environment**: Nintendo Wii U specific adaptations
+- **Custom Input Handling**: Gamepad and touch screen support
+
 ## Usage
 After building, run the executable from your project root, providing the path to a PDF or DjVu file as an argument:
 
@@ -107,7 +127,7 @@ The SDL Reader supports the following keyboard and mouse inputs:
 SDLReader-brick/
 ├── Makefile                    # Main multi-platform build system
 ├── src/                        # Shared source code
-├── include/                    # Header files
+├── include/                    # Shared header files
 ├── cli/                        # Command-line interface
 ├── res/                        # Resources (fonts, etc.)
 └── ports/                      # Platform-specific builds
@@ -115,7 +135,11 @@ SDLReader-brick/
     │   ├── Makefile            # TG5040 build configuration
     │   ├── Makefile.docker     # Docker environment management
     │   ├── docker-compose.yml  # Docker Compose setup
-    │   └── Dockerfile          # TG5040 toolchain image
+    │   ├── Dockerfile          # TG5040 toolchain image
+    │   ├── include/            # TG5040-specific headers
+    │   │   └── power_handler.h # Power management for TG5040
+    │   └── src/                # TG5040-specific source code
+    │       └── power_handler.cpp # Power button handling implementation
     ├── mac/                    # macOS desktop
     │   └── Makefile            # macOS build configuration
     └── wiiu/                   # Nintendo Wii U homebrew
@@ -124,7 +148,8 @@ SDLReader-brick/
 
 ### Development Workflow
 - **Cross-platform code**: Modify files in `src/`, `include/`, `cli/`
-- **Platform-specific code**: Use conditional compilation (`#ifdef TG5040_PLATFORM`)
+- **Platform-specific code**: Use conditional compilation (`#ifdef TG5040_PLATFORM`) or create port-specific implementations in `ports/{platform}/`
+- **Power management**: TG5040 includes hardware-specific power button handling and suspend/resume functionality
 - **Build system**: Each platform has its own Makefile in `ports/{platform}/`
 - **Docker development**: Use `ports/tg5040/docker-compose.yml` for containerized development
 

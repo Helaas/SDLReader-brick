@@ -65,9 +65,17 @@ After building the first time, unless a dependency of the image has changed, `ma
 
 ## Platform-Specific Features
 The TG5040 build includes:
-- Hardware power button monitoring and power management
-- Platform-optimized build flags (`-DTG5040_PLATFORM`)
-- Embedded Linux-specific libraries and dependencies
+- **Hardware Power Management**: Port-specific power button handling
+  - Power button monitoring via `/dev/input/event1`
+  - Short press: System suspend for battery conservation
+  - Long press: Safe system shutdown
+  - Wake detection with grace period handling
+  - Error notifications through GUI callbacks
+- **Platform-optimized build flags**: `-DTG5040_PLATFORM`
+- **Port-specific source structure**: 
+  - `include/power_handler.h` - TG5040 power management interface
+  - `src/power_handler.cpp` - Hardware-specific power button implementation
+- **Embedded Linux-specific libraries and dependencies**
 
 See [setup-env.sh](./support/setup-env.sh) for some useful vars for compiling that are exported automatically.
 

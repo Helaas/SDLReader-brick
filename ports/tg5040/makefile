@@ -4,7 +4,7 @@
 # Compiler and flags
 CXX      := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTG5040_PLATFORM\
-            -Isrc -Iinclude -D_REENTRANT -I/usr/include/SDL2
+            -Isrc -Iinclude -Iports/tg5040/include -D_REENTRANT -I/usr/include/SDL2
 
 # Output locations
 BIN_DIR  := bin
@@ -12,7 +12,7 @@ BUILD_DIR  := build
 TARGET   := $(BIN_DIR)/sdl_reader_cli
 
 # Object files
-OBJS := $(BUILD_DIR)/pdf_document.o $(BUILD_DIR)/renderer.o $(BUILD_DIR)/text_renderer.o $(BUILD_DIR)/power_handler.o $(BUILD_DIR)/app.o $(BUILD_DIR)/main.o
+OBJS := $(BUILD_DIR)/pdf_document.o $(BUILD_DIR)/renderer.o $(BUILD_DIR)/text_renderer.o $(BUILD_DIR)/tg5040_power_handler.o $(BUILD_DIR)/app.o $(BUILD_DIR)/main.o
 
 # Libraries (link order matters)
 LIBS := -lSDL2_ttf -lSDL2 \
@@ -43,6 +43,11 @@ $(BUILD_DIR)/%.o: src/%.cpp
 
 # Compile sources from cli/
 $(BUILD_DIR)/%.o: cli/%.cpp
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Compile TG5040-specific power handler
+$(BUILD_DIR)/tg5040_power_handler.o: ports/tg5040/src/power_handler.cpp
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
