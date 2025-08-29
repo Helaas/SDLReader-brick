@@ -1,0 +1,12 @@
+# SDLReader Docker Development Environment for TG5040
+# For Docker-specific build tasks, see Makefile.docker
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sdlreader:latest
+    volumes:
+      - ../../:/root/workspace
+    stdin_open: true
+    tty: true

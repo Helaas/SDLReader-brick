@@ -4,7 +4,7 @@ AVAILABLE_PLATFORMS := tg5040 mac wiiu
 DEFAULT_PLATFORM := tg5040
 PLATFORM ?= $(DEFAULT_PLATFORM)
 
-.PHONY: all clean help list-platforms $(AVAILABLE_PLATFORMS) mac wiiu
+.PHONY: all clean help list-platforms $(AVAILABLE_PLATFORMS)
 
 all: $(PLATFORM)
 

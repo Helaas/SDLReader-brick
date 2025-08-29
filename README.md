@@ -23,25 +23,53 @@ A minimal document reader built using SDL2 and  MuPDF supporting PDF
 * **PDF** (`.pdf`)
 
 ## Build Instructions
-To build this project, you will need:
-* A C++17 compatible compiler (e.g., g++).
-* `SDL2` development libraries.
-* `SDL2_ttf` development libraries.
-* `MuPDF` development libraries.
-* `pkg-config` (to find library paths automatically).
-* `make` (for the provided Makefile).
+This project supports multiple platforms with a unified build system.
 
-**On macOS (using Homebrew):**
-1.  Install dependencies:
-    ```bash
-    brew install sdl2 sdl2_ttf mupdf-tools pkg-config
-    ```
-2.  Navigate to the project root directory.
-3.  Build the project:
-    ```bash
-    make
-    ```
-    This will create the executable `sdl_reader` in the `bin/` directory.
+### Supported Platforms
+- **TG5040** - Embedded Linux device (default)
+- **macOS** - Desktop development and testing
+- **Wii U** - Nintendo Wii U homebrew (requires devkitPro)
+
+### Quick Start
+```bash
+# Build for default platform (TG5040)
+make
+
+# Build for specific platform
+make tg5040    # TG5040 embedded device
+make mac       # macOS
+make wiiu      # Wii U (requires devkitPro environment)
+
+# List available platforms
+make list-platforms
+
+# Clean all build artifacts
+make clean
+
+# Show help
+make help
+```
+
+### Platform-Specific Requirements
+
+#### TG5040 (Embedded Linux)
+* Cross-compilation toolchain for the target device
+* Docker environment available (see `ports/tg5040/` for Docker setup)
+
+#### macOS
+* A C++17 compatible compiler (e.g., g++, clang++)
+* `SDL2` and `SDL2_ttf` development libraries
+* `MuPDF` development libraries  
+* `pkg-config`
+
+**Install dependencies using Homebrew:**
+```bash
+brew install sdl2 sdl2_ttf mupdf-tools pkg-config
+```
+
+#### Wii U
+* devkitPro toolchain with WUT (Wii U Toolchain)
+* See `ports/wiiu/` for Wii U-specific build instructions
 
 ## Usage
 After building, run the executable from your project root, providing the path to a PDF or DjVu file as an argument:
@@ -73,6 +101,32 @@ The SDL Reader supports the following keyboard and mouse inputs:
 | `Ctrl + Mouse Wheel Up`| Zoom in                                 |
 | `Ctrl + Mouse Wheel Down`| Zoom out                              |
 | `Left Click + Drag`    | Pan/Scroll                              |
+
+## Project Structure
+```
+SDLReader-brick/
+├── Makefile                    # Main multi-platform build system
+├── src/                        # Shared source code
+├── include/                    # Header files
+├── cli/                        # Command-line interface
+├── res/                        # Resources (fonts, etc.)
+└── ports/                      # Platform-specific builds
+    ├── tg5040/                 # TG5040 embedded device
+    │   ├── Makefile            # TG5040 build configuration
+    │   ├── Makefile.docker     # Docker environment management
+    │   ├── docker-compose.yml  # Docker Compose setup
+    │   └── Dockerfile          # TG5040 toolchain image
+    ├── mac/                    # macOS desktop
+    │   └── Makefile            # macOS build configuration
+    └── wiiu/                   # Nintendo Wii U homebrew
+        └── Makefile            # Wii U build configuration
+```
+
+### Development Workflow
+- **Cross-platform code**: Modify files in `src/`, `include/`, `cli/`
+- **Platform-specific code**: Use conditional compilation (`#ifdef TG5040_PLATFORM`)
+- **Build system**: Each platform has its own Makefile in `ports/{platform}/`
+- **Docker development**: Use `ports/tg5040/docker-compose.yml` for containerized development
 
 # Acknowledgements
 

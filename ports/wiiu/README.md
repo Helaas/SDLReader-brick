@@ -1,18 +1,44 @@
-# SDLReader PDF document reader for WIIU
+# Wii U Port - SDLReader for Nintendo Wii U
 
-SDLReader compiles and runs on MacOS.  It uses a library called mupdf for loading PDF files.
+This directory contains the Wii U-specific build configuration for the SDLReader project.
 
-# Status
+SDLReader is a PDF document reader that compiles and runs on macOS, TG5040, and Wii U. It uses MuPDF for loading PDF files.
 
-Largely notes to myself at this point porting this to WiiU.
+## Quick Start
 
-* [mupdf-devkitppc](https://github.com/hito16/mupdf-devkitppc) builds
-* resolved multiple and undefined references.
-* created a main wrapper so the WiiU code can call the SLDReader code.
-* boots to blank screen.   Need to add logging
+### From Project Root
+```bash
+# Build for Wii U (requires devkitPro environment)
+make wiiu
+```
+
+### From This Directory  
+```bash
+cd ports/wiiu
+make
+```
+
+## Requirements
+- devkitPro toolchain with WUT (Wii U Toolchain)
+- Custom MuPDF build for devkitPPC: [mupdf-devkitppc](https://github.com/hito16/mupdf-devkitppc)
+
+## Platform-Specific Features
+The Wii U build:
+- Excludes hardware power button monitoring (uses console's own power management)
+- Static linking only (Wii U homebrew requirement)  
+- Uses devkitPro's harfbuzz and freetype libraries
+- Includes Wii U-specific main wrapper (`main_wiiu.cpp`)
 
 
-## Building
+## Development Status
+
+Current status of the Wii U port:
+* ✅ [mupdf-devkitppc](https://github.com/hito16/mupdf-devkitppc) builds successfully
+* ✅ Resolved multiple and undefined references
+* ✅ Created main wrapper so Wii U code can call SDLReader code  
+* ⚠️  Boots to blank screen - logging needed for debugging
+
+## Detailed Build Instructions
 
 Checkout the custom mupdf fork
 

@@ -1,3 +1,8 @@
+# Docker Development Environment Makefile for TG5040
+# This Makefile manages the Docker-based development environment
+# For the main application build, use the regular Makefile
+# For docker-compose workflow, see docker-compose.yml in this directory
+
 .PHONY: shell
 .PHONY: clean
 	
