@@ -2,9 +2,21 @@
 .SUFFIXES:
 #-------------------------------------------------------------------------------
 
+# Define clean target first, so it works without DEVKITPRO
+.PHONY: clean
+clean:
+	@echo clean ...
+	@rm -fr build *.rpx *.elf *.wuhb
+
+# Check for DEVKITPRO only for build targets
 ifeq ($(strip $(DEVKITPRO)),)
+ifneq ($(MAKECMDGOALS),clean)
 $(error "Please set DEVKITPRO in your environment. export DEVKITPRO=<path to>/devkitpro")
 endif
+endif
+
+# Only include devkit rules if DEVKITPRO is set
+ifneq ($(strip $(DEVKITPRO)),)
 
 TOPDIR ?= $(CURDIR)
 
@@ -149,11 +161,6 @@ $(BUILD):
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
 #-------------------------------------------------------------------------------
-clean:
-	@echo clean ...
-	@rm -fr $(BUILD) $(TARGET).rpx $(TARGET).elf $(TARGET).wuhb
-
-#-------------------------------------------------------------------------------
 else
 
 $(info info- ensure path $(ROMFS) exists)
@@ -187,6 +194,8 @@ $(OFILES_SRC)	: $(HFILES_BIN)
 #-------------------------------------------------------------------------------
 endif
 #-------------------------------------------------------------------------------
+
+endif # DEVKITPRO check
 
 .PHONY: run
 run: all
