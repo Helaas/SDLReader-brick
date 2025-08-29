@@ -9,4 +9,5 @@
 
 # TG5040 bundle artifacts
 /ports/tg5040/pak/lib/*
+/ports/tg5040/pak/res
 /ports/tg5040/pak/bin/sdl_reader_cli

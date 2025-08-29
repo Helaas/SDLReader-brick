@@ -19,7 +19,7 @@ JSON_FILE="/tmp/sdlreader_browser.json"
 SELECTION_FILE="/tmp/sdlreader_selection.txt"
 STATE_PATH="/tmp/sdlreader_lastdir.txt"   # last folder persistence
 LOG="/tmp/sdlreader_browser.log"
-DEBUG="${DEBUG:0}"                    # set DEBUG=-1 for logs
+DEBUG="${DEBUG:-0}"                    # set DEBUG=1 for logs
 
 ###############################################################################
 # Helpers

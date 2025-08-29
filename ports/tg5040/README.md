@@ -9,6 +9,9 @@ Based on the [Trimui toolchain Docker image](https://git.crowdedwood.com/trimui-
 - `Makefile.docker` - Docker environment management
 - `docker-compose.yml` - Docker Compose setup  
 - `Dockerfile` - TG5040 toolchain container image
+- `export_bundle.sh` - Bundle export script for distribution packages
+- `make_bundle.sh` - Library dependency bundling script (called from `export_bundle.sh`)
+- `BUNDLE_EXPORT.md` - Detailed bundle export system documentation
 
 ## Quick Start
 
@@ -43,7 +46,34 @@ make tg5040
 ```bash
 # From project root
 make tg5040
+
+# Build and export TG5040 bundle
+make export-tg5040
 ```
+
+## Bundle Export
+
+The TG5040 port includes an automated bundle export system that creates a complete distribution package:
+
+```bash
+# Export complete TG5040 bundle
+make export-tg5040
+
+# Manual export from ports/tg5040 directory
+./export_bundle.sh
+```
+
+The exported bundle (`ports/tg5040/pak/`) contains:
+- **bin/**: Main binary and utilities (jq, minui-list) 
+- **lib/**: All required shared library dependencies
+- **res/**: Font and resource files
+- **launch.sh**: Main launcher script
+
+### Bundle Features
+- **Self-contained**: Includes all dependencies and resources
+- **File preservation**: Preserves important utilities and scripts during rebuild
+- **Optimized**: Excludes system libraries, strips debug symbols
+- **Smart dependency resolution**: Uses `ldd` analysis with exclusion filters
 
 ## Installation
 
