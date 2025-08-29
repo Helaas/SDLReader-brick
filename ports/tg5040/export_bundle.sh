@@ -11,8 +11,20 @@ echo "Project root: $PROJECT_ROOT"
 echo "Bundle destination: $BUNDLE_DIR"
 
 # Clean and create bundle structure
+# Preserve important files before cleaning
+TEMP_DIR=$(mktemp -d)
+[ -f "$BUNDLE_DIR/bin/jq" ] && cp "$BUNDLE_DIR/bin/jq" "$TEMP_DIR/"
+[ -f "$BUNDLE_DIR/bin/minui-list" ] && cp "$BUNDLE_DIR/bin/minui-list" "$TEMP_DIR/"
+[ -f "$BUNDLE_DIR/launch.sh" ] && cp "$BUNDLE_DIR/launch.sh" "$TEMP_DIR/"
+
 rm -rf "$BUNDLE_DIR"
 mkdir -p "$BUNDLE_DIR/bin" "$BUNDLE_DIR/lib" "$BUNDLE_DIR/res"
+
+# Restore preserved files
+[ -f "$TEMP_DIR/jq" ] && cp "$TEMP_DIR/jq" "$BUNDLE_DIR/bin/"
+[ -f "$TEMP_DIR/minui-list" ] && cp "$TEMP_DIR/minui-list" "$BUNDLE_DIR/bin/"
+[ -f "$TEMP_DIR/launch.sh" ] && cp "$TEMP_DIR/launch.sh" "$BUNDLE_DIR/"
+rm -rf "$TEMP_DIR"
 
 # Copy bin contents from existing pak folder
 if [ -d "$PROJECT_ROOT/pak/bin" ]; then
@@ -34,21 +46,15 @@ else
     echo "Warning: sdl_reader_cli not found in bin/ - did you run 'make tg5040'?"
 fi
 
-# Generate library bundle using make_bundle2.sh
+# Generate library bundle using make_bundle.sh
 echo "Generating library dependencies..."
 cd "$PROJECT_ROOT"
 export BIN="./bin/sdl_reader_cli"
-export DEST="./lib"
-if [ -f "$SCRIPT_DIR/make_bundle2.sh" ]; then
-    bash "$SCRIPT_DIR/make_bundle2.sh"
-    
-    # Copy the generated lib folder to bundle
-    if [ -d "$PROJECT_ROOT/lib" ]; then
-        echo "Copying library dependencies..."
-        cp -a "$PROJECT_ROOT/lib/." "$BUNDLE_DIR/lib/"
-    fi
+export DEST="./ports/tg5040/pak/lib"
+if [ -f "$SCRIPT_DIR/make_bundle.sh" ]; then
+    bash "$SCRIPT_DIR/make_bundle.sh"
 else
-    echo "Warning: make_bundle2.sh not found in $SCRIPT_DIR"
+    echo "Warning: make_bundle.sh not found in $SCRIPT_DIR"
 fi
 
 # Copy resources

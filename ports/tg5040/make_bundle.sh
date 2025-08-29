@@ -8,8 +8,14 @@ set -x
 # --- Config ---
 BIN="${BIN:-./bin/sdl_reader_cli}"
 DEST="${DEST:-./bundle}"
-BINDIR="$DEST/bin"
-LIBDIR="$DEST/lib"
+# Check if DEST ends with /lib (meaning we want libs directly in DEST)
+if [[ "$DEST" == */lib ]]; then
+    BINDIR="$(dirname "$DEST")/bin"
+    LIBDIR="$DEST"
+else
+    BINDIR="$DEST/bin"
+    LIBDIR="$DEST/lib"
+fi
 
 # Exclude:
 # - glibc core (must use device versions)
@@ -105,46 +111,6 @@ if command -v patchelf >/dev/null 2>&1; then
 else
   echo "WARNING: patchelf not found; skipping RPATH/RUNPATH embed."
 fi
-
-# Launcher with env setup and video fallback logic
-cat > "$BINDIR/run.sh" <<'EOF'
-#!/usr/bin/env sh
-set -eu
-
-HERE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-export LD_LIBRARY_PATH="$HERE/../lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-
-# XDG runtime (needed for KMSDRM/libinput on many systems)
-: "${XDG_RUNTIME_DIR:=/tmp/runtime-$(id -u)}"
-mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
-
-# Try KMSDRM if /dev/dri exists, else fbcon if /dev/fb0 exists, otherwise let SDL choose.
-if [ -e /dev/dri/card0 ]; then
-  export SDL_VIDEODRIVER="${SDL_VIDEODRIVER:-kmsdrm}"
-elif [ -e /dev/fb0 ]; then
-  export SDL_VIDEODRIVER="${SDL_VIDEODRIVER:-fbcon}"
-  export SDL_FBDEV="${SDL_FBDEV:-/dev/fb0}"
-fi
-
-# Sensible audio default
-export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"
-
-# First attempt
-if "$HERE/sdl_reader_cli" "$@"; then
-  exit 0
-fi
-
-# Fallback to fbcon if kmsdrm fails
-if [ "${SDL_VIDEODRIVER:-}" = "kmsdrm" ]; then
-  echo "KMSDRM failed; retrying with fbcon..."
-  export SDL_VIDEODRIVER=fbcon
-  [ -e /dev/fb0 ] && export SDL_FBDEV=/dev/fb0
-  exec "$HERE/sdl_reader_cli" "$@"
-fi
-
-exit 1
-EOF
-chmod +x "$BINDIR/run.sh"
 
 # Optional: prune heavy libs you likely don't need on the Brick (uncomment if desired)
  rm -f "$LIBDIR"/libpulse*.so* "$LIBDIR"/libsystemd*.so* "$LIBDIR"/libdbus-1*.so* || true

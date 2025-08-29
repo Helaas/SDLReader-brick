@@ -60,4 +60,4 @@ $(BUILD_DIR)/tg5040_power_handler.o: ports/tg5040/src/power_handler.cpp
 clean:
 	@echo "Cleaning build artifacts..."
 	rm -rf $(BUILD_DIR)/*.o $(BIN_DIR)/*
-	rm -rf pak/ ../../lib/
+	rm -rf pak/ lib/
