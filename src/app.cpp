@@ -298,12 +298,12 @@ void App::handleEvent(const SDL_Event &event)
                 zoom(-10);
                 break;
 
-            // --- X: Best fit width (stub -> fits width) ---
+            // --- X: Best fit width ---
             case SDL_CONTROLLER_BUTTON_X:
                 fitPageToWidth();
                 break;
 
-            // --- A: Rotate (stub) ---
+            // --- A: Rotate ---
             case SDL_CONTROLLER_BUTTON_A:
                 rotateClockwise();
                 break;
@@ -312,15 +312,16 @@ void App::handleEvent(const SDL_Event &event)
             case SDL_CONTROLLER_BUTTON_GUIDE:
                 action = AppAction::Quit;
                 break; // MENU on Brick
+
+            // --- START for horizontal mirroring  ---    
             case SDL_CONTROLLER_BUTTON_START:
                 toggleMirrorHorizontal();
                 break;
 
-            // --- SELECT/START for mirroring (stubs) ---
+            // --- BACK for vertical mirroring  ---
             case SDL_CONTROLLER_BUTTON_BACK:
                 toggleMirrorVertical();
                 break; // SELECT
-            // note: START already used for Quit above; change if you prefer mirroring there
             default:
                 break;
             }
@@ -670,7 +671,7 @@ void App::resetPageView()
     fitPageToWindow();
 }
 
-// ---- helpers (stubs where noted) ----
+// ---- helpers  ----
 void App::jumpPages(int delta)
 {
     int target = std::clamp(m_currentPage + delta, 0, m_pageCount - 1);
@@ -696,11 +697,50 @@ void App::toggleMirrorHorizontal()
 
 void App::fitPageToWidth()
 {
-    // Approximate: compute scale so page width == window width (height may overflow).
-    // You already have 'fitPageToWindow()' for full-page; width-fit is complementary.
-    // Implement by measuring page width at 100% and window width, then set m_currentScale.
-    // For now, call fitPageToWindow() as a placeholder:
-    fitPageToWindow(); // TODO: replace with width-only fit.
+    int windowWidth = m_renderer->getWindowWidth();
+
+    // Use effective sizes so 90/270 rotation swaps W/H
+    int nativeWidth = effectiveNativeWidth();
+
+    if (nativeWidth == 0)
+    {
+        std::cerr << "App ERROR: Native page width is zero for page "
+                  << m_currentPage << std::endl;
+        return;
+    }
+
+    // Calculate scale to fit width exactly
+    m_currentScale = static_cast<int>((static_cast<double>(windowWidth) / nativeWidth) * 100.0);
+    
+    // Clamp scale to reasonable bounds
+    if (m_currentScale < 10)
+        m_currentScale = 10;
+    if (m_currentScale > 500)
+        m_currentScale = 500;
+
+    // Update page dimensions based on new scale
+    int nativeHeight = effectiveNativeHeight();
+    m_pageWidth = static_cast<int>(nativeWidth * (m_currentScale / 100.0));
+    m_pageHeight = static_cast<int>(nativeHeight * (m_currentScale / 100.0));
+
+    // Reset horizontal scroll since we're fitting to width
+    m_scrollX = 0;
+    
+    // For vertical scroll, if the page is taller than window, start at top
+    int windowHeight = m_renderer->getWindowHeight();
+    if (m_pageHeight > windowHeight)
+    {
+        // Start at top of page (positive maxY in your coordinate system)
+        int maxY = (m_pageHeight - windowHeight) / 2;
+        m_scrollY = maxY;
+    }
+    else
+    {
+        // Page fits vertically, center it
+        m_scrollY = 0;
+    }
+    
+    clampScroll();
 }
 
 void App::printAppState()
