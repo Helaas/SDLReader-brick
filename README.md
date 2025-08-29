@@ -9,6 +9,7 @@ A minimal document reader built using SDL2 and  MuPDF supporting PDF
 * [Usage](#usage)
 * [User Inputs](#user-inputs)
 * [Project Structure](#project-structure)
+* [Architecture](#architecture)
 
 ## Features
 * View PDF documents.
@@ -151,29 +152,29 @@ The SDL Reader supports the following keyboard and mouse inputs:
 ## Project Structure
 ```
 SDLReader-brick/
-├── Makefile                    # Main multi-platform build system
-├── src/                        # Shared source code
-├── include/                    # Shared header files
-├── cli/                        # Command-line interface
-├── res/                        # Resources (fonts, etc.)
-└── ports/                      # Platform-specific builds
-    ├── tg5040/                 # TG5040 embedded device
-    │   ├── Makefile            # TG5040 build configuration
-    │   ├── Makefile.docker     # Docker environment management
-    │   ├── docker-compose.yml  # Docker Compose setup
-    │   ├── Dockerfile          # TG5040 toolchain image
-    │   ├── include/            # TG5040-specific headers
-    │   │   └── power_handler.h # Power management for TG5040
-    │   └── src/                # TG5040-specific source code
+├── Makefile                      # Main multi-platform build system
+├── src/                          # Shared source code
+├── include/                      # Shared header files
+├── cli/                          # Command-line interface
+├── res/                          # Resources (fonts, etc.)
+└── ports/                        # Platform-specific builds
+    ├── tg5040/                   # TG5040 embedded device
+    │   ├── Makefile              # TG5040 build configuration
+    │   ├── Makefile.docker       # Docker environment management
+    │   ├── docker-compose.yml    # Docker Compose setup
+    │   ├── Dockerfile            # TG5040 toolchain image
+    │   ├── include/              # TG5040-specific headers
+    │   │   └── power_handler.h   # Power management for TG5040
+    │   └── src/                  # TG5040-specific source code
     │       └── power_handler.cpp # Power button handling implementation
-    ├── mac/                    # macOS desktop
-    │   └── Makefile            # macOS build configuration
-    ├── linux/                  # Linux desktop
-    │   ├── Makefile            # Linux build configuration
-    │   └── README.md           # Linux-specific instructions
-    └── wiiu/                   # Nintendo Wii U homebrew
-        └── Makefile            # Wii U build configuration
-```
+    ├── mac/                      # macOS desktop
+    │   └── Makefile              # macOS build configuration
+    ├── linux/                    # Linux desktop
+    │   ├── Makefile              # Linux build configuration
+    │   └── README.md             # Linux-specific instructions
+    └── wiiu/                     # Nintendo Wii U homebrew
+        └── Makefile              # Wii U build configuration
+```  
 
 ### Development Workflow
 - **Cross-platform code**: Modify files in `src/`, `include/`, `cli/`
@@ -181,6 +182,17 @@ SDLReader-brick/
 - **Power management**: TG5040 includes hardware-specific power button handling and suspend/resume functionality
 - **Build system**: Each platform has its own Makefile in `ports/{platform}/`
 - **Docker development**: Use `ports/tg5040/docker-compose.yml` for containerized development
+
+## Architecture
+
+For detailed information about the multi-platform design, conditional compilation strategies, and guidelines for adding new platforms, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
+Key architectural highlights:
+- **Clean separation** between shared and platform-specific code
+- **Conditional compilation** for platform-specific features
+- **Port-specific implementations** for hardware integration (e.g., TG5040 power management)
+- **Unified build system** with platform-specific Makefiles
+- **Scalable design** for easy addition of new platforms
 
 # Acknowledgements
 
