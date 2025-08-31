@@ -110,8 +110,7 @@ The TG5040 build includes:
 - **Document Format Support**: 
   - PDF documents via MuPDF integration
   - CBZ/ZIP comic book archives via MuPDF native support  
-  - XPS documents via MuPDF (future: expose in UI)
-  - EPUB e-books via MuPDF (future: expose in UI)
+  - EPUB e-books via MuPDF native support
 - **Platform-optimized build flags**: `-DTG5040_PLATFORM`
 - **Port-specific source structure**: 
   - `include/power_handler.h` - TG5040 power management interface

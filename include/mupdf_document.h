@@ -13,7 +13,6 @@
  * This class handles multiple document formats through MuPDF's native support:
  * - PDF documents (.pdf)
  * - Comic book archives (.cbz, .zip containing images)
- * - XPS documents (.xps)
  * - EPUB documents (.epub)
  * - And other formats supported by MuPDF
  */

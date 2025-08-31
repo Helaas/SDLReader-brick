@@ -1,9 +1,9 @@
 #!/bin/sh
 # File browser using minui-list with nested JSON ("items")
-# - Folders first, then PDFs and CBZ/ZIP files (case-insensitive)
+# - Folders first, then PDFs, CBZ/ZIP files, and EPUB books (case-insensitive)
 # - Uses custom confirm_text for folder vs file
 # - Remembers last visited folder between runs
-# - Selecting a PDF/CBZ exec's ./bin/sdl_reader_cli <file>
+# - Selecting a document exec's ./bin/sdl_reader_cli <file>
 # - DEBUG logs to /tmp/sdlreader_browser.log (set DEBUG=0 to disable)
 
 ###############################################################################
@@ -96,7 +96,7 @@ build_json_list() {
       printf '%s\n' "$p" >>"$dirs_tmp"
     elif [ -f "$p" ]; then
       case "$p" in
-        *.[Pp][Dd][Ff]|*.[Cc][Bb][Zz]|*.[Zz][Ii][Pp]) printf '%s\n' "$p" >>"$docs_tmp" ;;
+        *.[Pp][Dd][Ff]|*.[Cc][Bb][Zz]|*.[Zz][Ii][Pp]|*.[Ee][Pp][Uu][Bb]) printf '%s\n' "$p" >>"$docs_tmp" ;;
       esac
     fi
   done
@@ -237,7 +237,7 @@ browse() {
     fi
 
     case "$sel_path" in
-      *.[Pp][Dd][Ff]|*.[Cc][Bb][Zz]|*.[Zz][Ii][Pp])
+      *.[Pp][Dd][Ff]|*.[Cc][Bb][Zz]|*.[Zz][Ii][Pp]|*.[Ee][Pp][Uu][Bb])
         log "Document selected. Executing sdl_reader_cli with: '$sel_path'"
         if [ ! -x ./bin/sdl_reader_cli ]; then
           echo "Error: ./bin/sdl_reader_cli not found or not executable" >&2

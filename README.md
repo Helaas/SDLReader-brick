@@ -13,7 +13,7 @@ A minimal document reader built using SDL2 and MuPDF supporting multiple documen
 * [Architecture](#architecture)
 
 ## Features
-* View PDF documents and comic book archives (CBZ/ZIP).
+* View PDF documents, comic book archives (CBZ/ZIP), and EPUB books.
 * Page navigation (next/previous page).
 * Jump to specific page with `G` key (enter page number and press Enter).
 * Quick page jumping (±10 pages) with `[` and `]` keys.
@@ -24,13 +24,11 @@ A minimal document reader built using SDL2 and MuPDF supporting multiple documen
 * Toggle fullscreen mode.
 * Basic UI overlay showing current page and zoom level.
 * Advanced power management for embedded devices (TG5040).
-* Planned: EPUB (supported by mupdf)
 
 ## Supported Document Types
 * **PDF** (`.pdf`) - via MuPDF
 * **Comic Book Archive** (`.cbz`, `.zip` containing images) - via MuPDF native support
-* **XPS** (`.xps`) - via MuPDF (future: expose in UI)
-* **EPUB** (`.epub`) - via MuPDF (future: expose in UI)
+* **EPUB** (`.epub`) - via MuPDF native support
 
 ## Build Instructions
 This project supports multiple platforms with a unified build system.
@@ -144,6 +142,8 @@ After building, run the executable from your project root, providing the path to
 ./bin/sdl_reader_cli path/to/your_document.pdf
 # or
 ./bin/sdl_reader_cli path/to/your_comic.cbz
+# or
+./bin/sdl_reader_cli path/to/your_book.epub
 ```
 
 ## TG5040 Deployment
