@@ -62,7 +62,7 @@ pak/
 ├── bin/
 │   ├── jq                    # JSON processor utility (preserved)
 │   ├── minui-list           # MinUI list utility (preserved)
-│   └── sdl_reader_cli       # Main PDF reader binary
+│   └── sdl_reader_cli       # Main document reader binary (PDF, CBZ, ZIP)
 ├── lib/                     # All shared library dependencies
 │   ├── libSDL2*.so*         # SDL2 libraries
 │   ├── libmupdf*.so*        # MuPDF libraries

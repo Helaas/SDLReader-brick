@@ -1,9 +1,9 @@
 #!/bin/sh
 # File browser using minui-list with nested JSON ("items")
-# - Folders first, then PDFs (case-insensitive)
+# - Folders first, then PDFs and CBZ/ZIP files (case-insensitive)
 # - Uses custom confirm_text for folder vs file
 # - Remembers last visited folder between runs
-# - Selecting a PDF exec's ./bin/sdl_reader_cli <file.pdf>
+# - Selecting a PDF/CBZ exec's ./bin/sdl_reader_cli <file>
 # - DEBUG logs to /tmp/sdlreader_browser.log (set DEBUG=0 to disable)
 
 ###############################################################################
@@ -86,7 +86,7 @@ build_json_list() {
   log "build_json_list: dir='$dir'"
 
   dirs_tmp="$(mktemp -t fbrowse_dirs.XXXXXX)"
-  pdfs_tmp="$(mktemp -t fbrowse_pdfs.XXXXXX)"
+  docs_tmp="$(mktemp -t fbrowse_docs.XXXXXX)"
   items_tmp="$(mktemp -t fbrowse_items.XXXXXX)"
 
   # Collect entries (skip hidden; '*' glob ignores dotfiles)
@@ -96,7 +96,7 @@ build_json_list() {
       printf '%s\n' "$p" >>"$dirs_tmp"
     elif [ -f "$p" ]; then
       case "$p" in
-        *.[Pp][Dd][Ff]) printf '%s\n' "$p" >>"$pdfs_tmp" ;;
+        *.[Pp][Dd][Ff]|*.[Cc][Bb][Zz]|*.[Zz][Ii][Pp]) printf '%s\n' "$p" >>"$docs_tmp" ;;
       esac
     fi
   done
@@ -119,9 +119,9 @@ build_json_list() {
     done
   fi
 
-  # PDFs after (sorted, case-insensitive)
-  if [ -s "$pdfs_tmp" ]; then
-    sort -f "$pdfs_tmp" | while IFS= read -r p; do
+  # Documents after folders (sorted, case-insensitive)
+  if [ -s "$docs_tmp" ]; then
+    sort -f "$docs_tmp" | while IFS= read -r p; do
       b="$(basename "$p")"
       name_json=$(json_escape "$b")
       path_json=$(json_escape "$p")
@@ -133,7 +133,7 @@ build_json_list() {
   # Wrap into {"items":[ ... ]}
   ./bin/jq -s '{items: .}' "$items_tmp" >"$JSON_FILE"
 
-  rm -f "$dirs_tmp" "$pdfs_tmp" "$items_tmp"
+  rm -f "$dirs_tmp" "$docs_tmp" "$items_tmp"
 
   dump_file "$JSON_FILE" "LIST JSON for dir '$dir'"
 }
@@ -237,8 +237,8 @@ browse() {
     fi
 
     case "$sel_path" in
-      *.[Pp][Dd][Ff])
-        log "PDF selected. Executing sdl_reader_cli with: '$sel_path'"
+      *.[Pp][Dd][Ff]|*.[Cc][Bb][Zz]|*.[Zz][Ii][Pp])
+        log "Document selected. Executing sdl_reader_cli with: '$sel_path'"
         if [ ! -x ./bin/sdl_reader_cli ]; then
           echo "Error: ./bin/sdl_reader_cli not found or not executable" >&2
           exit 1
@@ -266,7 +266,7 @@ browse() {
         exec ./bin/sdl_reader_cli "$sel_path" 2>&1 | tee -a "$READER_LOG"
         ;;
       *)
-        log "Unknown selection type for path '$sel_path' (not dir, not .pdf). Rebuilding."
+        log "Unknown selection type for path '$sel_path' (not dir, not supported document format). Rebuilding."
         ;;
     esac
   done

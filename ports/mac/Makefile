@@ -34,16 +34,17 @@ MUPDF_OPT_PATH = /usr/local/opt/mupdf-tools
 # -I$(SRC_DIR): Include path for project's own header files (e.g., app.h, document.h)
 CXXFLAGS = -std=c++17 -Wall -Wextra -g -I$(MUPDF_OPT_PATH)/include -I$(SRC_DIR) -Iinclude
 
-# Include paths for SDL2 and SDL2_ttf
-# pkg-config --cflags SDL2_ttf added for explicit SDL_ttf header paths
-INC_PATHS = $(shell pkg-config --cflags SDL2_ttf sdl2)
+# Include paths for SDL2, SDL2_ttf, and SDL2_image
+# pkg-config --cflags SDL2_ttf SDL2_image added for explicit header paths
+INC_PATHS = $(shell pkg-config --cflags SDL2_ttf SDL2_image sdl2)
 
 # Library paths and libraries to link
 # -L$(MUPDF_OPT_PATH)/lib: Manual library path for MuPDF static libs via opt symlink
 # -lmupdf -lmupdf-third: Link against MuPDF's main and third-party libraries
-# pkg-config --libs SDL2_ttf added for explicit SDL_ttf library linking
-LIBS = $(shell pkg-config --libs SDL2_ttf sdl2) \
-       -L$(MUPDF_OPT_PATH)/lib -lmupdf -lmupdf-third
+# pkg-config --libs SDL2_ttf SDL2_image added for library linking
+# -lzip: Link against libzip for CBZ support
+LIBS = $(shell pkg-config --libs SDL2_ttf SDL2_image sdl2) \
+       -L$(MUPDF_OPT_PATH)/lib -lmupdf -lmupdf-third -lzip
 
 # All object files (will be placed in the build directory)
 # Transforms src/file.cpp into build/file.o and cli/file.cpp into build/file.o

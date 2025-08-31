@@ -1,6 +1,6 @@
 # SDL Reader
 
-A minimal document reader built using SDL2 and MuPDF supporting PDF 
+A minimal document reader built using SDL2, MuPDF, and libzip supporting PDF and CBZ documents 
 
 ## Table of Contents
 * [Features](#features)
@@ -13,7 +13,7 @@ A minimal document reader built using SDL2 and MuPDF supporting PDF
 * [Architecture](#architecture)
 
 ## Features
-* View PDF documents.
+* View PDF documents and comic book archives (CBZ/ZIP).
 * Page navigation (next/previous page).
 * Jump to specific page with `G` key (enter page number and press Enter).
 * Quick page jumping (±10 pages) with `[` and `]` keys.
@@ -23,10 +23,12 @@ A minimal document reader built using SDL2 and MuPDF supporting PDF
 * Scroll within pages (if zoomed in or page is larger than window).
 * Toggle fullscreen mode.
 * Basic UI overlay showing current page and zoom level.
-* Planned: CBZ, EPUB (supported by mupdf)
+* Advanced power management for embedded devices (TG5040).
+* Planned: EPUB (supported by mupdf)
 
 ## Supported Document Types
 * **PDF** (`.pdf`)
+* **Comic Book Archive** (`.cbz`, `.zip` containing images)
 
 ## Build Instructions
 This project supports multiple platforms with a unified build system.
@@ -75,7 +77,7 @@ make help
 
 **Install dependencies using Homebrew:**
 ```bash
-brew install sdl2 sdl2_ttf mupdf-tools pkg-config
+brew install sdl2 sdl2_ttf sdl2_image libzip mupdf-tools pkg-config
 ```
 
 #### Linux
@@ -88,7 +90,7 @@ brew install sdl2 sdl2_ttf mupdf-tools pkg-config
 
 **Install dependencies (Ubuntu/Debian):**
 ```bash
-sudo apt install build-essential pkg-config libsdl2-dev libsdl2-ttf-dev libmupdf-dev libfreetype6-dev libharfbuzz-dev libjpeg-dev libopenjp2-7-dev libjbig2dec0-dev libgumbo-dev libmujs-dev
+sudo apt install build-essential pkg-config libsdl2-dev libsdl2-ttf-dev libsdl2-image-dev libzip-dev libmupdf-dev libfreetype6-dev libharfbuzz-dev libjpeg-dev libopenjp2-7-dev libjbig2dec0-dev libgumbo-dev libmujs-dev
 ```
 
 Or use the automated installer:
@@ -103,11 +105,13 @@ cd ports/linux && make install-deps
 ## Platform-Specific Features
 
 ### TG5040 Embedded Device
-- **Power Management**: Hardware power button integration
-  - Short press: Suspend device to save battery
+- **Advanced Power Management**: NextUI-compatible power button integration
+  - Short press: Intelligent sleep with fallback to fake sleep mode
+  - Fake sleep: Black screen with input blocking when hardware sleep unavailable
+  - Automatic deep sleep attempts in background during fake sleep
   - Long press (2+ seconds): Safe shutdown
-  - Wake detection with grace period handling
-  - Error feedback through GUI notifications
+  - Smart error handling: No immediate errors, 30-second timeout before user notification
+  - Event flushing on wake to prevent phantom button presses
 - **Device-specific Input**: `/dev/input/event1` monitoring for power events
 - **System Integration**: NextUI-compatible suspend/shutdown scripts
 - **Bundle Export**: Complete distribution package creation
@@ -136,6 +140,8 @@ After building, run the executable from your project root, providing the path to
 
 ```bash
 ./bin/sdl_reader_cli path/to/your_document.pdf
+# or
+./bin/sdl_reader_cli path/to/your_comic.cbz
 ```
 
 ## TG5040 Deployment

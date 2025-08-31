@@ -3,6 +3,7 @@
 #include "text_renderer.h"
 #include "document.h"
 #include "pdf_document.h"
+#include "cbz_document.h"
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
 #endif
@@ -47,19 +48,25 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
     });
 #endif
 
-    if (filename.size() >= 4 &&
-        std::equal(filename.end() - 4, filename.end(),
-                   ".pdf",
-                   [](unsigned char a, unsigned char b)
-                   {
-                       return std::tolower(a) == std::tolower(b);
-                   }))
-    {
+    // Determine document type based on file extension
+    std::string lowercaseFilename = filename;
+    std::transform(lowercaseFilename.begin(), lowercaseFilename.end(), 
+                   lowercaseFilename.begin(), ::tolower);
+    
+    if (lowercaseFilename.size() >= 4 && 
+        lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".pdf") {
         m_document = std::make_unique<PdfDocument>();
+    }
+    else if ((lowercaseFilename.size() >= 4 && 
+              lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".cbz") ||
+             (lowercaseFilename.size() >= 4 && 
+              lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".zip")) {
+        m_document = std::make_unique<CbzDocument>();
     }
     else
     {
-        throw std::runtime_error("Unsupported file format: " + filename);
+        throw std::runtime_error("Unsupported file format: " + filename + 
+                                " (supported: .pdf, .cbz, .zip)");
     }
 
     if (!m_document->open(filename))

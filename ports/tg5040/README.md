@@ -95,17 +95,29 @@ After building the first time, unless a dependency of the image has changed, `ma
 
 ## Platform-Specific Features
 The TG5040 build includes:
-- **Hardware Power Management**: Port-specific power button handling
+- **Advanced Hardware Power Management**: NextUI-compatible power button handling
   - Power button monitoring via `/dev/input/event1`
-  - Short press: System suspend for battery conservation
-  - Long press: Safe system shutdown
-  - Wake detection with grace period handling
-  - Error notifications through GUI callbacks
+  - Short press: Intelligent sleep with fake sleep fallback
+    - Attempts real hardware sleep first
+    - If hardware sleep fails, enters fake sleep mode (black screen, input blocking)
+    - Continues attempting deep sleep in background every 2 seconds
+    - Automatically exits fake sleep when deep sleep succeeds
+    - Manual wake via power button press during fake sleep
+  - Long press (2+ seconds): Safe system shutdown
+  - Smart error handling: 30-second timeout before showing user errors
+  - Event flushing on wake to prevent phantom button presses
+  - Wake detection with proper state management
+- **Document Format Support**: 
+  - PDF documents via MuPDF integration
+  - CBZ/ZIP comic book archives via libzip and SDL_image
 - **Platform-optimized build flags**: `-DTG5040_PLATFORM`
 - **Port-specific source structure**: 
   - `include/power_handler.h` - TG5040 power management interface
-  - `src/power_handler.cpp` - Hardware-specific power button implementation
+  - `src/power_handler.cpp` - Hardware-specific power button implementation with NextUI compatibility
 - **Embedded Linux-specific libraries and dependencies**
+  - SDL2, SDL2_ttf, SDL2_image for graphics and input
+  - MuPDF and dependencies for PDF rendering
+  - libzip for CBZ archive support
 
 See [setup-env.sh](./support/setup-env.sh) for some useful vars for compiling that are exported automatically.
 

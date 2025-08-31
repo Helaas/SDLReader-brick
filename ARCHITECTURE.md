@@ -16,17 +16,20 @@ SDLReader is designed as a cross-platform document reader with a clean separatio
 **Type**: Embedded Linux handheld device  
 **Role**: Primary target platform with custom hardware integration  
 **Key Features**:
-- Custom power button handling (`/dev/input/event1`)
-- Suspend/resume power management
-- NextUI system integration
+- Advanced power button handling (`/dev/input/event1`)
+- NextUI-compatible suspend/resume power management
+- Fake sleep mode with automatic deep sleep attempts
+- Smart error handling with 30-second timeout
 - Battery conservation optimizations
 - Hardware-specific input device monitoring
+- CBZ and PDF document support
 
 **Build Characteristics**:
 - Cross-compilation required
 - Docker-based development environment
 - Platform flag: `-DTG5040_PLATFORM`
-- Custom libraries and system scripts
+- Custom libraries: MuPDF, libzip, SDL2_image
+- NextUI system integration scripts
 
 ### macOS
 **Type**: Desktop development platform  
@@ -77,10 +80,11 @@ SDLReader is designed as a cross-platform document reader with a clean separatio
 
 ### Shared Components (`src/`, `include/`, `cli/`)
 Core functionality that works across all platforms:
-- **Document handling**: PDF parsing and rendering via MuPDF
-- **Rendering engine**: SDL2-based graphics and text rendering  
+- **Document handling**: PDF parsing via MuPDF, CBZ/ZIP archive support via libzip
+- **Rendering engine**: SDL2-based graphics, text rendering, and image display
 - **User interface**: Page navigation, zoom, scroll controls
-- **Application logic**: Event handling, state management
+- **Application logic**: Event handling, state management, multi-format document support
+- **Document types**: PDF documents and comic book archives (CBZ/ZIP containing images)
 
 ### Platform-Specific Components (`ports/{platform}/`)
 Platform-specific implementations and optimizations:
@@ -110,8 +114,16 @@ The power management system demonstrates the port-specific architecture:
 
 ### TG5040 Implementation
 - **Location**: `ports/tg5040/include/power_handler.h`, `ports/tg5040/src/power_handler.cpp`
-- **Features**: Hardware power button monitoring, suspend/resume, wake detection
+- **Features**: 
+  - Hardware power button monitoring via Linux input device
+  - NextUI-compatible suspend/resume with fallback strategies
+  - Fake sleep mode: Black screen with input blocking when hardware sleep fails
+  - Automatic deep sleep attempts every 2 seconds during fake sleep
+  - Smart error handling: Only shows errors after 30 seconds of failed attempts
+  - Event flushing on wake to prevent phantom button presses
+  - Manual wake from fake sleep via power button
 - **Integration**: Compiled only when `TG5040_PLATFORM` is defined
+- **Callback System**: GUI integration for fake sleep mode and error display
 
 ### Other Platforms
 - **macOS**: No power management needed (desktop environment)
@@ -137,8 +149,9 @@ The power management system demonstrates the port-specific architecture:
 1. Sets `-DTG5040_PLATFORM` compiler flag
 2. Includes `ports/tg5040/include` in header search path
 3. Compiles `ports/tg5040/src/power_handler.cpp` as `tg5040_power_handler.o`
-4. Links with embedded Linux libraries
+4. Links with embedded Linux libraries (SDL2, SDL2_image, libzip, MuPDF)
 5. Sets up Docker cross-compilation environment
+6. Configures NextUI-compatible system integration
 
 #### Linux Build  
 1. Uses native compiler toolchain
