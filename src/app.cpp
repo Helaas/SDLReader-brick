@@ -280,11 +280,30 @@ void App::handleEvent(const SDL_Event &event)
         case SDLK_p:
             printAppState();
             break;
-        case SDLK_r:
-            resetPageView();
-            break;
         case SDLK_c:
             clampScroll();
+            break;
+        case SDLK_w:
+            fitPageToWidth();
+            break;
+        case SDLK_r:
+            if (SDL_GetModState() & KMOD_SHIFT) {
+                rotateClockwise();
+            } else {
+                resetPageView();
+            }
+            break;
+        case SDLK_h:
+            toggleMirrorHorizontal();
+            break;
+        case SDLK_v:
+            toggleMirrorVertical();
+            break;
+        case SDLK_LEFTBRACKET:
+            jumpPages(-10);
+            break;
+        case SDLK_RIGHTBRACKET:
+            jumpPages(+10);
             break;
         }
         break;
