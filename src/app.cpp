@@ -35,6 +35,16 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
     m_powerHandler->setErrorCallback([this](const std::string& message) {
         showErrorMessage(message);
     });
+    
+    // Register sleep mode callback for fake sleep functionality
+    m_powerHandler->setSleepModeCallback([this](bool enterFakeSleep) {
+        m_inFakeSleep = enterFakeSleep;
+        if (enterFakeSleep) {
+            std::cout << "App: Entering fake sleep mode - disabling inputs, screen will go black" << std::endl;
+        } else {
+            std::cout << "App: Exiting fake sleep mode - re-enabling inputs and screen" << std::endl;
+        }
+    });
 #endif
 
     if (filename.size() >= 4 &&
@@ -96,17 +106,32 @@ void App::run()
     {
         while (SDL_PollEvent(&event) != 0)
         {
-            handleEvent(event);
+            // In fake sleep mode, ignore all SDL events (power button is handled by PowerHandler)
+            if (!m_inFakeSleep) {
+                handleEvent(event);
+            } else {
+                // Only handle quit events to allow graceful shutdown
+                if (event.type == SDL_QUIT) {
+                    handleEvent(event);
+                }
+            }
         }
 
         Uint32 now = SDL_GetTicks();
         float dt = (now - m_prevTick) / 1000.0f;
         m_prevTick = now;
 
-        updateHeldPanning(dt);
-
-        renderCurrentPage();
-        renderUI();
+        if (!m_inFakeSleep) {
+            // Normal rendering
+            updateHeldPanning(dt);
+            renderCurrentPage();
+            renderUI();
+        } else {
+            // Fake sleep mode - render black screen
+            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 0, 0, 0, 255);
+            SDL_RenderClear(m_renderer->getSDLRenderer());
+        }
+        
         m_renderer->present();
     }
 }

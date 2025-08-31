@@ -167,6 +167,9 @@ private:
     std::string m_errorMessage;
     Uint32 m_errorMessageTime{0};
     static constexpr Uint32 ERROR_MESSAGE_DURATION = 3000; // 3 seconds
+    
+    // Fake sleep mode state
+    bool m_inFakeSleep{false};
 };
 
 #endif // APP_H
