@@ -109,15 +109,16 @@ The TG5040 build includes:
   - Wake detection with proper state management
 - **Document Format Support**: 
   - PDF documents via MuPDF integration
-  - CBZ/ZIP comic book archives via libzip and SDL_image
+  - CBZ/ZIP comic book archives via MuPDF native support  
+  - XPS documents via MuPDF (future: expose in UI)
+  - EPUB e-books via MuPDF (future: expose in UI)
 - **Platform-optimized build flags**: `-DTG5040_PLATFORM`
 - **Port-specific source structure**: 
   - `include/power_handler.h` - TG5040 power management interface
   - `src/power_handler.cpp` - Hardware-specific power button implementation with NextUI compatibility
 - **Embedded Linux-specific libraries and dependencies**
-  - SDL2, SDL2_ttf, SDL2_image for graphics and input
-  - MuPDF and dependencies for PDF rendering
-  - libzip for CBZ archive support
+  - SDL2, SDL2_ttf for graphics and input
+  - MuPDF and dependencies for document rendering (PDF, CBZ, XPS, EPUB)
 
 See [setup-env.sh](./support/setup-env.sh) for some useful vars for compiling that are exported automatically.
 

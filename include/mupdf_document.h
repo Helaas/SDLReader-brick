@@ -1,5 +1,5 @@
-#ifndef PDF_DOCUMENT_H
-#define PDF_DOCUMENT_H
+#ifndef MUPDF_DOCUMENT_H
+#define MUPDF_DOCUMENT_H
 
 #include "document.h"
 #include <mupdf/fitz.h>
@@ -7,10 +7,20 @@
 #include <memory>
 #include <string>
 
-class PdfDocument : public Document {
+/**
+ * @brief Document implementation using MuPDF library
+ * 
+ * This class handles multiple document formats through MuPDF's native support:
+ * - PDF documents (.pdf)
+ * - Comic book archives (.cbz, .zip containing images)
+ * - XPS documents (.xps)
+ * - EPUB documents (.epub)
+ * - And other formats supported by MuPDF
+ */
+class MuPdfDocument : public Document {
 public:
-    PdfDocument();
-    ~PdfDocument() override;
+    MuPdfDocument();
+    ~MuPdfDocument() override;
 
     std::vector<unsigned char> renderPage(int page, int& width, int& height, int scale) override;
     int getPageWidthNative(int page) override;
@@ -39,4 +49,4 @@ private:
     std::unique_ptr<fz_document, DocumentDeleter> m_doc;
 };
 
-#endif // PDF_DOCUMENT_H
+#endif // MUPDF_DOCUMENT_H

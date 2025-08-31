@@ -1,20 +1,22 @@
-#include "pdf_document.h"
+#include "mupdf_document.h"
 
 #include <iostream>
 #include <cstring>
 #include <stdexcept>
 
-PdfDocument::PdfDocument()
-    : m_ctx(nullptr), m_doc(nullptr, DocumentDeleter())
+MuPdfDocument::MuPdfDocument()
+    : Document()
 {
+    // Initialize MuPDF context
+    m_ctx = std::unique_ptr<fz_context, ContextDeleter>(fz_new_context(nullptr, nullptr, FZ_STORE_UNLIMITED));
 }
 
-PdfDocument::~PdfDocument()
+MuPdfDocument::~MuPdfDocument()
 {
     close();
 }
 
-bool PdfDocument::open(const std::string &filePath)
+bool MuPdfDocument::open(const std::string &filePath)
 {
     close();
 
@@ -43,7 +45,7 @@ bool PdfDocument::open(const std::string &filePath)
     return true;
 }
 
-std::vector<unsigned char> PdfDocument::renderPage(int pageNumber, int &width, int &height, int zoom)
+std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int &width, int &height, int zoom)
 {
     if (!m_ctx || !m_doc)
     {
@@ -86,7 +88,7 @@ std::vector<unsigned char> PdfDocument::renderPage(int pageNumber, int &width, i
 
     return buffer;
 }
-int PdfDocument::getPageWidthNative(int pageNumber)
+int MuPdfDocument::getPageWidthNative(int pageNumber)
 {
     if (!m_ctx || !m_doc)
         return 0;
@@ -110,7 +112,7 @@ int PdfDocument::getPageWidthNative(int pageNumber)
     return width; // implicit cast from volatile int to int
 }
 
-int PdfDocument::getPageHeightNative(int pageNumber)
+int MuPdfDocument::getPageHeightNative(int pageNumber)
 {
     if (!m_ctx || !m_doc)
         return 0;
@@ -134,7 +136,7 @@ int PdfDocument::getPageHeightNative(int pageNumber)
     return height;
 }
 
-int PdfDocument::getPageCount() const
+int MuPdfDocument::getPageCount() const
 {
     if (!m_ctx || !m_doc)
         return 0;
@@ -155,7 +157,7 @@ int PdfDocument::getPageCount() const
     return count;
 }
 
-void PdfDocument::close()
+void MuPdfDocument::close()
 {
     m_doc.reset();
     m_ctx.reset();

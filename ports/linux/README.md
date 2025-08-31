@@ -9,7 +9,7 @@ This directory contains the Linux-specific build configuration for SDL Reader.
 ### Ubuntu/Debian
 ```bash
 sudo apt update
-sudo apt install build-essential pkg-config libsdl2-dev libsdl2-ttf-dev libsdl2-image-dev libzip-dev libmupdf-dev libfreetype6-dev libharfbuzz-dev libjpeg-dev libopenjp2-7-dev libjbig2dec0-dev libgumbo-dev libmujs-dev
+sudo apt install build-essential pkg-config libsdl2-dev libsdl2-ttf-dev libmupdf-dev libfreetype6-dev libharfbuzz-dev libjpeg-dev libopenjp2-7-dev libjbig2dec0-dev libgumbo-dev libmujs-dev
 ```
 
 ### Other Distributions (Untested)
@@ -17,17 +17,17 @@ The following package lists are provided as a starting point but **have not been
 
 #### Fedora/RHEL/CentOS
 ```bash
-sudo dnf install gcc-c++ pkg-config SDL2-devel SDL2_ttf-devel SDL2_image-devel libzip-devel mupdf-devel freetype-devel
+sudo dnf install gcc-c++ pkg-config SDL2-devel SDL2_ttf-devel mupdf-devel freetype-devel
 ```
 
 #### Arch Linux
 ```bash
-sudo pacman -S base-devel pkg-config sdl2 sdl2_ttf sdl2_image libzip mupdf freetype2
+sudo pacman -S base-devel pkg-config sdl2 sdl2_ttf mupdf freetype2
 ```
 
 #### openSUSE
 ```bash
-sudo zypper install gcc-c++ pkg-config libSDL2-devel libSDL2_ttf-devel libSDL2_image-devel libzip-devel mupdf-devel
+sudo zypper install gcc-c++ pkg-config libSDL2-devel libSDL2_ttf-devel mupdf-devel
 ```
 
 **Note**: You may need to install additional MuPDF dependencies manually on these distributions.
@@ -78,7 +78,7 @@ Run it from the project root with:
 ### MuPDF Dependencies
 MuPDF requires many dependencies for full functionality. If you encounter linking errors, you may need to install additional packages manually. The complete dependency list for Ubuntu/Debian includes:
 
-- **Ubuntu/Debian** (tested): `libmupdf-dev`, `libfreetype6-dev`, `libharfbuzz-dev`, `libjpeg-dev`, `libopenjp2-7-dev`, `libjbig2dec0-dev`, `libgumbo-dev`, `libmujs-dev`, `libsdl2-image-dev`, `libzip-dev`
+- **Ubuntu/Debian** (tested): `libmupdf-dev`, `libfreetype6-dev`, `libharfbuzz-dev`, `libjpeg-dev`, `libopenjp2-7-dev`, `libjbig2dec0-dev`, `libgumbo-dev`, `libmujs-dev`
 - **Other distributions**: Package names will vary and may not be available in all repositories
 
 ### Distribution-Specific Issues
@@ -89,12 +89,12 @@ This build configuration has only been tested on **Ubuntu 24.04**. If you're usi
 3. You may need to compile some libraries from source
 4. Additional system configuration may be required
 
-### SDL2 and CBZ Support Issues
-Make sure you have SDL2, SDL2_ttf, SDL2_image, and libzip development packages installed for full functionality:
+### SDL2 Support Issues
+Make sure you have SDL2 and SDL2_ttf development packages installed for functionality:
 - **SDL2**: `libsdl2-dev` (Debian/Ubuntu), `SDL2-devel` (Fedora), `sdl2` (Arch)
 - **SDL2_ttf**: `libsdl2-ttf-dev` (Debian/Ubuntu), `SDL2_ttf-devel` (Fedora), `sdl2_ttf` (Arch)
-- **SDL2_image**: `libsdl2-image-dev` (Debian/Ubuntu), `SDL2_image-devel` (Fedora), `sdl2_image` (Arch)
-- **libzip**: `libzip-dev` (Debian/Ubuntu), `libzip-devel` (Fedora), `libzip` (Arch)
+
+MuPDF provides native support for CBZ/ZIP comic book archives, so no additional libraries are needed for comic book functionality.
 
 ### pkg-config Issues
 Ensure `pkg-config` is installed on your system. It's required to locate the SDL2 libraries and headers.

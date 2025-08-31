@@ -12,14 +12,14 @@ BUILD_DIR  := build
 TARGET   := $(BIN_DIR)/sdl_reader_cli
 
 # Object files
-OBJS := $(BUILD_DIR)/pdf_document.o $(BUILD_DIR)/cbz_document.o $(BUILD_DIR)/renderer.o $(BUILD_DIR)/text_renderer.o $(BUILD_DIR)/tg5040_power_handler.o $(BUILD_DIR)/app.o $(BUILD_DIR)/main.o
+OBJS := $(BUILD_DIR)/mupdf_document.o $(BUILD_DIR)/renderer.o $(BUILD_DIR)/text_renderer.o $(BUILD_DIR)/tg5040_power_handler.o $(BUILD_DIR)/app.o $(BUILD_DIR)/main.o
 
 # Libraries (link order matters)
-LIBS := -lSDL2_ttf -lSDL2_image -lSDL2 \
+LIBS := -lSDL2_ttf -lSDL2 \
   -L/usr/local/opt/mupdf-tools/lib \
   -lmupdf -lmupdf-third \
   -ljpeg -lopenjp2 -lharfbuzz -ljbig2dec \
-  -lfreetype -lz -lm -lpthread -ldl -lzip
+  -lfreetype -lz -lm -lpthread -ldl
 
 .PHONY: all clean export-bundle
 

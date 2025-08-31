@@ -2,8 +2,7 @@
 #include "renderer.h"
 #include "text_renderer.h"
 #include "document.h"
-#include "pdf_document.h"
-#include "cbz_document.h"
+#include "mupdf_document.h"
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
 #endif
@@ -49,19 +48,19 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
 #endif
 
     // Determine document type based on file extension
+    // MuPDF supports PDF, CBZ, ZIP (with images), XPS, EPUB, and other formats
     std::string lowercaseFilename = filename;
     std::transform(lowercaseFilename.begin(), lowercaseFilename.end(), 
                    lowercaseFilename.begin(), ::tolower);
     
-    if (lowercaseFilename.size() >= 4 && 
-        lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".pdf") {
-        m_document = std::make_unique<PdfDocument>();
-    }
-    else if ((lowercaseFilename.size() >= 4 && 
-              lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".cbz") ||
-             (lowercaseFilename.size() >= 4 && 
-              lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".zip")) {
-        m_document = std::make_unique<CbzDocument>();
+    // MuPDF can handle all these formats through its generic document interface
+    if ((lowercaseFilename.size() >= 4 && 
+         (lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".pdf" ||
+          lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".cbz" ||
+          lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".zip")) ||
+        (lowercaseFilename.size() >= 5 && 
+         lowercaseFilename.substr(lowercaseFilename.size() - 5) == ".epub")) {
+        m_document = std::make_unique<MuPdfDocument>();
     }
     else
     {

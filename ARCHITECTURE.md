@@ -28,7 +28,7 @@ SDLReader is designed as a cross-platform document reader with a clean separatio
 - Cross-compilation required
 - Docker-based development environment
 - Platform flag: `-DTG5040_PLATFORM`
-- Custom libraries: MuPDF, libzip, SDL2_image
+- Custom libraries: MuPDF, SDL2
 - NextUI system integration scripts
 
 ### macOS
@@ -80,11 +80,11 @@ SDLReader is designed as a cross-platform document reader with a clean separatio
 
 ### Shared Components (`src/`, `include/`, `cli/`)
 Core functionality that works across all platforms:
-- **Document handling**: PDF parsing via MuPDF, CBZ/ZIP archive support via libzip
-- **Rendering engine**: SDL2-based graphics, text rendering, and image display
+- **Document handling**: PDF and CBZ/ZIP support via MuPDF's native format support
+- **Rendering engine**: SDL2-based graphics and text rendering
 - **User interface**: Page navigation, zoom, scroll controls
-- **Application logic**: Event handling, state management, multi-format document support
-- **Document types**: PDF documents and comic book archives (CBZ/ZIP containing images)
+- **Application logic**: Event handling, state management, unified document format support
+- **Document types**: PDF documents and comic book archives (CBZ/ZIP) through single document interface
 
 ### Platform-Specific Components (`ports/{platform}/`)
 Platform-specific implementations and optimizations:

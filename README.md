@@ -1,6 +1,6 @@
 # SDL Reader
 
-A minimal document reader built using SDL2, MuPDF, and libzip supporting PDF and CBZ documents 
+A minimal document reader built using SDL2 and MuPDF supporting multiple document formats 
 
 ## Table of Contents
 * [Features](#features)
@@ -27,8 +27,10 @@ A minimal document reader built using SDL2, MuPDF, and libzip supporting PDF and
 * Planned: EPUB (supported by mupdf)
 
 ## Supported Document Types
-* **PDF** (`.pdf`)
-* **Comic Book Archive** (`.cbz`, `.zip` containing images)
+* **PDF** (`.pdf`) - via MuPDF
+* **Comic Book Archive** (`.cbz`, `.zip` containing images) - via MuPDF native support
+* **XPS** (`.xps`) - via MuPDF (future: expose in UI)
+* **EPUB** (`.epub`) - via MuPDF (future: expose in UI)
 
 ## Build Instructions
 This project supports multiple platforms with a unified build system.
@@ -77,7 +79,7 @@ make help
 
 **Install dependencies using Homebrew:**
 ```bash
-brew install sdl2 sdl2_ttf sdl2_image libzip mupdf-tools pkg-config
+brew install sdl2 sdl2_ttf mupdf-tools pkg-config
 ```
 
 #### Linux
@@ -90,7 +92,7 @@ brew install sdl2 sdl2_ttf sdl2_image libzip mupdf-tools pkg-config
 
 **Install dependencies (Ubuntu/Debian):**
 ```bash
-sudo apt install build-essential pkg-config libsdl2-dev libsdl2-ttf-dev libsdl2-image-dev libzip-dev libmupdf-dev libfreetype6-dev libharfbuzz-dev libjpeg-dev libopenjp2-7-dev libjbig2dec0-dev libgumbo-dev libmujs-dev
+sudo apt install build-essential pkg-config libsdl2-dev libsdl2-ttf-dev libmupdf-dev libfreetype6-dev libharfbuzz-dev libjpeg-dev libopenjp2-7-dev libjbig2dec0-dev libgumbo-dev libmujs-dev
 ```
 
 Or use the automated installer:

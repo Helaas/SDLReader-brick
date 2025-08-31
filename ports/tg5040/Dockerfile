@@ -40,7 +40,6 @@ RUN apt-get -y update && apt-get -y install \
     libfreetype6-dev \
     zlib1g-dev \
     libjpeg-dev \
-    libzip-dev \
     pkg-config \
     patchelf \
   && rm -rf /var/lib/apt/lists/*
