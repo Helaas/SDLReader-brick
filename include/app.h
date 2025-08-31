@@ -49,6 +49,12 @@ private:
     
     // Error message display
     void showErrorMessage(const std::string& message);
+    
+    // Scale display timing
+    void updateScaleDisplayTime();
+    
+    // Page display timing
+    void updatePageDisplayTime();
 
     // Event Handling
     void handleEvent(const SDL_Event &event);
@@ -180,6 +186,14 @@ private:
     std::string m_pageJumpBuffer;
     Uint32 m_pageJumpStartTime{0};
     static constexpr Uint32 PAGE_JUMP_TIMEOUT = 5000; // 5 seconds timeout
+    
+    // Scale display timing
+    Uint32 m_scaleDisplayTime{0};
+    static constexpr Uint32 SCALE_DISPLAY_DURATION = 2000; // 2 seconds
+    
+    // Page display timing
+    Uint32 m_pageDisplayTime{0};
+    static constexpr Uint32 PAGE_DISPLAY_DURATION = 2000; // 2 seconds
 };
 
 #endif // APP_H

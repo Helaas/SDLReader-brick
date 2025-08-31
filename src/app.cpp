@@ -76,6 +76,12 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
     // Initial page load and fit
     loadDocument();
 
+    // Initialize scale display timer
+    m_scaleDisplayTime = SDL_GetTicks();
+    
+    // Initialize page display timer  
+    m_pageDisplayTime = SDL_GetTicks();
+
     // Initialize game controllers
     initializeGameControllers();
 }
@@ -169,18 +175,22 @@ void App::handleEvent(const SDL_Event &event)
         case SDLK_RIGHT:
             m_scrollX -= 50;
             clampScroll();
+            updatePageDisplayTime();
             break;
         case SDLK_LEFT:
             m_scrollX += 50;
             clampScroll();
+            updatePageDisplayTime();
             break;
         case SDLK_UP:
             m_scrollY += 50;
             clampScroll();
+            updatePageDisplayTime();
             break;
         case SDLK_DOWN:
             m_scrollY -= 50;
             clampScroll();
+            updatePageDisplayTime();
             break;
         case SDLK_PAGEDOWN:
             goToNextPage();
@@ -317,6 +327,7 @@ void App::handleEvent(const SDL_Event &event)
             else
             {
                 m_scrollY += 50;
+                updatePageDisplayTime();
             }
         }
         else if (event.wheel.y < 0)
@@ -328,6 +339,7 @@ void App::handleEvent(const SDL_Event &event)
             else
             {
                 m_scrollY -= 50;
+                updatePageDisplayTime();
             }
         }
         clampScroll();
@@ -356,6 +368,7 @@ void App::handleEvent(const SDL_Event &event)
             m_lastTouchX = static_cast<float>(event.motion.x);
             m_lastTouchY = static_cast<float>(event.motion.y);
             clampScroll();
+            updatePageDisplayTime();
         }
         break;
     case SDL_CONTROLLERAXISMOTION:
@@ -591,13 +604,19 @@ void App::renderUI()
     int currentWindowWidth = m_renderer->getWindowWidth();
     int currentWindowHeight = m_renderer->getWindowHeight();
 
-    m_textRenderer->renderText(pageInfo,
-                               (currentWindowWidth - static_cast<int>(pageInfo.length()) * 8) / 2,
-                               currentWindowHeight - 30, textColor);
+    // Only show page info for 2 seconds after it changes
+    if ((SDL_GetTicks() - m_pageDisplayTime) < PAGE_DISPLAY_DURATION) {
+        m_textRenderer->renderText(pageInfo,
+                                   (currentWindowWidth - static_cast<int>(pageInfo.length()) * 8) / 2,
+                                   currentWindowHeight - 30, textColor);
+    }
 
-    m_textRenderer->renderText(scaleInfo,
-                               currentWindowWidth - static_cast<int>(scaleInfo.length()) * 8 - 10,
-                               10, textColor);
+    // Only show scale info for 2 seconds after it changes
+    if ((SDL_GetTicks() - m_scaleDisplayTime) < SCALE_DISPLAY_DURATION) {
+        m_textRenderer->renderText(scaleInfo,
+                                   currentWindowWidth - static_cast<int>(scaleInfo.length()) * 8 - 10,
+                                   10, textColor);
+    }
     
     // Render error message if active
     if (!m_errorMessage.empty() && (SDL_GetTicks() - m_errorMessageTime) < ERROR_MESSAGE_DURATION) {
@@ -733,6 +752,8 @@ void App::goToNextPage()
         m_currentPage++;
         onPageChangedKeepZoom();
         alignToTopOfCurrentPage();
+        updateScaleDisplayTime();
+        updatePageDisplayTime();
     }
 }
 
@@ -743,6 +764,8 @@ void App::goToPreviousPage()
         m_currentPage--;
         onPageChangedKeepZoom();
         alignToTopOfCurrentPage();
+        updateScaleDisplayTime();
+        updatePageDisplayTime();
     }
 }
 
@@ -753,6 +776,8 @@ void App::goToPage(int pageNum)
         m_currentPage = pageNum;
         onPageChangedKeepZoom();
         alignToTopOfCurrentPage();
+        updateScaleDisplayTime();
+        updatePageDisplayTime();
     }
 }
 
@@ -767,6 +792,8 @@ void App::zoom(int delta)
 
     recenterScrollOnZoom(oldScale, m_currentScale);
     clampScroll();
+    updateScaleDisplayTime();
+    updatePageDisplayTime();
 }
 
 void App::zoomTo(int scale)
@@ -780,6 +807,8 @@ void App::zoomTo(int scale)
 
     recenterScrollOnZoom(oldScale, m_currentScale);
     clampScroll();
+    updateScaleDisplayTime();
+    updatePageDisplayTime();
 }
 
 void App::fitPageToWindow()
@@ -812,6 +841,8 @@ void App::fitPageToWindow()
 
     m_scrollX = 0;
     m_scrollY = 0;
+    updateScaleDisplayTime();
+    updatePageDisplayTime();
 }
 
 void App::recenterScrollOnZoom(int oldScale, int newScale)
@@ -933,6 +964,8 @@ void App::fitPageToWidth()
     }
     
     clampScroll();
+    updateScaleDisplayTime();
+    updatePageDisplayTime();
 }
 
 void App::printAppState()
@@ -1265,6 +1298,16 @@ void App::showErrorMessage(const std::string& message)
 {
     m_errorMessage = message;
     m_errorMessageTime = SDL_GetTicks();
+}
+
+void App::updateScaleDisplayTime()
+{
+    m_scaleDisplayTime = SDL_GetTicks();
+}
+
+void App::updatePageDisplayTime()
+{
+    m_pageDisplayTime = SDL_GetTicks();
 }
 
 void App::startPageJumpInput()
