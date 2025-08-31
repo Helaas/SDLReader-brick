@@ -159,13 +159,42 @@ void App::handleEvent(const SDL_Event &event)
             action = AppAction::Quit;
             break;
         case SDLK_ESCAPE:
-            action = AppAction::Quit;
+        case SDLK_q:
+            if (m_pageJumpInputActive) {
+                cancelPageJumpInput();
+            } else {
+                action = AppAction::Quit;
+            }
             break;
         case SDLK_RIGHT:
-            goToNextPage();
+            m_scrollX -= 50;
+            clampScroll();
             break;
         case SDLK_LEFT:
+            m_scrollX += 50;
+            clampScroll();
+            break;
+        case SDLK_UP:
+            m_scrollY += 50;
+            clampScroll();
+            break;
+        case SDLK_DOWN:
+            m_scrollY -= 50;
+            clampScroll();
+            break;
+        case SDLK_PAGEDOWN:
+            goToNextPage();
+            break;
+        case SDLK_PAGEUP:
             goToPreviousPage();
+            break;
+        case SDLK_PLUS:
+        case SDLK_KP_PLUS:
+            zoom(10);
+            break;
+        case SDLK_MINUS:
+        case SDLK_KP_MINUS:
+            zoom(-10);
             break;
         case SDLK_HOME:
             goToPage(0);
@@ -173,18 +202,80 @@ void App::handleEvent(const SDL_Event &event)
         case SDLK_END:
             goToPage(m_pageCount - 1);
             break;
-        case SDLK_UP:
-            zoom(10);
-            break;
-        case SDLK_DOWN:
-            zoom(-10);
-            break;
         case SDLK_0:
-            zoomTo(100);
+        case SDLK_KP_0:
+            if (m_pageJumpInputActive) {
+                handlePageJumpInput('0');
+            } else {
+                zoomTo(100);
+            }
+            break;
+        case SDLK_1:
+        case SDLK_KP_1:
+            if (m_pageJumpInputActive) {
+                handlePageJumpInput('1');
+            }
+            break;
+        case SDLK_2:
+        case SDLK_KP_2:
+            if (m_pageJumpInputActive) {
+                handlePageJumpInput('2');
+            }
+            break;
+        case SDLK_3:
+        case SDLK_KP_3:
+            if (m_pageJumpInputActive) {
+                handlePageJumpInput('3');
+            }
+            break;
+        case SDLK_4:
+        case SDLK_KP_4:
+            if (m_pageJumpInputActive) {
+                handlePageJumpInput('4');
+            }
+            break;
+        case SDLK_5:
+        case SDLK_KP_5:
+            if (m_pageJumpInputActive) {
+                handlePageJumpInput('5');
+            }
+            break;
+        case SDLK_6:
+        case SDLK_KP_6:
+            if (m_pageJumpInputActive) {
+                handlePageJumpInput('6');
+            }
+            break;
+        case SDLK_7:
+        case SDLK_KP_7:
+            if (m_pageJumpInputActive) {
+                handlePageJumpInput('7');
+            }
+            break;
+        case SDLK_8:
+        case SDLK_KP_8:
+            if (m_pageJumpInputActive) {
+                handlePageJumpInput('8');
+            }
+            break;
+        case SDLK_9:
+        case SDLK_KP_9:
+            if (m_pageJumpInputActive) {
+                handlePageJumpInput('9');
+            }
+            break;
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER:
+            if (m_pageJumpInputActive) {
+                confirmPageJumpInput();
+            }
             break;
         case SDLK_f:
             m_renderer->toggleFullscreen();
             fitPageToWindow();
+            break;
+        case SDLK_g:
+            startPageJumpInput();
             break;
         case SDLK_p:
             printAppState();
@@ -564,6 +655,55 @@ void App::renderUI()
     } else if (!m_errorMessage.empty()) {
         // Clear expired error message
         m_errorMessage.clear();
+    }
+    
+    // Render page jump input if active
+    if (m_pageJumpInputActive) {
+        // Check for timeout
+        if (SDL_GetTicks() - m_pageJumpStartTime > PAGE_JUMP_TIMEOUT) {
+            const_cast<App*>(this)->cancelPageJumpInput();
+        } else {
+            SDL_Color jumpColor = {255, 255, 255, 255}; // White text
+            SDL_Color jumpBgColor = {0, 100, 200, 200}; // Semi-transparent blue background
+            
+            // Use larger font for page jump input
+            int jumpFontScale = 300; // 300% = 3x larger 
+            m_textRenderer->setFontSize(jumpFontScale);
+            
+            // Calculate actual font size for positioning
+            int actualFontSize = static_cast<int>(baseFontSize * (jumpFontScale / 100.0));
+            
+            std::string jumpPrompt = "Go to page: " + m_pageJumpBuffer + "_";
+            std::string jumpHint = "Enter page number (1-" + std::to_string(m_pageCount) + "), press Enter to confirm, Esc to cancel";
+            
+            // Calculate positioning
+            int avgCharWidth = actualFontSize * 0.6;
+            int promptWidth = static_cast<int>(jumpPrompt.length()) * avgCharWidth;
+            int hintWidth = static_cast<int>(jumpHint.length()) * (actualFontSize / 2); // Smaller font for hint
+            
+            int promptX = (currentWindowWidth - promptWidth) / 2;
+            int promptY = (currentWindowHeight - actualFontSize * 2) / 2;
+            
+            // Draw background rectangle
+            int bgWidth = std::max(promptWidth, hintWidth) + 40;
+            int bgHeight = actualFontSize * 3;
+            SDL_Rect bgRect = {promptX - 20, promptY - 10, bgWidth, bgHeight};
+            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), jumpBgColor.r, jumpBgColor.g, jumpBgColor.b, jumpBgColor.a);
+            SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
+            SDL_RenderFillRect(m_renderer->getSDLRenderer(), &bgRect);
+            
+            // Draw prompt text
+            m_textRenderer->renderText(jumpPrompt, promptX, promptY, jumpColor);
+            
+            // Draw hint text (smaller)
+            m_textRenderer->setFontSize(150); // 150% for hint
+            int hintX = (currentWindowWidth - hintWidth) / 2;
+            int hintY = promptY + actualFontSize + 10;
+            m_textRenderer->renderText(jumpHint, hintX, hintY, jumpColor);
+            
+            // Restore original font size
+            m_textRenderer->setFontSize(100);
+        }
     }
 }
 
@@ -1106,4 +1246,69 @@ void App::showErrorMessage(const std::string& message)
 {
     m_errorMessage = message;
     m_errorMessageTime = SDL_GetTicks();
+}
+
+void App::startPageJumpInput()
+{
+    m_pageJumpInputActive = true;
+    m_pageJumpBuffer.clear();
+    m_pageJumpStartTime = SDL_GetTicks();
+    std::cout << "Page jump mode activated. Enter page number (1-" << m_pageCount << ") and press Enter." << std::endl;
+}
+
+void App::handlePageJumpInput(char digit)
+{
+    if (!m_pageJumpInputActive) return;
+    
+    // Check if we're still within timeout
+    if (SDL_GetTicks() - m_pageJumpStartTime > PAGE_JUMP_TIMEOUT) {
+        cancelPageJumpInput();
+        return;
+    }
+    
+    // Limit input length to prevent overflow
+    if (m_pageJumpBuffer.length() < 10) {
+        m_pageJumpBuffer += digit;
+        std::cout << "Page jump input: " << m_pageJumpBuffer << std::endl;
+    }
+}
+
+void App::cancelPageJumpInput()
+{
+    if (m_pageJumpInputActive) {
+        m_pageJumpInputActive = false;
+        m_pageJumpBuffer.clear();
+        std::cout << "Page jump cancelled." << std::endl;
+    }
+}
+
+void App::confirmPageJumpInput()
+{
+    if (!m_pageJumpInputActive) return;
+    
+    if (m_pageJumpBuffer.empty()) {
+        cancelPageJumpInput();
+        return;
+    }
+    
+    try {
+        int targetPage = std::stoi(m_pageJumpBuffer);
+        
+        // Convert from 1-based to 0-based indexing
+        targetPage -= 1;
+        
+        if (targetPage >= 0 && targetPage < m_pageCount) {
+            goToPage(targetPage);
+            std::cout << "Jumped to page " << (targetPage + 1) << std::endl;
+        } else {
+            std::cout << "Invalid page number. Valid range: 1-" << m_pageCount << std::endl;
+            showErrorMessage("Invalid page: " + m_pageJumpBuffer + ". Valid range: 1-" + std::to_string(m_pageCount));
+        }
+    } catch (const std::exception& e) {
+        std::cout << "Invalid page number format: " << m_pageJumpBuffer << std::endl;
+        showErrorMessage("Invalid page number: " + m_pageJumpBuffer);
+    }
+    
+    m_pageJumpInputActive = false;
+    m_pageJumpBuffer.clear();
 }

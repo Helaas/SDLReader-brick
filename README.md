@@ -15,6 +15,7 @@ A minimal document reader built using SDL2 and MuPDF supporting PDF
 ## Features
 * View PDF documents.
 * Page navigation (next/previous page).
+* Jump to specific page with `G` key (enter page number and press Enter).
 * Zoom in/out.
 * Scroll within pages (if zoomed in or page is larger than window).
 * Toggle fullscreen mode.
@@ -175,10 +176,10 @@ The SDL Reader supports the following keyboard and mouse inputs:
 | `Down Arrow`           | Scroll down                             |
 | `Page Down`            | Go to next page                         |
 | `Page Up`              | Go to previous page                     |
-| `=` (Equals)           | Zoom in                                 |
+| `+` (Plus)             | Zoom in                                 |
 | `-` (Minus)            | Zoom out                                |
 | `F`                    | Toggle Fullscreen                       |
-| `G`                    | Jump to Page (Not Implemented)          |
+| `G`                    | Jump to Page                            |
 | **Mouse** |                                         |
 | `Mouse Wheel Up`       | Scroll up                               |
 | `Mouse Wheel Down`     | Scroll down                             |

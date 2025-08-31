@@ -58,6 +58,10 @@ private:
     void goToPreviousPage();
     void goToPage(int pageNum);
     void jumpPages(int delta);
+    void startPageJumpInput();
+    void handlePageJumpInput(char digit);
+    void cancelPageJumpInput();
+    void confirmPageJumpInput();
 
     // Zoom and Scaling
     void zoom(int delta);
@@ -170,6 +174,12 @@ private:
     
     // Fake sleep mode state
     bool m_inFakeSleep{false};
+    
+    // Page jump input state
+    bool m_pageJumpInputActive{false};
+    std::string m_pageJumpBuffer;
+    Uint32 m_pageJumpStartTime{0};
+    static constexpr Uint32 PAGE_JUMP_TIMEOUT = 5000; // 5 seconds timeout
 };
 
 #endif // APP_H
