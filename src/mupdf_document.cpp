@@ -84,8 +84,8 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int &width,
             // Gradual scaling for zoom levels - avoid cliff effects
             if (baseScale > 1.0f) {
                 // Calculate how much detail we can afford based on zoom level
-                // Higher zoom = more detail allowed, up to 2x window size
-                float zoomFactor = std::min(baseScale, 2.0f); // Cap at 2x
+                // Higher zoom = more detail allowed, up to 3.5x window size (350% zoom)
+                float zoomFactor = std::min(baseScale, 3.5f); // Cap at 3.5x
                 float maxDetailScale = zoomFactor;
                 float detailScaleX = static_cast<float>(m_maxWidth * maxDetailScale) / nativeWidth;
                 float detailScaleY = static_cast<float>(m_maxHeight * maxDetailScale) / nativeHeight;
@@ -241,7 +241,7 @@ int MuPdfDocument::getPageWidthEffective(int pageNumber, int zoom)
             
             // Gradual scaling for zoom levels - avoid cliff effects
             if (baseScale > 1.0f) {
-                float zoomFactor = std::min(baseScale, 2.0f); // Cap at 2x
+                float zoomFactor = std::min(baseScale, 3.5f); // Cap at 3.5x
                 float detailScale = static_cast<float>(m_maxWidth * zoomFactor) / scaledWidth;
                 downsampleScale = std::max(downsampleScale, detailScale);
             }
@@ -292,7 +292,7 @@ int MuPdfDocument::getPageHeightEffective(int pageNumber, int zoom)
             
             // Gradual scaling for zoom levels - avoid cliff effects
             if (baseScale > 1.0f) {
-                float zoomFactor = std::min(baseScale, 2.0f); // Cap at 2x
+                float zoomFactor = std::min(baseScale, 3.5f); // Cap at 3.5x
                 float detailScaleX = static_cast<float>(m_maxWidth * zoomFactor) / scaledWidth;
                 float detailScaleY = static_cast<float>(m_maxHeight * zoomFactor) / scaledHeight;
                 float detailScale = std::min(detailScaleX, detailScaleY);

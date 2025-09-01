@@ -799,8 +799,8 @@ void App::zoom(int delta)
     m_currentScale += delta;
     if (m_currentScale < 10)
         m_currentScale = 10;
-    if (m_currentScale > 500)
-        m_currentScale = 500;
+    if (m_currentScale > 350)
+        m_currentScale = 350;
 
     recenterScrollOnZoom(oldScale, m_currentScale);
     clampScroll();
@@ -814,8 +814,8 @@ void App::zoomTo(int scale)
     m_currentScale = scale;
     if (m_currentScale < 10)
         m_currentScale = 10;
-    if (m_currentScale > 500)
-        m_currentScale = 500;
+    if (m_currentScale > 350)
+        m_currentScale = 350;
 
     recenterScrollOnZoom(oldScale, m_currentScale);
     clampScroll();
@@ -851,8 +851,8 @@ void App::fitPageToWindow()
     m_currentScale = std::min(scaleToFitWidth, scaleToFitHeight);
     if (m_currentScale < 10)
         m_currentScale = 10;
-    if (m_currentScale > 500)
-        m_currentScale = 500;
+    if (m_currentScale > 350)
+        m_currentScale = 350;
 
     m_pageWidth = static_cast<int>(nativeWidth * (m_currentScale / 100.0));
     m_pageHeight = static_cast<int>(nativeHeight * (m_currentScale / 100.0));
@@ -950,14 +950,16 @@ void App::fitPageToWidth()
         return;
     }
 
-    // Calculate scale to fit width exactly
-    m_currentScale = static_cast<int>((static_cast<double>(windowWidth) / nativeWidth) * 100.0);
+    // Calculate scale to fit width with a small margin (95% of window width)
+    // This accounts for potential downsampling and provides better visual fit
+    double targetWidth = windowWidth * 0.95; // 5% margin
+    m_currentScale = static_cast<int>((targetWidth / nativeWidth) * 100.0);
     
     // Clamp scale to reasonable bounds
     if (m_currentScale < 10)
         m_currentScale = 10;
-    if (m_currentScale > 500)
-        m_currentScale = 500;
+    if (m_currentScale > 350)
+        m_currentScale = 350;
 
     // Update page dimensions based on new scale
     int nativeHeight = effectiveNativeHeight();
