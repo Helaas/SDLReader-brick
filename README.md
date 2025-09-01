@@ -188,10 +188,10 @@ The SDL Reader supports the following keyboard, mouse, and game controller input
 | `L2 (Left Trigger)`       | Jump back 10 pages                   |
 | `R2 (Right Trigger)`      | Jump forward 10 pages                |
 | **Face Buttons**          |                                      |
-| `A`                       | Fit page to width                    |
-| `B`                       | Zoom out                             |
-| `X`                       | Rotate page clockwise (90°)          |
-| `Y`                       | Zoom in                              |
+| `B`                       | Fit page to width                    |
+| `A`                       | Zoom out                             |
+| `X`                       | Zoom in                              |
+| `Y`                       | Rotate page clockwise (90°)          |
 | **System Buttons**        |                                      |
 | `Start`                   | Toggle horizontal mirror             |
 | `Select`                  | Toggle vertical mirror               |
