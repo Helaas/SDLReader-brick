@@ -466,14 +466,14 @@ void App::handleEvent(const SDL_Event &event)
                 zoom(-10);
                 break;
 
-            // --- X: Best fit width ---
+            // --- X: Rotate ---
             case SDL_CONTROLLER_BUTTON_X:
-                fitPageToWidth();
+                rotateClockwise();
                 break;
 
-            // --- A: Rotate ---
+            // --- A: Best fit width ---
             case SDL_CONTROLLER_BUTTON_A:
-                rotateClockwise();
+                fitPageToWidth();
                 break;
 
             // --- MENU/START: Quit ---

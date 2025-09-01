@@ -177,6 +177,26 @@ The bundle is completely self-contained and includes all necessary dependencies 
 ## User Inputs
 The SDL Reader supports the following keyboard, mouse, and game controller inputs:
 
+### TrimUI Brick Controls
+| Button/Input              | Action                               |
+| :------------------------ | :----------------------------------- |
+| **D-Pad**                 |                                      |
+| `D-Pad Up/Down/Left/Right`| Scroll/Pan in direction              |
+| **Shoulder Buttons**      |                                      |
+| `L1 (Left Shoulder)`      | Previous page                        |
+| `R1 (Right Shoulder)`     | Next page                            |
+| `L2 (Left Trigger)`       | Jump back 10 pages                   |
+| `R2 (Right Trigger)`      | Jump forward 10 pages                |
+| **Face Buttons**          |                                      |
+| `A`                       | Fit page to width                    |
+| `B`                       | Zoom out                             |
+| `X`                       | Rotate page clockwise (90°)          |
+| `Y`                       | Zoom in                              |
+| **System Buttons**        |                                      |
+| `Start`                   | Toggle horizontal mirror             |
+| `Select`                  | Toggle vertical mirror               |
+| `Menu`                    | Quit application                     |
+
 ### Keyboard Controls
 | Input                  | Action                                  |
 | :--------------------- | :-------------------------------------- |
@@ -209,7 +229,7 @@ The SDL Reader supports the following keyboard, mouse, and game controller input
 | `Ctrl + Mouse Wheel Down` | Zoom out                             |
 | `Left Click + Drag`       | Pan/Scroll                           |
 
-### Game Controller Controls
+### SDL2 Game Controller Controls
 | Button/Input              | Action                               |
 | :------------------------ | :----------------------------------- |
 | **D-Pad**                 |                                      |
@@ -217,12 +237,12 @@ The SDL Reader supports the following keyboard, mouse, and game controller input
 | **Shoulder Buttons**      |                                      |
 | `L1 (Left Shoulder)`      | Previous page                        |
 | `R1 (Right Shoulder)`     | Next page                            |
-| `L2 (Left Trigger)`       | Jump back 10 pages                  |
-| `R2 (Right Trigger)`      | Jump forward 10 pages               |
+| `L2 (Left Trigger)`       | Jump back 10 pages                   |
+| `R2 (Right Trigger)`      | Jump forward 10 pages                |
 | **Face Buttons**          |                                      |
-| `A`                       | Rotate page clockwise (90°)         |
+| `A`                       | Fit page to width                    |
 | `B`                       | Zoom out                             |
-| `X`                       | Fit page to width                    |
+| `X`                       | Rotate page clockwise (90°)          |
 | `Y`                       | Zoom in                              |
 | **System Buttons**        |                                      |
 | `Start`                   | Toggle horizontal mirror             |
