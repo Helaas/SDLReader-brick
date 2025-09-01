@@ -6,6 +6,9 @@
 #include <vector>
 #include <memory>
 #include <string>
+#include <map>
+#include <tuple>
+#include <mutex>
 
 /**
  * @brief Document implementation using MuPDF library
@@ -24,8 +27,11 @@ public:
     std::vector<unsigned char> renderPage(int page, int& width, int& height, int scale) override;
     int getPageWidthNative(int page) override;
     int getPageHeightNative(int page) override;
+    int getPageWidthEffective(int page, int zoom);
+    int getPageHeightEffective(int page, int zoom);
     bool open(const std::string& filePath) override;
     int getPageCount() const override;
+    void setMaxRenderSize(int width, int height);
     void close() override;
 
 private:
@@ -46,6 +52,11 @@ private:
 
     std::unique_ptr<fz_context, ContextDeleter> m_ctx;
     std::unique_ptr<fz_document, DocumentDeleter> m_doc;
+    std::map<std::pair<int, int>, std::tuple<std::vector<unsigned char>, int, int>> m_cache;
+    std::mutex m_cacheMutex;
+    int m_maxWidth = 1024;
+    int m_maxHeight = 768;
+    int m_pageCount = 0;
 };
 
 #endif // MUPDF_DOCUMENT_H

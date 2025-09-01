@@ -73,6 +73,12 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
         throw std::runtime_error("Failed to open document: " + filename);
     }
 
+    // Set max render size for downsampling based on current window size
+    if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
+    {
+        muDoc->setMaxRenderSize(m_renderer->getWindowWidth(), m_renderer->getWindowHeight());
+    }
+
     m_pageCount = m_document->getPageCount();
     if (m_pageCount == 0)
     {
@@ -822,6 +828,12 @@ void App::fitPageToWindow()
     int windowWidth = m_renderer->getWindowWidth();
     int windowHeight = m_renderer->getWindowHeight();
 
+    // Update max render size for downsampling
+    if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
+    {
+        muDoc->setMaxRenderSize(windowWidth, windowHeight);
+    }
+
     // Use effective sizes so 90/270 rotation swaps W/H
     int nativeWidth = effectiveNativeWidth();
     int nativeHeight = effectiveNativeHeight();
@@ -1251,13 +1263,31 @@ void App::onPageChangedKeepZoom()
 void App::alignToTopOfCurrentPage()
 {
     // Recompute extents with current zoom (safe even if already set)
-    int nativeW = m_document->getPageWidthNative(m_currentPage);
-    int nativeH = m_document->getPageHeightNative(m_currentPage);
-    if (nativeW <= 0 || nativeH <= 0)
+    // Use effective size for MuPdfDocument to account for downsampling
+    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+    int effectiveW, effectiveH;
+    
+    if (muPdfDoc) {
+        effectiveW = muPdfDoc->getPageWidthEffective(m_currentPage, m_currentScale);
+        effectiveH = muPdfDoc->getPageHeightEffective(m_currentPage, m_currentScale);
+        
+        // Apply rotation
+        if (m_rotation % 180 != 0) {
+            std::swap(effectiveW, effectiveH);
+        }
+    } else {
+        // Fallback for other document types
+        int nativeW = effectiveNativeWidth();
+        int nativeH = effectiveNativeHeight();
+        effectiveW = static_cast<int>(nativeW * (m_currentScale / 100.0));
+        effectiveH = static_cast<int>(nativeH * (m_currentScale / 100.0));
+    }
+    
+    if (effectiveW <= 0 || effectiveH <= 0)
         return;
 
-    m_pageWidth = static_cast<int>(nativeW * (m_currentScale / 100.0));
-    m_pageHeight = static_cast<int>(nativeH * (m_currentScale / 100.0));
+    m_pageWidth = effectiveW;
+    m_pageHeight = effectiveH;
 
     // If the page is taller than the window, place the view at the *top edge*
     // With your clamp scheme, "top edge" corresponds to +maxY
