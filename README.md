@@ -175,11 +175,11 @@ The exported bundle at `ports/tg5040/pak/` contains:
 The bundle is completely self-contained and includes all necessary dependencies for the TG5040 platform.
 
 ## User Inputs
-The SDL Reader supports the following keyboard and mouse inputs:
+The SDL Reader supports the following keyboard, mouse, and game controller inputs:
 
+### Keyboard Controls
 | Input                  | Action                                  |
 | :--------------------- | :-------------------------------------- |
-| **Keyboard** |                                         |
 | `Q` or `Esc`           | Quit application                        |
 | `Right Arrow`          | Scroll right                            |
 | `Left Arrow`           | Scroll left                             |
@@ -199,12 +199,40 @@ The SDL Reader supports the following keyboard and mouse inputs:
 | `V`                    | Toggle vertical mirror                  |
 | `[` (Left Bracket)     | Jump back 10 pages                     |
 | `]` (Right Bracket)    | Jump forward 10 pages                  |
-| **Mouse** |                                         |
-| `Mouse Wheel Up`       | Scroll up                               |
-| `Mouse Wheel Down`     | Scroll down                             |
-| `Ctrl + Mouse Wheel Up`| Zoom in                                 |
-| `Ctrl + Mouse Wheel Down`| Zoom out                              |
-| `Left Click + Drag`    | Pan/Scroll                              |
+
+### Mouse Controls
+| Input                     | Action                               |
+| :------------------------ | :----------------------------------- |
+| `Mouse Wheel Up`          | Scroll up                            |
+| `Mouse Wheel Down`        | Scroll down                          |
+| `Ctrl + Mouse Wheel Up`   | Zoom in                              |
+| `Ctrl + Mouse Wheel Down` | Zoom out                             |
+| `Left Click + Drag`       | Pan/Scroll                           |
+
+### Game Controller Controls
+| Button/Input              | Action                               |
+| :------------------------ | :----------------------------------- |
+| **D-Pad**                 |                                      |
+| `D-Pad Up/Down/Left/Right`| Scroll/Pan in direction              |
+| **Shoulder Buttons**      |                                      |
+| `L1 (Left Shoulder)`      | Previous page                        |
+| `R1 (Right Shoulder)`     | Next page                            |
+| `L2 (Left Trigger)`       | Jump back 10 pages                  |
+| `R2 (Right Trigger)`      | Jump forward 10 pages               |
+| **Face Buttons**          |                                      |
+| `A`                       | Rotate page clockwise (90°)         |
+| `B`                       | Zoom out                             |
+| `X`                       | Fit page to width                    |
+| `Y`                       | Zoom in                              |
+| **System Buttons**        |                                      |
+| `Start`                   | Toggle horizontal mirror             |
+| `Back/Select`             | Toggle vertical mirror               |
+| `Guide/Menu`              | Quit application                     |
+| **Analog Sticks**         |                                      |
+| `Left/Right Stick X-Axis` | Scroll horizontally                  |
+| `Left/Right Stick Y-Axis` | Scroll vertically                    |
+
+*Note: Controller button names may vary depending on your controller type (Xbox, PlayStation, etc.). The mappings above use SDL2's standardized button names.*
 
 ## Project Structure
 ```
