@@ -1057,16 +1057,19 @@ void App::rotateClockwise()
     m_rotation = (m_rotation + 90) % 360;
     onPageChangedKeepZoom();
     alignToTopOfCurrentPage();
+    markDirty();
 }
 
 void App::toggleMirrorVertical()
 {
     m_mirrorV = !m_mirrorV;
+    markDirty();
 }
 
 void App::toggleMirrorHorizontal()
 {
     m_mirrorH = !m_mirrorH;
+    markDirty();
 }
 
 void App::fitPageToWidth()
