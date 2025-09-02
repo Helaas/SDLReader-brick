@@ -378,6 +378,9 @@ void App::handleEvent(const SDL_Event &event)
                 jumpPages(+10);
             }
             break;
+        default:
+            // Unknown keys are ignored
+            break;
         }
         break;
     case SDL_MOUSEWHEEL:
@@ -605,6 +608,34 @@ void App::handleEvent(const SDL_Event &event)
             m_gameControllerInstanceID = -1;
             std::cout << "Game controller disconnected." << std::endl;
         }
+        break;
+    case SDL_JOYBUTTONDOWN:
+        // Handle joystick button presses
+        {
+            // Handle specific button functions
+            switch (event.jbutton.button) {
+            case 9:
+                // Button 9 - Reset page view (like R key)
+                resetPageView();
+                break;
+            case 10:
+                // Button 10 - Set zoom to 200%
+                zoomTo(200);
+                break;
+            default:
+                // Other joystick buttons are ignored
+                break;
+            }
+        }
+        break;
+    case SDL_JOYBUTTONUP:
+        // Joystick button releases are ignored
+        break;
+    case SDL_JOYHATMOTION:
+        // Joystick hat motion is ignored
+        break;
+    case SDL_JOYAXISMOTION:
+        // Joystick axis motion is ignored
         break;
     }
 
@@ -1159,6 +1190,9 @@ void App::resetPageView()
 {
     m_currentPage = 0;
     m_currentScale = 100;
+    m_rotation = 0;          // Reset rotation to 0 degrees
+    m_mirrorH = false;       // Reset horizontal mirroring
+    m_mirrorV = false;       // Reset vertical mirroring
     fitPageToWindow();
 }
 

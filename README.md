@@ -192,6 +192,9 @@ The SDL Reader supports the following keyboard, mouse, and game controller input
 | `A`                       | Zoom out                             |
 | `X`                       | Zoom in                              |
 | `Y`                       | Rotate page clockwise (90°)          |
+| **Function Buttons**      |                                      |
+| `F1`                      | Reset page view                      |
+| `F2`                      | Zoom to 200%                         |
 | **System Buttons**        |                                      |
 | `Start`                   | Toggle horizontal mirror             |
 | `Select`                  | Toggle vertical mirror               |
