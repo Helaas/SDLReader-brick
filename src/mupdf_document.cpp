@@ -34,7 +34,7 @@ bool MuPdfDocument::open(const std::string &filePath)
     m_ctx.reset(ctx);
     fz_register_document_handlers(ctx);
 
-    fz_document *doc = nullptr;
+    volatile fz_document *doc = nullptr; // Use volatile to prevent longjmp clobbering
     fz_try(ctx)
     {
         doc = fz_open_document(ctx, filePath.c_str());
@@ -45,8 +45,8 @@ bool MuPdfDocument::open(const std::string &filePath)
         return false;
     }
 
-    m_doc = std::unique_ptr<fz_document, DocumentDeleter>(doc, DocumentDeleter{ctx});
-    m_pageCount = fz_count_pages(ctx, doc);
+    m_doc = std::unique_ptr<fz_document, DocumentDeleter>((fz_document*)doc, DocumentDeleter{ctx});
+    m_pageCount = fz_count_pages(ctx, (fz_document*)doc);
     return true;
 }
 
@@ -57,19 +57,39 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int &width,
         throw std::runtime_error("Document not open");
     }
 
+    // Validate page number
+    if (pageNumber < 0 || pageNumber >= m_pageCount) {
+        throw std::runtime_error("Invalid page number: " + std::to_string(pageNumber));
+    }
+
     fz_context *ctx = m_ctx.get();
     fz_document *doc = m_doc.get();
+    
+    // Additional safety check
+    if (!ctx || !doc) {
+        throw std::runtime_error("MuPDF context or document is null");
+    }
 
     // Calculate transform including downsampling
     float baseScale = zoom / 100.0f;
     float downsampleScale = 1.0f;
     
     // Pre-calculate if we need downsampling to avoid fz_scale_pixmap
-    fz_page *tempPage = nullptr;
+    volatile fz_page *tempPage = nullptr; // Use volatile to prevent longjmp clobbering
     fz_try(ctx)
     {
+        // Check if page number is valid before attempting to load
+        int totalPages = fz_count_pages(ctx, doc);
+        if (pageNumber >= totalPages) {
+            throw std::runtime_error("Page number out of range: " + std::to_string(pageNumber) + " >= " + std::to_string(totalPages));
+        }
+        
         tempPage = fz_load_page(ctx, doc, pageNumber);
-        fz_rect bounds = fz_bound_page(ctx, tempPage);
+        if (!tempPage) {
+            throw std::runtime_error("Failed to load page " + std::to_string(pageNumber));
+        }
+        
+        fz_rect bounds = fz_bound_page(ctx, (fz_page*)tempPage);
         int nativeWidth = static_cast<int>((bounds.x1 - bounds.x0) * baseScale);
         int nativeHeight = static_cast<int>((bounds.y1 - bounds.y0) * baseScale);
         
@@ -95,67 +115,90 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int &width,
                 downsampleScale = std::max(downsampleScale, detailScale);
             }
         }
-        fz_drop_page(ctx, tempPage);
+        fz_drop_page(ctx, (fz_page*)tempPage);
     }
     fz_catch(ctx)
     {
-        if (tempPage) fz_drop_page(ctx, tempPage);
-        throw std::runtime_error("Error calculating page bounds");
+        if (tempPage) fz_drop_page(ctx, (fz_page*)tempPage);
+        std::string errorMsg = "Error calculating page bounds for page " + std::to_string(pageNumber);
+        std::cerr << "MuPdfDocument: " << errorMsg << std::endl;
+        throw std::runtime_error(errorMsg);
     }
 
-    // Check cache using effective scale for cache key to account for downsampling
-    float effectiveScale = baseScale * downsampleScale;
-    int effectiveZoom = static_cast<int>(effectiveScale * 100);
-    auto key = std::make_pair(pageNumber, effectiveZoom);
+    // Check cache using exact zoom level for cache key
+    auto key = std::make_pair(pageNumber, zoom); // zoom is already an integer percentage
     
     std::cout << "Render page " << pageNumber << ": zoom=" << zoom 
               << "%, baseScale=" << baseScale 
               << ", downsampleScale=" << downsampleScale 
-              << ", effectiveZoom=" << effectiveZoom << "%" << std::endl;
+              << ", exactZoom=" << zoom << "%" << std::endl;
     
     {
         std::lock_guard<std::mutex> lock(m_cacheMutex);
         auto it = m_cache.find(key);
         if (it != m_cache.end())
         {
-            std::cout << "Cache HIT for page " << pageNumber << " at effective zoom " << effectiveZoom << "%" << std::endl;
+            std::cout << "Cache HIT for page " << pageNumber << " at exact zoom " << zoom << "%" << std::endl;
             auto &[buffer, cachedWidth, cachedHeight] = it->second;
             width = cachedWidth;
             height = cachedHeight;
             return buffer;
         }
-        std::cout << "Cache MISS for page " << pageNumber << " at effective zoom " << effectiveZoom << "%" << std::endl;
+        std::cout << "Cache MISS for page " << pageNumber << " at exact zoom " << zoom << "%" << std::endl;
     }
 
     fz_matrix transform = fz_scale(baseScale * downsampleScale, baseScale * downsampleScale);
-    fz_pixmap *pix = nullptr;
+    volatile fz_pixmap *pix = nullptr; // Use volatile to prevent longjmp clobbering
     std::vector<unsigned char> buffer;
 
     fz_try(ctx)
     {
-        fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        volatile fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        if (!page) {
+            throw std::runtime_error("Failed to load page " + std::to_string(pageNumber) + " for rendering");
+        }
 
-        pix = fz_new_pixmap_from_page(ctx, page, transform, fz_device_rgb(ctx), 0);
+        pix = fz_new_pixmap_from_page(ctx, (fz_page*)page, transform, fz_device_rgb(ctx), 0);
+        if (!pix) {
+            fz_drop_page(ctx, (fz_page*)page);
+            throw std::runtime_error("Failed to create pixmap for page " + std::to_string(pageNumber));
+        }
 
-        fz_drop_page(ctx, page);
+        fz_drop_page(ctx, (fz_page*)page);
 
-        width = fz_pixmap_width(ctx, pix);
-        height = fz_pixmap_height(ctx, pix);
+        width = fz_pixmap_width(ctx, (fz_pixmap*)pix);
+        height = fz_pixmap_height(ctx, (fz_pixmap*)pix);
 
         // No post-processing scaling needed - downsampling applied in transform
 
         size_t dataSize = width * height * 3;
         buffer.resize(dataSize);
-        memcpy(buffer.data(), fz_pixmap_samples(ctx, pix), dataSize);
+        memcpy(buffer.data(), fz_pixmap_samples(ctx, (fz_pixmap*)pix), dataSize);
 
-        fz_drop_pixmap(ctx, pix);
+        fz_drop_pixmap(ctx, (fz_pixmap*)pix);
         pix = nullptr;
     }
     fz_catch(ctx)
     {
         if (pix)
-            fz_drop_pixmap(ctx, pix);
-        throw std::runtime_error("Error rendering page");
+            fz_drop_pixmap(ctx, (fz_pixmap*)pix);
+        
+        // More detailed error reporting for different types of PDF corruption
+        std::string errorMsg = "Error rendering page " + std::to_string(pageNumber);
+        const char* fzError = fz_caught_message(ctx);
+        if (fzError && strlen(fzError) > 0) {
+            errorMsg += ": " + std::string(fzError);
+            
+            // Handle specific known PDF corruption issues
+            if (strstr(fzError, "cycle in page tree")) {
+                errorMsg += " (PDF has circular page tree references - document may be corrupted)";
+            } else if (strstr(fzError, "cannot load object")) {
+                errorMsg += " (PDF object corruption detected)";
+            }
+        }
+        
+        std::cerr << "MuPdfDocument: " << errorMsg << std::endl;
+        throw std::runtime_error(errorMsg);
     }
 
     // Cache the result
@@ -177,10 +220,10 @@ int MuPdfDocument::getPageWidthNative(int pageNumber)
 
     fz_try(ctx)
     {
-        fz_page *page = fz_load_page(ctx, doc, pageNumber);
-        fz_rect bounds = fz_bound_page(ctx, page);
+        volatile fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        fz_rect bounds = fz_bound_page(ctx, (fz_page*)page);
         width = static_cast<int>(bounds.x1 - bounds.x0);
-        fz_drop_page(ctx, page);
+        fz_drop_page(ctx, (fz_page*)page);
     }
     fz_catch(ctx)
     {
@@ -201,10 +244,10 @@ int MuPdfDocument::getPageHeightNative(int pageNumber)
 
     fz_try(ctx)
     {
-        fz_page *page = fz_load_page(ctx, doc, pageNumber);
-        fz_rect bounds = fz_bound_page(ctx, page);
+        volatile fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        fz_rect bounds = fz_bound_page(ctx, (fz_page*)page);
         height = static_cast<int>(bounds.y1 - bounds.y0);
-        fz_drop_page(ctx, page);
+        fz_drop_page(ctx, (fz_page*)page);
     }
     fz_catch(ctx)
     {
@@ -225,10 +268,10 @@ int MuPdfDocument::getPageWidthEffective(int pageNumber, int zoom)
 
     fz_try(ctx)
     {
-        fz_page *page = fz_load_page(ctx, doc, pageNumber);
-        fz_rect bounds = fz_bound_page(ctx, page);
+        volatile fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        fz_rect bounds = fz_bound_page(ctx, (fz_page*)page);
         int nativeWidth = static_cast<int>(bounds.x1 - bounds.x0);
-        fz_drop_page(ctx, page);
+        fz_drop_page(ctx, (fz_page*)page);
         
         // Apply zoom
         float baseScale = zoom / 100.0f;
@@ -272,11 +315,11 @@ int MuPdfDocument::getPageHeightEffective(int pageNumber, int zoom)
 
     fz_try(ctx)
     {
-        fz_page *page = fz_load_page(ctx, doc, pageNumber);
-        fz_rect bounds = fz_bound_page(ctx, page);
+        volatile fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        fz_rect bounds = fz_bound_page(ctx, (fz_page*)page);
         int nativeWidth = static_cast<int>(bounds.x1 - bounds.x0);
         int nativeHeight = static_cast<int>(bounds.y1 - bounds.y0);
-        fz_drop_page(ctx, page);
+        fz_drop_page(ctx, (fz_page*)page);
         
         // Apply zoom
         float baseScale = zoom / 100.0f;
@@ -333,4 +376,50 @@ void MuPdfDocument::close()
         std::lock_guard<std::mutex> lock(m_cacheMutex);
         m_cache.clear();
     }
+}
+
+bool MuPdfDocument::isPageValid(int pageNumber)
+{
+    if (!m_ctx || !m_doc) {
+        return false;
+    }
+    
+    if (pageNumber < 0 || pageNumber >= m_pageCount) {
+        return false;
+    }
+    
+    fz_context *ctx = m_ctx.get();
+    fz_document *doc = m_doc.get();
+    volatile fz_page *page = nullptr;
+    volatile bool isValid = false; // Make volatile to prevent longjmp issues
+    
+    fz_try(ctx)
+    {
+        page = fz_load_page(ctx, doc, pageNumber);
+        if (page) {
+            // Try to get page bounds to verify it's not corrupted
+            fz_rect bounds = fz_bound_page(ctx, (fz_page*)page);
+            // Check if bounds are reasonable
+            if (bounds.x1 > bounds.x0 && bounds.y1 > bounds.y0 && 
+                bounds.x1 - bounds.x0 < 100000 && bounds.y1 - bounds.y0 < 100000) {
+                isValid = true;
+            }
+            fz_drop_page(ctx, (fz_page*)page);
+        }
+    }
+    fz_catch(ctx)
+    {
+        if (page) {
+            fz_drop_page(ctx, (fz_page*)page);
+        }
+        isValid = false;
+        
+        // Log the specific error for debugging
+        const char* fzError = fz_caught_message(ctx);
+        if (fzError) {
+            std::cerr << "MuPdfDocument: Page " << pageNumber << " validation failed: " << fzError << std::endl;
+        }
+    }
+    
+    return isValid;
 }

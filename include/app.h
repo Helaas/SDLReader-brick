@@ -4,6 +4,7 @@
 #include "renderer.h"
 #include "document.h"
 #include "text_renderer.h"
+#include "page_preloader.h"
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
 #endif
@@ -12,6 +13,8 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <mutex>
+#include <chrono>
 
 class App
 {
@@ -41,11 +44,17 @@ public:
 
     void run();
 
+    // Get document mutex for thread-safe access
+    std::mutex& getDocumentMutex() { return m_documentMutex; }
+
 private:
     // Document and Rendering Management
     void loadDocument();
     void renderCurrentPage();
     void renderUI();
+    
+    // Check if a preloaded page is available and use it
+    bool tryRenderPreloadedPage(Uint32 renderStart);
     
     // Error message display
     void showErrorMessage(const std::string& message);
@@ -72,6 +81,8 @@ private:
     // Zoom and Scaling
     void zoom(int delta);
     void zoomTo(int scale);
+    void applyPendingZoom();  // Apply accumulated zoom changes
+    bool isZoomDebouncing() const;  // Check if zoom is currently being debounced
     void fitPageToWindow();
     void recenterScrollOnZoom(int oldScale, int newScale);
     void fitPageToWidth();
@@ -106,6 +117,11 @@ private:
     std::unique_ptr<Renderer> m_renderer;
     std::unique_ptr<Document> m_document;
     std::unique_ptr<TextRenderer> m_textRenderer;
+    std::unique_ptr<PagePreloader> m_pagePreloader;
+    
+    // Mutex to protect document access from multiple threads
+    mutable std::mutex m_documentMutex;
+    
 #ifdef TG5040_PLATFORM
     std::unique_ptr<PowerHandler> m_powerHandler;
 #endif
@@ -131,7 +147,7 @@ private:
     void closeGameControllers();
 
     // Per-frame panning when D-pad is held
-    void updateHeldPanning(float dt);
+    bool updateHeldPanning(float dt);
 
     // --- edge-turn timing ---
     float m_edgeTurnHoldRight{0.0f};
@@ -139,7 +155,24 @@ private:
     float m_edgeTurnHoldUp{0.0f};
     float m_edgeTurnHoldDown{0.0f};
 
-    float m_edgeTurnThreshold{0.15f}; // seconds to dwell at edge before flipping
+    float m_edgeTurnThreshold{0.150f}; // seconds to dwell at edge before flipping
+
+    // Page change cooldown to prevent rapid page flipping during panning
+    Uint32 m_lastPageChangeTime{0};
+    static constexpr Uint32 PAGE_CHANGE_COOLDOWN = 300; // 300ms cooldown after page change
+    
+    // Dynamic timeout based on actual rendering time (used for both scroll timeout and zoom debouncing)
+    Uint32 m_lastRenderDuration{300}; // Default to 300ms if no render time measured yet
+    
+    // Check if we're in page change cooldown period
+    bool isInPageChangeCooldown() const {
+        return (SDL_GetTicks() - m_lastPageChangeTime) < PAGE_CHANGE_COOLDOWN;
+    }
+    
+    // Check if we should block scrolling after a page change (using dynamic timeout)
+    bool isInScrollTimeout() const {
+        return (SDL_GetTicks() - m_lastPageChangeTime) < m_lastRenderDuration;
+    }
 
     // Try a one-shot nudge; if at the edge, flip the page instead.
     void handleDpadNudgeRight();
@@ -194,6 +227,18 @@ private:
     // Page display timing
     Uint32 m_pageDisplayTime{0};
     static constexpr Uint32 PAGE_DISPLAY_DURATION = 2000; // 2 seconds
+    
+    // Zoom throttling to prevent rapid operations
+    std::chrono::steady_clock::time_point m_lastZoomTime;
+    static constexpr int ZOOM_THROTTLE_MS = 25; // 25ms minimum between zoom operations for smoother response
+
+    // Zoom debouncing for performance on slow machines
+    int m_pendingZoomDelta{0};
+    std::chrono::steady_clock::time_point m_lastZoomInputTime;
+    
+    // Rendering optimization
+    bool m_needsRedraw{true}; // Flag to indicate when screen needs to be redrawn
+    void markDirty() { m_needsRedraw = true; }
 };
 
 #endif // APP_H

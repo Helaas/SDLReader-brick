@@ -3,6 +3,7 @@
 #include "text_renderer.h"
 #include "document.h"
 #include "mupdf_document.h"
+#include "page_preloader.h"
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
 #endif
@@ -19,7 +20,8 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
     : m_running(true), m_currentPage(0), m_currentScale(100),
       m_scrollX(0), m_scrollY(0), m_pageWidth(0), m_pageHeight(0),
       m_isDragging(false), m_lastTouchX(0.0f), m_lastTouchY(0.0f),
-      m_gameController(nullptr), m_gameControllerInstanceID(-1)
+      m_gameController(nullptr), m_gameControllerInstanceID(-1),
+      m_lastZoomTime(std::chrono::steady_clock::now())
 {
 
     // Pass the pre-initialized window and renderer to the Renderer object
@@ -96,10 +98,22 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
 
     // Initialize game controllers
     initializeGameControllers();
+    
+    // Initialize page preloader
+    m_pagePreloader = std::make_unique<PagePreloader>(this, m_document.get());
+    m_pagePreloader->start();
+    
+    // Start preloading pages ahead of current page
+    m_pagePreloader->requestPreload(m_currentPage, m_currentScale);
 }
 
 App::~App()
 {
+    // Stop page preloader first
+    if (m_pagePreloader) {
+        m_pagePreloader->stop();
+    }
+    
 #ifdef TG5040_PLATFORM
     if (m_powerHandler) {
         m_powerHandler->stop();
@@ -140,17 +154,34 @@ void App::run()
         m_prevTick = now;
 
         if (!m_inFakeSleep) {
-            // Normal rendering
-            updateHeldPanning(dt);
-            renderCurrentPage();
-            renderUI();
+            // Normal rendering - only render if something changed
+            bool panningChanged = updateHeldPanning(dt);
+            
+            // Check for settled zoom input and apply pending zoom
+            if (m_pendingZoomDelta != 0) {
+                auto now = std::chrono::steady_clock::now();
+                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastZoomInputTime).count();
+                if (elapsed >= m_lastRenderDuration) {
+                    // Zoom input has settled, apply the final accumulated zoom
+                    applyPendingZoom();
+                }
+            }
+            
+            if (m_needsRedraw || panningChanged) {
+                renderCurrentPage();
+                renderUI();
+                m_renderer->present();
+                m_needsRedraw = false;
+            }
         } else {
             // Fake sleep mode - render black screen
-            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 0, 0, 0, 255);
-            SDL_RenderClear(m_renderer->getSDLRenderer());
+            if (m_needsRedraw) {
+                SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 0, 0, 0, 255);
+                SDL_RenderClear(m_renderer->getSDLRenderer());
+                m_renderer->present();
+                m_needsRedraw = false;
+            }
         }
-        
-        m_renderer->present();
     }
 }
 
@@ -185,30 +216,46 @@ void App::handleEvent(const SDL_Event &event)
             }
             break;
         case SDLK_RIGHT:
-            m_scrollX -= 50;
-            clampScroll();
-            updatePageDisplayTime();
+            if (!isInScrollTimeout()) {
+                m_scrollX -= 50;
+                clampScroll();
+                updatePageDisplayTime();
+                markDirty();
+            }
             break;
         case SDLK_LEFT:
-            m_scrollX += 50;
-            clampScroll();
-            updatePageDisplayTime();
+            if (!isInScrollTimeout()) {
+                m_scrollX += 50;
+                clampScroll();
+                updatePageDisplayTime();
+                markDirty();
+            }
             break;
         case SDLK_UP:
-            m_scrollY += 50;
-            clampScroll();
-            updatePageDisplayTime();
+            if (!isInScrollTimeout()) {
+                m_scrollY += 50;
+                clampScroll();
+                updatePageDisplayTime();
+                markDirty();
+            }
             break;
         case SDLK_DOWN:
-            m_scrollY -= 50;
-            clampScroll();
-            updatePageDisplayTime();
+            if (!isInScrollTimeout()) {
+                m_scrollY -= 50;
+                clampScroll();
+                updatePageDisplayTime();
+                markDirty();
+            }
             break;
         case SDLK_PAGEDOWN:
-            goToNextPage();
+            if (!isInPageChangeCooldown()) {
+                goToNextPage();
+            }
             break;
         case SDLK_PAGEUP:
-            goToPreviousPage();
+            if (!isInPageChangeCooldown()) {
+                goToPreviousPage();
+            }
             break;
         case SDLK_PLUS:
         case SDLK_KP_PLUS:
@@ -322,10 +369,14 @@ void App::handleEvent(const SDL_Event &event)
             toggleMirrorVertical();
             break;
         case SDLK_LEFTBRACKET:
-            jumpPages(-10);
+            if (!isInPageChangeCooldown()) {
+                jumpPages(-10);
+            }
             break;
         case SDLK_RIGHTBRACKET:
-            jumpPages(+10);
+            if (!isInPageChangeCooldown()) {
+                jumpPages(+10);
+            }
             break;
         }
         break;
@@ -336,7 +387,7 @@ void App::handleEvent(const SDL_Event &event)
             {
                 zoom(10);
             }
-            else
+            else if (!isInScrollTimeout())
             {
                 m_scrollY += 50;
                 updatePageDisplayTime();
@@ -348,13 +399,14 @@ void App::handleEvent(const SDL_Event &event)
             {
                 zoom(-10);
             }
-            else
+            else if (!isInScrollTimeout())
             {
                 m_scrollY -= 50;
                 updatePageDisplayTime();
             }
         }
         clampScroll();
+        markDirty();
         break;
     case SDL_MOUSEBUTTONDOWN:
         if (event.button.button == SDL_BUTTON_LEFT)
@@ -371,7 +423,7 @@ void App::handleEvent(const SDL_Event &event)
         }
         break;
     case SDL_MOUSEMOTION:
-        if (m_isDragging)
+        if (m_isDragging && !isInScrollTimeout())
         {
             float dx = static_cast<float>(event.motion.x) - m_lastTouchX;
             float dy = static_cast<float>(event.motion.y) - m_lastTouchY;
@@ -381,6 +433,7 @@ void App::handleEvent(const SDL_Event &event)
             m_lastTouchY = static_cast<float>(event.motion.y);
             clampScroll();
             updatePageDisplayTime();
+            markDirty();
         }
         break;
     case SDL_CONTROLLERAXISMOTION:
@@ -391,36 +444,44 @@ void App::handleEvent(const SDL_Event &event)
             if (event.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT &&
                 event.caxis.value > AXIS_DEAD_ZONE)
             {
-                jumpPages(-10);
+                if (!isInPageChangeCooldown()) {
+                    jumpPages(-10);
+                }
             }
             if (event.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT &&
                 event.caxis.value > AXIS_DEAD_ZONE)
             {
-                jumpPages(+10);
+                if (!isInPageChangeCooldown()) {
+                    jumpPages(+10);
+                }
             }
 
             switch (event.caxis.axis)
             {
             case SDL_CONTROLLER_AXIS_LEFTX:
             case SDL_CONTROLLER_AXIS_RIGHTX:
-                if (event.caxis.value < -AXIS_DEAD_ZONE)
-                {
-                    m_scrollX += 20;
-                }
-                else if (event.caxis.value > AXIS_DEAD_ZONE)
-                {
-                    m_scrollX -= 20;
+                if (!isInScrollTimeout()) {
+                    if (event.caxis.value < -AXIS_DEAD_ZONE)
+                    {
+                        m_scrollX += 20;
+                    }
+                    else if (event.caxis.value > AXIS_DEAD_ZONE)
+                    {
+                        m_scrollX -= 20;
+                    }
                 }
                 break;
             case SDL_CONTROLLER_AXIS_LEFTY:
             case SDL_CONTROLLER_AXIS_RIGHTY:
-                if (event.caxis.value < -AXIS_DEAD_ZONE)
-                {
-                    m_scrollY += 20;
-                }
-                else if (event.caxis.value > AXIS_DEAD_ZONE)
-                {
-                    m_scrollY -= 20;
+                if (!isInScrollTimeout()) {
+                    if (event.caxis.value < -AXIS_DEAD_ZONE)
+                    {
+                        m_scrollY += 20;
+                    }
+                    else if (event.caxis.value > AXIS_DEAD_ZONE)
+                    {
+                        m_scrollY -= 20;
+                    }
                 }
                 break;
             }
@@ -452,10 +513,14 @@ void App::handleEvent(const SDL_Event &event)
 
             // --- L1 / R1: page up (previous) ---
             case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
-                goToPreviousPage();
+                if (!isInPageChangeCooldown()) {
+                    goToPreviousPage();
+                }
                 break;
             case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
-                goToNextPage();
+                if (!isInPageChangeCooldown()) {
+                    goToNextPage();
+                }
                 break;
 
             // --- Y / B: zoom in/out ---
@@ -550,6 +615,7 @@ void App::handleEvent(const SDL_Event &event)
     else if (action == AppAction::Resize)
     {
         fitPageToWindow();
+        markDirty();
     }
 }
 
@@ -561,13 +627,27 @@ void App::loadDocument()
 
 void App::renderCurrentPage()
 {
+    Uint32 renderStart = SDL_GetTicks();
+    
+    // Try to use preloaded page first
+    if (tryRenderPreloadedPage(renderStart)) {
+        return;
+    }
+    
+    // Fall back to regular rendering if no preloaded page available
+    std::cout << "FALLBACK: Using direct render for page " << m_currentPage << " at scale " << m_currentScale << std::endl;
     m_renderer->clear(255, 255, 255, 255);
 
     int winW = m_renderer->getWindowWidth();
     int winH = m_renderer->getWindowHeight();
 
     int srcW, srcH;
-    std::vector<uint8_t> pixelData = m_document->renderPage(m_currentPage, srcW, srcH, m_currentScale);
+    std::vector<uint8_t> pixelData;
+    {
+        // Lock the document mutex to ensure thread-safe access
+        std::lock_guard<std::mutex> lock(m_documentMutex);
+        pixelData = m_document->renderPage(m_currentPage, srcW, srcH, m_currentScale);
+    }
 
     // displayed page size after rotation
     if (m_rotation % 180 == 0)
@@ -601,6 +681,94 @@ void App::renderCurrentPage()
                              posX, posY, m_pageWidth, m_pageHeight,
                              static_cast<double>(m_rotation),
                              currentFlipFlags());
+    
+    // Measure total render time for dynamic timeout
+    m_lastRenderDuration = SDL_GetTicks() - renderStart;
+}
+
+bool App::tryRenderPreloadedPage(Uint32 renderStart)
+{
+    if (!m_pagePreloader) {
+        return false;
+    }
+    
+    // Try to get preloaded page
+    auto preloadedPage = m_pagePreloader->getPreloadedPage(m_currentPage, m_currentScale);
+    if (!preloadedPage) {
+        std::cout << "PRELOAD MISS: No preloaded page for page " << m_currentPage << " at scale " << m_currentScale << std::endl;
+        return false; // No preloaded page available
+    }
+    
+    std::cout << "PRELOAD HIT: Using preloaded page " << m_currentPage << " at scale " << m_currentScale << std::endl;
+    
+    // Additional safety check: verify page data is valid before using it
+    if (preloadedPage->pixelData.empty() || preloadedPage->width <= 0 || preloadedPage->height <= 0) {
+        std::cerr << "App: Invalid preloaded page data for page " << m_currentPage 
+                  << ", falling back to direct render" << std::endl;
+        return false; // Page data is corrupted, fall back to direct rendering
+    }
+    
+    m_renderer->clear(255, 255, 255, 255);
+
+    int winW = m_renderer->getWindowWidth();
+    int winH = m_renderer->getWindowHeight();
+
+    int srcW = preloadedPage->width;
+    int srcH = preloadedPage->height;
+
+    // displayed page size after rotation
+    if (m_rotation % 180 == 0)
+    {
+        m_pageWidth = srcW;
+        m_pageHeight = srcH;
+    }
+    else
+    {
+        m_pageWidth = srcH;
+        m_pageHeight = srcW;
+    }
+
+    int posX = (winW - m_pageWidth) / 2 + m_scrollX;
+
+    int posY;
+    if (m_pageHeight <= winH)
+    {
+        if (m_topAlignWhenFits || m_forceTopAlignNextRender)
+            posY = 0;
+        else
+            posY = (winH - m_pageHeight) / 2;
+    }
+    else
+    {
+        posY = (winH - m_pageHeight) / 2 + m_scrollY;
+    }
+    m_forceTopAlignNextRender = false;
+
+    // Make a local copy of critical data to avoid race conditions during rendering
+    std::vector<uint8_t> localPixelData;
+    try {
+        localPixelData = preloadedPage->pixelData; // Copy pixel data locally
+        
+        // Final validation of local copy
+        if (localPixelData.empty()) {
+            std::cerr << "App: Local pixel data copy is empty for page " << m_currentPage << std::endl;
+            return false;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "App: Error copying pixel data for page " << m_currentPage 
+                  << ": " << e.what() << std::endl;
+        return false;
+    }
+
+    m_renderer->renderPageEx(localPixelData, srcW, srcH,
+                             posX, posY, m_pageWidth, m_pageHeight,
+                             static_cast<double>(m_rotation),
+                             currentFlipFlags());
+    
+    // Measure total render time for dynamic timeout
+    m_lastRenderDuration = SDL_GetTicks() - renderStart;
+    
+    return true; // Successfully rendered preloaded page
 }
 
 void App::renderUI()
@@ -766,6 +934,15 @@ void App::goToNextPage()
         alignToTopOfCurrentPage();
         updateScaleDisplayTime();
         updatePageDisplayTime();
+        markDirty();
+        
+        // Set cooldown timer to prevent rapid page changes during panning
+        m_lastPageChangeTime = SDL_GetTicks();
+        
+        // Request preloading of upcoming pages
+        if (m_pagePreloader) {
+            m_pagePreloader->requestPreload(m_currentPage, m_currentScale);
+        }
     }
 }
 
@@ -778,6 +955,15 @@ void App::goToPreviousPage()
         alignToTopOfCurrentPage();
         updateScaleDisplayTime();
         updatePageDisplayTime();
+        markDirty();
+        
+        // Set cooldown timer to prevent rapid page changes during panning
+        m_lastPageChangeTime = SDL_GetTicks();
+        
+        // Request preloading of upcoming pages
+        if (m_pagePreloader) {
+            m_pagePreloader->requestPreload(m_currentPage, m_currentScale);
+        }
     }
 }
 
@@ -790,26 +976,38 @@ void App::goToPage(int pageNum)
         alignToTopOfCurrentPage();
         updateScaleDisplayTime();
         updatePageDisplayTime();
+        markDirty();
+        
+        // Request preloading of upcoming pages
+        if (m_pagePreloader) {
+            m_pagePreloader->requestPreload(m_currentPage, m_currentScale);
+        }
     }
 }
 
 void App::zoom(int delta)
 {
-    int oldScale = m_currentScale;
-    m_currentScale += delta;
-    if (m_currentScale < 10)
-        m_currentScale = 10;
-    if (m_currentScale > 350)
-        m_currentScale = 350;
-
-    recenterScrollOnZoom(oldScale, m_currentScale);
-    clampScroll();
-    updateScaleDisplayTime();
-    updatePageDisplayTime();
+    // Accumulate zoom changes and track input timing for debouncing
+    auto now = std::chrono::steady_clock::now();
+    
+    // Add to pending zoom delta
+    m_pendingZoomDelta += delta;
+    m_lastZoomInputTime = now;
+    
+    // If there's already a pending zoom, don't apply immediately
+    // The render loop will check for settled input and apply the final zoom
 }
 
 void App::zoomTo(int scale)
 {
+    // Throttle zoom operations to prevent rapid cache clearing and bus errors
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastZoomTime).count();
+    if (elapsed < ZOOM_THROTTLE_MS) {
+        return; // Too soon, ignore this zoom request
+    }
+    m_lastZoomTime = now;
+
     int oldScale = m_currentScale;
     m_currentScale = scale;
     if (m_currentScale < 10)
@@ -821,10 +1019,54 @@ void App::zoomTo(int scale)
     clampScroll();
     updateScaleDisplayTime();
     updatePageDisplayTime();
+    markDirty();
+    
+    // Only trigger preloading if we're not in the middle of debouncing zoom input
+    // During debouncing, we'll trigger preloading once when the final zoom is applied
+    if (m_pagePreloader && oldScale != m_currentScale && !isZoomDebouncing()) {
+        m_pagePreloader->clearCache();
+        m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
+    }
+}
+
+void App::applyPendingZoom()
+{
+    if (m_pendingZoomDelta == 0) {
+        return; // No pending zoom to apply
+    }
+
+    int oldScale = m_currentScale;
+    m_currentScale += m_pendingZoomDelta;
+    if (m_currentScale < 10)
+        m_currentScale = 10;
+    if (m_currentScale > 350)
+        m_currentScale = 350;
+
+    recenterScrollOnZoom(oldScale, m_currentScale);
+    clampScroll();
+    updateScaleDisplayTime();
+    updatePageDisplayTime();
+    markDirty();
+    
+    // Clear cache and request bidirectional preloading at new scale
+    if (m_pagePreloader && oldScale != m_currentScale) {
+        m_pagePreloader->clearCache();
+        m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
+    }
+
+    // Reset pending zoom
+    m_pendingZoomDelta = 0;
+}
+
+bool App::isZoomDebouncing() const
+{
+    return m_pendingZoomDelta != 0;
 }
 
 void App::fitPageToWindow()
 {
+    int oldScale = m_currentScale; // Track old scale for preloader
+    
     int windowWidth = m_renderer->getWindowWidth();
     int windowHeight = m_renderer->getWindowHeight();
 
@@ -861,6 +1103,14 @@ void App::fitPageToWindow()
     m_scrollY = 0;
     updateScaleDisplayTime();
     updatePageDisplayTime();
+    markDirty();
+    
+    // Only trigger preloading if we're not in the middle of debouncing zoom input
+    // During debouncing, we'll trigger preloading once when the final zoom is applied
+    if (m_pagePreloader && oldScale != m_currentScale && !isZoomDebouncing()) {
+        m_pagePreloader->clearCache();
+        m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
+    }
 }
 
 void App::recenterScrollOnZoom(int oldScale, int newScale)
@@ -924,20 +1174,25 @@ void App::rotateClockwise()
     m_rotation = (m_rotation + 90) % 360;
     onPageChangedKeepZoom();
     alignToTopOfCurrentPage();
+    markDirty();
 }
 
 void App::toggleMirrorVertical()
 {
     m_mirrorV = !m_mirrorV;
+    markDirty();
 }
 
 void App::toggleMirrorHorizontal()
 {
     m_mirrorH = !m_mirrorH;
+    markDirty();
 }
 
 void App::fitPageToWidth()
 {
+    int oldScale = m_currentScale; // Track old scale for preloader
+    
     int windowWidth = m_renderer->getWindowWidth();
 
     // Use effective sizes so 90/270 rotation swaps W/H
@@ -986,6 +1241,14 @@ void App::fitPageToWidth()
     clampScroll();
     updateScaleDisplayTime();
     updatePageDisplayTime();
+    markDirty();
+    
+    // Only trigger preloading if we're not in the middle of debouncing zoom input
+    // During debouncing, we'll trigger preloading once when the final zoom is applied  
+    if (m_pagePreloader && oldScale != m_currentScale && !isZoomDebouncing()) {
+        m_pagePreloader->clearCache();
+        m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
+    }
 }
 
 void App::printAppState()
@@ -1034,73 +1297,118 @@ void App::closeGameControllers()
     }
 }
 
-void App::updateHeldPanning(float dt)
+bool App::updateHeldPanning(float dt)
 {
+    bool changed = false;
     float dx = 0.0f, dy = 0.0f;
 
-    if (m_dpadLeftHeld)
+    if (m_dpadLeftHeld) {
         dx += 1.0f;
-    if (m_dpadRightHeld)
+    }
+    if (m_dpadRightHeld) {
         dx -= 1.0f;
-    if (m_dpadUpHeld)
+    }
+    if (m_dpadUpHeld) {
         dy += 1.0f;
-    if (m_dpadDownHeld)
+    }
+    if (m_dpadDownHeld) {
         dy -= 1.0f;
+    }
 
+    // Check if we're in scroll timeout after a page change
+    bool inScrollTimeout = isInScrollTimeout();
+    
     if (dx != 0.0f || dy != 0.0f)
     {
-        float len = std::sqrt(dx * dx + dy * dy);
-        dx /= len;
-        dy /= len;
+        if (inScrollTimeout) {
+            // During scroll timeout, don't allow panning movement
+            // This prevents scrolling past the beginning of a new page
+            // But we still need to continue processing edge-turn logic below
+        } else {
+            float len = std::sqrt(dx * dx + dy * dy);
+            dx /= len;
+            dy /= len;
 
-        m_scrollX += static_cast<int>(dx * m_dpadPanSpeed * dt);
-        m_scrollY += static_cast<int>(dy * m_dpadPanSpeed * dt);
-        clampScroll();
+            int oldScrollX = m_scrollX;
+            int oldScrollY = m_scrollY;
+            
+            float moveX = dx * m_dpadPanSpeed * dt;
+            float moveY = dy * m_dpadPanSpeed * dt;
+            
+            // Ensure minimum movement of 1 pixel if there's any input
+            int pixelMoveX = static_cast<int>(moveX);
+            int pixelMoveY = static_cast<int>(moveY);
+            if (dx != 0.0f && pixelMoveX == 0) {
+                pixelMoveX = (dx > 0) ? 1 : -1;
+            }
+            if (dy != 0.0f && pixelMoveY == 0) {
+                pixelMoveY = (dy > 0) ? 1 : -1;
+            }
+            
+            m_scrollX += pixelMoveX;
+            m_scrollY += pixelMoveY;
+            clampScroll();
+            
+            if (m_scrollX != oldScrollX || m_scrollY != oldScrollY) {
+                changed = true;
+            }
+        }
     }
 
     // --- HORIZONTAL edge → page turn ---
     const int maxX = getMaxScrollX();
 
-    if (maxX == 0)
-    {
-        if (m_dpadRightHeld)
-            m_edgeTurnHoldRight += dt;
+    // Reset edge-turn timers during scroll timeout to prevent accumulated time from previous page
+    if (inScrollTimeout) {
+        m_edgeTurnHoldRight = 0.0f;
+        m_edgeTurnHoldLeft = 0.0f;
+        m_edgeTurnHoldUp = 0.0f;
+        m_edgeTurnHoldDown = 0.0f;
+    } else {
+        // Only accumulate edge-turn time when not in scroll timeout
+        if (maxX == 0)
+        {
+            if (m_dpadRightHeld)
+                m_edgeTurnHoldRight += dt;
+            else
+                m_edgeTurnHoldRight = 0.0f;
+            if (m_dpadLeftHeld)
+                m_edgeTurnHoldLeft += dt;
+            else
+                m_edgeTurnHoldLeft = 0.0f;
+        }
         else
-            m_edgeTurnHoldRight = 0.0f;
-        if (m_dpadLeftHeld)
-            m_edgeTurnHoldLeft += dt;
-        else
-            m_edgeTurnHoldLeft = 0.0f;
-    }
-    else
-    {
-        if (m_scrollX == -maxX && m_dpadRightHeld)
-            m_edgeTurnHoldRight += dt;
-        else
-            m_edgeTurnHoldRight = 0.0f;
-        if (m_scrollX == maxX && m_dpadLeftHeld)
-            m_edgeTurnHoldLeft += dt;
-        else
-            m_edgeTurnHoldLeft = 0.0f;
+        {
+            if (m_scrollX == -maxX && m_dpadRightHeld)
+                m_edgeTurnHoldRight += dt;
+            else
+                m_edgeTurnHoldRight = 0.0f;
+            if (m_scrollX == maxX && m_dpadLeftHeld)
+                m_edgeTurnHoldLeft += dt;
+            else
+                m_edgeTurnHoldLeft = 0.0f;
+        }
     }
 
     if (m_edgeTurnHoldRight >= m_edgeTurnThreshold)
     {
-        if (m_currentPage < m_pageCount - 1)
+        if (m_currentPage < m_pageCount - 1 && !isInPageChangeCooldown())
         {
             goToNextPage();
             m_scrollX = getMaxScrollX(); // appear at left edge
             clampScroll();
+            changed = true;
         }
         m_edgeTurnHoldRight = 0.0f;
     }
     else if (m_edgeTurnHoldLeft >= m_edgeTurnThreshold)
     {
-        if (m_currentPage > 0)
+        if (m_currentPage > 0 && !isInPageChangeCooldown())
         {
             goToPreviousPage();
             m_scrollX = -getMaxScrollX(); // appear at right edge
             clampScroll();
+            changed = true;
         }
         m_edgeTurnHoldLeft = 0.0f;
     }
@@ -1108,55 +1416,62 @@ void App::updateHeldPanning(float dt)
     // --- VERTICAL edge → page turn (NEW) ---
     const int maxY = getMaxScrollY();
 
-    if (maxY == 0)
-    {
-        // Page fits vertically: treat sustained up/down as page turns
-        if (m_dpadDownHeld)
-            m_edgeTurnHoldDown += dt;
+    if (!inScrollTimeout) {
+        // Only accumulate edge-turn time when not in scroll timeout
+        if (maxY == 0)
+        {
+            // Page fits vertically: treat sustained up/down as page turns
+            if (m_dpadDownHeld)
+                m_edgeTurnHoldDown += dt;
+            else
+                m_edgeTurnHoldDown = 0.0f;
+            if (m_dpadUpHeld)
+                m_edgeTurnHoldUp += dt;
+            else
+                m_edgeTurnHoldUp = 0.0f;
+        }
         else
-            m_edgeTurnHoldDown = 0.0f;
-        if (m_dpadUpHeld)
-            m_edgeTurnHoldUp += dt;
-        else
-            m_edgeTurnHoldUp = 0.0f;
-    }
-    else
-    {
-        // Bottom edge & still pushing down? (down moves view further down in your scheme: dy < 0)
-        if (m_scrollY == -maxY && m_dpadDownHeld)
-            m_edgeTurnHoldDown += dt;
-        else
-            m_edgeTurnHoldDown = 0.0f;
+        {
+            // Bottom edge & still pushing down? (down moves view further down in your scheme: dy < 0)
+            if (m_scrollY == -maxY && m_dpadDownHeld)
+                m_edgeTurnHoldDown += dt;
+            else
+                m_edgeTurnHoldDown = 0.0f;
 
-        // Top edge & still pushing up?
-        if (m_scrollY == maxY && m_dpadUpHeld)
-            m_edgeTurnHoldUp += dt;
-        else
-            m_edgeTurnHoldUp = 0.0f;
+            // Top edge & still pushing up?
+            if (m_scrollY == maxY && m_dpadUpHeld)
+                m_edgeTurnHoldUp += dt;
+            else
+                m_edgeTurnHoldUp = 0.0f;
+        }
     }
 
     if (m_edgeTurnHoldDown >= m_edgeTurnThreshold)
     {
-        if (m_currentPage < m_pageCount - 1)
+        if (m_currentPage < m_pageCount - 1 && !isInPageChangeCooldown())
         {
             goToNextPage();
             // Land at the top edge of the new page so motion feels continuous downward
             m_scrollY = getMaxScrollY();
             clampScroll();
+            changed = true;
         }
         m_edgeTurnHoldDown = 0.0f;
     }
     else if (m_edgeTurnHoldUp >= m_edgeTurnThreshold)
     {
-        if (m_currentPage > 0)
+        if (m_currentPage > 0 && !isInPageChangeCooldown())
         {
             goToPreviousPage();
             // Land at the bottom edge of the previous page
             m_scrollY = -getMaxScrollY();
             clampScroll();
+            changed = true;
         }
         m_edgeTurnHoldUp = 0.0f;
     }
+    
+    return changed;
 }
 
 int App::getMaxScrollX() const
@@ -1176,7 +1491,7 @@ void App::handleDpadNudgeRight()
     // Right nudge while already at right edge -> next page
     if (maxX == 0 || m_scrollX == -maxX)
     {
-        if (m_currentPage < m_pageCount - 1)
+        if (m_currentPage < m_pageCount - 1 && !isInPageChangeCooldown())
         {
             goToNextPage();
             m_scrollX = getMaxScrollX(); // appear at left edge of new page
@@ -1194,7 +1509,7 @@ void App::handleDpadNudgeLeft()
     // Left nudge while already at left edge -> previous page
     if (maxX == 0 || m_scrollX == maxX)
     {
-        if (m_currentPage > 0)
+        if (m_currentPage > 0 && !isInPageChangeCooldown())
         {
             goToPreviousPage();
             m_scrollX = -getMaxScrollX(); // appear at right edge of prev page
@@ -1212,7 +1527,7 @@ void App::handleDpadNudgeDown()
     // Down nudge while already at bottom edge -> next page
     if (maxY == 0 || m_scrollY == -maxY)
     {
-        if (m_currentPage < m_pageCount - 1)
+        if (m_currentPage < m_pageCount - 1 && !isInPageChangeCooldown())
         {
             goToNextPage();
             m_scrollY = getMaxScrollY(); // appear at top edge of new page
@@ -1230,7 +1545,7 @@ void App::handleDpadNudgeUp()
     // Up nudge while already at top edge -> previous page
     if (maxY == 0 || m_scrollY == maxY)
     {
-        if (m_currentPage > 0)
+        if (m_currentPage > 0 && !isInPageChangeCooldown())
         {
             goToPreviousPage();
             m_scrollY = -getMaxScrollY(); // appear at bottom edge of prev page

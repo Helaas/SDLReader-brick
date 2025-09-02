@@ -12,7 +12,7 @@ BUILD_DIR  := build
 TARGET   := $(BIN_DIR)/sdl_reader_cli
 
 # Object files
-OBJS := $(BUILD_DIR)/mupdf_document.o $(BUILD_DIR)/renderer.o $(BUILD_DIR)/text_renderer.o $(BUILD_DIR)/tg5040_power_handler.o $(BUILD_DIR)/app.o $(BUILD_DIR)/main.o
+OBJS := $(BUILD_DIR)/mupdf_document.o $(BUILD_DIR)/renderer.o $(BUILD_DIR)/text_renderer.o $(BUILD_DIR)/page_preloader.o $(BUILD_DIR)/tg5040_power_handler.o $(BUILD_DIR)/app.o $(BUILD_DIR)/main.o
 
 # Libraries (link order matters)
 LIBS := -lSDL2_ttf -lSDL2 \
