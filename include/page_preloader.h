@@ -100,7 +100,7 @@ private:
     std::mutex m_cacheMutex;
     
     // Configuration
-    static const size_t MAX_CACHE_SIZE = 8; // Maximum number of pages to keep in cache
+    static const size_t MAX_CACHE_SIZE = 20; // Maximum number of pages to keep in cache (increased for rapid navigation)
     int m_preloadCount = 1; // Number of pages to preload ahead
     
     // Track last request to avoid duplicate work

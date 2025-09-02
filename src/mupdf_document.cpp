@@ -125,28 +125,26 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int &width,
         throw std::runtime_error(errorMsg);
     }
 
-    // Check cache using effective scale for cache key to account for downsampling
-    float effectiveScale = baseScale * downsampleScale;
-    int effectiveZoom = static_cast<int>(effectiveScale * 100);
-    auto key = std::make_pair(pageNumber, effectiveZoom);
+    // Check cache using exact zoom level for cache key
+    auto key = std::make_pair(pageNumber, zoom); // zoom is already an integer percentage
     
     std::cout << "Render page " << pageNumber << ": zoom=" << zoom 
               << "%, baseScale=" << baseScale 
               << ", downsampleScale=" << downsampleScale 
-              << ", effectiveZoom=" << effectiveZoom << "%" << std::endl;
+              << ", exactZoom=" << zoom << "%" << std::endl;
     
     {
         std::lock_guard<std::mutex> lock(m_cacheMutex);
         auto it = m_cache.find(key);
         if (it != m_cache.end())
         {
-            std::cout << "Cache HIT for page " << pageNumber << " at effective zoom " << effectiveZoom << "%" << std::endl;
+            std::cout << "Cache HIT for page " << pageNumber << " at exact zoom " << zoom << "%" << std::endl;
             auto &[buffer, cachedWidth, cachedHeight] = it->second;
             width = cachedWidth;
             height = cachedHeight;
             return buffer;
         }
-        std::cout << "Cache MISS for page " << pageNumber << " at effective zoom " << effectiveZoom << "%" << std::endl;
+        std::cout << "Cache MISS for page " << pageNumber << " at exact zoom " << zoom << "%" << std::endl;
     }
 
     fz_matrix transform = fz_scale(baseScale * downsampleScale, baseScale * downsampleScale);

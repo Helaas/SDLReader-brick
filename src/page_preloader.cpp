@@ -4,6 +4,7 @@
 #include "app.h"
 #include <iostream>
 #include <algorithm>
+#include <chrono>
 
 PagePreloader::PagePreloader(App* app, Document* document) 
     : m_app(app), m_document(document)
@@ -36,6 +37,14 @@ void PagePreloader::stop() {
     }
     
     m_running = false;
+    
+    // Clear the queue to prevent processing more requests
+    {
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        std::queue<PreloadRequest> empty;
+        std::swap(m_preloadQueue, empty);
+    }
+    
     m_queueCondition.notify_all();
     
     if (m_workerThread.joinable()) {
@@ -79,10 +88,25 @@ void PagePreloader::requestPreload(int currentPage, int scale) {
         // Add requests for upcoming pages with priority
         int totalPages;
         {
+            // Check if app and document are still valid before accessing them
+            if (!m_app || !m_document) {
+                return; // App or document no longer available
+            }
+            
             // Lock the document mutex for thread-safe access
             std::lock_guard<std::mutex> docLock(m_app->getDocumentMutex());
+            if (!m_document) {
+                return; // Document might have been nulled between checks
+            }
             totalPages = m_document->getPageCount();
         }
+        
+        // Add current page first, then upcoming pages with priority
+        PreloadRequest currentRequest;
+        currentRequest.pageNumber = currentPage;
+        currentRequest.scale = scale;
+        currentRequest.priority = 0; // Current page has highest priority
+        m_preloadQueue.push(currentRequest);
         
         for (int i = 1; i <= m_preloadCount; ++i) {
             int nextPage = currentPage + i;
@@ -98,8 +122,16 @@ void PagePreloader::requestPreload(int currentPage, int scale) {
     
     m_queueCondition.notify_all();
     
-    // Clean up old cache entries in background
-    cleanupOldCacheEntries(currentPage, scale);
+    // Clean up old cache entries in background, but not too frequently
+    // to avoid cache thrashing during rapid navigation
+    static auto lastCleanup = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
+    auto timeSinceLastCleanup = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastCleanup);
+    
+    if (timeSinceLastCleanup.count() >= 1000) { // Only cleanup every 1 second
+        cleanupOldCacheEntries(currentPage, scale);
+        lastCleanup = now;
+    }
 }
 
 void PagePreloader::requestBidirectionalPreload(int currentPage, int scale) {
@@ -160,8 +192,16 @@ void PagePreloader::requestBidirectionalPreload(int currentPage, int scale) {
     
     m_queueCondition.notify_all();
     
-    // Clean up old cache entries in background
-    cleanupOldCacheEntries(currentPage, scale);
+    // Clean up old cache entries in background, but not too frequently  
+    // to avoid cache thrashing during rapid navigation
+    static auto lastBidirectionalCleanup = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
+    auto timeSinceLastCleanup = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastBidirectionalCleanup);
+    
+    if (timeSinceLastCleanup.count() >= 1000) { // Only cleanup every 1 second
+        cleanupOldCacheEntries(currentPage, scale);
+        lastBidirectionalCleanup = now;
+    }
 }
 
 std::shared_ptr<PagePreloader::PreloadedPage> PagePreloader::getPreloadedPage(int pageNumber, int scale) {
@@ -171,7 +211,16 @@ std::shared_ptr<PagePreloader::PreloadedPage> PagePreloader::getPreloadedPage(in
     auto it = m_preloadedPages.find(key);
     
     if (it != m_preloadedPages.end()) {
-        return it->second;
+        auto page = it->second;
+        // Additional safety check: ensure the page data is valid and complete
+        if (page && !page->pixelData.empty() && page->width > 0 && page->height > 0) {
+            return page;
+        } else {
+            // Page exists but data is invalid, remove it from cache
+            std::cerr << "PagePreloader: Found invalid cached page " << pageNumber 
+                      << ", removing from cache" << std::endl;
+            m_preloadedPages.erase(it);
+        }
     }
     
     return nullptr;
@@ -200,6 +249,12 @@ void PagePreloader::preloadWorker() {
         m_preloadQueue.pop();
         lock.unlock();
         
+        // Additional check after unlocking - make sure we're still running
+        // and that app/document are still valid
+        if (!m_running || !m_app || !m_document) {
+            continue;
+        }
+        
         // Check if page is already cached
         std::string key = getCacheKey(request.pageNumber, request.scale);
         {
@@ -226,8 +281,16 @@ void PagePreloader::preloadPage(const PreloadRequest& request) {
         // This helps detect corrupted PDF pages early
         bool pageValid = true;
         if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document)) {
+            // Check if app and document are still valid
+            if (!m_app || !m_document) {
+                return; // App or document no longer available
+            }
+            
             // Lock the document mutex for thread-safe access
             std::lock_guard<std::mutex> docLock(m_app->getDocumentMutex());
+            if (!m_document) {
+                return; // Document might have been nulled between checks
+            }
             pageValid = muDoc->isPageValid(request.pageNumber);
         }
         
@@ -243,12 +306,42 @@ void PagePreloader::preloadPage(const PreloadRequest& request) {
         int width, height;
         std::vector<uint8_t> pixelData;
         {
+            // Check if app and document are still valid
+            if (!m_app || !m_document) {
+                return; // App or document no longer available
+            }
+            
             // Lock the document mutex to ensure thread-safe access
             std::lock_guard<std::mutex> docLock(m_app->getDocumentMutex());
+            if (!m_document) {
+                return; // Document might have been nulled between checks
+            }
+            
             try {
+                // Additional check right before rendering
+                if (!m_running || !m_app || !m_document) {
+                    return; // Exit if anything became invalid
+                }
+                
+                // Check page bounds
+                int totalPages = m_document->getPageCount();
+                if (request.pageNumber < 0 || request.pageNumber >= totalPages) {
+                    std::cerr << "PagePreloader: Page " << request.pageNumber 
+                              << " is out of bounds (0-" << (totalPages - 1) << ")" << std::endl;
+                    return;
+                }
+                
                 pixelData = m_document->renderPage(
                     request.pageNumber, width, height, request.scale
                 );
+                
+                // Validate the render result
+                if (pixelData.empty() || width <= 0 || height <= 0) {
+                    std::cerr << "PagePreloader: Invalid render result for page " << request.pageNumber 
+                              << " (size: " << pixelData.size() << ", dims: " << width << "x" << height << ")" << std::endl;
+                    return;
+                }
+                
             } catch (const std::exception& e) {
                 std::cerr << "PagePreloader: Error preloading page " << request.pageNumber 
                           << ": " << e.what() << std::endl;
@@ -261,17 +354,38 @@ void PagePreloader::preloadPage(const PreloadRequest& request) {
             return;
         }
         
-        // Create preloaded page object
+        // Validate rendered data before caching
+        if (pixelData.empty() || width <= 0 || height <= 0) {
+            std::cerr << "PagePreloader: Invalid render data for page " << request.pageNumber 
+                      << ", skipping cache insertion" << std::endl;
+            return;
+        }
+        
+        // Additional size validation to prevent memory corruption
+        size_t expectedSize = static_cast<size_t>(width) * height * 3; // RGB format (3 bytes per pixel)
+        if (pixelData.size() != expectedSize) {
+            std::cerr << "PagePreloader: Pixel data size mismatch for page " << request.pageNumber 
+                      << " (expected: " << expectedSize << ", got: " << pixelData.size() << ")" << std::endl;
+            return;
+        }
+        
+        // Create preloaded page object with explicit copy to avoid race conditions
         auto preloadedPage = std::make_shared<PreloadedPage>();
-        preloadedPage->pixelData = std::move(pixelData);
+        preloadedPage->pixelData.reserve(pixelData.size());
+        preloadedPage->pixelData = pixelData; // Copy instead of move to be safer
         preloadedPage->width = width;
         preloadedPage->height = height;
         preloadedPage->scale = request.scale;
         preloadedPage->pageNumber = request.pageNumber;
         
-        // Add to cache
+        // Add to cache with additional validation
         {
             std::lock_guard<std::mutex> lock(m_cacheMutex);
+            
+            // Double-check we're still running before modifying cache
+            if (!m_running) {
+                return;
+            }
             
             // Enforce cache size limit
             if (m_preloadedPages.size() >= MAX_CACHE_SIZE) {
@@ -304,18 +418,20 @@ std::string PagePreloader::getCacheKey(int pageNumber, int scale) const {
 void PagePreloader::cleanupOldCacheEntries(int currentPage, int scale) {
     std::lock_guard<std::mutex> lock(m_cacheMutex);
     
-    // Remove pages that are too far behind or ahead
-    const int keepRange = m_preloadCount + 2; // Keep a few extra pages around current page
+    // Be more conservative with cleanup to avoid race conditions
+    // Keep a larger range around current page to account for rapid navigation
+    const int keepRange = (m_preloadCount * 2) + 5; // Much larger safety margin
     
     auto it = m_preloadedPages.begin();
     while (it != m_preloadedPages.end()) {
         int pageNumber = it->second->pageNumber;
         int pageScale = it->second->scale;
         
-        // Remove if page is too far from current page or wrong scale
+        // Only remove pages that are really far away or wrong scale
+        // Be more lenient to prevent cache thrashing during rapid navigation
         if (std::abs(pageNumber - currentPage) > keepRange || pageScale != scale) {
             std::cout << "PagePreloader: Cleaning up page " << pageNumber 
-                      << " (too far from current page " << currentPage << ")" << std::endl;
+                      << " (too far from current page " << currentPage << ", range=" << keepRange << ")" << std::endl;
             it = m_preloadedPages.erase(it);
         } else {
             ++it;

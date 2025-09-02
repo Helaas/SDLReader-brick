@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 #include <mutex>
+#include <chrono>
 
 class App
 {
@@ -152,7 +153,24 @@ private:
     float m_edgeTurnHoldUp{0.0f};
     float m_edgeTurnHoldDown{0.0f};
 
-    float m_edgeTurnThreshold{0.075f}; // seconds to dwell at edge before flipping
+    float m_edgeTurnThreshold{0.150f}; // seconds to dwell at edge before flipping
+
+    // Page change cooldown to prevent rapid page flipping during panning
+    Uint32 m_lastPageChangeTime{0};
+    static constexpr Uint32 PAGE_CHANGE_COOLDOWN = 300; // 300ms cooldown after page change
+    
+    // Scroll timeout after page change to prevent scrolling past beginning of new page
+    static constexpr Uint32 SCROLL_TIMEOUT_AFTER_PAGE_CHANGE = 300; // 300ms timeout for scrolling
+    
+    // Check if we're in page change cooldown period
+    bool isInPageChangeCooldown() const {
+        return (SDL_GetTicks() - m_lastPageChangeTime) < PAGE_CHANGE_COOLDOWN;
+    }
+    
+    // Check if we should block scrolling after a page change
+    bool isInScrollTimeout() const {
+        return (SDL_GetTicks() - m_lastPageChangeTime) < SCROLL_TIMEOUT_AFTER_PAGE_CHANGE;
+    }
 
     // Try a one-shot nudge; if at the edge, flip the page instead.
     void handleDpadNudgeRight();
@@ -207,6 +225,10 @@ private:
     // Page display timing
     Uint32 m_pageDisplayTime{0};
     static constexpr Uint32 PAGE_DISPLAY_DURATION = 2000; // 2 seconds
+    
+    // Zoom throttling to prevent rapid operations
+    std::chrono::steady_clock::time_point m_lastZoomTime;
+    static constexpr int ZOOM_THROTTLE_MS = 25; // 25ms minimum between zoom operations for smoother response
     
     // Rendering optimization
     bool m_needsRedraw{true}; // Flag to indicate when screen needs to be redrawn
