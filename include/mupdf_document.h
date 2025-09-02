@@ -33,6 +33,9 @@ public:
     int getPageCount() const override;
     void setMaxRenderSize(int width, int height);
     void close() override;
+    
+    // Validate if a page can be safely loaded (check for corruption)
+    bool isPageValid(int pageNumber);
 
 private:
     // Use smart pointers to manage MuPDF types safely

@@ -12,6 +12,7 @@
 #include <cstdint>
 
 class Document;
+class App;
 
 /**
  * @brief Preloads pages in a background thread for smooth page navigation
@@ -29,7 +30,7 @@ public:
         int pageNumber;
     };
 
-    PagePreloader(Document* document);
+    PagePreloader(App* app, Document* document);
     ~PagePreloader();
     
     /**
@@ -79,6 +80,7 @@ private:
     std::string getCacheKey(int pageNumber, int scale) const;
     void cleanupOldCacheEntries(int currentPage, int scale);
     
+    App* m_app;
     Document* m_document;
     std::thread m_workerThread;
     std::queue<PreloadRequest> m_preloadQueue;
@@ -92,7 +94,7 @@ private:
     
     // Configuration
     static const size_t MAX_CACHE_SIZE = 8; // Maximum number of pages to keep in cache
-    int m_preloadCount = 3; // Number of pages to preload ahead
+    int m_preloadCount = 1; // Number of pages to preload ahead
     
     // Track last request to avoid duplicate work
     int m_lastCurrentPage = -1;

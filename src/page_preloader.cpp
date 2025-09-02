@@ -1,11 +1,16 @@
 #include "page_preloader.h"
 #include "document.h"
+#include "mupdf_document.h"
+#include "app.h"
 #include <iostream>
 #include <algorithm>
 
-PagePreloader::PagePreloader(Document* document) 
-    : m_document(document)
+PagePreloader::PagePreloader(App* app, Document* document) 
+    : m_app(app), m_document(document)
 {
+    if (!m_app) {
+        throw std::invalid_argument("App cannot be null");
+    }
     if (!m_document) {
         throw std::invalid_argument("Document cannot be null");
     }
@@ -41,6 +46,14 @@ void PagePreloader::stop() {
 }
 
 void PagePreloader::requestPreload(int currentPage, int scale) {
+    if (!m_running) {
+        return; // Not running, ignore request
+    }
+    
+    if (!m_document) {
+        return; // No document available
+    }
+    
     // Avoid duplicate requests
     {
         std::lock_guard<std::mutex> lock(m_lastRequestMutex);
@@ -64,7 +77,13 @@ void PagePreloader::requestPreload(int currentPage, int scale) {
         std::swap(m_preloadQueue, empty);
         
         // Add requests for upcoming pages with priority
-        int totalPages = m_document->getPageCount();
+        int totalPages;
+        {
+            // Lock the document mutex for thread-safe access
+            std::lock_guard<std::mutex> docLock(m_app->getDocumentMutex());
+            totalPages = m_document->getPageCount();
+        }
+        
         for (int i = 1; i <= m_preloadCount; ++i) {
             int nextPage = currentPage + i;
             if (nextPage < totalPages) {
@@ -137,14 +156,49 @@ void PagePreloader::preloadWorker() {
 
 void PagePreloader::preloadPage(const PreloadRequest& request) {
     try {
+        // Check if we're still running before doing expensive work
+        if (!m_running) {
+            return;
+        }
+        
+        // Check if the page is valid before attempting to render it
+        // This helps detect corrupted PDF pages early
+        bool pageValid = true;
+        if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document)) {
+            // Lock the document mutex for thread-safe access
+            std::lock_guard<std::mutex> docLock(m_app->getDocumentMutex());
+            pageValid = muDoc->isPageValid(request.pageNumber);
+        }
+        
+        if (!pageValid) {
+            std::cerr << "PagePreloader: Skipping invalid/corrupted page " << request.pageNumber << std::endl;
+            return;
+        }
+        
         std::cout << "PagePreloader: Preloading page " << request.pageNumber 
                   << " at scale " << request.scale << std::endl;
         
-        // Render the page
+        // Render the page with thread-safe document access
         int width, height;
-        std::vector<uint8_t> pixelData = m_document->renderPage(
-            request.pageNumber, width, height, request.scale
-        );
+        std::vector<uint8_t> pixelData;
+        {
+            // Lock the document mutex to ensure thread-safe access
+            std::lock_guard<std::mutex> docLock(m_app->getDocumentMutex());
+            try {
+                pixelData = m_document->renderPage(
+                    request.pageNumber, width, height, request.scale
+                );
+            } catch (const std::exception& e) {
+                std::cerr << "PagePreloader: Error preloading page " << request.pageNumber 
+                          << ": " << e.what() << std::endl;
+                return; // Skip this page and continue
+            }
+        }
+        
+        // Check again if we're still running after the potentially long render operation
+        if (!m_running) {
+            return;
+        }
         
         // Create preloaded page object
         auto preloadedPage = std::make_shared<PreloadedPage>();
@@ -174,8 +228,11 @@ void PagePreloader::preloadPage(const PreloadRequest& request) {
         std::cout << "PagePreloader: Successfully preloaded page " << request.pageNumber << std::endl;
         
     } catch (const std::exception& e) {
-        std::cerr << "PagePreloader: Error preloading page " << request.pageNumber 
-                  << ": " << e.what() << std::endl;
+        // Only log error if we're still running (not shutting down)
+        if (m_running) {
+            std::cerr << "PagePreloader: Error preloading page " << request.pageNumber 
+                      << ": " << e.what() << std::endl;
+        }
     }
 }
 

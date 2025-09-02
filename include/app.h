@@ -13,6 +13,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <mutex>
 
 class App
 {
@@ -41,6 +42,9 @@ public:
     ~App();
 
     void run();
+
+    // Get document mutex for thread-safe access
+    std::mutex& getDocumentMutex() { return m_documentMutex; }
 
 private:
     // Document and Rendering Management
@@ -111,6 +115,10 @@ private:
     std::unique_ptr<Document> m_document;
     std::unique_ptr<TextRenderer> m_textRenderer;
     std::unique_ptr<PagePreloader> m_pagePreloader;
+    
+    // Mutex to protect document access from multiple threads
+    mutable std::mutex m_documentMutex;
+    
 #ifdef TG5040_PLATFORM
     std::unique_ptr<PowerHandler> m_powerHandler;
 #endif

@@ -99,7 +99,7 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
     initializeGameControllers();
     
     // Initialize page preloader
-    m_pagePreloader = std::make_unique<PagePreloader>(m_document.get());
+    m_pagePreloader = std::make_unique<PagePreloader>(this, m_document.get());
     m_pagePreloader->start();
     
     // Start preloading pages ahead of current page
@@ -586,7 +586,12 @@ void App::renderCurrentPage()
     int winH = m_renderer->getWindowHeight();
 
     int srcW, srcH;
-    std::vector<uint8_t> pixelData = m_document->renderPage(m_currentPage, srcW, srcH, m_currentScale);
+    std::vector<uint8_t> pixelData;
+    {
+        // Lock the document mutex to ensure thread-safe access
+        std::lock_guard<std::mutex> lock(m_documentMutex);
+        pixelData = m_document->renderPage(m_currentPage, srcW, srcH, m_currentScale);
+    }
 
     // displayed page size after rotation
     if (m_rotation % 180 == 0)
