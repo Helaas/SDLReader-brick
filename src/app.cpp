@@ -3,6 +3,7 @@
 #include "text_renderer.h"
 #include "document.h"
 #include "mupdf_document.h"
+#include "page_preloader.h"
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
 #endif
@@ -96,10 +97,22 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
 
     // Initialize game controllers
     initializeGameControllers();
+    
+    // Initialize page preloader
+    m_pagePreloader = std::make_unique<PagePreloader>(m_document.get());
+    m_pagePreloader->start();
+    
+    // Start preloading pages ahead of current page
+    m_pagePreloader->requestPreload(m_currentPage, m_currentScale);
 }
 
 App::~App()
 {
+    // Stop page preloader first
+    if (m_pagePreloader) {
+        m_pagePreloader->stop();
+    }
+    
 #ifdef TG5040_PLATFORM
     if (m_powerHandler) {
         m_powerHandler->stop();
@@ -561,6 +574,12 @@ void App::loadDocument()
 
 void App::renderCurrentPage()
 {
+    // Try to use preloaded page first
+    if (tryRenderPreloadedPage()) {
+        return;
+    }
+    
+    // Fall back to regular rendering if no preloaded page available
     m_renderer->clear(255, 255, 255, 255);
 
     int winW = m_renderer->getWindowWidth();
@@ -601,6 +620,62 @@ void App::renderCurrentPage()
                              posX, posY, m_pageWidth, m_pageHeight,
                              static_cast<double>(m_rotation),
                              currentFlipFlags());
+}
+
+bool App::tryRenderPreloadedPage()
+{
+    if (!m_pagePreloader) {
+        return false;
+    }
+    
+    // Try to get preloaded page
+    auto preloadedPage = m_pagePreloader->getPreloadedPage(m_currentPage, m_currentScale);
+    if (!preloadedPage) {
+        return false; // No preloaded page available
+    }
+    
+    m_renderer->clear(255, 255, 255, 255);
+
+    int winW = m_renderer->getWindowWidth();
+    int winH = m_renderer->getWindowHeight();
+
+    int srcW = preloadedPage->width;
+    int srcH = preloadedPage->height;
+
+    // displayed page size after rotation
+    if (m_rotation % 180 == 0)
+    {
+        m_pageWidth = srcW;
+        m_pageHeight = srcH;
+    }
+    else
+    {
+        m_pageWidth = srcH;
+        m_pageHeight = srcW;
+    }
+
+    int posX = (winW - m_pageWidth) / 2 + m_scrollX;
+
+    int posY;
+    if (m_pageHeight <= winH)
+    {
+        if (m_topAlignWhenFits || m_forceTopAlignNextRender)
+            posY = 0;
+        else
+            posY = (winH - m_pageHeight) / 2;
+    }
+    else
+    {
+        posY = (winH - m_pageHeight) / 2 + m_scrollY;
+    }
+    m_forceTopAlignNextRender = false;
+
+    m_renderer->renderPageEx(preloadedPage->pixelData, srcW, srcH,
+                             posX, posY, m_pageWidth, m_pageHeight,
+                             static_cast<double>(m_rotation),
+                             currentFlipFlags());
+    
+    return true; // Successfully rendered preloaded page
 }
 
 void App::renderUI()
@@ -766,6 +841,11 @@ void App::goToNextPage()
         alignToTopOfCurrentPage();
         updateScaleDisplayTime();
         updatePageDisplayTime();
+        
+        // Request preloading of upcoming pages
+        if (m_pagePreloader) {
+            m_pagePreloader->requestPreload(m_currentPage, m_currentScale);
+        }
     }
 }
 
@@ -778,6 +858,11 @@ void App::goToPreviousPage()
         alignToTopOfCurrentPage();
         updateScaleDisplayTime();
         updatePageDisplayTime();
+        
+        // Request preloading of upcoming pages
+        if (m_pagePreloader) {
+            m_pagePreloader->requestPreload(m_currentPage, m_currentScale);
+        }
     }
 }
 
@@ -790,6 +875,11 @@ void App::goToPage(int pageNum)
         alignToTopOfCurrentPage();
         updateScaleDisplayTime();
         updatePageDisplayTime();
+        
+        // Request preloading of upcoming pages
+        if (m_pagePreloader) {
+            m_pagePreloader->requestPreload(m_currentPage, m_currentScale);
+        }
     }
 }
 
@@ -806,6 +896,12 @@ void App::zoom(int delta)
     clampScroll();
     updateScaleDisplayTime();
     updatePageDisplayTime();
+    
+    // Clear cache and request preloading at new scale
+    if (m_pagePreloader && oldScale != m_currentScale) {
+        m_pagePreloader->clearCache();
+        m_pagePreloader->requestPreload(m_currentPage, m_currentScale);
+    }
 }
 
 void App::zoomTo(int scale)
@@ -821,6 +917,12 @@ void App::zoomTo(int scale)
     clampScroll();
     updateScaleDisplayTime();
     updatePageDisplayTime();
+    
+    // Clear cache and request preloading at new scale
+    if (m_pagePreloader && oldScale != m_currentScale) {
+        m_pagePreloader->clearCache();
+        m_pagePreloader->requestPreload(m_currentPage, m_currentScale);
+    }
 }
 
 void App::fitPageToWindow()

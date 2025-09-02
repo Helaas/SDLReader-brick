@@ -4,6 +4,7 @@
 #include "renderer.h"
 #include "document.h"
 #include "text_renderer.h"
+#include "page_preloader.h"
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
 #endif
@@ -46,6 +47,9 @@ private:
     void loadDocument();
     void renderCurrentPage();
     void renderUI();
+    
+    // Check if a preloaded page is available and use it
+    bool tryRenderPreloadedPage();
     
     // Error message display
     void showErrorMessage(const std::string& message);
@@ -106,6 +110,7 @@ private:
     std::unique_ptr<Renderer> m_renderer;
     std::unique_ptr<Document> m_document;
     std::unique_ptr<TextRenderer> m_textRenderer;
+    std::unique_ptr<PagePreloader> m_pagePreloader;
 #ifdef TG5040_PLATFORM
     std::unique_ptr<PowerHandler> m_powerHandler;
 #endif
