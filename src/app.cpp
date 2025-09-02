@@ -153,17 +153,24 @@ void App::run()
         m_prevTick = now;
 
         if (!m_inFakeSleep) {
-            // Normal rendering
-            updateHeldPanning(dt);
-            renderCurrentPage();
-            renderUI();
+            // Normal rendering - only render if something changed
+            bool panningChanged = updateHeldPanning(dt);
+            
+            if (m_needsRedraw || panningChanged) {
+                renderCurrentPage();
+                renderUI();
+                m_renderer->present();
+                m_needsRedraw = false;
+            }
         } else {
             // Fake sleep mode - render black screen
-            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 0, 0, 0, 255);
-            SDL_RenderClear(m_renderer->getSDLRenderer());
+            if (m_needsRedraw) {
+                SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 0, 0, 0, 255);
+                SDL_RenderClear(m_renderer->getSDLRenderer());
+                m_renderer->present();
+                m_needsRedraw = false;
+            }
         }
-        
-        m_renderer->present();
     }
 }
 
@@ -201,21 +208,25 @@ void App::handleEvent(const SDL_Event &event)
             m_scrollX -= 50;
             clampScroll();
             updatePageDisplayTime();
+            markDirty();
             break;
         case SDLK_LEFT:
             m_scrollX += 50;
             clampScroll();
             updatePageDisplayTime();
+            markDirty();
             break;
         case SDLK_UP:
             m_scrollY += 50;
             clampScroll();
             updatePageDisplayTime();
+            markDirty();
             break;
         case SDLK_DOWN:
             m_scrollY -= 50;
             clampScroll();
             updatePageDisplayTime();
+            markDirty();
             break;
         case SDLK_PAGEDOWN:
             goToNextPage();
@@ -394,6 +405,7 @@ void App::handleEvent(const SDL_Event &event)
             m_lastTouchY = static_cast<float>(event.motion.y);
             clampScroll();
             updatePageDisplayTime();
+            markDirty();
         }
         break;
     case SDL_CONTROLLERAXISMOTION:
@@ -563,6 +575,7 @@ void App::handleEvent(const SDL_Event &event)
     else if (action == AppAction::Resize)
     {
         fitPageToWindow();
+        markDirty();
     }
 }
 
@@ -846,6 +859,7 @@ void App::goToNextPage()
         alignToTopOfCurrentPage();
         updateScaleDisplayTime();
         updatePageDisplayTime();
+        markDirty();
         
         // Request preloading of upcoming pages
         if (m_pagePreloader) {
@@ -863,6 +877,7 @@ void App::goToPreviousPage()
         alignToTopOfCurrentPage();
         updateScaleDisplayTime();
         updatePageDisplayTime();
+        markDirty();
         
         // Request preloading of upcoming pages
         if (m_pagePreloader) {
@@ -901,11 +916,12 @@ void App::zoom(int delta)
     clampScroll();
     updateScaleDisplayTime();
     updatePageDisplayTime();
+    markDirty();
     
-    // Clear cache and request preloading at new scale
+    // Clear cache and request bidirectional preloading at new scale
     if (m_pagePreloader && oldScale != m_currentScale) {
         m_pagePreloader->clearCache();
-        m_pagePreloader->requestPreload(m_currentPage, m_currentScale);
+        m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
     }
 }
 
@@ -922,16 +938,19 @@ void App::zoomTo(int scale)
     clampScroll();
     updateScaleDisplayTime();
     updatePageDisplayTime();
+    markDirty();
     
-    // Clear cache and request preloading at new scale
+    // Clear cache and request bidirectional preloading at new scale
     if (m_pagePreloader && oldScale != m_currentScale) {
         m_pagePreloader->clearCache();
-        m_pagePreloader->requestPreload(m_currentPage, m_currentScale);
+        m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
     }
 }
 
 void App::fitPageToWindow()
 {
+    int oldScale = m_currentScale; // Track old scale for preloader
+    
     int windowWidth = m_renderer->getWindowWidth();
     int windowHeight = m_renderer->getWindowHeight();
 
@@ -968,6 +987,13 @@ void App::fitPageToWindow()
     m_scrollY = 0;
     updateScaleDisplayTime();
     updatePageDisplayTime();
+    markDirty();
+    
+    // Clear cache and request bidirectional preloading at new scale
+    if (m_pagePreloader && oldScale != m_currentScale) {
+        m_pagePreloader->clearCache();
+        m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
+    }
 }
 
 void App::recenterScrollOnZoom(int oldScale, int newScale)
@@ -1045,6 +1071,8 @@ void App::toggleMirrorHorizontal()
 
 void App::fitPageToWidth()
 {
+    int oldScale = m_currentScale; // Track old scale for preloader
+    
     int windowWidth = m_renderer->getWindowWidth();
 
     // Use effective sizes so 90/270 rotation swaps W/H
@@ -1093,6 +1121,13 @@ void App::fitPageToWidth()
     clampScroll();
     updateScaleDisplayTime();
     updatePageDisplayTime();
+    markDirty();
+    
+    // Clear cache and request bidirectional preloading at new scale
+    if (m_pagePreloader && oldScale != m_currentScale) {
+        m_pagePreloader->clearCache();
+        m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
+    }
 }
 
 void App::printAppState()
@@ -1141,18 +1176,23 @@ void App::closeGameControllers()
     }
 }
 
-void App::updateHeldPanning(float dt)
+bool App::updateHeldPanning(float dt)
 {
+    bool changed = false;
     float dx = 0.0f, dy = 0.0f;
 
-    if (m_dpadLeftHeld)
+    if (m_dpadLeftHeld) {
         dx += 1.0f;
-    if (m_dpadRightHeld)
+    }
+    if (m_dpadRightHeld) {
         dx -= 1.0f;
-    if (m_dpadUpHeld)
+    }
+    if (m_dpadUpHeld) {
         dy += 1.0f;
-    if (m_dpadDownHeld)
+    }
+    if (m_dpadDownHeld) {
         dy -= 1.0f;
+    }
 
     if (dx != 0.0f || dy != 0.0f)
     {
@@ -1160,9 +1200,29 @@ void App::updateHeldPanning(float dt)
         dx /= len;
         dy /= len;
 
-        m_scrollX += static_cast<int>(dx * m_dpadPanSpeed * dt);
-        m_scrollY += static_cast<int>(dy * m_dpadPanSpeed * dt);
+        int oldScrollX = m_scrollX;
+        int oldScrollY = m_scrollY;
+        
+        float moveX = dx * m_dpadPanSpeed * dt;
+        float moveY = dy * m_dpadPanSpeed * dt;
+        
+        // Ensure minimum movement of 1 pixel if there's any input
+        int pixelMoveX = static_cast<int>(moveX);
+        int pixelMoveY = static_cast<int>(moveY);
+        if (dx != 0.0f && pixelMoveX == 0) {
+            pixelMoveX = (dx > 0) ? 1 : -1;
+        }
+        if (dy != 0.0f && pixelMoveY == 0) {
+            pixelMoveY = (dy > 0) ? 1 : -1;
+        }
+        
+        m_scrollX += pixelMoveX;
+        m_scrollY += pixelMoveY;
         clampScroll();
+        
+        if (m_scrollX != oldScrollX || m_scrollY != oldScrollY) {
+            changed = true;
+        }
     }
 
     // --- HORIZONTAL edge → page turn ---
@@ -1198,6 +1258,7 @@ void App::updateHeldPanning(float dt)
             goToNextPage();
             m_scrollX = getMaxScrollX(); // appear at left edge
             clampScroll();
+            changed = true;
         }
         m_edgeTurnHoldRight = 0.0f;
     }
@@ -1208,6 +1269,7 @@ void App::updateHeldPanning(float dt)
             goToPreviousPage();
             m_scrollX = -getMaxScrollX(); // appear at right edge
             clampScroll();
+            changed = true;
         }
         m_edgeTurnHoldLeft = 0.0f;
     }
@@ -1250,6 +1312,7 @@ void App::updateHeldPanning(float dt)
             // Land at the top edge of the new page so motion feels continuous downward
             m_scrollY = getMaxScrollY();
             clampScroll();
+            changed = true;
         }
         m_edgeTurnHoldDown = 0.0f;
     }
@@ -1261,9 +1324,12 @@ void App::updateHeldPanning(float dt)
             // Land at the bottom edge of the previous page
             m_scrollY = -getMaxScrollY();
             clampScroll();
+            changed = true;
         }
         m_edgeTurnHoldUp = 0.0f;
     }
+    
+    return changed;
 }
 
 int App::getMaxScrollX() const

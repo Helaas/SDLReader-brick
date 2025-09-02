@@ -144,7 +144,7 @@ private:
     void closeGameControllers();
 
     // Per-frame panning when D-pad is held
-    void updateHeldPanning(float dt);
+    bool updateHeldPanning(float dt);
 
     // --- edge-turn timing ---
     float m_edgeTurnHoldRight{0.0f};
@@ -152,7 +152,7 @@ private:
     float m_edgeTurnHoldUp{0.0f};
     float m_edgeTurnHoldDown{0.0f};
 
-    float m_edgeTurnThreshold{0.15f}; // seconds to dwell at edge before flipping
+    float m_edgeTurnThreshold{0.075f}; // seconds to dwell at edge before flipping
 
     // Try a one-shot nudge; if at the edge, flip the page instead.
     void handleDpadNudgeRight();
@@ -207,6 +207,10 @@ private:
     // Page display timing
     Uint32 m_pageDisplayTime{0};
     static constexpr Uint32 PAGE_DISPLAY_DURATION = 2000; // 2 seconds
+    
+    // Rendering optimization
+    bool m_needsRedraw{true}; // Flag to indicate when screen needs to be redrawn
+    void markDirty() { m_needsRedraw = true; }
 };
 
 #endif // APP_H

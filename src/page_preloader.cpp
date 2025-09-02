@@ -102,6 +102,68 @@ void PagePreloader::requestPreload(int currentPage, int scale) {
     cleanupOldCacheEntries(currentPage, scale);
 }
 
+void PagePreloader::requestBidirectionalPreload(int currentPage, int scale) {
+    // Avoid duplicate requests
+    {
+        std::lock_guard<std::mutex> lock(m_lastRequestMutex);
+        if (currentPage == m_lastCurrentPage && scale == m_lastScale) {
+            return; // Same request as last time
+        }
+        m_lastCurrentPage = currentPage;
+        m_lastScale = scale;
+    }
+    
+    if (!m_running) {
+        return;
+    }
+    
+    // Clear old queue and add new bidirectional requests
+    {
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        
+        // Clear existing queue to prioritize new requests
+        std::queue<PreloadRequest> empty;
+        std::swap(m_preloadQueue, empty);
+        
+        // Get total pages for bounds checking
+        int totalPages;
+        {
+            // Lock the document mutex for thread-safe access
+            std::lock_guard<std::mutex> docLock(m_app->getDocumentMutex());
+            totalPages = m_document->getPageCount();
+        }
+        
+        // Add requests for previous pages (when zoom changes, we want to cache backwards too)
+        for (int i = 1; i <= m_preloadCount; ++i) {
+            int prevPage = currentPage - i;
+            if (prevPage >= 0) {
+                PreloadRequest request;
+                request.pageNumber = prevPage;
+                request.scale = scale;
+                request.priority = i + 100; // Lower priority than forward pages
+                m_preloadQueue.push(request);
+            }
+        }
+        
+        // Add requests for upcoming pages (higher priority)
+        for (int i = 1; i <= m_preloadCount; ++i) {
+            int nextPage = currentPage + i;
+            if (nextPage < totalPages) {
+                PreloadRequest request;
+                request.pageNumber = nextPage;
+                request.scale = scale;
+                request.priority = i; // Higher priority for forward pages
+                m_preloadQueue.push(request);
+            }
+        }
+    }
+    
+    m_queueCondition.notify_all();
+    
+    // Clean up old cache entries in background
+    cleanupOldCacheEntries(currentPage, scale);
+}
+
 std::shared_ptr<PagePreloader::PreloadedPage> PagePreloader::getPreloadedPage(int pageNumber, int scale) {
     std::lock_guard<std::mutex> lock(m_cacheMutex);
     
@@ -109,7 +171,6 @@ std::shared_ptr<PagePreloader::PreloadedPage> PagePreloader::getPreloadedPage(in
     auto it = m_preloadedPages.find(key);
     
     if (it != m_preloadedPages.end()) {
-        std::cout << "PagePreloader: Cache hit for page " << pageNumber << " at scale " << scale << std::endl;
         return it->second;
     }
     

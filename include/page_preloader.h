@@ -51,6 +51,13 @@ public:
     void requestPreload(int currentPage, int scale);
     
     /**
+     * Request bidirectional preloading when zoom changes
+     * @param currentPage The current page being viewed
+     * @param scale The new scale/zoom level
+     */
+    void requestBidirectionalPreload(int currentPage, int scale);
+    
+    /**
      * Get a preloaded page if available
      * @param pageNumber The page number to retrieve
      * @param scale The scale/zoom level
