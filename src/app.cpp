@@ -157,6 +157,16 @@ void App::run()
             // Normal rendering - only render if something changed
             bool panningChanged = updateHeldPanning(dt);
             
+            // Check for settled zoom input and apply pending zoom
+            if (m_pendingZoomDelta != 0) {
+                auto now = std::chrono::steady_clock::now();
+                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastZoomInputTime).count();
+                if (elapsed >= m_lastRenderDuration) {
+                    // Zoom input has settled, apply the final accumulated zoom
+                    applyPendingZoom();
+                }
+            }
+            
             if (m_needsRedraw || panningChanged) {
                 renderCurrentPage();
                 renderUI();
@@ -375,7 +385,7 @@ void App::handleEvent(const SDL_Event &event)
         {
             if (SDL_GetModState() & KMOD_CTRL)
             {
-                zoom(5);
+                zoom(10);
             }
             else if (!isInScrollTimeout())
             {
@@ -387,7 +397,7 @@ void App::handleEvent(const SDL_Event &event)
         {
             if (SDL_GetModState() & KMOD_CTRL)
             {
-                zoom(-5);
+                zoom(-10);
             }
             else if (!isInScrollTimeout())
             {
@@ -515,10 +525,10 @@ void App::handleEvent(const SDL_Event &event)
 
             // --- Y / B: zoom in/out ---
             case SDL_CONTROLLER_BUTTON_Y:
-                zoom(5);
+                zoom(10);
                 break;
             case SDL_CONTROLLER_BUTTON_B:
-                zoom(-5);
+                zoom(-10);
                 break;
 
             // --- X: Rotate ---
@@ -617,8 +627,10 @@ void App::loadDocument()
 
 void App::renderCurrentPage()
 {
+    Uint32 renderStart = SDL_GetTicks();
+    
     // Try to use preloaded page first
-    if (tryRenderPreloadedPage()) {
+    if (tryRenderPreloadedPage(renderStart)) {
         return;
     }
     
@@ -669,9 +681,12 @@ void App::renderCurrentPage()
                              posX, posY, m_pageWidth, m_pageHeight,
                              static_cast<double>(m_rotation),
                              currentFlipFlags());
+    
+    // Measure total render time for dynamic timeout
+    m_lastRenderDuration = SDL_GetTicks() - renderStart;
 }
 
-bool App::tryRenderPreloadedPage()
+bool App::tryRenderPreloadedPage(Uint32 renderStart)
 {
     if (!m_pagePreloader) {
         return false;
@@ -749,6 +764,9 @@ bool App::tryRenderPreloadedPage()
                              posX, posY, m_pageWidth, m_pageHeight,
                              static_cast<double>(m_rotation),
                              currentFlipFlags());
+    
+    // Measure total render time for dynamic timeout
+    m_lastRenderDuration = SDL_GetTicks() - renderStart;
     
     return true; // Successfully rendered preloaded page
 }
@@ -969,32 +987,15 @@ void App::goToPage(int pageNum)
 
 void App::zoom(int delta)
 {
-    // Throttle zoom operations to prevent rapid cache clearing and bus errors
+    // Accumulate zoom changes and track input timing for debouncing
     auto now = std::chrono::steady_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastZoomTime).count();
-    if (elapsed < ZOOM_THROTTLE_MS) {
-        return; // Too soon, ignore this zoom request
-    }
-    m_lastZoomTime = now;
-
-    int oldScale = m_currentScale;
-    m_currentScale += delta;
-    if (m_currentScale < 10)
-        m_currentScale = 10;
-    if (m_currentScale > 350)
-        m_currentScale = 350;
-
-    recenterScrollOnZoom(oldScale, m_currentScale);
-    clampScroll();
-    updateScaleDisplayTime();
-    updatePageDisplayTime();
-    markDirty();
     
-    // Clear cache and request bidirectional preloading at new scale
-    if (m_pagePreloader && oldScale != m_currentScale) {
-        m_pagePreloader->clearCache();
-        m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
-    }
+    // Add to pending zoom delta
+    m_pendingZoomDelta += delta;
+    m_lastZoomInputTime = now;
+    
+    // If there's already a pending zoom, don't apply immediately
+    // The render loop will check for settled input and apply the final zoom
 }
 
 void App::zoomTo(int scale)
@@ -1020,11 +1021,46 @@ void App::zoomTo(int scale)
     updatePageDisplayTime();
     markDirty();
     
+    // Only trigger preloading if we're not in the middle of debouncing zoom input
+    // During debouncing, we'll trigger preloading once when the final zoom is applied
+    if (m_pagePreloader && oldScale != m_currentScale && !isZoomDebouncing()) {
+        m_pagePreloader->clearCache();
+        m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
+    }
+}
+
+void App::applyPendingZoom()
+{
+    if (m_pendingZoomDelta == 0) {
+        return; // No pending zoom to apply
+    }
+
+    int oldScale = m_currentScale;
+    m_currentScale += m_pendingZoomDelta;
+    if (m_currentScale < 10)
+        m_currentScale = 10;
+    if (m_currentScale > 350)
+        m_currentScale = 350;
+
+    recenterScrollOnZoom(oldScale, m_currentScale);
+    clampScroll();
+    updateScaleDisplayTime();
+    updatePageDisplayTime();
+    markDirty();
+    
     // Clear cache and request bidirectional preloading at new scale
     if (m_pagePreloader && oldScale != m_currentScale) {
         m_pagePreloader->clearCache();
         m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
     }
+
+    // Reset pending zoom
+    m_pendingZoomDelta = 0;
+}
+
+bool App::isZoomDebouncing() const
+{
+    return m_pendingZoomDelta != 0;
 }
 
 void App::fitPageToWindow()
@@ -1069,8 +1105,9 @@ void App::fitPageToWindow()
     updatePageDisplayTime();
     markDirty();
     
-    // Clear cache and request bidirectional preloading at new scale
-    if (m_pagePreloader && oldScale != m_currentScale) {
+    // Only trigger preloading if we're not in the middle of debouncing zoom input
+    // During debouncing, we'll trigger preloading once when the final zoom is applied
+    if (m_pagePreloader && oldScale != m_currentScale && !isZoomDebouncing()) {
         m_pagePreloader->clearCache();
         m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
     }
@@ -1206,8 +1243,9 @@ void App::fitPageToWidth()
     updatePageDisplayTime();
     markDirty();
     
-    // Clear cache and request bidirectional preloading at new scale
-    if (m_pagePreloader && oldScale != m_currentScale) {
+    // Only trigger preloading if we're not in the middle of debouncing zoom input
+    // During debouncing, we'll trigger preloading once when the final zoom is applied  
+    if (m_pagePreloader && oldScale != m_currentScale && !isZoomDebouncing()) {
         m_pagePreloader->clearCache();
         m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
     }
