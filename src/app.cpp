@@ -217,32 +217,28 @@ void App::handleEvent(const SDL_Event &event)
             break;
         case SDLK_RIGHT:
             if (!isInScrollTimeout()) {
-                m_scrollX -= 50;
-                clampScroll();
+                handleDpadNudgeRight();
                 updatePageDisplayTime();
                 markDirty();
             }
             break;
         case SDLK_LEFT:
             if (!isInScrollTimeout()) {
-                m_scrollX += 50;
-                clampScroll();
+                handleDpadNudgeLeft();
                 updatePageDisplayTime();
                 markDirty();
             }
             break;
         case SDLK_UP:
             if (!isInScrollTimeout()) {
-                m_scrollY += 50;
-                clampScroll();
+                handleDpadNudgeUp();
                 updatePageDisplayTime();
                 markDirty();
             }
             break;
         case SDLK_DOWN:
             if (!isInScrollTimeout()) {
-                m_scrollY -= 50;
-                clampScroll();
+                handleDpadNudgeDown();
                 updatePageDisplayTime();
                 markDirty();
             }
@@ -1770,10 +1766,23 @@ void App::handleDpadNudgeRight()
     printf("DEBUG: Right nudge called - maxX=%d, scrollX=%d, condition=%s\n", 
            maxX, m_scrollX, (maxX == 0 || m_scrollX <= (-maxX + 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
     
-    // Right nudge while already at right edge -> always defer to progress bar system
+    // Right nudge while already at right edge
     if (maxX == 0 || m_scrollX <= (-maxX + 2)) // Use same tolerance as edge-turn system
     {
-        // At edge: never do immediate page change, always let progress bar system handle it
+        if (maxX == 0) {
+            // Page fits horizontally (fit-to-width): allow immediate page change via nudge
+            // The progress bar system will also work in parallel for sustained holds
+            if (m_edgeTurnHoldRight == 0.0f) // Only if no progress bar is currently running
+            {
+                if (m_currentPage < m_pageCount - 1 && !isInPageChangeCooldown())
+                {
+                    goToNextPage();
+                    m_scrollX = getMaxScrollX(); // appear at left edge of new page
+                    clampScroll();
+                }
+            }
+        }
+        // For zoomed pages (maxX > 0): always defer to progress bar system
         // This ensures a progress bar always appears when holding D-pad at edge
         return;
     }
@@ -1788,10 +1797,23 @@ void App::handleDpadNudgeLeft()
     printf("DEBUG: Left nudge called - maxX=%d, scrollX=%d, condition=%s\n", 
            maxX, m_scrollX, (maxX == 0 || m_scrollX >= (maxX - 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
     
-    // Left nudge while already at left edge -> always defer to progress bar system
+    // Left nudge while already at left edge
     if (maxX == 0 || m_scrollX >= (maxX - 2)) // Use same tolerance as edge-turn system
     {
-        // At edge: never do immediate page change, always let progress bar system handle it
+        if (maxX == 0) {
+            // Page fits horizontally (fit-to-width): allow immediate page change via nudge
+            // The progress bar system will also work in parallel for sustained holds
+            if (m_edgeTurnHoldLeft == 0.0f) // Only if no progress bar is currently running
+            {
+                if (m_currentPage > 0 && !isInPageChangeCooldown())
+                {
+                    goToPreviousPage();
+                    m_scrollX = -getMaxScrollX(); // appear at right edge of prev page
+                    clampScroll();
+                }
+            }
+        }
+        // For zoomed pages (maxX > 0): always defer to progress bar system
         // This ensures a progress bar always appears when holding D-pad at edge
         return;
     }
@@ -1806,10 +1828,23 @@ void App::handleDpadNudgeDown()
     printf("DEBUG: Down nudge called - maxY=%d, scrollY=%d, condition=%s\n", 
            maxY, m_scrollY, (maxY == 0 || m_scrollY <= (-maxY + 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
     
-    // Down nudge while already at bottom edge -> always defer to progress bar system
+    // Down nudge while already at bottom edge
     if (maxY == 0 || m_scrollY <= (-maxY + 2)) // Use same tolerance as edge-turn system
     {
-        // At edge: never do immediate page change, always let progress bar system handle it
+        if (maxY == 0) {
+            // Page fits vertically (fit-to-width): allow immediate page change via nudge
+            // The progress bar system will also work in parallel for sustained holds
+            if (m_edgeTurnHoldDown == 0.0f) // Only if no progress bar is currently running
+            {
+                if (m_currentPage < m_pageCount - 1 && !isInPageChangeCooldown())
+                {
+                    goToNextPage();
+                    m_scrollY = getMaxScrollY(); // appear at top edge of new page
+                    clampScroll();
+                }
+            }
+        }
+        // For zoomed pages (maxY > 0): always defer to progress bar system
         // This ensures a progress bar always appears when holding D-pad at edge
         return;
     }
@@ -1824,10 +1859,23 @@ void App::handleDpadNudgeUp()
     printf("DEBUG: Up nudge called - maxY=%d, scrollY=%d, condition=%s\n", 
            maxY, m_scrollY, (maxY == 0 || m_scrollY >= (maxY - 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
     
-    // Up nudge while already at top edge -> always defer to progress bar system
+    // Up nudge while already at top edge
     if (maxY == 0 || m_scrollY >= (maxY - 2)) // Use same tolerance as edge-turn system
     {
-        // At edge: never do immediate page change, always let progress bar system handle it
+        if (maxY == 0) {
+            // Page fits vertically (fit-to-width): allow immediate page change via nudge
+            // The progress bar system will also work in parallel for sustained holds
+            if (m_edgeTurnHoldUp == 0.0f) // Only if no progress bar is currently running
+            {
+                if (m_currentPage > 0 && !isInPageChangeCooldown())
+                {
+                    goToPreviousPage();
+                    m_scrollY = -getMaxScrollY(); // appear at bottom edge of prev page
+                    clampScroll();
+                }
+            }
+        }
+        // For zoomed pages (maxY > 0): always defer to progress bar system
         // This ensures a progress bar always appears when holding D-pad at edge
         return;
     }
