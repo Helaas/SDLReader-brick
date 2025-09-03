@@ -259,7 +259,8 @@ The SDL Reader supports the following keyboard, mouse, and game controller input
 | `Left/Right Stick Y-Axis`                 | Scroll vertically                                     |
                  
 *Note: Controller button names may vary depending on your controller type (Xbox, PlayStation, etc.). The mappings above use SDL2's standardized button names.*
-*Note 2: On Xbox controller, D-Pad Left & Right appear to trigger the Brick F1 & F2 functionality in addition to nudging*
+
+*Note 2: When using an Xbox controller, D-Pad Left & Right appear to trigger the Brick F1 & F2 functionality in addition to nudging.*
 
 ## Smart Edge Navigation
 
