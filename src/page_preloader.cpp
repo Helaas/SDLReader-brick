@@ -214,7 +214,34 @@ std::shared_ptr<PagePreloader::PreloadedPage> PagePreloader::getPreloadedPage(in
         auto page = it->second;
         // Additional safety check: ensure the page data is valid and complete
         if (page && !page->pixelData.empty() && page->width > 0 && page->height > 0) {
-            return page;
+            // Extra safety: check if the pixel data vector is not corrupted
+            try {
+                // Verify the vector is in a valid state by checking basic properties
+                size_t dataSize = page->pixelData.size();
+                const uint8_t* dataPtr = page->pixelData.data();
+                
+                // Basic sanity checks
+                if (dataPtr == nullptr && dataSize > 0) {
+                    std::cerr << "PagePreloader: Corrupted pixel data vector for page " << pageNumber << std::endl;
+                    m_preloadedPages.erase(it);
+                    return nullptr;
+                }
+                
+                // Check if the size makes sense (should be width * height * 3 for RGB)
+                size_t expectedSize = static_cast<size_t>(page->width) * static_cast<size_t>(page->height) * 3;
+                if (dataSize != expectedSize) {
+                    std::cerr << "PagePreloader: Pixel data size mismatch for page " << pageNumber 
+                              << " (expected: " << expectedSize << ", actual: " << dataSize << ")" << std::endl;
+                    m_preloadedPages.erase(it);
+                    return nullptr;
+                }
+                
+                return page;
+            } catch (...) {
+                std::cerr << "PagePreloader: Exception while validating cached page " << pageNumber 
+                          << ", removing from cache" << std::endl;
+                m_preloadedPages.erase(it);
+            }
         } else {
             // Page exists but data is invalid, remove it from cache
             std::cerr << "PagePreloader: Found invalid cached page " << pageNumber 
@@ -429,9 +456,24 @@ void PagePreloader::cleanupOldCacheEntries(int currentPage, int scale) {
         
         // Only remove pages that are really far away or wrong scale
         // Be more lenient to prevent cache thrashing during rapid navigation
-        if (std::abs(pageNumber - currentPage) > keepRange || pageScale != scale) {
-            std::cout << "PagePreloader: Cleaning up page " << pageNumber 
-                      << " (too far from current page " << currentPage << ", range=" << keepRange << ")" << std::endl;
+        bool tooFar = std::abs(pageNumber - currentPage) > keepRange;
+        bool wrongScale = pageScale != scale;
+        
+        if (tooFar || wrongScale) {
+            std::string reason;
+            if (tooFar && wrongScale) {
+                reason = "too far (distance=" + std::to_string(std::abs(pageNumber - currentPage)) + 
+                        ", range=" + std::to_string(keepRange) + ") and wrong scale (" + 
+                        std::to_string(pageScale) + " vs " + std::to_string(scale) + ")";
+            } else if (tooFar) {
+                reason = "too far from current page " + std::to_string(currentPage) + 
+                        " (distance=" + std::to_string(std::abs(pageNumber - currentPage)) + 
+                        ", range=" + std::to_string(keepRange) + ")";
+            } else {
+                reason = "wrong scale (" + std::to_string(pageScale) + " vs " + std::to_string(scale) + ")";
+            }
+            
+            std::cout << "PagePreloader: Cleaning up page " << pageNumber << " (" << reason << ")" << std::endl;
             it = m_preloadedPages.erase(it);
         } else {
             ++it;
