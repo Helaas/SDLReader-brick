@@ -217,32 +217,28 @@ void App::handleEvent(const SDL_Event &event)
             break;
         case SDLK_RIGHT:
             if (!isInScrollTimeout()) {
-                m_scrollX -= 50;
-                clampScroll();
+                handleDpadNudgeRight();
                 updatePageDisplayTime();
                 markDirty();
             }
             break;
         case SDLK_LEFT:
             if (!isInScrollTimeout()) {
-                m_scrollX += 50;
-                clampScroll();
+                handleDpadNudgeLeft();
                 updatePageDisplayTime();
                 markDirty();
             }
             break;
         case SDLK_UP:
             if (!isInScrollTimeout()) {
-                m_scrollY += 50;
-                clampScroll();
+                handleDpadNudgeUp();
                 updatePageDisplayTime();
                 markDirty();
             }
             break;
         case SDLK_DOWN:
             if (!isInScrollTimeout()) {
-                m_scrollY -= 50;
-                clampScroll();
+                handleDpadNudgeDown();
                 updatePageDisplayTime();
                 markDirty();
             }
@@ -570,15 +566,43 @@ void App::handleEvent(const SDL_Event &event)
             {
             case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
                 m_dpadRightHeld = false;
+                if (m_edgeTurnHoldRight > 0.0f) { // Only set cooldown if timer was actually running
+                    m_edgeTurnCooldownRight = SDL_GetTicks() / 1000.0f;
+                    printf("DEBUG: Right edge-turn cancelled, timer was %.3f, cooldown set to %.3f\n", 
+                           m_edgeTurnHoldRight, m_edgeTurnCooldownRight);
+                }
+                m_edgeTurnHoldRight = 0.0f; // Reset edge timer when button released
+                markDirty(); // Trigger redraw to hide progress indicator
                 break;
             case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
                 m_dpadLeftHeld = false;
+                if (m_edgeTurnHoldLeft > 0.0f) { // Only set cooldown if timer was actually running
+                    m_edgeTurnCooldownLeft = SDL_GetTicks() / 1000.0f;
+                    printf("DEBUG: Left edge-turn cancelled, timer was %.3f, cooldown set to %.3f\n", 
+                           m_edgeTurnHoldLeft, m_edgeTurnCooldownLeft);
+                }
+                m_edgeTurnHoldLeft = 0.0f; // Reset edge timer when button released
+                markDirty(); // Trigger redraw to hide progress indicator
                 break;
             case SDL_CONTROLLER_BUTTON_DPAD_UP:
                 m_dpadUpHeld = false;
+                if (m_edgeTurnHoldUp > 0.0f) { // Only set cooldown if timer was actually running
+                    m_edgeTurnCooldownUp = SDL_GetTicks() / 1000.0f;
+                    printf("DEBUG: Up edge-turn cancelled, timer was %.3f, cooldown set to %.3f\n", 
+                           m_edgeTurnHoldUp, m_edgeTurnCooldownUp);
+                }
+                m_edgeTurnHoldUp = 0.0f; // Reset edge timer when button released
+                markDirty(); // Trigger redraw to hide progress indicator
                 break;
             case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
                 m_dpadDownHeld = false;
+                if (m_edgeTurnHoldDown > 0.0f) { // Only set cooldown if timer was actually running
+                    m_edgeTurnCooldownDown = SDL_GetTicks() / 1000.0f;
+                    printf("DEBUG: Down edge-turn cancelled, timer was %.3f, cooldown set to %.3f\n", 
+                           m_edgeTurnHoldDown, m_edgeTurnCooldownDown);
+                }
+                m_edgeTurnHoldDown = 0.0f; // Reset edge timer when button released
+                markDirty(); // Trigger redraw to hide progress indicator
                 break;
             default:
                 break;
@@ -778,6 +802,20 @@ bool App::tryRenderPreloadedPage(Uint32 renderStart)
     // Make a local copy of critical data to avoid race conditions during rendering
     std::vector<uint8_t> localPixelData;
     try {
+        // Additional null check before accessing the shared_ptr
+        if (!preloadedPage) {
+            std::cerr << "App: PreloadedPage became null during rendering for page " << m_currentPage << std::endl;
+            return false;
+        }
+        
+        // Check if the pixel data vector is in a valid state before copying
+        if (preloadedPage->pixelData.data() == nullptr && !preloadedPage->pixelData.empty()) {
+            std::cerr << "App: PreloadedPage has corrupted pixel data for page " << m_currentPage << std::endl;
+            return false;
+        }
+        
+        // Reserve space first to avoid potential reallocation issues during copy
+        localPixelData.reserve(preloadedPage->pixelData.size());
         localPixelData = preloadedPage->pixelData; // Copy pixel data locally
         
         // Final validation of local copy
@@ -788,6 +826,9 @@ bool App::tryRenderPreloadedPage(Uint32 renderStart)
     } catch (const std::exception& e) {
         std::cerr << "App: Error copying pixel data for page " << m_currentPage 
                   << ": " << e.what() << std::endl;
+        return false;
+    } catch (...) {
+        std::cerr << "App: Unknown error copying pixel data for page " << m_currentPage << std::endl;
         return false;
     }
 
@@ -952,6 +993,90 @@ void App::renderUI()
             
             // Restore original font size
             m_textRenderer->setFontSize(100);
+        }
+    }
+    
+    // Render edge-turn progress indicator - only show when D-pad is actively held and scale >= 100%
+    bool dpadHeld = m_dpadLeftHeld || m_dpadRightHeld || m_dpadUpHeld || m_dpadDownHeld;
+    float maxEdgeHold = std::max({m_edgeTurnHoldRight, m_edgeTurnHoldLeft, m_edgeTurnHoldUp, m_edgeTurnHoldDown});
+    if (dpadHeld && maxEdgeHold > 0.0f && m_currentScale >= 100) {
+        float progress = maxEdgeHold / m_edgeTurnThreshold;
+        if (progress > 0.05f) { // Only show indicator after 5% progress to avoid flicker
+            // Determine which edge and direction
+            std::string direction;
+            int indicatorX = 0, indicatorY = 0;
+            int barWidth = 200, barHeight = 20;
+            
+            if (m_edgeTurnHoldRight > 0.0f && m_dpadRightHeld) {
+                direction = "Next Page";
+                indicatorX = currentWindowWidth - barWidth - 20;
+                indicatorY = currentWindowHeight / 2;
+            } else if (m_edgeTurnHoldLeft > 0.0f && m_dpadLeftHeld) {
+                direction = "Previous Page";
+                indicatorX = 20;
+                indicatorY = currentWindowHeight / 2;
+            } else if (m_edgeTurnHoldDown > 0.0f && m_dpadDownHeld) {
+                direction = "Next Page";
+                indicatorX = (currentWindowWidth - barWidth) / 2;
+                indicatorY = currentWindowHeight - 60;
+            } else if (m_edgeTurnHoldUp > 0.0f && m_dpadUpHeld) {
+                direction = "Previous Page";
+                indicatorX = (currentWindowWidth - barWidth) / 2;
+                indicatorY = 40;
+            }
+            
+            // Calculate text dimensions for better background sizing
+            int avgCharWidth = 10; // Slightly wider character width estimation for better text spacing
+            int textWidth = static_cast<int>(direction.length()) * avgCharWidth;
+            int textHeight = 20; // Approximate height at 120% font size
+            int textPadding = 12; // Increased padding around text for wider background
+            
+            // Position text above the progress bar
+            int textX = indicatorX + (barWidth - textWidth) / 2;
+            int textY = indicatorY - textHeight - textPadding - 5;
+            
+            // Draw text background container with semi-transparent background
+            SDL_Rect textBgRect = {
+                textX - textPadding, 
+                textY - textPadding, 
+                textWidth + 2 * textPadding, 
+                textHeight + 2 * textPadding
+            };
+            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 0, 0, 0, 180); // Semi-transparent black
+            SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
+            SDL_RenderFillRect(m_renderer->getSDLRenderer(), &textBgRect);
+            
+            // Draw text background border
+            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 255, 255, 255, 255);
+            SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &textBgRect);
+            
+            // Draw progress bar background
+            SDL_Rect bgRect = {indicatorX, indicatorY, barWidth, barHeight};
+            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 50, 50, 50, 150);
+            SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
+            SDL_RenderFillRect(m_renderer->getSDLRenderer(), &bgRect);
+            
+            // Draw progress bar
+            int progressWidth = static_cast<int>(barWidth * std::min(progress, 1.0f));
+            if (progressWidth > 0) {
+                SDL_Rect progressRect = {indicatorX, indicatorY, progressWidth, barHeight};
+                // Color transitions from yellow to green as it fills
+                uint8_t red = static_cast<uint8_t>(255 * (1.0f - progress));
+                uint8_t green = 255;
+                uint8_t blue = 0;
+                SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), red, green, blue, 200);
+                SDL_RenderFillRect(m_renderer->getSDLRenderer(), &progressRect);
+            }
+            
+            // Draw progress bar border
+            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 255, 255, 255, 255);
+            SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &bgRect);
+            
+            // Draw text label with white text
+            SDL_Color labelColor = {255, 255, 255, 255};
+            m_textRenderer->setFontSize(120); // 120% for visibility
+            m_textRenderer->renderText(direction, textX, textY, labelColor);
+            m_textRenderer->setFontSize(100); // Restore normal size
         }
     }
 }
@@ -1391,6 +1516,12 @@ bool App::updateHeldPanning(float dt)
 
     // --- HORIZONTAL edge → page turn ---
     const int maxX = getMaxScrollX();
+    
+    // Track old edge-turn values to detect changes for progress indicator updates
+    float oldEdgeTurnHoldRight = m_edgeTurnHoldRight;
+    float oldEdgeTurnHoldLeft = m_edgeTurnHoldLeft;
+    float oldEdgeTurnHoldUp = m_edgeTurnHoldUp;
+    float oldEdgeTurnHoldDown = m_edgeTurnHoldDown;
 
     // Reset edge-turn timers during scroll timeout to prevent accumulated time from previous page
     if (inScrollTimeout) {
@@ -1402,47 +1533,103 @@ bool App::updateHeldPanning(float dt)
         // Only accumulate edge-turn time when not in scroll timeout
         if (maxX == 0)
         {
-            if (m_dpadRightHeld)
+            static bool debugShown = false;
+            if (!debugShown) {
+                printf("DEBUG: Edge-turn conditions met - maxX=0, checking D-pad states\n");
+                debugShown = true;
+            }
+            if (m_dpadRightHeld) {
+                float oldTime = m_edgeTurnHoldRight;
                 m_edgeTurnHoldRight += dt;
-            else
+                if (oldTime == 0.0f && m_edgeTurnHoldRight > 0.0f) {
+                    printf("DEBUG: Right edge-turn timer started\n");
+                }
+            } else {
                 m_edgeTurnHoldRight = 0.0f;
-            if (m_dpadLeftHeld)
+            }
+            if (m_dpadLeftHeld) {
+                float oldTime = m_edgeTurnHoldLeft;
                 m_edgeTurnHoldLeft += dt;
-            else
+                if (oldTime == 0.0f && m_edgeTurnHoldLeft > 0.0f) {
+                    printf("DEBUG: Left edge-turn timer started\n");
+                }
+            } else {
                 m_edgeTurnHoldLeft = 0.0f;
+            }
         }
         else
         {
-            if (m_scrollX == -maxX && m_dpadRightHeld)
+            // Use small tolerance for edge detection to handle rounding issues
+            const int edgeTolerance = 2; // pixels
+            
+            static bool debugShown = false;
+            if (!debugShown) {
+                printf("DEBUG: Edge-turn conditions met - maxX=%d>0, scrollX=%d, checking scroll-based edges\n", maxX, m_scrollX);
+                debugShown = true;
+            }
+            
+            if (m_scrollX <= (-maxX + edgeTolerance) && m_dpadRightHeld) {
+                float oldTime = m_edgeTurnHoldRight;
                 m_edgeTurnHoldRight += dt;
-            else
+                if (oldTime == 0.0f && m_edgeTurnHoldRight > 0.0f) {
+                    printf("DEBUG: Right edge-turn timer started (scroll-based)\n");
+                }
+            } else {
                 m_edgeTurnHoldRight = 0.0f;
-            if (m_scrollX == maxX && m_dpadLeftHeld)
+            }
+            if (m_scrollX >= (maxX - edgeTolerance) && m_dpadLeftHeld) {
+                float oldTime = m_edgeTurnHoldLeft;
                 m_edgeTurnHoldLeft += dt;
-            else
+                if (oldTime == 0.0f && m_edgeTurnHoldLeft > 0.0f) {
+                    printf("DEBUG: Left edge-turn timer started (scroll-based)\n");
+                }
+            } else {
                 m_edgeTurnHoldLeft = 0.0f;
+            }
         }
     }
 
     if (m_edgeTurnHoldRight >= m_edgeTurnThreshold)
     {
-        if (m_currentPage < m_pageCount - 1 && !isInPageChangeCooldown())
+        // Check cooldown before allowing page change
+        float currentTime = SDL_GetTicks() / 1000.0f;
+        bool inCooldown = (m_edgeTurnCooldownRight > 0.0f) && 
+                         (currentTime - m_edgeTurnCooldownRight < m_edgeTurnCooldownDuration);
+        
+        if (!inCooldown && m_currentPage < m_pageCount - 1 && !isInPageChangeCooldown())
         {
+            printf("DEBUG: Right edge-turn completed - page change allowed\n");
             goToNextPage();
             m_scrollX = getMaxScrollX(); // appear at left edge
             clampScroll();
             changed = true;
         }
+        else if (inCooldown)
+        {
+            printf("DEBUG: Right edge-turn completed - blocked by cooldown (%.3fs remaining)\n", 
+                   m_edgeTurnCooldownDuration - (currentTime - m_edgeTurnCooldownRight));
+        }
         m_edgeTurnHoldRight = 0.0f;
     }
     else if (m_edgeTurnHoldLeft >= m_edgeTurnThreshold)
     {
-        if (m_currentPage > 0 && !isInPageChangeCooldown())
+        // Check cooldown before allowing page change
+        float currentTime = SDL_GetTicks() / 1000.0f;
+        bool inCooldown = (m_edgeTurnCooldownLeft > 0.0f) && 
+                         (currentTime - m_edgeTurnCooldownLeft < m_edgeTurnCooldownDuration);
+        
+        if (!inCooldown && m_currentPage > 0 && !isInPageChangeCooldown())
         {
+            printf("DEBUG: Left edge-turn completed - page change allowed\n");
             goToPreviousPage();
             m_scrollX = -getMaxScrollX(); // appear at right edge
             clampScroll();
             changed = true;
+        }
+        else if (inCooldown)
+        {
+            printf("DEBUG: Left edge-turn completed - blocked by cooldown (%.3fs remaining)\n", 
+                   m_edgeTurnCooldownDuration - (currentTime - m_edgeTurnCooldownLeft));
         }
         m_edgeTurnHoldLeft = 0.0f;
     }
@@ -1455,54 +1642,107 @@ bool App::updateHeldPanning(float dt)
         if (maxY == 0)
         {
             // Page fits vertically: treat sustained up/down as page turns
-            if (m_dpadDownHeld)
+            if (m_dpadDownHeld) {
+                float oldTime = m_edgeTurnHoldDown;
                 m_edgeTurnHoldDown += dt;
-            else
+                if (oldTime == 0.0f && m_edgeTurnHoldDown > 0.0f) {
+                    printf("DEBUG: Down edge-turn timer started (maxY=0)\n");
+                }
+            } else {
                 m_edgeTurnHoldDown = 0.0f;
-            if (m_dpadUpHeld)
+            }
+            if (m_dpadUpHeld) {
+                float oldTime = m_edgeTurnHoldUp;
                 m_edgeTurnHoldUp += dt;
-            else
+                if (oldTime == 0.0f && m_edgeTurnHoldUp > 0.0f) {
+                    printf("DEBUG: Up edge-turn timer started (maxY=0)\n");
+                }
+            } else {
                 m_edgeTurnHoldUp = 0.0f;
+            }
         }
         else
         {
+            // Use small tolerance for edge detection to handle rounding issues
+            const int edgeTolerance = 2; // pixels
+            
             // Bottom edge & still pushing down? (down moves view further down in your scheme: dy < 0)
-            if (m_scrollY == -maxY && m_dpadDownHeld)
+            if (m_scrollY <= (-maxY + edgeTolerance) && m_dpadDownHeld) {
+                float oldTime = m_edgeTurnHoldDown;
                 m_edgeTurnHoldDown += dt;
-            else
+                if (oldTime == 0.0f && m_edgeTurnHoldDown > 0.0f) {
+                    printf("DEBUG: Down edge-turn timer started (scroll-based)\n");
+                }
+            } else {
                 m_edgeTurnHoldDown = 0.0f;
+            }
 
             // Top edge & still pushing up?
-            if (m_scrollY == maxY && m_dpadUpHeld)
+            if (m_scrollY >= (maxY - edgeTolerance) && m_dpadUpHeld) {
+                float oldTime = m_edgeTurnHoldUp;
                 m_edgeTurnHoldUp += dt;
-            else
+                if (oldTime == 0.0f && m_edgeTurnHoldUp > 0.0f) {
+                    printf("DEBUG: Up edge-turn timer started (scroll-based)\n");
+                }
+            } else {
                 m_edgeTurnHoldUp = 0.0f;
+            }
         }
     }
 
     if (m_edgeTurnHoldDown >= m_edgeTurnThreshold)
     {
-        if (m_currentPage < m_pageCount - 1 && !isInPageChangeCooldown())
+        // Check cooldown before allowing page change
+        float currentTime = SDL_GetTicks() / 1000.0f;
+        bool inCooldown = (m_edgeTurnCooldownDown > 0.0f) && 
+                         (currentTime - m_edgeTurnCooldownDown < m_edgeTurnCooldownDuration);
+        
+        if (!inCooldown && m_currentPage < m_pageCount - 1 && !isInPageChangeCooldown())
         {
+            printf("DEBUG: Down edge-turn completed - page change allowed\n");
             goToNextPage();
             // Land at the top edge of the new page so motion feels continuous downward
             m_scrollY = getMaxScrollY();
             clampScroll();
             changed = true;
         }
+        else if (inCooldown)
+        {
+            printf("DEBUG: Down edge-turn completed - blocked by cooldown (%.3fs remaining)\n", 
+                   m_edgeTurnCooldownDuration - (currentTime - m_edgeTurnCooldownDown));
+        }
         m_edgeTurnHoldDown = 0.0f;
     }
     else if (m_edgeTurnHoldUp >= m_edgeTurnThreshold)
     {
-        if (m_currentPage > 0 && !isInPageChangeCooldown())
+        // Check cooldown before allowing page change
+        float currentTime = SDL_GetTicks() / 1000.0f;
+        bool inCooldown = (m_edgeTurnCooldownUp > 0.0f) && 
+                         (currentTime - m_edgeTurnCooldownUp < m_edgeTurnCooldownDuration);
+        
+        if (!inCooldown && m_currentPage > 0 && !isInPageChangeCooldown())
         {
+            printf("DEBUG: Up edge-turn completed - page change allowed\n");
             goToPreviousPage();
             // Land at the bottom edge of the previous page
             m_scrollY = -getMaxScrollY();
             clampScroll();
             changed = true;
         }
+        else if (inCooldown)
+        {
+            printf("DEBUG: Up edge-turn completed - blocked by cooldown (%.3fs remaining)\n", 
+                   m_edgeTurnCooldownDuration - (currentTime - m_edgeTurnCooldownUp));
+        }
         m_edgeTurnHoldUp = 0.0f;
+    }
+    
+    // Check if any edge-turn timing values changed and mark as dirty for progress indicator updates
+    if (m_edgeTurnHoldRight != oldEdgeTurnHoldRight ||
+        m_edgeTurnHoldLeft != oldEdgeTurnHoldLeft ||
+        m_edgeTurnHoldUp != oldEdgeTurnHoldUp ||
+        m_edgeTurnHoldDown != oldEdgeTurnHoldDown) {
+        markDirty();
     }
     
     return changed;
@@ -1522,15 +1762,28 @@ int App::getMaxScrollY() const
 void App::handleDpadNudgeRight()
 {
     const int maxX = getMaxScrollX();
-    // Right nudge while already at right edge -> next page
-    if (maxX == 0 || m_scrollX == -maxX)
+    
+    printf("DEBUG: Right nudge called - maxX=%d, scrollX=%d, condition=%s\n", 
+           maxX, m_scrollX, (maxX == 0 || m_scrollX <= (-maxX + 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
+    
+    // Right nudge while already at right edge
+    if (maxX == 0 || m_scrollX <= (-maxX + 2)) // Use same tolerance as edge-turn system
     {
-        if (m_currentPage < m_pageCount - 1 && !isInPageChangeCooldown())
-        {
-            goToNextPage();
-            m_scrollX = getMaxScrollX(); // appear at left edge of new page
-            clampScroll();
+        if (maxX == 0) {
+            // Page fits horizontally (fit-to-width): allow immediate page change via nudge
+            // The progress bar system will also work in parallel for sustained holds
+            if (m_edgeTurnHoldRight == 0.0f) // Only if no progress bar is currently running
+            {
+                if (m_currentPage < m_pageCount - 1 && !isInPageChangeCooldown())
+                {
+                    goToNextPage();
+                    m_scrollX = getMaxScrollX(); // appear at left edge of new page
+                    clampScroll();
+                }
+            }
         }
+        // For zoomed pages (maxX > 0): always defer to progress bar system
+        // This ensures a progress bar always appears when holding D-pad at edge
         return;
     }
     m_scrollX -= 50;
@@ -1540,15 +1793,28 @@ void App::handleDpadNudgeRight()
 void App::handleDpadNudgeLeft()
 {
     const int maxX = getMaxScrollX();
-    // Left nudge while already at left edge -> previous page
-    if (maxX == 0 || m_scrollX == maxX)
+    
+    printf("DEBUG: Left nudge called - maxX=%d, scrollX=%d, condition=%s\n", 
+           maxX, m_scrollX, (maxX == 0 || m_scrollX >= (maxX - 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
+    
+    // Left nudge while already at left edge
+    if (maxX == 0 || m_scrollX >= (maxX - 2)) // Use same tolerance as edge-turn system
     {
-        if (m_currentPage > 0 && !isInPageChangeCooldown())
-        {
-            goToPreviousPage();
-            m_scrollX = -getMaxScrollX(); // appear at right edge of prev page
-            clampScroll();
+        if (maxX == 0) {
+            // Page fits horizontally (fit-to-width): allow immediate page change via nudge
+            // The progress bar system will also work in parallel for sustained holds
+            if (m_edgeTurnHoldLeft == 0.0f) // Only if no progress bar is currently running
+            {
+                if (m_currentPage > 0 && !isInPageChangeCooldown())
+                {
+                    goToPreviousPage();
+                    m_scrollX = -getMaxScrollX(); // appear at right edge of prev page
+                    clampScroll();
+                }
+            }
         }
+        // For zoomed pages (maxX > 0): always defer to progress bar system
+        // This ensures a progress bar always appears when holding D-pad at edge
         return;
     }
     m_scrollX += 50;
@@ -1558,15 +1824,28 @@ void App::handleDpadNudgeLeft()
 void App::handleDpadNudgeDown()
 {
     const int maxY = getMaxScrollY();
-    // Down nudge while already at bottom edge -> next page
-    if (maxY == 0 || m_scrollY == -maxY)
+    
+    printf("DEBUG: Down nudge called - maxY=%d, scrollY=%d, condition=%s\n", 
+           maxY, m_scrollY, (maxY == 0 || m_scrollY <= (-maxY + 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
+    
+    // Down nudge while already at bottom edge
+    if (maxY == 0 || m_scrollY <= (-maxY + 2)) // Use same tolerance as edge-turn system
     {
-        if (m_currentPage < m_pageCount - 1 && !isInPageChangeCooldown())
-        {
-            goToNextPage();
-            m_scrollY = getMaxScrollY(); // appear at top edge of new page
-            clampScroll();
+        if (maxY == 0) {
+            // Page fits vertically (fit-to-width): allow immediate page change via nudge
+            // The progress bar system will also work in parallel for sustained holds
+            if (m_edgeTurnHoldDown == 0.0f) // Only if no progress bar is currently running
+            {
+                if (m_currentPage < m_pageCount - 1 && !isInPageChangeCooldown())
+                {
+                    goToNextPage();
+                    m_scrollY = getMaxScrollY(); // appear at top edge of new page
+                    clampScroll();
+                }
+            }
         }
+        // For zoomed pages (maxY > 0): always defer to progress bar system
+        // This ensures a progress bar always appears when holding D-pad at edge
         return;
     }
     m_scrollY -= 50;
@@ -1576,15 +1855,28 @@ void App::handleDpadNudgeDown()
 void App::handleDpadNudgeUp()
 {
     const int maxY = getMaxScrollY();
-    // Up nudge while already at top edge -> previous page
-    if (maxY == 0 || m_scrollY == maxY)
+    
+    printf("DEBUG: Up nudge called - maxY=%d, scrollY=%d, condition=%s\n", 
+           maxY, m_scrollY, (maxY == 0 || m_scrollY >= (maxY - 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
+    
+    // Up nudge while already at top edge
+    if (maxY == 0 || m_scrollY >= (maxY - 2)) // Use same tolerance as edge-turn system
     {
-        if (m_currentPage > 0 && !isInPageChangeCooldown())
-        {
-            goToPreviousPage();
-            m_scrollY = -getMaxScrollY(); // appear at bottom edge of prev page
-            clampScroll();
+        if (maxY == 0) {
+            // Page fits vertically (fit-to-width): allow immediate page change via nudge
+            // The progress bar system will also work in parallel for sustained holds
+            if (m_edgeTurnHoldUp == 0.0f) // Only if no progress bar is currently running
+            {
+                if (m_currentPage > 0 && !isInPageChangeCooldown())
+                {
+                    goToPreviousPage();
+                    m_scrollY = -getMaxScrollY(); // appear at bottom edge of prev page
+                    clampScroll();
+                }
+            }
         }
+        // For zoomed pages (maxY > 0): always defer to progress bar system
+        // This ensures a progress bar always appears when holding D-pad at edge
         return;
     }
     m_scrollY += 50;

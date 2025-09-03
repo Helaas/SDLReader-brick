@@ -15,6 +15,7 @@ A minimal document reader built using SDL2 and MuPDF supporting multiple documen
 ## Features
 * View PDF documents, comic book archives (CBZ/ZIP), and EPUB books.
 * Page navigation (next/previous page).
+* **Smart Edge Navigation**: When at zoomed ≥ 100% & at a page edge, hold D-pad for 300ms to turn pages with visual progress indicator.
 * Jump to specific page with `G` key (enter page number and press Enter).
 * Quick page jumping (±10 pages) with `[` and `]` keys.
 * Zoom in/out and fit page to width.
@@ -178,84 +179,112 @@ The bundle is completely self-contained and includes all necessary dependencies 
 The SDL Reader supports the following keyboard, mouse, and game controller inputs:
 
 ### TrimUI Brick Controls
-| Button/Input              | Action                               |
-| :------------------------ | :----------------------------------- |
-| **D-Pad**                 |                                      |
-| `D-Pad Up/Down/Left/Right`| Scroll/Pan in direction              |
-| **Shoulder Buttons**      |                                      |
-| `L1 (Left Shoulder)`      | Previous page                        |
-| `R1 (Right Shoulder)`     | Next page                            |
-| `L2 (Left Trigger)`       | Jump back 10 pages                   |
-| `R2 (Right Trigger)`      | Jump forward 10 pages                |
-| **Face Buttons**          |                                      |
-| `B`                       | Fit page to width                    |
-| `A`                       | Zoom out                             |
-| `X`                       | Zoom in                              |
-| `Y`                       | Rotate page clockwise (90°)          |
-| **Function Buttons**      |                                      |
-| `F1`                      | Reset page view                      |
-| `F2`                      | Zoom to 200%                         |
-| **System Buttons**        |                                      |
-| `Start`                   | Toggle horizontal mirror             |
-| `Select`                  | Toggle vertical mirror               |
-| `Menu`                    | Quit application                     |
+| Button/Input                               | Action                                               |
+| :----------------------------------------  | :-----------------------------------                 |
+| **D-Pad**                                  |                                                      |
+| `D-Pad Up/Down/Left/Right`                 | Scroll/Pan in direction                              |
+| `D-Pad (at page edge)`                     | Hold for 300ms to turn page (with progress indicator)|
+| **Shoulder Buttons**                       |                                                      |
+| `L1 (Left Shoulder)`                       | Previous page                                        |
+| `R1 (Right Shoulder)`                      | Next page                                            |
+| `L2 (Left Trigger)`                        | Jump back 10 pages                                   |
+| `R2 (Right Trigger)`                       | Jump forward 10 pages                                |
+| **Face Buttons**                           |                                                      |
+| `B`                                        | Fit page to width                                    |
+| `A`                                        | Zoom out                                             |
+| `X`                                        | Zoom in                                              |
+| `Y`                                        | Rotate page clockwise (90°)                          |
+| **Function Buttons**                       |                                                      |
+| `F1`                                       | Reset page view                                      |
+| `F2`                                       | Zoom to 200%                                         |
+| **System Buttons**                         |                                                      |
+| `Start`                                    | Toggle horizontal mirror                             |
+| `Select`                                   | Toggle vertical mirror                               |
+| `Menu`                                     | Quit application                                     |
 
 ### Keyboard Controls
-| Input                  | Action                                  |
-| :--------------------- | :-------------------------------------- |
-| `Q` or `Esc`           | Quit application                        |
-| `Right Arrow`          | Scroll right                            |
-| `Left Arrow`           | Scroll left                             |
-| `Up Arrow`             | Scroll up                               |
-| `Down Arrow`           | Scroll down                             |
-| `Page Down`            | Go to next page                         |
-| `Page Up`              | Go to previous page                     |
-| `+` (Plus)             | Zoom in                                 |
-| `-` (Minus)            | Zoom out                                |
-| `Numpad +` / `Numpad -`| Zoom in/out (numpad support)           |
-| `F`                    | Toggle Fullscreen                       |
-| `G`                    | Jump to Page                            |
-| `W`                    | Fit page to width                       |
-| `R`                    | Reset page view                         |
-| `Shift + R`            | Rotate page clockwise (90°)             |
-| `H`                    | Toggle horizontal mirror                |
-| `V`                    | Toggle vertical mirror                  |
-| `[` (Left Bracket)     | Jump back 10 pages                     |
-| `]` (Right Bracket)    | Jump forward 10 pages                  |
+| Input                                     | Action                                                |
+| :---------------------------------------- | :---------------------------------------------------- |
+| `Q` or `Esc`                              | Quit application                                      |
+| `Right Arrow`                             | Scroll right                                          |
+| `Left Arrow`                              | Scroll left                                           |
+| `Up Arrow`                                | Scroll up                                             |
+| `Down Arrow`                              | Scroll down                                           |
+| `Page Down`                               | Go to next page                                       |
+| `Page Up`                                 | Go to previous page                                   |
+| `+` (Plus)                                | Zoom in                                               |
+| `-` (Minus)                               | Zoom out                                              |
+| `Numpad +` / `Numpad -`                   | Zoom in/out (numpad support)                          |
+| `F`                                       | Toggle Fullscreen                                     |
+| `G`                                       | Jump to Page                                          |
+| `W`                                       | Fit page to width                                     |
+| `R`                                       | Reset page view                                       |
+| `Shift + R`                               | Rotate page clockwise (90°)                           |
+| `H`                                       | Toggle horizontal mirror                              |
+| `V`                                       | Toggle vertical mirror                                |
+| `[` (Left Bracket)                        | Jump back 10 pages                                    |
+| `]` (Right Bracket)                       | Jump forward 10 pages                                 |
 
 ### Mouse Controls
-| Input                     | Action                               |
-| :------------------------ | :----------------------------------- |
-| `Mouse Wheel Up`          | Scroll up                            |
-| `Mouse Wheel Down`        | Scroll down                          |
-| `Ctrl + Mouse Wheel Up`   | Zoom in                              |
-| `Ctrl + Mouse Wheel Down` | Zoom out                             |
-| `Left Click + Drag`       | Pan/Scroll                           |
+| Input                                     | Action                                                |
+| :---------------------------------------- | :---------------------------------------------------- |
+| `Mouse Wheel Up`                          | Scroll up                                             |
+| `Mouse Wheel Down`                        | Scroll down                                           |
+| `Ctrl + Mouse Wheel Up`                   | Zoom in                                               |
+| `Ctrl + Mouse Wheel Down`                 | Zoom out                                              |
+| `Left Click + Drag`                       | Pan/Scroll                                            |
 
 ### SDL2 Game Controller Controls
-| Button/Input              | Action                               |
-| :------------------------ | :----------------------------------- |
-| **D-Pad**                 |                                      |
-| `D-Pad Up/Down/Left/Right`| Scroll/Pan in direction              |
-| **Shoulder Buttons**      |                                      |
-| `L1 (Left Shoulder)`      | Previous page                        |
-| `R1 (Right Shoulder)`     | Next page                            |
-| `L2 (Left Trigger)`       | Jump back 10 pages                   |
-| `R2 (Right Trigger)`      | Jump forward 10 pages                |
-| **Face Buttons**          |                                      |
-| `A`                       | Fit page to width                    |
-| `B`                       | Zoom out                             |
-| `X`                       | Rotate page clockwise (90°)          |
-| `Y`                       | Zoom in                              |
-| **System Buttons**        |                                      |
-| `Start`                   | Toggle horizontal mirror             |
-| `Back/Select`             | Toggle vertical mirror               |
-| `Guide/Menu`              | Quit application                     |
-| **Analog Sticks**         |                                      |
-| `Left/Right Stick X-Axis` | Scroll horizontally                  |
-| `Left/Right Stick Y-Axis` | Scroll vertically                    |
-
+| Button/Input                              | Action                                                |
+| :---------------------------------------- | :---------------------------------------------------- |
+| **D-Pad**                                 |                                                       |
+| `D-Pad Up/Down/Left/Right`                | Scroll/Pan in direction                               |
+| `D-Pad (zoomed ≥ 100% & at page edge)`    | Hold for 300ms to turn page (with progress indicator) |
+| **Shoulder Buttons**                      |                                                       |
+| `L1 (Left Shoulder)`                      | Previous page                                         |
+| `R1 (Right Shoulder)`                     | Next page                                             |
+| `L2 (Left Trigger)`                       | Jump back 10 pages                                    |
+| `R2 (Right Trigger)`                      | Jump forward 10 pages                                 |
+| **Face Buttons**                          |                                                       |
+| `A`                                       | Fit page to width                                     |
+| `B`                                       | Zoom out                                              |
+| `X`                                       | Rotate page clockwise (90°)                           |
+| `Y`                                       | Zoom in                                               |
+| **System Buttons**                        |                                                       |
+| `Start`                                   | Toggle horizontal mirror                              |
+| `Back/Select`                             | Toggle vertical mirror                                |
+| `Guide/Menu`                              | Quit application                                      |
+| **Analog Sticks**                         |                                                       |
+| `Left/Right Stick X-Axis`                 | Scroll horizontally                                   |
+| `Left/Right Stick Y-Axis`                 | Scroll vertically                                     |
+                 
 *Note: Controller button names may vary depending on your controller type (Xbox, PlayStation, etc.). The mappings above use SDL2's standardized button names.*
+
+*Note 2: When using an Xbox controller, D-Pad Left & Right appear to trigger the Brick F1 & F2 functionality in addition to nudging.*
+
+## Smart Edge Navigation
+
+SDL Reader includes an intelligent edge navigation system for smooth page turning with game controllers:
+
+### How It Works
+- **Edge Detection**: When zoomed in ≥ 100%, using D-pad controls and reaching a page edge (left, right, top, or bottom), the system detects you're at the boundary
+- **Hold to Turn**: Continue holding the D-pad direction for 300ms to initiate page turning
+- **Visual Feedback**: A progress bar appears showing:
+  - Direction of pending page change (e.g., "Next Page", "Previous Page") 
+  - Progress indicator that fills as you approach the 300ms threshold
+  - Color transitions from yellow to green as the timer progresses
+- **Immediate Cancellation**: Release the D-pad before 300ms to stay on the current page
+- **Seamless Transition**: After page change, you appear at the appropriate edge of the new page for continuous navigation
+
+### When It Activates
+- **Fully Zoomed Out**: When the page fits entirely within the window
+- **At Scroll Limits**: When zoomed in and you've reached the maximum scroll position in any direction
+- **D-pad Only**: This feature works with game controller D-pads, not keyboard arrow keys
+
+### Benefits
+- **Prevents Accidental Page Changes**: No more accidentally flipping pages when trying to scroll
+- **Intuitive Control**: Natural feel for gaming device users
+- **Visual Clarity**: Always know when a page change is about to happen
 
 ## Project Structure
 ```

@@ -155,7 +155,14 @@ private:
     float m_edgeTurnHoldUp{0.0f};
     float m_edgeTurnHoldDown{0.0f};
 
-    float m_edgeTurnThreshold{0.150f}; // seconds to dwell at edge before flipping
+    float m_edgeTurnThreshold{0.300f}; // seconds to dwell at edge before flipping
+    
+    // Cooldown timestamps to prevent immediate nudges after edge-turn cancellation
+    float m_edgeTurnCooldownRight{0.0f};
+    float m_edgeTurnCooldownLeft{0.0f};
+    float m_edgeTurnCooldownUp{0.0f};
+    float m_edgeTurnCooldownDown{0.0f};
+    float m_edgeTurnCooldownDuration{0.5f}; // 500ms cooldown after cancellation
 
     // Page change cooldown to prevent rapid page flipping during panning
     Uint32 m_lastPageChangeTime{0};
