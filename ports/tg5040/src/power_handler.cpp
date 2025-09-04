@@ -131,11 +131,14 @@ void PowerHandler::handlePowerButtonEvent(const input_event& ev, std::chrono::st
         auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
         press_time = std::chrono::steady_clock::time_point{};
         
-        std::cout << "Power button released after " << duration_ms << "ms" << std::endl;
+        std::cout << "PowerHandler: Power button released after " << duration_ms << "ms" << std::endl;
         
         if (duration < SHORT_PRESS_MAX) {
             // Short press - try to sleep
+            std::cout << "PowerHandler: Short press detected - calling attemptSleep()" << std::endl;
             attemptSleep();
+        } else {
+            std::cout << "PowerHandler: Long press detected (duration >= " << SHORT_PRESS_MAX.count() << "ms)" << std::endl;
         }
     } else if (ev.value == 2 && press_time != std::chrono::steady_clock::time_point{}) {
         // Button held down
@@ -150,41 +153,54 @@ void PowerHandler::handlePowerButtonEvent(const input_event& ev, std::chrono::st
 
 void PowerHandler::attemptSleep()
 {
-    std::cout << "Attempting sleep..." << std::endl;
+    std::cout << "PowerHandler: Attempting sleep..." << std::endl;
     
-    if (requestSleep()) {
+    bool sleepSuccess = requestSleep();
+    std::cout << "PowerHandler: requestSleep() returned: " << (sleepSuccess ? "true" : "false") << std::endl;
+    
+    if (sleepSuccess) {
         // Real sleep succeeded
-        std::cout << "Real sleep successful" << std::endl;
+        std::cout << "PowerHandler: Real sleep successful" << std::endl;
         flushEvents(); // Flush events after waking
     } else {
         // Real sleep failed - enter fake sleep mode
-        std::cout << "Real sleep failed - entering fake sleep mode" << std::endl;
+        std::cout << "PowerHandler: Real sleep failed - entering fake sleep mode" << std::endl;
         enterFakeSleep();
     }
 }
 
 void PowerHandler::enterFakeSleep()
 {
+    std::cout << "PowerHandler: Entering fake sleep mode..." << std::endl;
     m_in_fake_sleep.store(true);
     m_fake_sleep_start_time = std::chrono::steady_clock::now(); // Track when fake sleep started
     
+    std::cout << "PowerHandler: Calling sleep mode callback with true..." << std::endl;
     if (m_sleepModeCallback) {
         m_sleepModeCallback(true); // Enable fake sleep (black screen, disable inputs)
+        std::cout << "PowerHandler: Sleep mode callback executed successfully" << std::endl;
+    } else {
+        std::cout << "PowerHandler: ERROR - No sleep mode callback registered!" << std::endl;
     }
     
-    std::cout << "Entered fake sleep mode - screen off, inputs disabled" << std::endl;
+    std::cout << "PowerHandler: Entered fake sleep mode - screen should be off, inputs disabled" << std::endl;
 }
 
 void PowerHandler::exitFakeSleep()
 {
+    std::cout << "PowerHandler: Exiting fake sleep mode..." << std::endl;
     m_in_fake_sleep.store(false);
     
+    std::cout << "PowerHandler: Calling sleep mode callback with false..." << std::endl;
     if (m_sleepModeCallback) {
         m_sleepModeCallback(false); // Disable fake sleep (restore screen, enable inputs)
+        std::cout << "PowerHandler: Sleep mode callback executed successfully" << std::endl;
+    } else {
+        std::cout << "PowerHandler: ERROR - No sleep mode callback registered!" << std::endl;
     }
     
     flushEvents(); // Flush any accumulated events
-    std::cout << "Exited fake sleep mode - screen restored, inputs enabled" << std::endl;
+    std::cout << "PowerHandler: Exited fake sleep mode - screen should be restored, inputs enabled" << std::endl;
 }
 
 void PowerHandler::tryDeepSleep()
@@ -244,7 +260,11 @@ bool PowerHandler::requestSleep()
         if (result == 0) {
             std::cout << "Suspend successful" << std::endl;
             return true;
+        } else {
+            std::cout << "Direct system suspend failed with result: " << result << std::endl;
         }
+    } else {
+        std::cout << "Direct system suspend not available (/sys/power/state not writable)" << std::endl;
     }
     
     // Method 2: Platform suspend script (NextUI secondary method)
@@ -254,7 +274,11 @@ bool PowerHandler::requestSleep()
         if (result == 0) {
             std::cout << "Platform suspend successful" << std::endl;
             return true;
+        } else {
+            std::cout << "Platform suspend script failed with result: " << result << std::endl;
         }
+    } else {
+        std::cout << "Platform suspend script not available (/mnt/SDCARD/System/bin/suspend not executable)" << std::endl;
     }
     
     // Method 3: Try freeze mode as fallback
@@ -264,11 +288,15 @@ bool PowerHandler::requestSleep()
         if (result == 0) {
             std::cout << "Freeze suspend successful" << std::endl;
             return true;
+        } else {
+            std::cout << "Freeze mode suspend failed with result: " << result << std::endl;
         }
+    } else {
+        std::cout << "Freeze mode suspend not available (/sys/power/state not writable)" << std::endl;
     }
     
-    std::cout << "Warning: No working suspend method found" << std::endl;
-    std::cerr << "ERROR: Could not suspend device - no working methods available" << std::endl;
+    std::cout << "Warning: No working suspend method found - will use fake sleep mode" << std::endl;
+    std::cerr << "INFO: Could not suspend device - falling back to fake sleep mode" << std::endl;
     
     return false;
 }
