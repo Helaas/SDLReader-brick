@@ -43,8 +43,10 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
         m_inFakeSleep = enterFakeSleep;
         if (enterFakeSleep) {
             std::cout << "App: Entering fake sleep mode - disabling inputs, screen will go black" << std::endl;
+            markDirty(); // Force screen redraw to show black screen
         } else {
             std::cout << "App: Exiting fake sleep mode - re-enabling inputs and screen" << std::endl;
+            markDirty(); // Force screen redraw to restore normal display
         }
     });
 #endif
