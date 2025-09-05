@@ -33,8 +33,7 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 * **EPUB** (`.epub`) - via MuPDF native support
 
 ## TrimUI Brick Control Scheme
-
-![TrimUI Brick Controls](.github/resources/tg5040 controls.png")
+![TrimUI Brick Controls](.github/resources/tg5040%20controls.png)
 
 ## Build Instructions
 This project supports multiple platforms with a unified build system.
