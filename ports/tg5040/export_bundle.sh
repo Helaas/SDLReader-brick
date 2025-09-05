@@ -69,6 +69,11 @@ else
     echo "Warning: res/ directory not found"
 fi
 
+# Copy documentation files
+echo "Copying documentation..."
+cp "$PROJECT_ROOT/README.md" "$BUNDLE_DIR/"
+cp "$PROJECT_ROOT/pak.json" "$BUNDLE_DIR/"
+
 # Make all binaries executable
 chmod +x "$BUNDLE_DIR/bin"/* 2>/dev/null || true
 
