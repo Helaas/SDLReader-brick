@@ -79,6 +79,21 @@ save_lastdir() {
 log "Starting browser. BASE=$BASE"
 
 ###############################################################################
+# First run: open docs.pdf if not done before
+###############################################################################
+FIRST_RUN_FLAG="./.first_run_done"
+if [ ! -f "$FIRST_RUN_FLAG" ] && [ -f "./res/docs.pdf" ]; then
+  log "First run: launching docs.pdf"
+  ./bin/sdl_reader_cli "./res/docs.pdf"
+  touch "$FIRST_RUN_FLAG"
+  log "First run completed, flag created"
+fi
+
+###############################################################################
+# Determine starting directory (remember last)
+###############################################################################
+
+###############################################################################
 # Build JSON ("items") for minui-list
 ###############################################################################
 build_json_list() {
@@ -263,7 +278,7 @@ browse() {
         echo "Working directory: $(pwd)" >> "$READER_LOG"
         echo "--- Binary output follows ---" >> "$READER_LOG"
         
-        exec ./bin/sdl_reader_cli "$sel_path" 2>&1 | tee -a "$READER_LOG"
+        ./bin/sdl_reader_cli "$sel_path" 2>&1 | tee -a "$READER_LOG"
         ;;
       *)
         log "Unknown selection type for path '$sel_path' (not dir, not supported document format). Rebuilding."
