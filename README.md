@@ -1,10 +1,11 @@
 # SDL Reader
 
-A minimal document reader built using SDL2 and MuPDF supporting multiple document formats 
+SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and MuPDF. It supports viewing PDF, CBZ/ZIP comic archives, and EPUB books with intuitive navigation, zooming, rotation, and mirroring features. Optimized for embedded devices like the TrimUI Brick (TG5040) running `NextUI`. It also runs on desktop platforms including macOS, Linux, and is a work in progress as Wii U homebrew.
 
 ## Table of Contents
 * [Features](#features)
 * [Supported Document Types](#supported-document-types)
+* [TrimUI Brick Control Scheme](#trimui-brick-control-scheme)
 * [Build Instructions](#build-instructions)
 * [Usage](#usage)
 * [TG5040 Deployment](#tg5040-deployment)
@@ -16,20 +17,24 @@ A minimal document reader built using SDL2 and MuPDF supporting multiple documen
 * View PDF documents, comic book archives (CBZ/ZIP), and EPUB books.
 * Page navigation (next/previous page).
 * **Smart Edge Navigation**: When at zoomed ≥ 100% & at a page edge, hold D-pad for 300ms to turn pages with visual progress indicator.
-* Jump to specific page with `G` key (enter page number and press Enter).
-* Quick page jumping (±10 pages) with `[` and `]` keys.
+* Quick page jumping (±10 pages).
 * Zoom in/out and fit page to width.
-* Page rotation (90° increments) with `Shift + R`.
-* Page mirroring (horizontal/vertical) with `H` and `V` keys.
+* Page rotation (90° increments).
+* Page mirroring (horizontal/vertical).
 * Scroll within pages (if zoomed in or page is larger than window).
-* Toggle fullscreen mode.
+* Toggle fullscreen mode (on Desktop).
+* Jump to specific page (On Desktop, enter page number and press Enter).
 * Basic UI overlay showing current page and zoom level.
-* Advanced power management for embedded devices (TG5040).
+* Power button support on embedded devices (TG5040).
 
 ## Supported Document Types
 * **PDF** (`.pdf`) - via MuPDF
 * **Comic Book Archive** (`.cbz`, `.zip` containing images) - via MuPDF native support
 * **EPUB** (`.epub`) - via MuPDF native support
+
+## TrimUI Brick Control Scheme
+
+![TrimUI Brick Controls](.github/resources/tg5040 controls.png")
 
 ## Build Instructions
 This project supports multiple platforms with a unified build system.
