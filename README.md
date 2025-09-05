@@ -1,6 +1,6 @@
 # SDL Reader
 
-SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and MuPDF. It supports viewing PDF, CBZ/ZIP comic archives, and EPUB books with intuitive navigation, zooming, rotation, and mirroring features. Optimized for embedded devices like the TrimUI Brick (TG5040) running `NextUI`. It also runs on desktop platforms including macOS, Linux, and is a work in progress as Wii U homebrew.
+SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and MuPDF. It supports viewing PDF, CBZ/ZIP comic archives, and EPUB books with intuitive navigation, zooming, rotation, and mirroring features. Optimized for embedded devices like the TrimUI Brick (TG5040) running [NextUI](https://github.com/LoveRetro/NextUI). It also runs on desktop platforms including macOS, Linux, and is a work in progress as Wii U homebrew.
 
 ## Table of Contents
 * [Features](#features)
@@ -23,14 +23,14 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 * Page mirroring (horizontal/vertical).
 * Scroll within pages (if zoomed in or page is larger than window).
 * Toggle fullscreen mode (on Desktop).
-* Jump to specific page (On Desktop, enter page number and press Enter).
+* Jump to specific page (on Desktop, Press `G`, enter page number and press Enter).
 * Basic UI overlay showing current page and zoom level.
 * Power button support on embedded devices (TG5040).
 
 ## Supported Document Types
-* **PDF** (`.pdf`) - via MuPDF
-* **Comic Book Archive** (`.cbz`, `.zip` containing images) - via MuPDF native support
-* **EPUB** (`.epub`) - via MuPDF native support
+* **PDF** (`.pdf`)
+* **Comic Book Archive** (`.cbz`, `.zip` containing images)
+* **EPUB** (`.epub`)
 
 ## TrimUI Brick Control Scheme
 ![TrimUI Brick Controls](.github/resources/tg5040%20controls.png)
@@ -141,7 +141,7 @@ cd ports/linux && make install-deps
 - **Custom Input Handling**: Gamepad and touch screen support
 
 ## Usage
-After building, run the executable from your project root, providing the path to a PDF or DjVu file as an argument:
+After building, run the executable from your project root, providing the path to a PDF, CBZ or EPUB file as an argument:
 
 ```bash
 ./bin/sdl_reader_cli path/to/your_document.pdf
@@ -344,5 +344,11 @@ Key architectural highlights:
 - **Scalable design** for easy addition of new platforms
 
 # Acknowledgements
+- <a href="https://github.com/hito16" target="_blank" rel="noopener noreferrer"><img src="https://github.com/hito16.png" alt="@hito16" width="18" height="18" style="border-radius:50%"> hito16</a>, for starting the original SDl Reader project.
+- [rofl0r/SDLBook](https://github.com/rofl0r/SDLBook), for inspiring hito16.
+- [LoveRetro/NextUI](https://github.com/LoveRetro/NextUI), for creating an excellent OS for the TrimUI Brick.
+- <a href="https://github.com/josegonzalez" target="_blank" rel="noopener noreferrer"><img src="https://github.com/josegonzalez.png" alt="@josegonzalez" width="18" height="18" style="border-radius:50%"> josegonzalez</a>, for minui-list and countless other tools.
+- [UncleJunVIP/nextui-pak-store](https://github.com/UncleJunVIP/nextui-pak-store) for the Pak Store
+- [Claude.ai](https://claude.ai), for creating Sonnet 4. I’m not a C++ programmer, but Sonnet gave me a fighting chance at getting this done in a reasonable timeframe.
 
-This project was inspired by SDLBook.
+
