@@ -351,4 +351,5 @@ Key architectural highlights:
 - [UncleJunVIP/nextui-pak-store](https://github.com/UncleJunVIP/nextui-pak-store) for the Pak Store
 - [Claude.ai](https://claude.ai), for creating Sonnet 4. I’m not a C++ programmer, but Sonnet gave me a fighting chance at getting this done in a reasonable timeframe.
 
-
+# License
+In order to comply with the MuPDF license, this project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). See the [LICENSE](LICENSE) file for details.
