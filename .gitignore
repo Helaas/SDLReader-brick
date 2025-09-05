@@ -12,3 +12,6 @@
 /ports/tg5040/pak/res/*
 !/ports/tg5040/pak/res/docs.pdf
 /ports/tg5040/pak/bin/sdl_reader_cli
+
+# Zipped bundle
+SDLReader.pak.zip

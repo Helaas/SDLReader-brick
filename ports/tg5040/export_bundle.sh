@@ -16,6 +16,7 @@ TEMP_DIR=$(mktemp -d)
 [ -f "$BUNDLE_DIR/bin/jq" ] && cp "$BUNDLE_DIR/bin/jq" "$TEMP_DIR/"
 [ -f "$BUNDLE_DIR/bin/minui-list" ] && cp "$BUNDLE_DIR/bin/minui-list" "$TEMP_DIR/"
 [ -f "$BUNDLE_DIR/launch.sh" ] && cp "$BUNDLE_DIR/launch.sh" "$TEMP_DIR/"
+[ -f "$BUNDLE_DIR/res/docs.pdf" ] && cp "$BUNDLE_DIR/res/docs.pdf" "$TEMP_DIR/docs.pdf"
 
 rm -rf "$BUNDLE_DIR"
 mkdir -p "$BUNDLE_DIR/bin" "$BUNDLE_DIR/lib" "$BUNDLE_DIR/res"
@@ -24,6 +25,7 @@ mkdir -p "$BUNDLE_DIR/bin" "$BUNDLE_DIR/lib" "$BUNDLE_DIR/res"
 [ -f "$TEMP_DIR/jq" ] && cp "$TEMP_DIR/jq" "$BUNDLE_DIR/bin/"
 [ -f "$TEMP_DIR/minui-list" ] && cp "$TEMP_DIR/minui-list" "$BUNDLE_DIR/bin/"
 [ -f "$TEMP_DIR/launch.sh" ] && cp "$TEMP_DIR/launch.sh" "$BUNDLE_DIR/"
+[ -f "$TEMP_DIR/docs.pdf" ] && cp "$TEMP_DIR/docs.pdf" "$BUNDLE_DIR/res/docs.pdf"
 rm -rf "$TEMP_DIR"
 
 # Copy bin contents from existing pak folder
@@ -61,6 +63,8 @@ fi
 if [ -d "$PROJECT_ROOT/res" ]; then
     echo "Copying resources..."
     cp -a "$PROJECT_ROOT/res/." "$BUNDLE_DIR/res/"
+    # If docs.pdf was preserved, restore it after copying
+    [ -f "$TEMP_DIR/docs.pdf" ] && cp "$TEMP_DIR/docs.pdf" "$BUNDLE_DIR/res/docs.pdf"
 else
     echo "Warning: res/ directory not found"
 fi
@@ -68,7 +72,18 @@ fi
 # Make all binaries executable
 chmod +x "$BUNDLE_DIR/bin"/* 2>/dev/null || true
 
+# Zip the bundle
+echo "Creating SDLReader.pak.zip..."
+if ! command -v zip &> /dev/null; then
+    echo "Installing zip..."
+    apt update && apt install -y zip
+fi
+rm -f "$PROJECT_ROOT/SDLReader.pak.zip"
+cd "$BUNDLE_DIR"
+zip -r "$PROJECT_ROOT/SDLReader.pak.zip" .
+
 echo ""
 echo "TG5040 bundle exported successfully to: $BUNDLE_DIR"
+echo "Zipped bundle: $PROJECT_ROOT/SDLReader.pak.zip"
 echo "Bundle contents:"
 find "$BUNDLE_DIR" -type f | sort
