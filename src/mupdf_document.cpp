@@ -205,22 +205,42 @@ int MuPdfDocument::getPageWidthNative(int pageNumber)
 {
     if (!m_ctx || !m_doc)
         return 0;
+    
+    // Validate page number first
+    if (pageNumber < 0 || pageNumber >= m_pageCount) {
+        return 0;
+    }
 
     fz_context *ctx = m_ctx.get();
     fz_document *doc = m_doc.get();
+    
+    // Additional safety check
+    if (!ctx || !doc) {
+        return 0;
+    }
+    
     int width = 0;
+    fz_page *page = nullptr;
     
     fz_var(width);
+    fz_var(page);
 
     fz_try(ctx)
     {
-        fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        page = fz_load_page(ctx, doc, pageNumber);
+        if (!page) {
+            fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to load page");
+        }
         fz_rect bounds = fz_bound_page(ctx, page);
         width = static_cast<int>(bounds.x1 - bounds.x0);
         fz_drop_page(ctx, page);
+        page = nullptr;
     }
     fz_catch(ctx)
     {
+        if (page) {
+            fz_drop_page(ctx, page);
+        }
         width = 0;
     }
 
@@ -231,22 +251,42 @@ int MuPdfDocument::getPageHeightNative(int pageNumber)
 {
     if (!m_ctx || !m_doc)
         return 0;
+    
+    // Validate page number first
+    if (pageNumber < 0 || pageNumber >= m_pageCount) {
+        return 0;
+    }
 
     fz_context *ctx = m_ctx.get();
     fz_document *doc = m_doc.get();
+    
+    // Additional safety check
+    if (!ctx || !doc) {
+        return 0;
+    }
+    
     int height = 0;
+    fz_page *page = nullptr;
     
     fz_var(height);
+    fz_var(page);
 
     fz_try(ctx)
     {
-        fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        page = fz_load_page(ctx, doc, pageNumber);
+        if (!page) {
+            fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to load page");
+        }
         fz_rect bounds = fz_bound_page(ctx, page);
         height = static_cast<int>(bounds.y1 - bounds.y0);
         fz_drop_page(ctx, page);
+        page = nullptr;
     }
     fz_catch(ctx)
     {
+        if (page) {
+            fz_drop_page(ctx, page);
+        }
         height = 0;
     }
 
@@ -257,19 +297,36 @@ int MuPdfDocument::getPageWidthEffective(int pageNumber, int zoom)
 {
     if (!m_ctx || !m_doc)
         return 0;
+    
+    // Validate page number first
+    if (pageNumber < 0 || pageNumber >= m_pageCount) {
+        return 0;
+    }
 
     fz_context *ctx = m_ctx.get();
     fz_document *doc = m_doc.get();
+    
+    // Additional safety check
+    if (!ctx || !doc) {
+        return 0;
+    }
+    
     int width = 0;
+    fz_page *page = nullptr;
     
     fz_var(width);
+    fz_var(page);
 
     fz_try(ctx)
     {
-        fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        page = fz_load_page(ctx, doc, pageNumber);
+        if (!page) {
+            fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to load page");
+        }
         fz_rect bounds = fz_bound_page(ctx, page);
         int nativeWidth = static_cast<int>(bounds.x1 - bounds.x0);
         fz_drop_page(ctx, page);
+        page = nullptr;
         
         // Apply zoom
         float baseScale = zoom / 100.0f;
@@ -296,6 +353,9 @@ int MuPdfDocument::getPageWidthEffective(int pageNumber, int zoom)
     }
     fz_catch(ctx)
     {
+        if (page) {
+            fz_drop_page(ctx, page);
+        }
         width = 0;
     }
 
@@ -306,20 +366,37 @@ int MuPdfDocument::getPageHeightEffective(int pageNumber, int zoom)
 {
     if (!m_ctx || !m_doc)
         return 0;
+    
+    // Validate page number first
+    if (pageNumber < 0 || pageNumber >= m_pageCount) {
+        return 0;
+    }
 
     fz_context *ctx = m_ctx.get();
     fz_document *doc = m_doc.get();
+    
+    // Additional safety check
+    if (!ctx || !doc) {
+        return 0;
+    }
+    
     int height = 0;
+    fz_page *page = nullptr;
     
     fz_var(height);
+    fz_var(page);
 
     fz_try(ctx)
     {
-        fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        page = fz_load_page(ctx, doc, pageNumber);
+        if (!page) {
+            fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to load page");
+        }
         fz_rect bounds = fz_bound_page(ctx, page);
         int nativeWidth = static_cast<int>(bounds.x1 - bounds.x0);
         int nativeHeight = static_cast<int>(bounds.y1 - bounds.y0);
         fz_drop_page(ctx, page);
+        page = nullptr;
         
         // Apply zoom
         float baseScale = zoom / 100.0f;
@@ -351,6 +428,9 @@ int MuPdfDocument::getPageHeightEffective(int pageNumber, int zoom)
     }
     fz_catch(ctx)
     {
+        if (page) {
+            fz_drop_page(ctx, page);
+        }
         height = 0;
     }
 
@@ -427,108 +507,8 @@ bool MuPdfDocument::isPageValid(int pageNumber)
     return isValid;
 }
 
-// Test function to see if fz_clone_pixmap works
-bool test_fz_clone_pixmap(fz_context *ctx) {
-    // Create a small test pixmap
-    fz_pixmap *original = nullptr;
-    fz_pixmap *cloned = nullptr;
-    bool success = false;
-    
-    fz_var(original);
-    fz_var(cloned);
-    fz_var(success);
-    
-    fz_try(ctx) {
-        // Create a small RGB pixmap
-        original = fz_new_pixmap(ctx, fz_device_rgb(ctx), 100, 100, nullptr, 0);
-        if (!original) {
-            std::cout << "❌ Failed to create test pixmap" << std::endl;
-            return false;
-        }
-        
-        // Try to clone it
-        cloned = fz_clone_pixmap(ctx, original);
-        if (cloned) {
-            std::cout << "✅ fz_clone_pixmap works! Cloned pixmap: " 
-                      << fz_pixmap_width(ctx, cloned) << "x" 
-                      << fz_pixmap_height(ctx, cloned) << std::endl;
-            success = true;
-        } else {
-            std::cout << "❌ fz_clone_pixmap returned null" << std::endl;
-        }
-        
-        // Clean up
-        if (cloned) fz_drop_pixmap(ctx, cloned);
-        fz_drop_pixmap(ctx, original);
-    }
-    fz_catch(ctx) {
-        std::cout << "❌ Exception during fz_clone_pixmap test: " << fz_caught_message(ctx) << std::endl;
-        if (cloned) fz_drop_pixmap(ctx, cloned);
-        if (original) fz_drop_pixmap(ctx, original);
-        success = false;
-    }
-    
-    return success;
-}
-
-// Test function to see if fz_scale_pixmap works  
-bool test_fz_scale_pixmap(fz_context *ctx) {
-    fz_pixmap *original = nullptr;
-    fz_pixmap *scaled = nullptr;
-    bool success = false;
-    
-    fz_var(original);
-    fz_var(scaled);
-    fz_var(success);
-    
-    fz_try(ctx) {
-        // Create a test pixmap
-        original = fz_new_pixmap(ctx, fz_device_rgb(ctx), 200, 200, nullptr, 0);
-        if (!original) {
-            std::cout << "❌ Failed to create test pixmap for scaling" << std::endl;
-            return false;
-        }
-        
-        // Try to scale it to 100x100
-        scaled = fz_scale_pixmap(ctx, original, 0, 0, 100, 100, nullptr);
-        if (scaled) {
-            std::cout << "✅ fz_scale_pixmap works! Scaled from 200x200 to " 
-                      << fz_pixmap_width(ctx, scaled) << "x" 
-                      << fz_pixmap_height(ctx, scaled) << std::endl;
-            success = true;
-        } else {
-            std::cout << "❌ fz_scale_pixmap returned null" << std::endl;
-        }
-        
-        // Clean up
-        if (scaled) fz_drop_pixmap(ctx, scaled);
-        fz_drop_pixmap(ctx, original);
-    }
-    fz_catch(ctx) {
-        std::cout << "❌ Exception during fz_scale_pixmap test: " << fz_caught_message(ctx) << std::endl;
-        if (scaled) fz_drop_pixmap(ctx, scaled);
-        if (original) fz_drop_pixmap(ctx, original);
-        success = false;
-    }
-    
-    return success;
-}
-
-bool MuPdfDocument::testNewMuPDFFeatures() {
-    if (!m_ctx) {
-        std::cout << "❌ No MuPDF context available for testing" << std::endl;
-        return false;
-    }
-    
-    fz_context *ctx = m_ctx.get();
-    std::cout << "🧪 Testing MuPDF 1.26.7 new features..." << std::endl;
-    
-    bool clone_works = test_fz_clone_pixmap(ctx);
-    bool scale_works = test_fz_scale_pixmap(ctx);
-    
-    std::cout << "📊 Test Results:" << std::endl;
-    std::cout << "   fz_clone_pixmap: " << (clone_works ? "✅ WORKING" : "❌ NOT WORKING") << std::endl;
-    std::cout << "   fz_scale_pixmap: " << (scale_works ? "✅ WORKING" : "❌ NOT WORKING") << std::endl;
-    
-    return clone_works && scale_works;
+void MuPdfDocument::clearCache()
+{
+    std::lock_guard<std::mutex> lock(m_cacheMutex);
+    m_cache.clear();
 }

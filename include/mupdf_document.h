@@ -37,8 +37,8 @@ public:
     // Validate if a page can be safely loaded (check for corruption)
     bool isPageValid(int pageNumber);
     
-    // Test new MuPDF 1.26.7 features (fz_clone_pixmap, fz_scale_pixmap)
-    bool testNewMuPDFFeatures();
+    // Clear the render cache
+    void clearCache();
 
 private:
     // Use smart pointers to manage MuPDF types safely
