@@ -43,7 +43,7 @@ $(TARGET): $(OBJS) | $(BIN_DIR)
 
 # Compile source to object files
 $(BUILD_DIR)/%.o: src/%.cpp
-	 @mkdir -p $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # Compile sources from cli/
