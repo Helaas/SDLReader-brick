@@ -680,6 +680,11 @@ void App::renderCurrentPage()
 
     int winW = m_renderer->getWindowWidth();
     int winH = m_renderer->getWindowHeight();
+    
+    // Debug: Check native page dimensions before rendering
+    int nativeW = m_document->getPageWidthNative(m_currentPage);
+    int nativeH = m_document->getPageHeightNative(m_currentPage);
+    std::cout << "DEBUG: Native page dimensions: " << nativeW << "x" << nativeH << std::endl;
 
     int srcW, srcH;
     std::vector<uint8_t> pixelData;
@@ -689,20 +694,28 @@ void App::renderCurrentPage()
         pixelData = m_document->renderPage(m_currentPage, srcW, srcH, m_currentScale);
     }
 
-    // Update page dimensions only when zoom level has changed, not on page changes
-    // This preserves consistent positioning during page transitions while updating for zoom
-    if (m_currentScale != m_lastRenderedScale) {
-        // Zoom level changed - update dimensions based on actual pixel data
-        if (m_rotation % 180 == 0) {
-            m_pageWidth = srcW;
-            m_pageHeight = srcH;
-        } else {
-            m_pageWidth = srcH;
-            m_pageHeight = srcW;
-        }
-        m_lastRenderedScale = m_currentScale;
+    // Use native page dimensions scaled by zoom for consistent positioning
+    // This prevents the "floating" effect while ensuring proper centering
+    float scaleMultiplier = m_currentScale / 100.0f;
+    int expectedWidth = static_cast<int>(nativeW * scaleMultiplier);
+    int expectedHeight = static_cast<int>(nativeH * scaleMultiplier);
+    
+    if (m_rotation % 180 == 0) {
+        m_pageWidth = expectedWidth;
+        m_pageHeight = expectedHeight;
+    } else {
+        m_pageWidth = expectedHeight;
+        m_pageHeight = expectedWidth;
     }
-    // Otherwise keep existing dimensions for consistent positioning
+    m_lastRenderedScale = m_currentScale;
+    
+    // Clamp scroll position based on the updated page dimensions
+    clampScroll();
+    
+    // Debug: Show the dimension values for troubleshooting
+    std::cout << "DEBUG: Using positioning dimensions " << m_pageWidth << "x" << m_pageHeight 
+              << " (native " << nativeW << "x" << nativeH << " at " << m_currentScale << "%) "
+              << "for rendered " << srcW << "x" << srcH << std::endl;
 
     int posX = (winW - m_pageWidth) / 2 + m_scrollX;
 
@@ -719,8 +732,12 @@ void App::renderCurrentPage()
         posY = (winH - m_pageHeight) / 2 + m_scrollY;
     }
 
+    // Use actual rendered dimensions for the renderPageEx call to prevent white bars
+    int renderWidth = (m_rotation % 180 == 0) ? srcW : srcH;
+    int renderHeight = (m_rotation % 180 == 0) ? srcH : srcW;
+
     m_renderer->renderPageEx(pixelData, srcW, srcH,
-                             posX, posY, m_pageWidth, m_pageHeight,
+                             posX, posY, renderWidth, renderHeight,
                              static_cast<double>(m_rotation),
                              currentFlipFlags());
     
@@ -1730,7 +1747,7 @@ void App::onPageChangedKeepZoom()
         muPdfDoc->clearCache();
     }
 
-    // Predict scaled size for the new page using the current zoom
+    // Check that page dimensions are valid
     int nativeW = effectiveNativeWidth();
     int nativeH = effectiveNativeHeight();
 
@@ -1741,11 +1758,8 @@ void App::onPageChangedKeepZoom()
         return;
     }
 
-    m_pageWidth = static_cast<int>(nativeW * (m_currentScale / 100.0));
-    m_pageHeight = static_cast<int>(nativeH * (m_currentScale / 100.0));
-
-    // Keep current scroll but ensure it's valid for the new page extents
-    clampScroll();
+    // Note: Page dimensions will be set by renderCurrentPage() for consistency
+    // Scroll clamping will be handled after page dimensions are updated
 }
 
 void App::alignToTopOfCurrentPage()
