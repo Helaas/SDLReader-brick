@@ -32,17 +32,32 @@ RUN apt-get -y update && apt-get -y install \
     tree \
     unzip \
     wget \
-    libmupdf-dev \
-    mupdf-tools \
+    curl \
     libharfbuzz-dev \
     libopenjp2-7-dev \
     libjbig2dec0-dev \
     libfreetype6-dev \
     zlib1g-dev \
     libjpeg-dev \
+    libpng-dev \
+    libglib2.0-dev \
+    libfontconfig1-dev \
+    liblcms2-dev \
+    libcurl4-openssl-dev \
     pkg-config \
     patchelf \
   && rm -rf /var/lib/apt/lists/*
+
+# Build MuPDF 1.26.7 from source
+RUN cd /tmp && \
+    git clone --depth 1 --branch 1.26.7 https://github.com/ArtifexSoftware/mupdf.git && \
+    cd mupdf && \
+    git submodule update --init && \
+    sed -i 's/-std=c++20/-std=c++17/g' Makelists && \
+    make prefix=/usr/local install-libs && \
+    ldconfig && \
+    cd / && \
+    rm -rf /tmp/mupdf
 
 RUN mkdir -p /root/workspace
 WORKDIR /root

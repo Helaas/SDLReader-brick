@@ -4,7 +4,7 @@
 # Compiler and flags
 CXX      := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTG5040_PLATFORM\
-            -Isrc -Iinclude -Iports/tg5040/include -D_REENTRANT -I/usr/include/SDL2
+            -Isrc -Iinclude -Iports/tg5040/include -I/usr/local/include -D_REENTRANT -I/usr/include/SDL2
 
 # Output locations
 BIN_DIR  := bin
@@ -16,7 +16,7 @@ OBJS := $(BUILD_DIR)/mupdf_document.o $(BUILD_DIR)/renderer.o $(BUILD_DIR)/text_
 
 # Libraries (link order matters)
 LIBS := -lSDL2_ttf -lSDL2 \
-  -L/usr/local/opt/mupdf-tools/lib \
+  -L/usr/local/lib \
   -lmupdf -lmupdf-third \
   -ljpeg -lopenjp2 -lharfbuzz -ljbig2dec \
   -lfreetype -lz -lm -lpthread -ldl
