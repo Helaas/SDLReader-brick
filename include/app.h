@@ -124,6 +124,7 @@ private:
     int m_currentPage;
     int m_pageCount;
     int m_currentScale;
+    int m_lastRenderedScale{0};  // Track last scale used in rendering to detect zoom changes
     int m_scrollX;
     int m_scrollY;
     int m_pageWidth;
@@ -191,7 +192,6 @@ private:
 
     // Top alignment control when page height <= window height
     bool m_topAlignWhenFits{true};         // prefer top-align instead of centering when it fits
-    bool m_forceTopAlignNextRender{false}; // one-shot flag after page changes
 
     // Align the current page so its top is visible
     void alignToTopOfCurrentPage();

@@ -689,24 +689,27 @@ void App::renderCurrentPage()
         pixelData = m_document->renderPage(m_currentPage, srcW, srcH, m_currentScale);
     }
 
-    // displayed page size after rotation
-    if (m_rotation % 180 == 0)
-    {
-        m_pageWidth = srcW;
-        m_pageHeight = srcH;
+    // Update page dimensions only when zoom level has changed, not on page changes
+    // This preserves consistent positioning during page transitions while updating for zoom
+    if (m_currentScale != m_lastRenderedScale) {
+        // Zoom level changed - update dimensions based on actual pixel data
+        if (m_rotation % 180 == 0) {
+            m_pageWidth = srcW;
+            m_pageHeight = srcH;
+        } else {
+            m_pageWidth = srcH;
+            m_pageHeight = srcW;
+        }
+        m_lastRenderedScale = m_currentScale;
     }
-    else
-    {
-        m_pageWidth = srcH;
-        m_pageHeight = srcW;
-    }
+    // Otherwise keep existing dimensions for consistent positioning
 
     int posX = (winW - m_pageWidth) / 2 + m_scrollX;
 
     int posY;
     if (m_pageHeight <= winH)
     {
-        if (m_topAlignWhenFits || m_forceTopAlignNextRender)
+        if (m_topAlignWhenFits)
             posY = 0;
         else
             posY = (winH - m_pageHeight) / 2;
@@ -715,7 +718,6 @@ void App::renderCurrentPage()
     {
         posY = (winH - m_pageHeight) / 2 + m_scrollY;
     }
-    m_forceTopAlignNextRender = false;
 
     m_renderer->renderPageEx(pixelData, srcW, srcH,
                              posX, posY, m_pageWidth, m_pageHeight,
@@ -1722,6 +1724,12 @@ void App::handleDpadNudgeUp()
 
 void App::onPageChangedKeepZoom()
 {
+    // Clear pixel cache to prevent showing stale page data with new positioning
+    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+    if (muPdfDoc) {
+        muPdfDoc->clearCache();
+    }
+
     // Predict scaled size for the new page using the current zoom
     int nativeW = effectiveNativeWidth();
     int nativeH = effectiveNativeHeight();
@@ -1781,8 +1789,17 @@ void App::alignToTopOfCurrentPage()
     }
     else
     {
-        // No vertical scroll range (fits): request a top-aligned render once
-        m_forceTopAlignNextRender = true;
+        // Page fits within window height - center it or align to top based on preference
+        // Instead of using the flag, just set scroll position consistently
+        if (m_topAlignWhenFits) {
+            // For top alignment when page fits, we want the page to appear at the top
+            // This means positioning should be consistent with the rendering calculation
+            m_scrollY = 0;
+        } else {
+            // For center alignment when page fits  
+            m_scrollY = 0;
+        }
+        clampScroll();
     }
 }
 
