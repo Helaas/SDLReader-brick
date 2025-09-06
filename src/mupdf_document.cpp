@@ -124,11 +124,25 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int &width,
         
         std::cout << "Original rendered size: " << originalWidth << "x" << originalHeight << std::endl;
 
-        // Check if we need to scale down to fit within max size constraints
-        if (originalWidth > m_maxWidth || originalHeight > m_maxHeight)
+        // For zoom levels > 100%, allow larger renders to show detail
+        // Calculate effective max size based on zoom level
+        int effectiveMaxWidth = m_maxWidth;
+        int effectiveMaxHeight = m_maxHeight;
+        
+        if (zoom > 100) {
+            // Scale max render size proportionally to zoom level (up to 4x for very high zoom)
+            float zoomFactor = std::min(zoom / 100.0f, 4.0f);
+            effectiveMaxWidth = static_cast<int>(m_maxWidth * zoomFactor);
+            effectiveMaxHeight = static_cast<int>(m_maxHeight * zoomFactor);
+            std::cout << "High zoom detected (" << zoom << "%), using expanded max size: " 
+                      << effectiveMaxWidth << "x" << effectiveMaxHeight << std::endl;
+        }
+
+        // Check if we need to scale down to fit within effective max size constraints
+        if (originalWidth > effectiveMaxWidth || originalHeight > effectiveMaxHeight)
         {
-            float scaleX = static_cast<float>(m_maxWidth) / originalWidth;
-            float scaleY = static_cast<float>(m_maxHeight) / originalHeight;
+            float scaleX = static_cast<float>(effectiveMaxWidth) / originalWidth;
+            float scaleY = static_cast<float>(effectiveMaxHeight) / originalHeight;
             float scaleDown = std::min(scaleX, scaleY);
             
             int newWidth = static_cast<int>(originalWidth * scaleDown);
