@@ -741,6 +741,13 @@ void App::renderCurrentPage()
                              static_cast<double>(m_rotation),
                              currentFlipFlags());
     
+    // Trigger prerendering of adjacent pages for faster page changes
+    // Do this after the main render to avoid blocking the current page display
+    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+    if (muPdfDoc) {
+        muPdfDoc->prerenderAdjacentPagesAsync(m_currentPage, m_currentScale);
+    }
+    
     // Measure total render time for dynamic timeout
     m_lastRenderDuration = SDL_GetTicks() - renderStart;
 }

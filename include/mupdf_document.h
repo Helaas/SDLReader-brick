@@ -9,6 +9,8 @@
 #include <map>
 #include <tuple>
 #include <mutex>
+#include <thread>
+#include <atomic>
 
 /**
  * @brief Document implementation using MuPDF library
@@ -39,6 +41,11 @@ public:
     
     // Clear the render cache
     void clearCache();
+    
+    // Prerender pages for faster page changes
+    void prerenderPage(int pageNumber, int scale);
+    void prerenderAdjacentPages(int currentPage, int scale);
+    void prerenderAdjacentPagesAsync(int currentPage, int scale);
 
 private:
     // Use smart pointers to manage MuPDF types safely
@@ -63,6 +70,10 @@ private:
     int m_maxWidth = 1024;
     int m_maxHeight = 768;
     int m_pageCount = 0;
+    
+    // Background prerendering support
+    std::thread m_prerenderThread;
+    std::atomic<bool> m_prerenderActive{false};
 };
 
 #endif // MUPDF_DOCUMENT_H

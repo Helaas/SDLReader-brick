@@ -14,6 +14,12 @@ MuPdfDocument::MuPdfDocument()
 
 MuPdfDocument::~MuPdfDocument()
 {
+    // Stop background prerendering before destroying the object
+    if (m_prerenderThread.joinable()) {
+        m_prerenderActive = false;
+        m_prerenderThread.join();
+    }
+    
     // Cleanup is handled by unique_ptr deleters
     // Clear cache
     std::lock_guard<std::mutex> lock(m_cacheMutex);
@@ -525,4 +531,85 @@ void MuPdfDocument::clearCache()
 {
     std::lock_guard<std::mutex> lock(m_cacheMutex);
     m_cache.clear();
+}
+
+void MuPdfDocument::prerenderPage(int pageNumber, int scale)
+{
+    // Validate page number
+    if (pageNumber < 0 || pageNumber >= m_pageCount) {
+        return;
+    }
+    
+    // Check if already cached
+    auto key = std::make_pair(pageNumber, scale);
+    {
+        std::lock_guard<std::mutex> lock(m_cacheMutex);
+        if (m_cache.find(key) != m_cache.end()) {
+            return; // Already cached
+        }
+    }
+    
+    try {
+        // Render the page (this will add it to cache)
+        int width, height;
+        std::vector<unsigned char> result = renderPage(pageNumber, width, height, scale);
+        std::cout << "Prerendered page " << pageNumber << " at " << scale << "% zoom" << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Failed to prerender page " << pageNumber << ": " << e.what() << std::endl;
+    }
+}
+
+void MuPdfDocument::prerenderAdjacentPages(int currentPage, int scale)
+{
+    // Prerender next page
+    if (currentPage + 1 < m_pageCount) {
+        prerenderPage(currentPage + 1, scale);
+    }
+    
+    // Prerender previous page  
+    if (currentPage - 1 >= 0) {
+        prerenderPage(currentPage - 1, scale);
+    }
+    
+    // For better user experience, also prerender the page after next
+    if (currentPage + 2 < m_pageCount) {
+        prerenderPage(currentPage + 2, scale);
+    }
+}
+
+void MuPdfDocument::prerenderAdjacentPagesAsync(int currentPage, int scale)
+{
+    // Stop any existing background prerendering
+    if (m_prerenderThread.joinable()) {
+        m_prerenderActive = false;
+        m_prerenderThread.join();
+    }
+    
+    // Start new background prerendering
+    m_prerenderActive = true;
+    m_prerenderThread = std::thread([this, currentPage, scale]() {
+        try {
+            // Prerender in order of user's likely navigation
+            
+            // 1. Next page (most likely)
+            if (m_prerenderActive && currentPage + 1 < m_pageCount) {
+                prerenderPage(currentPage + 1, scale);
+            }
+            
+            // 2. Previous page (less likely but still common)
+            if (m_prerenderActive && currentPage - 1 >= 0) {
+                prerenderPage(currentPage - 1, scale);
+            }
+            
+            // 3. Page after next (for reading ahead)
+            if (m_prerenderActive && currentPage + 2 < m_pageCount) {
+                prerenderPage(currentPage + 2, scale);
+            }
+            
+        } catch (const std::exception& e) {
+            std::cerr << "Background prerendering failed: " << e.what() << std::endl;
+        }
+        
+        m_prerenderActive = false;
+    });
 }
