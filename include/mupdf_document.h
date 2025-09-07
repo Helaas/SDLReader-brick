@@ -68,6 +68,12 @@ private:
 
     std::unique_ptr<fz_context, ContextDeleter> m_ctx;
     std::unique_ptr<fz_document, DocumentDeleter> m_doc;
+    
+    // Separate context for background prerendering to avoid race conditions
+    std::unique_ptr<fz_context, ContextDeleter> m_prerenderCtx;
+    std::unique_ptr<fz_document, DocumentDeleter> m_prerenderDoc;
+    std::mutex m_prerenderMutex;  // Protects prerender context operations
+    
     std::map<std::pair<int, int>, std::tuple<std::vector<unsigned char>, int, int>> m_cache;
     std::mutex m_cacheMutex;
     std::mutex m_renderMutex;  // Protects MuPDF context operations

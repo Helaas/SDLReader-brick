@@ -682,16 +682,38 @@ void App::renderCurrentPage()
     int winH = m_renderer->getWindowHeight();
     
     // Debug: Check native page dimensions before rendering
-    int nativeW = m_document->getPageWidthNative(m_currentPage);
-    int nativeH = m_document->getPageHeightNative(m_currentPage);
+    int nativeW = 0, nativeH = 0;
+    try {
+        nativeW = m_document->getPageWidthNative(m_currentPage);
+        nativeH = m_document->getPageHeightNative(m_currentPage);
+    } catch (const std::exception& e) {
+        std::cerr << "Error getting page dimensions for page " << m_currentPage << ": " << e.what() << std::endl;
+        showErrorMessage("Failed to get page dimensions: " + std::string(e.what()));
+        m_lastRenderDuration = SDL_GetTicks() - renderStart;
+        return;
+    }
     std::cout << "DEBUG: Native page dimensions: " << nativeW << "x" << nativeH << std::endl;
 
     int srcW, srcH;
     std::vector<uint8_t> pixelData;
-    {
+    try {
         // Lock the document mutex to ensure thread-safe access
         std::lock_guard<std::mutex> lock(m_documentMutex);
         pixelData = m_document->renderPage(m_currentPage, srcW, srcH, m_currentScale);
+    } catch (const std::exception& e) {
+        std::cerr << "Error rendering page " << m_currentPage << ": " << e.what() << std::endl;
+        // Show error message instead of crashing
+        showErrorMessage("Failed to render page: " + std::string(e.what()));
+        // Return early to avoid further processing
+        m_lastRenderDuration = SDL_GetTicks() - renderStart;
+        return;
+    }
+
+    if (pixelData.empty()) {
+        std::cerr << "Warning: Rendered pixel data is empty for page " << m_currentPage << std::endl;
+        showErrorMessage("Page rendering failed - empty data");
+        m_lastRenderDuration = SDL_GetTicks() - renderStart;
+        return;
     }
 
     // Use actual rendered dimensions for positioning to account for downsampling
@@ -1162,10 +1184,19 @@ void App::recenterScrollOnZoom(int oldScale, int newScale)
     int oldPageWidth, oldPageHeight, newPageWidth, newPageHeight;
     if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
     {
-        oldPageWidth = muDoc->getPageWidthEffective(m_currentPage, oldScale);
-        oldPageHeight = muDoc->getPageHeightEffective(m_currentPage, oldScale);
-        newPageWidth = muDoc->getPageWidthEffective(m_currentPage, newScale);
-        newPageHeight = muDoc->getPageHeightEffective(m_currentPage, newScale);
+        try {
+            oldPageWidth = muDoc->getPageWidthEffective(m_currentPage, oldScale);
+            oldPageHeight = muDoc->getPageHeightEffective(m_currentPage, oldScale);
+            newPageWidth = muDoc->getPageWidthEffective(m_currentPage, newScale);
+            newPageHeight = muDoc->getPageHeightEffective(m_currentPage, newScale);
+        } catch (const std::exception& e) {
+            std::cerr << "Error getting effective dimensions for zoom: " << e.what() << std::endl;
+            // Fallback to simple calculation
+            oldPageWidth = static_cast<int>(nativeWidth * (oldScale / 100.0));
+            oldPageHeight = static_cast<int>(nativeHeight * (oldScale / 100.0));
+            newPageWidth = static_cast<int>(nativeWidth * (newScale / 100.0));
+            newPageHeight = static_cast<int>(nativeHeight * (newScale / 100.0));
+        }
     }
     else
     {
@@ -1266,16 +1297,21 @@ void App::fitPageToWidth()
     int contentWidth = nativeWidth; // Default to full page width
     if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
     {
-        fz_rect contentBounds = muDoc->getPageContentBounds(m_currentPage);
-        if (!fz_is_empty_rect(contentBounds))
-        {
-            int contentW = static_cast<int>(contentBounds.x1 - contentBounds.x0);
-            if (contentW > 0 && contentW < nativeWidth)
+        try {
+            fz_rect contentBounds = muDoc->getPageContentBounds(m_currentPage);
+            if (!fz_is_empty_rect(contentBounds))
             {
-                contentWidth = contentW;
-                std::cout << "Content-based fitting: full page width=" << nativeWidth 
-                         << ", content width=" << contentWidth << std::endl;
+                int contentW = static_cast<int>(contentBounds.x1 - contentBounds.x0);
+                if (contentW > 0 && contentW < nativeWidth)
+                {
+                    contentWidth = contentW;
+                    std::cout << "Content-based fitting: full page width=" << nativeWidth 
+                             << ", content width=" << contentWidth << std::endl;
+                }
             }
+        } catch (const std::exception& e) {
+            std::cerr << "Error getting content bounds for page " << m_currentPage << ": " << e.what() << std::endl;
+            // Use default contentWidth
         }
     }
 
@@ -1298,12 +1334,17 @@ void App::fitPageToWidth()
     // Adjust for effective dimensions if MuPDF would downsample
     if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
     {
-        int effectiveW = muDoc->getPageWidthEffective(m_currentPage, m_currentScale);
-        int effectiveH = muDoc->getPageHeightEffective(m_currentPage, m_currentScale);
-        if (effectiveW > 0 && effectiveH > 0)
-        {
-            m_pageWidth = effectiveW;
-            m_pageHeight = effectiveH;
+        try {
+            int effectiveW = muDoc->getPageWidthEffective(m_currentPage, m_currentScale);
+            int effectiveH = muDoc->getPageHeightEffective(m_currentPage, m_currentScale);
+            if (effectiveW > 0 && effectiveH > 0)
+            {
+                m_pageWidth = effectiveW;
+                m_pageHeight = effectiveH;
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Error getting effective dimensions for page " << m_currentPage << ": " << e.what() << std::endl;
+            // Use calculated dimensions
         }
     }
 
@@ -1334,9 +1375,14 @@ void App::printAppState()
 {
     std::cout << "--- App State ---" << std::endl;
     std::cout << "Current Page: " << (m_currentPage + 1) << "/" << m_pageCount << std::endl;
-    std::cout << "Native Page Dimensions: "
-              << m_document->getPageWidthNative(m_currentPage) << "x"
-              << m_document->getPageHeightNative(m_currentPage) << std::endl;
+    try {
+        std::cout << "Native Page Dimensions: "
+                  << m_document->getPageWidthNative(m_currentPage) << "x"
+                  << m_document->getPageHeightNative(m_currentPage) << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Error getting page dimensions for page " << m_currentPage << ": " << e.what() << std::endl;
+        std::cout << "Native Page Dimensions: Error retrieving" << std::endl;
+    }
     std::cout << "Current Scale: " << m_currentScale << "%" << std::endl;
     std::cout << "Scaled Page Dimensions: " << m_pageWidth << "x" << m_pageHeight << " (Actual/Rendered)" << std::endl;
     std::cout << "Scroll Position (Page Offset): X=" << m_scrollX << ", Y=" << m_scrollY << std::endl;
@@ -1832,8 +1878,26 @@ void App::alignToTopOfCurrentPage()
     int effectiveW, effectiveH;
     if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
     {
-        effectiveW = muDoc->getPageWidthEffective(m_currentPage, m_currentScale);
-        effectiveH = muDoc->getPageHeightEffective(m_currentPage, m_currentScale);
+        try {
+            effectiveW = muDoc->getPageWidthEffective(m_currentPage, m_currentScale);
+            effectiveH = muDoc->getPageHeightEffective(m_currentPage, m_currentScale);
+        } catch (const std::exception& e) {
+            std::cerr << "Error getting effective dimensions for page " << m_currentPage << ": " << e.what() << std::endl;
+            // Fallback to simple calculation
+            int nativeW = m_document->getPageWidthNative(m_currentPage);
+            int nativeH = m_document->getPageHeightNative(m_currentPage);
+            float scaleMultiplier = m_currentScale / 100.0f;
+            int expectedWidth = static_cast<int>(nativeW * scaleMultiplier);
+            int expectedHeight = static_cast<int>(nativeH * scaleMultiplier);
+            
+            if (m_rotation % 180 == 0) {
+                effectiveW = expectedWidth;
+                effectiveH = expectedHeight;
+            } else {
+                effectiveW = expectedHeight;
+                effectiveH = expectedWidth;
+            }
+        }
     }
     else
     {
@@ -1878,16 +1942,26 @@ void App::alignToTopOfCurrentPage()
 
 int App::effectiveNativeWidth() const
 {
-    int w = m_document->getPageWidthNative(m_currentPage);
-    int h = m_document->getPageHeightNative(m_currentPage);
-    return (m_rotation % 180 == 0) ? w : h;
+    try {
+        int w = m_document->getPageWidthNative(m_currentPage);
+        int h = m_document->getPageHeightNative(m_currentPage);
+        return (m_rotation % 180 == 0) ? w : h;
+    } catch (const std::exception& e) {
+        std::cerr << "Error getting effective native width for page " << m_currentPage << ": " << e.what() << std::endl;
+        return 0;
+    }
 }
 
 int App::effectiveNativeHeight() const
 {
-    int w = m_document->getPageWidthNative(m_currentPage);
-    int h = m_document->getPageHeightNative(m_currentPage);
-    return (m_rotation % 180 == 0) ? h : w;
+    try {
+        int w = m_document->getPageWidthNative(m_currentPage);
+        int h = m_document->getPageHeightNative(m_currentPage);
+        return (m_rotation % 180 == 0) ? h : w;
+    } catch (const std::exception& e) {
+        std::cerr << "Error getting effective native height for page " << m_currentPage << ": " << e.what() << std::endl;
+        return 0;
+    }
 }
 
 SDL_RendererFlip App::currentFlipFlags() const
