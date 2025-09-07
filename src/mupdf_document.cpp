@@ -106,9 +106,10 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int &width,
         int nativeWidth = static_cast<int>((bounds.x1 - bounds.x0) * baseScale);
         int nativeHeight = static_cast<int>((bounds.y1 - bounds.y0) * baseScale);
         
-        // Only downsample if the zoomed image is larger than max size
-        // This allows zooming in for detail up to the max render size
-        if (nativeWidth > m_maxWidth || nativeHeight > m_maxHeight)
+        // Only downsample if the zoomed image is significantly larger than max size
+        // Allow some oversize rendering for better text quality
+        const float oversizeTolerance = 1.5f; // Allow 50% oversize before downsampling
+        if (nativeWidth > m_maxWidth * oversizeTolerance || nativeHeight > m_maxHeight * oversizeTolerance)
         {
             float scaleX = static_cast<float>(m_maxWidth) / nativeWidth;
             float scaleY = static_cast<float>(m_maxHeight) / nativeHeight;
@@ -341,7 +342,8 @@ int MuPdfDocument::getPageWidthEffective(int pageNumber, int zoom)
 
         // Apply downsampling logic (same as renderPage)
         float downsampleScale = 1.0f;
-        if (scaledWidth > m_maxWidth || scaledHeight > m_maxHeight)
+        const float oversizeTolerance = 1.5f; // Allow 50% oversize before downsampling
+        if (scaledWidth > m_maxWidth * oversizeTolerance || scaledHeight > m_maxHeight * oversizeTolerance)
         {
             float scaleX = static_cast<float>(m_maxWidth) / scaledWidth;
             float scaleY = static_cast<float>(m_maxHeight) / scaledHeight;
@@ -392,7 +394,8 @@ int MuPdfDocument::getPageHeightEffective(int pageNumber, int zoom)
 
         // Apply downsampling logic (same as renderPage)
         float downsampleScale = 1.0f;
-        if (scaledWidth > m_maxWidth || scaledHeight > m_maxHeight)
+        const float oversizeTolerance = 1.5f; // Allow 50% oversize before downsampling
+        if (scaledWidth > m_maxWidth * oversizeTolerance || scaledHeight > m_maxHeight * oversizeTolerance)
         {
             float scaleX = static_cast<float>(m_maxWidth) / scaledWidth;
             float scaleY = static_cast<float>(m_maxHeight) / scaledHeight;
@@ -579,6 +582,68 @@ void MuPdfDocument::prerenderAdjacentPagesAsync(int currentPage, int scale)
         
         m_prerenderActive = false;
     });
+}
+
+fz_rect MuPdfDocument::getPageContentBounds(int pageNumber)
+{
+    std::lock_guard<std::mutex> lock(m_renderMutex);
+    
+    if (!m_ctx || !m_doc)
+        return fz_empty_rect;
+    
+    // Validate page number first
+    if (pageNumber < 0 || pageNumber >= m_pageCount) {
+        return fz_empty_rect;
+    }
+
+    fz_context *ctx = m_ctx.get();
+    fz_document *doc = m_doc.get();
+    
+    fz_rect contentBounds = fz_empty_rect;
+    fz_page *page = nullptr;
+    fz_device *device = nullptr;
+    
+    fz_var(page);
+    fz_var(device);
+    fz_var(contentBounds);
+
+    fz_try(ctx)
+    {
+        page = fz_load_page(ctx, doc, pageNumber);
+        if (!page) {
+            fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to load page");
+        }
+        
+        // Create a bounding box device to capture content bounds
+        device = fz_new_bbox_device(ctx, &contentBounds);
+        if (!device) {
+            fz_drop_page(ctx, page);
+            fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to create bounding box device");
+        }
+        
+        // Run the page content through the device to get content bounds
+        fz_run_page(ctx, page, device, fz_identity, nullptr);
+        
+        fz_close_device(ctx, device);
+        fz_drop_device(ctx, device);
+        device = nullptr;
+        
+        fz_drop_page(ctx, page);
+        page = nullptr;
+    }
+    fz_catch(ctx)
+    {
+        if (device) {
+            fz_close_device(ctx, device);
+            fz_drop_device(ctx, device);
+        }
+        if (page) {
+            fz_drop_page(ctx, page);
+        }
+        contentBounds = fz_empty_rect;
+    }
+
+    return contentBounds;
 }
 
 

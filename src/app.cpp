@@ -694,18 +694,14 @@ void App::renderCurrentPage()
         pixelData = m_document->renderPage(m_currentPage, srcW, srcH, m_currentScale);
     }
 
-    // Use native page dimensions scaled by zoom for consistent positioning
-    // This prevents the "floating" effect while ensuring proper centering
-    float scaleMultiplier = m_currentScale / 100.0f;
-    int expectedWidth = static_cast<int>(nativeW * scaleMultiplier);
-    int expectedHeight = static_cast<int>(nativeH * scaleMultiplier);
-    
+    // Use actual rendered dimensions for positioning to account for downsampling
+    // This ensures consistent positioning regardless of MuPDF's downsampling behavior
     if (m_rotation % 180 == 0) {
-        m_pageWidth = expectedWidth;
-        m_pageHeight = expectedHeight;
+        m_pageWidth = srcW;
+        m_pageHeight = srcH;
     } else {
-        m_pageWidth = expectedHeight;
-        m_pageHeight = expectedWidth;
+        m_pageWidth = srcH;
+        m_pageHeight = srcW;
     }
     m_lastRenderedScale = m_currentScale;
     
@@ -713,9 +709,9 @@ void App::renderCurrentPage()
     clampScroll();
     
     // Debug: Show the dimension values for troubleshooting
-    std::cout << "DEBUG: Using positioning dimensions " << m_pageWidth << "x" << m_pageHeight 
+    std::cout << "DEBUG: Using actual rendered dimensions " << m_pageWidth << "x" << m_pageHeight 
               << " (native " << nativeW << "x" << nativeH << " at " << m_currentScale << "%) "
-              << "for rendered " << srcW << "x" << srcH << std::endl;
+              << "rendered " << srcW << "x" << srcH << std::endl;
 
     int posX = (winW - m_pageWidth) / 2 + m_scrollX;
 
@@ -1105,10 +1101,11 @@ void App::fitPageToWindow()
     int windowWidth = m_renderer->getWindowWidth();
     int windowHeight = m_renderer->getWindowHeight();
 
-    // Update max render size for downsampling
+    // Update max render size for downsampling - allow higher resolution for better text quality
     if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
     {
-        muDoc->setMaxRenderSize(windowWidth, windowHeight);
+        // Allow rendering at up to 3x window size for better quality, especially when zoomed
+        muDoc->setMaxRenderSize(windowWidth * 3, windowHeight * 3);
     }
 
     // Use effective sizes so 90/270 rotation swaps W/H
@@ -1134,6 +1131,18 @@ void App::fitPageToWindow()
     m_pageWidth = static_cast<int>(nativeWidth * (m_currentScale / 100.0));
     m_pageHeight = static_cast<int>(nativeHeight * (m_currentScale / 100.0));
 
+    // Adjust for effective dimensions if MuPDF would downsample
+    if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
+    {
+        int effectiveW = muDoc->getPageWidthEffective(m_currentPage, m_currentScale);
+        int effectiveH = muDoc->getPageHeightEffective(m_currentPage, m_currentScale);
+        if (effectiveW > 0 && effectiveH > 0)
+        {
+            m_pageWidth = effectiveW;
+            m_pageHeight = effectiveH;
+        }
+    }
+
     m_scrollX = 0;
     m_scrollY = 0;
     updateScaleDisplayTime();
@@ -1149,11 +1158,23 @@ void App::recenterScrollOnZoom(int oldScale, int newScale)
     int nativeWidth = effectiveNativeWidth();
     int nativeHeight = effectiveNativeHeight();
 
-    int oldPageWidth = static_cast<int>(nativeWidth * (oldScale / 100.0));
-    int oldPageHeight = static_cast<int>(nativeHeight * (oldScale / 100.0));
-
-    int newPageWidth = static_cast<int>(nativeWidth * (newScale / 100.0));
-    int newPageHeight = static_cast<int>(nativeHeight * (newScale / 100.0));
+    // Use effective dimensions for both old and new scales
+    int oldPageWidth, oldPageHeight, newPageWidth, newPageHeight;
+    if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
+    {
+        oldPageWidth = muDoc->getPageWidthEffective(m_currentPage, oldScale);
+        oldPageHeight = muDoc->getPageHeightEffective(m_currentPage, oldScale);
+        newPageWidth = muDoc->getPageWidthEffective(m_currentPage, newScale);
+        newPageHeight = muDoc->getPageHeightEffective(m_currentPage, newScale);
+    }
+    else
+    {
+        // Fallback to simple calculation
+        oldPageWidth = static_cast<int>(nativeWidth * (oldScale / 100.0));
+        oldPageHeight = static_cast<int>(nativeHeight * (oldScale / 100.0));
+        newPageWidth = static_cast<int>(nativeWidth * (newScale / 100.0));
+        newPageHeight = static_cast<int>(nativeHeight * (newScale / 100.0));
+    }
 
     int windowWidth = m_renderer->getWindowWidth();
     int windowHeight = m_renderer->getWindowHeight();
@@ -1224,6 +1245,13 @@ void App::fitPageToWidth()
 {
     int windowWidth = m_renderer->getWindowWidth();
 
+    // Update max render size for downsampling - allow higher resolution for better text quality
+    if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
+    {
+        // Allow rendering at up to 3x window size for better quality, especially when zoomed
+        muDoc->setMaxRenderSize(windowWidth * 3, m_renderer->getWindowHeight() * 3);
+    }
+
     // Use effective sizes so 90/270 rotation swaps W/H
     int nativeWidth = effectiveNativeWidth();
 
@@ -1234,10 +1262,27 @@ void App::fitPageToWidth()
         return;
     }
 
-    // Calculate scale to fit width with a small margin (95% of window width)
+    // Try to get content width (excluding margins) for smarter fitting
+    int contentWidth = nativeWidth; // Default to full page width
+    if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
+    {
+        fz_rect contentBounds = muDoc->getPageContentBounds(m_currentPage);
+        if (!fz_is_empty_rect(contentBounds))
+        {
+            int contentW = static_cast<int>(contentBounds.x1 - contentBounds.x0);
+            if (contentW > 0 && contentW < nativeWidth)
+            {
+                contentWidth = contentW;
+                std::cout << "Content-based fitting: full page width=" << nativeWidth 
+                         << ", content width=" << contentWidth << std::endl;
+            }
+        }
+    }
+
+    // Calculate scale to fit content width with a small margin (95% of window width)
     // This accounts for potential downsampling and provides better visual fit
     double targetWidth = windowWidth * 0.95; // 5% margin
-    m_currentScale = static_cast<int>((targetWidth / nativeWidth) * 100.0);
+    m_currentScale = static_cast<int>((targetWidth / contentWidth) * 100.0);
     
     // Clamp scale to reasonable bounds
     if (m_currentScale < 10)
@@ -1249,6 +1294,18 @@ void App::fitPageToWidth()
     int nativeHeight = effectiveNativeHeight();
     m_pageWidth = static_cast<int>(nativeWidth * (m_currentScale / 100.0));
     m_pageHeight = static_cast<int>(nativeHeight * (m_currentScale / 100.0));
+
+    // Adjust for effective dimensions if MuPDF would downsample
+    if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
+    {
+        int effectiveW = muDoc->getPageWidthEffective(m_currentPage, m_currentScale);
+        int effectiveH = muDoc->getPageHeightEffective(m_currentPage, m_currentScale);
+        if (effectiveW > 0 && effectiveH > 0)
+        {
+            m_pageWidth = effectiveW;
+            m_pageHeight = effectiveH;
+        }
+    }
 
     // Reset horizontal scroll since we're fitting to width
     m_scrollX = 0;
@@ -1281,7 +1338,7 @@ void App::printAppState()
               << m_document->getPageWidthNative(m_currentPage) << "x"
               << m_document->getPageHeightNative(m_currentPage) << std::endl;
     std::cout << "Current Scale: " << m_currentScale << "%" << std::endl;
-    std::cout << "Scaled Page Dimensions: " << m_pageWidth << "x" << m_pageHeight << " (Expected/Actual)" << std::endl;
+    std::cout << "Scaled Page Dimensions: " << m_pageWidth << "x" << m_pageHeight << " (Actual/Rendered)" << std::endl;
     std::cout << "Scroll Position (Page Offset): X=" << m_scrollX << ", Y=" << m_scrollY << std::endl;
     std::cout << "Window Dimensions: " << m_renderer->getWindowWidth() << "x" << m_renderer->getWindowHeight() << std::endl;
     std::cout << "-----------------" << std::endl;
@@ -1771,24 +1828,29 @@ void App::onPageChangedKeepZoom()
 
 void App::alignToTopOfCurrentPage()
 {
-    // Use the same dimensions that the renderer uses for positioning
-    // This should match the calculation in render() where m_pageWidth/Height are set
-    int nativeW = m_document->getPageWidthNative(m_currentPage);
-    int nativeH = m_document->getPageHeightNative(m_currentPage);
-    
-    // Use native page dimensions scaled by zoom for consistent positioning
-    // This matches what the renderer does to prevent misalignment
-    float scaleMultiplier = m_currentScale / 100.0f;
-    int expectedWidth = static_cast<int>(nativeW * scaleMultiplier);
-    int expectedHeight = static_cast<int>(nativeH * scaleMultiplier);
-    
+    // Use effective dimensions for accurate positioning
     int effectiveW, effectiveH;
-    if (m_rotation % 180 == 0) {
-        effectiveW = expectedWidth;
-        effectiveH = expectedHeight;
-    } else {
-        effectiveW = expectedHeight;
-        effectiveH = expectedWidth;
+    if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
+    {
+        effectiveW = muDoc->getPageWidthEffective(m_currentPage, m_currentScale);
+        effectiveH = muDoc->getPageHeightEffective(m_currentPage, m_currentScale);
+    }
+    else
+    {
+        // Fallback to simple calculation
+        int nativeW = m_document->getPageWidthNative(m_currentPage);
+        int nativeH = m_document->getPageHeightNative(m_currentPage);
+        float scaleMultiplier = m_currentScale / 100.0f;
+        int expectedWidth = static_cast<int>(nativeW * scaleMultiplier);
+        int expectedHeight = static_cast<int>(nativeH * scaleMultiplier);
+        
+        if (m_rotation % 180 == 0) {
+            effectiveW = expectedWidth;
+            effectiveH = expectedHeight;
+        } else {
+            effectiveW = expectedHeight;
+            effectiveH = expectedWidth;
+        }
     }
     
     if (effectiveW <= 0 || effectiveH <= 0)
