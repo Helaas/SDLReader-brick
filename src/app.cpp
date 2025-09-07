@@ -51,7 +51,7 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
 #endif
 
     // Determine document type based on file extension
-    // MuPDF supports PDF, CBZ, ZIP (with images), XPS, EPUB, and other formats
+    // MuPDF supports PDF, CBZ, ZIP (with images), XPS, EPUB, MOBI, and other formats
     std::string lowercaseFilename = filename;
     std::transform(lowercaseFilename.begin(), lowercaseFilename.end(), 
                    lowercaseFilename.begin(), ::tolower);
@@ -62,13 +62,14 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
           lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".cbz" ||
           lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".zip")) ||
         (lowercaseFilename.size() >= 5 && 
-         lowercaseFilename.substr(lowercaseFilename.size() - 5) == ".epub")) {
+         (lowercaseFilename.substr(lowercaseFilename.size() - 5) == ".epub" ||
+          lowercaseFilename.substr(lowercaseFilename.size() - 5) == ".mobi"))) {
         m_document = std::make_unique<MuPdfDocument>();
     }
     else
     {
         throw std::runtime_error("Unsupported file format: " + filename + 
-                                " (supported: .pdf, .cbz, .zip)");
+                                " (supported: .pdf, .cbz, .zip, .epub, .mobi)");
     }
 
     if (!m_document->open(filename))

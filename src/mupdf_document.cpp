@@ -59,7 +59,12 @@ bool MuPdfDocument::open(const std::string &filePath)
     }
     fz_catch(ctx)
     {
-        std::cerr << "Failed to open document: " << filePath << "\n";
+        const char* fzError = fz_caught_message(ctx);
+        std::string errorMsg = "Failed to open document: " + filePath;
+        if (fzError && strlen(fzError) > 0) {
+            errorMsg += " (MuPDF error: " + std::string(fzError) + ")";
+        }
+        std::cerr << errorMsg << "\n";
         return false;
     }
 

@@ -31,6 +31,7 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 * **PDF** (`.pdf`)
 * **Comic Book Archive** (`.cbz`, `.zip` containing images)
 * **EPUB** (`.epub`)
+* **MOBI** (`.mobi`) - Kindle e-book format
 
 ## TrimUI Brick Control Scheme
 ![TrimUI Brick Controls](.github/resources/tg5040%20controls.png)
