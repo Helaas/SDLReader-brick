@@ -67,6 +67,7 @@ private:
     std::unique_ptr<fz_document, DocumentDeleter> m_doc;
     std::map<std::pair<int, int>, std::tuple<std::vector<unsigned char>, int, int>> m_cache;
     std::mutex m_cacheMutex;
+    std::mutex m_renderMutex;  // Protects MuPDF context operations
     int m_maxWidth = 1024;
     int m_maxHeight = 768;
     int m_pageCount = 0;

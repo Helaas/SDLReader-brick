@@ -60,6 +60,9 @@ bool MuPdfDocument::open(const std::string &filePath)
 
 std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int &width, int &height, int zoom)
 {
+    // Protect all MuPDF operations with mutex to prevent race conditions
+    std::lock_guard<std::mutex> lock(m_renderMutex);
+    
     if (!m_ctx || !m_doc)
     {
         throw std::runtime_error("Document not open");
@@ -223,6 +226,8 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int &width,
 }
 int MuPdfDocument::getPageWidthNative(int pageNumber)
 {
+    std::lock_guard<std::mutex> lock(m_renderMutex);
+    
     if (!m_ctx || !m_doc)
         return 0;
     
@@ -269,6 +274,8 @@ int MuPdfDocument::getPageWidthNative(int pageNumber)
 
 int MuPdfDocument::getPageHeightNative(int pageNumber)
 {
+    std::lock_guard<std::mutex> lock(m_renderMutex);
+    
     if (!m_ctx || !m_doc)
         return 0;
     
@@ -480,6 +487,8 @@ void MuPdfDocument::close()
 
 bool MuPdfDocument::isPageValid(int pageNumber)
 {
+    std::lock_guard<std::mutex> lock(m_renderMutex);
+    
     if (!m_ctx || !m_doc) {
         return false;
     }
