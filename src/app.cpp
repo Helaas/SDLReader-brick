@@ -1851,12 +1851,10 @@ void App::handleDpadNudgeUp()
 
 void App::onPageChangedKeepZoom()
 {
-    // Clear pixel cache to prevent showing stale page data with new positioning
-    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-    if (muPdfDoc) {
-        muPdfDoc->clearCache();
-    }
-
+    // Don't clear the cache on page changes - we want to keep prerendered pages
+    // The cache is keyed by (page, zoom) so different pages won't interfere
+    // Only clear cache if there's a zoom change, which is handled elsewhere
+    
     // Check that page dimensions are valid
     int nativeW = effectiveNativeWidth();
     int nativeH = effectiveNativeHeight();
