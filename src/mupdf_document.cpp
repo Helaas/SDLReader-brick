@@ -55,6 +55,7 @@ bool MuPdfDocument::open(const std::string &filePath)
 
     m_doc = std::unique_ptr<fz_document, DocumentDeleter>(doc, DocumentDeleter{ctx});
     m_pageCount = fz_count_pages(ctx, doc);
+    
     return true;
 }
 
@@ -81,13 +82,69 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int &width,
         throw std::runtime_error("MuPDF context or document is null");
     }
 
-    // Calculate transform for initial rendering
+    // Calculate transform including downsampling (main branch approach)
     float baseScale = zoom / 100.0f;
+    float downsampleScale = 1.0f;
     
+    // Pre-calculate if we need downsampling to avoid post-processing
+    volatile fz_page *tempPage = nullptr; // Use volatile to prevent longjmp clobbering
+    fz_try(ctx)
+    {
+        // Check if page number is valid before attempting to load
+        int totalPages = fz_count_pages(ctx, doc);
+        if (pageNumber >= totalPages) {
+            throw std::runtime_error("Page number out of range: " + 
+                std::to_string(pageNumber) + " >= " + std::to_string(totalPages));
+        }
+        
+        tempPage = fz_load_page(ctx, doc, pageNumber);
+        if (!tempPage) {
+            throw std::runtime_error("Failed to load page " + std::to_string(pageNumber));
+        }
+        
+        fz_rect bounds = fz_bound_page(ctx, (fz_page*)tempPage);
+        int nativeWidth = static_cast<int>((bounds.x1 - bounds.x0) * baseScale);
+        int nativeHeight = static_cast<int>((bounds.y1 - bounds.y0) * baseScale);
+        
+        // Only downsample if the zoomed image is larger than max size
+        // This allows zooming in for detail up to the max render size
+        if (nativeWidth > m_maxWidth || nativeHeight > m_maxHeight)
+        {
+            float scaleX = static_cast<float>(m_maxWidth) / nativeWidth;
+            float scaleY = static_cast<float>(m_maxHeight) / nativeHeight;
+            downsampleScale = std::min(scaleX, scaleY);
+            
+            // Gradual scaling for zoom levels - avoid cliff effects
+            if (baseScale > 1.0f) {
+                // Calculate how much detail we can afford based on zoom level
+                // Higher zoom = more detail allowed, up to 3.5x window size (350% zoom)
+                float zoomFactor = std::min(baseScale, 3.5f); // Cap at 3.5x
+                float maxDetailScale = zoomFactor;
+                float detailScaleX = static_cast<float>(m_maxWidth * maxDetailScale) / nativeWidth;
+                float detailScaleY = static_cast<float>(m_maxHeight * maxDetailScale) / nativeHeight;
+                float detailScale = std::min(detailScaleX, detailScaleY);
+                
+                // Use the more permissive scale, but ensure smooth transitions
+                downsampleScale = std::max(downsampleScale, detailScale);
+            }
+        }
+        fz_drop_page(ctx, (fz_page*)tempPage);
+    }
+    fz_catch(ctx)
+    {
+        if (tempPage) fz_drop_page(ctx, (fz_page*)tempPage);
+        std::string errorMsg = "Error calculating page bounds for page " + std::to_string(pageNumber);
+        std::cerr << "MuPdfDocument: " << errorMsg << std::endl;
+        throw std::runtime_error(errorMsg);
+    }
+
     // Check cache using exact zoom level for cache key
-    auto key = std::make_pair(pageNumber, zoom);
+    auto key = std::make_pair(pageNumber, zoom); // zoom is already an integer percentage
     
-    std::cout << "Render page " << pageNumber << ": zoom=" << zoom << "% (MuPDF 1.26.7 improved)" << std::endl;
+    std::cout << "Render page " << pageNumber << ": zoom=" << zoom 
+              << "%, baseScale=" << baseScale 
+              << ", downsampleScale=" << downsampleScale 
+              << ", exactZoom=" << zoom << "%" << std::endl;
     
     {
         std::lock_guard<std::mutex> lock(m_cacheMutex);
@@ -103,100 +160,41 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int &width,
         std::cout << "Cache MISS for page " << pageNumber << " at exact zoom " << zoom << "%" << std::endl;
     }
 
-    // Initial transform - render at requested scale
-    fz_matrix transform = fz_scale(baseScale, baseScale);
-    fz_pixmap *originalPix = nullptr;
-    fz_pixmap *finalPix = nullptr;
+    // Apply both base scale and downsample scale in the transform
+    fz_matrix transform = fz_scale(baseScale * downsampleScale, baseScale * downsampleScale);
+    volatile fz_pixmap *pix = nullptr; // Use volatile to prevent longjmp clobbering
     std::vector<unsigned char> buffer;
     
-    fz_var(originalPix);
-    fz_var(finalPix);
-
     fz_try(ctx)
     {
-        fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        volatile fz_page *page = fz_load_page(ctx, doc, pageNumber);
         if (!page) {
             throw std::runtime_error("Failed to load page " + std::to_string(pageNumber) + " for rendering");
         }
 
-        // Render at the requested scale
-        originalPix = fz_new_pixmap_from_page(ctx, page, transform, fz_device_rgb(ctx), 0);
-        if (!originalPix) {
-            fz_drop_page(ctx, page);
+        pix = fz_new_pixmap_from_page(ctx, (fz_page*)page, transform, fz_device_rgb(ctx), 0);
+        if (!pix) {
+            fz_drop_page(ctx, (fz_page*)page);
             throw std::runtime_error("Failed to create pixmap for page " + std::to_string(pageNumber));
         }
 
-        fz_drop_page(ctx, page);
+        fz_drop_page(ctx, (fz_page*)page);
 
-        int originalWidth = fz_pixmap_width(ctx, originalPix);
-        int originalHeight = fz_pixmap_height(ctx, originalPix);
-        
-        std::cout << "Original rendered size: " << originalWidth << "x" << originalHeight << std::endl;
+        width = fz_pixmap_width(ctx, (fz_pixmap*)pix);
+        height = fz_pixmap_height(ctx, (fz_pixmap*)pix);
 
-        // For zoom levels > 100%, allow larger renders to show detail
-        // Calculate effective max size based on zoom level
-        int effectiveMaxWidth = m_maxWidth;
-        int effectiveMaxHeight = m_maxHeight;
-        
-        if (zoom > 100) {
-            // Scale max render size proportionally to zoom level (up to 4x for very high zoom)
-            float zoomFactor = std::min(zoom / 100.0f, 4.0f);
-            effectiveMaxWidth = static_cast<int>(m_maxWidth * zoomFactor);
-            effectiveMaxHeight = static_cast<int>(m_maxHeight * zoomFactor);
-            std::cout << "High zoom detected (" << zoom << "%), using expanded max size: " 
-                      << effectiveMaxWidth << "x" << effectiveMaxHeight << std::endl;
-        }
-
-        // Check if we need to scale down to fit within effective max size constraints
-        if (originalWidth > effectiveMaxWidth || originalHeight > effectiveMaxHeight)
-        {
-            float scaleX = static_cast<float>(effectiveMaxWidth) / originalWidth;
-            float scaleY = static_cast<float>(effectiveMaxHeight) / originalHeight;
-            float scaleDown = std::min(scaleX, scaleY);
-            
-            int newWidth = static_cast<int>(originalWidth * scaleDown);
-            int newHeight = static_cast<int>(originalHeight * scaleDown);
-            
-            std::cout << "Scaling down from " << originalWidth << "x" << originalHeight 
-                      << " to " << newWidth << "x" << newHeight 
-                      << " (scale factor: " << scaleDown << ")" << std::endl;
-            
-            // Use fz_scale_pixmap to scale down - this is the new feature!
-            finalPix = fz_scale_pixmap(ctx, originalPix, 0, 0, newWidth, newHeight, nullptr);
-            if (!finalPix) {
-                throw std::runtime_error("Failed to scale pixmap for page " + std::to_string(pageNumber));
-            }
-            
-            // Clean up original pixmap
-            fz_drop_pixmap(ctx, originalPix);
-            originalPix = nullptr;
-        }
-        else
-        {
-            // No scaling needed, use original pixmap
-            finalPix = originalPix;
-            originalPix = nullptr; // Transfer ownership
-            std::cout << "No scaling needed, using original size" << std::endl;
-        }
-
-        width = fz_pixmap_width(ctx, finalPix);
-        height = fz_pixmap_height(ctx, finalPix);
-
-        std::cout << "Final output size: " << width << "x" << height << std::endl;
-
+        // No post-processing scaling needed - downsampling applied in transform
         size_t dataSize = width * height * 3;
         buffer.resize(dataSize);
-        memcpy(buffer.data(), fz_pixmap_samples(ctx, finalPix), dataSize);
+        memcpy(buffer.data(), fz_pixmap_samples(ctx, (fz_pixmap*)pix), dataSize);
 
-        fz_drop_pixmap(ctx, finalPix);
-        finalPix = nullptr;
+        fz_drop_pixmap(ctx, (fz_pixmap*)pix);
+        pix = nullptr;
     }
     fz_catch(ctx)
     {
-        if (finalPix && finalPix != originalPix)
-            fz_drop_pixmap(ctx, finalPix);
-        if (originalPix)
-            fz_drop_pixmap(ctx, originalPix);
+        if (pix)
+            fz_drop_pixmap(ctx, (fz_pixmap*)pix);
         
         // More detailed error reporting for different types of PDF corruption
         std::string errorMsg = "Error rendering page " + std::to_string(pageNumber);
@@ -324,53 +322,38 @@ int MuPdfDocument::getPageWidthEffective(int pageNumber, int zoom)
 {
     if (!m_ctx || !m_doc)
         return 0;
-    
-    // Validate page number first
-    if (pageNumber < 0 || pageNumber >= m_pageCount) {
-        return 0;
-    }
 
     fz_context *ctx = m_ctx.get();
     fz_document *doc = m_doc.get();
-    
-    // Additional safety check
-    if (!ctx || !doc) {
-        return 0;
-    }
-    
-    int width = 0;
-    fz_page *page = nullptr;
-    
-    fz_var(width);
-    fz_var(page);
+    volatile int width = 0;
 
     fz_try(ctx)
     {
-        page = fz_load_page(ctx, doc, pageNumber);
-        if (!page) {
-            fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to load page");
-        }
-        fz_rect bounds = fz_bound_page(ctx, page);
+        volatile fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        fz_rect bounds = fz_bound_page(ctx, (fz_page*)page);
         int nativeWidth = static_cast<int>(bounds.x1 - bounds.x0);
-        fz_drop_page(ctx, page);
-        page = nullptr;
-        
-        // Apply zoom
+        int nativeHeight = static_cast<int>(bounds.y1 - bounds.y0);
+        fz_drop_page(ctx, (fz_page*)page);
+
         float baseScale = zoom / 100.0f;
         int scaledWidth = static_cast<int>(nativeWidth * baseScale);
-        
-        // Apply downsampling logic matching renderPage
-        if (scaledWidth > m_maxWidth)
+        int scaledHeight = static_cast<int>(nativeHeight * baseScale);
+
+        // Apply downsampling logic (same as renderPage)
+        float downsampleScale = 1.0f;
+        if (scaledWidth > m_maxWidth || scaledHeight > m_maxHeight)
         {
-            float downsampleScale = static_cast<float>(m_maxWidth) / scaledWidth;
-            
+            float scaleX = static_cast<float>(m_maxWidth) / scaledWidth;
+            float scaleY = static_cast<float>(m_maxHeight) / scaledHeight;
+            downsampleScale = std::min(scaleX, scaleY);
+
             // Gradual scaling for zoom levels - avoid cliff effects
             if (baseScale > 1.0f) {
                 float zoomFactor = std::min(baseScale, 3.5f); // Cap at 3.5x
                 float detailScale = static_cast<float>(m_maxWidth * zoomFactor) / scaledWidth;
                 downsampleScale = std::max(downsampleScale, detailScale);
             }
-            
+
             width = static_cast<int>(scaledWidth * downsampleScale);
         }
         else
@@ -380,9 +363,6 @@ int MuPdfDocument::getPageWidthEffective(int pageNumber, int zoom)
     }
     fz_catch(ctx)
     {
-        if (page) {
-            fz_drop_page(ctx, page);
-        }
         width = 0;
     }
 
@@ -393,50 +373,31 @@ int MuPdfDocument::getPageHeightEffective(int pageNumber, int zoom)
 {
     if (!m_ctx || !m_doc)
         return 0;
-    
-    // Validate page number first
-    if (pageNumber < 0 || pageNumber >= m_pageCount) {
-        return 0;
-    }
 
     fz_context *ctx = m_ctx.get();
     fz_document *doc = m_doc.get();
-    
-    // Additional safety check
-    if (!ctx || !doc) {
-        return 0;
-    }
-    
-    int height = 0;
-    fz_page *page = nullptr;
-    
-    fz_var(height);
-    fz_var(page);
+    volatile int height = 0;
 
     fz_try(ctx)
     {
-        page = fz_load_page(ctx, doc, pageNumber);
-        if (!page) {
-            fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to load page");
-        }
-        fz_rect bounds = fz_bound_page(ctx, page);
+        volatile fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        fz_rect bounds = fz_bound_page(ctx, (fz_page*)page);
         int nativeWidth = static_cast<int>(bounds.x1 - bounds.x0);
         int nativeHeight = static_cast<int>(bounds.y1 - bounds.y0);
-        fz_drop_page(ctx, page);
-        page = nullptr;
-        
-        // Apply zoom
+        fz_drop_page(ctx, (fz_page*)page);
+
         float baseScale = zoom / 100.0f;
         int scaledWidth = static_cast<int>(nativeWidth * baseScale);
         int scaledHeight = static_cast<int>(nativeHeight * baseScale);
-        
-        // Apply downsampling logic matching renderPage (maintain aspect ratio)
+
+        // Apply downsampling logic (same as renderPage)
+        float downsampleScale = 1.0f;
         if (scaledWidth > m_maxWidth || scaledHeight > m_maxHeight)
         {
             float scaleX = static_cast<float>(m_maxWidth) / scaledWidth;
             float scaleY = static_cast<float>(m_maxHeight) / scaledHeight;
-            float downsampleScale = std::min(scaleX, scaleY);
-            
+            downsampleScale = std::min(scaleX, scaleY);
+
             // Gradual scaling for zoom levels - avoid cliff effects
             if (baseScale > 1.0f) {
                 float zoomFactor = std::min(baseScale, 3.5f); // Cap at 3.5x
@@ -445,7 +406,7 @@ int MuPdfDocument::getPageHeightEffective(int pageNumber, int zoom)
                 float detailScale = std::min(detailScaleX, detailScaleY);
                 downsampleScale = std::max(downsampleScale, detailScale);
             }
-            
+
             height = static_cast<int>(scaledHeight * downsampleScale);
         }
         else
@@ -455,9 +416,6 @@ int MuPdfDocument::getPageHeightEffective(int pageNumber, int zoom)
     }
     fz_catch(ctx)
     {
-        if (page) {
-            fz_drop_page(ctx, page);
-        }
         height = 0;
     }
 
@@ -622,3 +580,5 @@ void MuPdfDocument::prerenderAdjacentPagesAsync(int currentPage, int scale)
         m_prerenderActive = false;
     });
 }
+
+

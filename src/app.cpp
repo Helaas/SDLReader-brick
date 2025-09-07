@@ -1771,25 +1771,24 @@ void App::onPageChangedKeepZoom()
 
 void App::alignToTopOfCurrentPage()
 {
-    // Recompute extents with current zoom (safe even if already set)
-    // Use effective size for MuPdfDocument to account for downsampling
-    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-    int effectiveW, effectiveH;
+    // Use the same dimensions that the renderer uses for positioning
+    // This should match the calculation in render() where m_pageWidth/Height are set
+    int nativeW = m_document->getPageWidthNative(m_currentPage);
+    int nativeH = m_document->getPageHeightNative(m_currentPage);
     
-    if (muPdfDoc) {
-        effectiveW = muPdfDoc->getPageWidthEffective(m_currentPage, m_currentScale);
-        effectiveH = muPdfDoc->getPageHeightEffective(m_currentPage, m_currentScale);
-        
-        // Apply rotation
-        if (m_rotation % 180 != 0) {
-            std::swap(effectiveW, effectiveH);
-        }
+    // Use native page dimensions scaled by zoom for consistent positioning
+    // This matches what the renderer does to prevent misalignment
+    float scaleMultiplier = m_currentScale / 100.0f;
+    int expectedWidth = static_cast<int>(nativeW * scaleMultiplier);
+    int expectedHeight = static_cast<int>(nativeH * scaleMultiplier);
+    
+    int effectiveW, effectiveH;
+    if (m_rotation % 180 == 0) {
+        effectiveW = expectedWidth;
+        effectiveH = expectedHeight;
     } else {
-        // Fallback for other document types
-        int nativeW = effectiveNativeWidth();
-        int nativeH = effectiveNativeHeight();
-        effectiveW = static_cast<int>(nativeW * (m_currentScale / 100.0));
-        effectiveH = static_cast<int>(nativeH * (m_currentScale / 100.0));
+        effectiveW = expectedHeight;
+        effectiveH = expectedWidth;
     }
     
     if (effectiveW <= 0 || effectiveH <= 0)
@@ -1798,30 +1797,21 @@ void App::alignToTopOfCurrentPage()
     m_pageWidth = effectiveW;
     m_pageHeight = effectiveH;
 
-    // If the page is taller than the window, place the view at the *top edge*
-    // With your clamp scheme, "top edge" corresponds to +maxY
+    // Always align to top of page when changing pages
+    // Reset both scroll positions to ensure we start at top-left
+    m_scrollX = 0;
+    m_scrollY = 0;
+    
+    // If the page is taller than the window, we need to adjust scrollY to show top
     int windowH = m_renderer->getWindowHeight();
     int maxY = std::max(0, (m_pageHeight - windowH) / 2);
 
     if (maxY > 0)
     {
-        m_scrollY = +maxY; // top edge visible
-        clampScroll();
+        m_scrollY = +maxY; // Show top edge of page
     }
-    else
-    {
-        // Page fits within window height - center it or align to top based on preference
-        // Instead of using the flag, just set scroll position consistently
-        if (m_topAlignWhenFits) {
-            // For top alignment when page fits, we want the page to appear at the top
-            // This means positioning should be consistent with the rendering calculation
-            m_scrollY = 0;
-        } else {
-            // For center alignment when page fits  
-            m_scrollY = 0;
-        }
-        clampScroll();
-    }
+    
+    clampScroll();
 }
 
 int App::effectiveNativeWidth() const

@@ -68,8 +68,8 @@ private:
     std::map<std::pair<int, int>, std::tuple<std::vector<unsigned char>, int, int>> m_cache;
     std::mutex m_cacheMutex;
     std::mutex m_renderMutex;  // Protects MuPDF context operations
-    int m_maxWidth = 1024;
-    int m_maxHeight = 768;
+    int m_maxWidth = 2048;   // Increased from 1024 for better quality
+    int m_maxHeight = 1536;  // Increased from 768 for better quality
     int m_pageCount = 0;
     
     // Background prerendering support
