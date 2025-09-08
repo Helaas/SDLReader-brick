@@ -1444,6 +1444,9 @@ bool App::updateHeldPanning(float dt)
     // Check if we're in scroll timeout after a page change
     bool inScrollTimeout = isInScrollTimeout();
     
+    // Track if scrolling actually happened this frame
+    bool scrollingOccurred = false;
+    
     if (dx != 0.0f || dy != 0.0f)
     {
         if (inScrollTimeout) {
@@ -1477,6 +1480,7 @@ bool App::updateHeldPanning(float dt)
             
             if (m_scrollX != oldScrollX || m_scrollY != oldScrollY) {
                 changed = true;
+                scrollingOccurred = true;
             }
         }
     }
@@ -1492,24 +1496,31 @@ bool App::updateHeldPanning(float dt)
 
     // Reset edge-turn timers during scroll timeout to prevent accumulated time from previous page
     if (inScrollTimeout) {
+        if (m_edgeTurnHoldRight > 0.0f || m_edgeTurnHoldLeft > 0.0f || m_edgeTurnHoldUp > 0.0f || m_edgeTurnHoldDown > 0.0f) {
+            printf("DEBUG: Resetting edge-turn timers due to scroll timeout (timeout duration: %dms)\n", m_lastRenderDuration);
+        }
+        m_edgeTurnHoldRight = 0.0f;
+        m_edgeTurnHoldLeft = 0.0f;
+        m_edgeTurnHoldUp = 0.0f;
+        m_edgeTurnHoldDown = 0.0f;
+    } else if (scrollingOccurred) {
+        // Reset edge-turn timers if user is actively scrolling - only start timer when stationary at edge
+        if (m_edgeTurnHoldRight > 0.0f || m_edgeTurnHoldLeft > 0.0f || m_edgeTurnHoldUp > 0.0f || m_edgeTurnHoldDown > 0.0f) {
+            printf("DEBUG: Resetting edge-turn timers due to active scrolling\n");
+        }
         m_edgeTurnHoldRight = 0.0f;
         m_edgeTurnHoldLeft = 0.0f;
         m_edgeTurnHoldUp = 0.0f;
         m_edgeTurnHoldDown = 0.0f;
     } else {
-        // Only accumulate edge-turn time when not in scroll timeout
+        // Only accumulate edge-turn time when not in scroll timeout AND not actively scrolling
         if (maxX == 0)
         {
-            static bool debugShown = false;
-            if (!debugShown) {
-                printf("DEBUG: Edge-turn conditions met - maxX=0, checking D-pad states\n");
-                debugShown = true;
-            }
             if (m_dpadRightHeld) {
                 float oldTime = m_edgeTurnHoldRight;
                 m_edgeTurnHoldRight += dt;
                 if (oldTime == 0.0f && m_edgeTurnHoldRight > 0.0f) {
-                    printf("DEBUG: Right edge-turn timer started\n");
+                    printf("DEBUG: Right edge-turn timer started (maxX=0)\n");
                 }
             } else {
                 m_edgeTurnHoldRight = 0.0f;
@@ -1518,7 +1529,7 @@ bool App::updateHeldPanning(float dt)
                 float oldTime = m_edgeTurnHoldLeft;
                 m_edgeTurnHoldLeft += dt;
                 if (oldTime == 0.0f && m_edgeTurnHoldLeft > 0.0f) {
-                    printf("DEBUG: Left edge-turn timer started\n");
+                    printf("DEBUG: Left edge-turn timer started (maxX=0)\n");
                 }
             } else {
                 m_edgeTurnHoldLeft = 0.0f;
@@ -1529,28 +1540,30 @@ bool App::updateHeldPanning(float dt)
             // Use small tolerance for edge detection to handle rounding issues
             const int edgeTolerance = 2; // pixels
             
-            static bool debugShown = false;
-            if (!debugShown) {
-                printf("DEBUG: Edge-turn conditions met - maxX=%d>0, scrollX=%d, checking scroll-based edges\n", maxX, m_scrollX);
-                debugShown = true;
-            }
-            
             if (m_scrollX <= (-maxX + edgeTolerance) && m_dpadRightHeld) {
                 float oldTime = m_edgeTurnHoldRight;
                 m_edgeTurnHoldRight += dt;
                 if (oldTime == 0.0f && m_edgeTurnHoldRight > 0.0f) {
-                    printf("DEBUG: Right edge-turn timer started (scroll-based)\n");
+                    printf("DEBUG: Right edge-turn timer started (scroll-based, scrollX=%d, threshold=%d)\n", m_scrollX, -maxX + edgeTolerance);
                 }
             } else {
+                if (m_dpadRightHeld && m_edgeTurnHoldRight > 0.0f) {
+                    printf("DEBUG: Right edge-turn timer stopped (scrollX=%d, threshold=%d, held=%s)\n", 
+                           m_scrollX, -maxX + edgeTolerance, m_dpadRightHeld ? "YES" : "NO");
+                }
                 m_edgeTurnHoldRight = 0.0f;
             }
             if (m_scrollX >= (maxX - edgeTolerance) && m_dpadLeftHeld) {
                 float oldTime = m_edgeTurnHoldLeft;
                 m_edgeTurnHoldLeft += dt;
                 if (oldTime == 0.0f && m_edgeTurnHoldLeft > 0.0f) {
-                    printf("DEBUG: Left edge-turn timer started (scroll-based)\n");
+                    printf("DEBUG: Left edge-turn timer started (scroll-based, scrollX=%d, threshold=%d)\n", m_scrollX, maxX - edgeTolerance);
                 }
             } else {
+                if (m_dpadLeftHeld && m_edgeTurnHoldLeft > 0.0f) {
+                    printf("DEBUG: Left edge-turn timer stopped (scrollX=%d, threshold=%d, held=%s)\n", 
+                           m_scrollX, maxX - edgeTolerance, m_dpadLeftHeld ? "YES" : "NO");
+                }
                 m_edgeTurnHoldLeft = 0.0f;
             }
         }
@@ -1604,8 +1617,8 @@ bool App::updateHeldPanning(float dt)
     // --- VERTICAL edge → page turn (NEW) ---
     const int maxY = getMaxScrollY();
 
-    if (!inScrollTimeout) {
-        // Only accumulate edge-turn time when not in scroll timeout
+    if (!inScrollTimeout && !scrollingOccurred) {
+        // Only accumulate edge-turn time when not in scroll timeout AND not actively scrolling
         if (maxY == 0)
         {
             // Page fits vertically: treat sustained up/down as page turns
@@ -1655,6 +1668,13 @@ bool App::updateHeldPanning(float dt)
                 m_edgeTurnHoldUp = 0.0f;
             }
         }
+    } else if (scrollingOccurred) {
+        // Reset vertical edge-turn timers if actively scrolling
+        if (m_edgeTurnHoldUp > 0.0f || m_edgeTurnHoldDown > 0.0f) {
+            printf("DEBUG: Resetting vertical edge-turn timers due to active scrolling\n");
+        }
+        m_edgeTurnHoldUp = 0.0f;
+        m_edgeTurnHoldDown = 0.0f;
     }
 
     if (m_edgeTurnHoldDown >= m_edgeTurnThreshold)
@@ -1730,8 +1750,9 @@ void App::handleDpadNudgeRight()
 {
     const int maxX = getMaxScrollX();
     
-    printf("DEBUG: Right nudge called - maxX=%d, scrollX=%d, condition=%s\n", 
-           maxX, m_scrollX, (maxX == 0 || m_scrollX <= (-maxX + 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
+    printf("DEBUG: Right nudge called - maxX=%d, scrollX=%d, condition=%s, inScrollTimeout=%s\n", 
+           maxX, m_scrollX, (maxX == 0 || m_scrollX <= (-maxX + 2)) ? "AT_EDGE" : "NOT_AT_EDGE",
+           isInScrollTimeout() ? "YES" : "NO");
     
     // Right nudge while already at right edge
     if (maxX == 0 || m_scrollX <= (-maxX + 2)) // Use same tolerance as edge-turn system
@@ -1743,16 +1764,19 @@ void App::handleDpadNudgeRight()
             {
                 if (m_currentPage < m_pageCount - 1 && !isInPageChangeCooldown())
                 {
+                    printf("DEBUG: Immediate page change via nudge (fit-to-width)\n");
                     goToNextPage();
                     m_scrollX = getMaxScrollX(); // appear at left edge of new page
                     clampScroll();
                 }
             }
+        } else {
+            // For zoomed pages (maxX > 0): defer to progress bar system
+            printf("DEBUG: Zoomed page at edge - deferring to progress bar system\n");
         }
-        // For zoomed pages (maxX > 0): always defer to progress bar system
-        // This ensures a progress bar always appears when holding D-pad at edge
         return;
     }
+    printf("DEBUG: Normal scroll - moving right\n");
     m_scrollX -= 50;
     clampScroll();
 }
