@@ -724,19 +724,22 @@ void App::renderCurrentPage()
               << " (native " << nativeW << "x" << nativeH << " at " << m_currentScale << "%) "
               << "rendered " << srcW << "x" << srcH << std::endl;
 
-    int posX = (winW - m_pageWidth) / 2 + m_scrollX;
+    // Use consistent dimensions for positioning to avoid rubber banding after zoom
+    auto [effectivePageWidth, effectivePageHeight] = getEffectivePageDimensions();
+
+    int posX = (winW - effectivePageWidth) / 2 + m_scrollX;
 
     int posY;
-    if (m_pageHeight <= winH)
+    if (effectivePageHeight <= winH)
     {
         if (m_topAlignWhenFits)
             posY = 0;
         else
-            posY = (winH - m_pageHeight) / 2;
+            posY = (winH - effectivePageHeight) / 2;
     }
     else
     {
-        posY = (winH - m_pageHeight) / 2 + m_scrollY;
+        posY = (winH - effectivePageHeight) / 2 + m_scrollY;
     }
 
     // Use actual rendered dimensions for the renderPageEx call to prevent white bars
@@ -1217,8 +1220,11 @@ void App::clampScroll()
     int windowWidth = m_renderer->getWindowWidth();
     int windowHeight = m_renderer->getWindowHeight();
 
-    int maxScrollX = std::max(0, (m_pageWidth - windowWidth) / 2);
-    int maxScrollY = std::max(0, (m_pageHeight - windowHeight) / 2);
+    // Use effective dimensions when available to avoid panning issues after zoom operations
+    auto [effectivePageWidth, effectivePageHeight] = getEffectivePageDimensions();
+
+    int maxScrollX = std::max(0, (effectivePageWidth - windowWidth) / 2);
+    int maxScrollY = std::max(0, (effectivePageHeight - windowHeight) / 2);
 
     m_scrollX = std::max(-maxScrollX, std::min(maxScrollX, m_scrollX));
     m_scrollY = std::max(-maxScrollY, std::min(maxScrollY, m_scrollY));
@@ -1708,12 +1714,14 @@ bool App::updateHeldPanning(float dt)
 int App::getMaxScrollX() const
 {
     int windowWidth = m_renderer->getWindowWidth();
-    return std::max(0, (m_pageWidth - windowWidth) / 2);
+    auto [effectivePageWidth, effectivePageHeight] = getEffectivePageDimensions();
+    return std::max(0, (effectivePageWidth - windowWidth) / 2);
 }
 int App::getMaxScrollY() const
 {
     int windowHeight = m_renderer->getWindowHeight();
-    return std::max(0, (m_pageHeight - windowHeight) / 2);
+    auto [effectivePageWidth, effectivePageHeight] = getEffectivePageDimensions();
+    return std::max(0, (effectivePageHeight - windowHeight) / 2);
 }
 
 void App::handleDpadNudgeRight()
@@ -2045,4 +2053,27 @@ void App::confirmPageJumpInput()
     
     m_pageJumpInputActive = false;
     m_pageJumpBuffer.clear();
+}
+
+std::pair<int, int> App::getEffectivePageDimensions() const
+{
+    int effectivePageWidth = m_pageWidth;
+    int effectivePageHeight = m_pageHeight;
+    
+    if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
+    {
+        try {
+            int effectiveW = muDoc->getPageWidthEffective(m_currentPage, m_currentScale);
+            int effectiveH = muDoc->getPageHeightEffective(m_currentPage, m_currentScale);
+            if (effectiveW > 0 && effectiveH > 0)
+            {
+                effectivePageWidth = effectiveW;
+                effectivePageHeight = effectiveH;
+            }
+        } catch (const std::exception& e) {
+            // Fall back to stored dimensions if effective dimensions fail
+        }
+    }
+    
+    return std::make_pair(effectivePageWidth, effectivePageHeight);
 }

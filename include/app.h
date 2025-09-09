@@ -236,6 +236,9 @@ private:
     // Rendering optimization
     bool m_needsRedraw{true}; // Flag to indicate when screen needs to be redrawn
     void markDirty() { m_needsRedraw = true; }
+    
+    // Helper to get effective page dimensions (accounts for MuPDF downsampling)
+    std::pair<int, int> getEffectivePageDimensions() const;
 };
 
 #endif // APP_H
