@@ -164,17 +164,12 @@ private:
     Uint32 m_lastPageChangeTime{0};
     static constexpr Uint32 PAGE_CHANGE_COOLDOWN = 300; // 300ms cooldown after page change
     
-    // Dynamic timeout based on actual rendering time (used for both scroll timeout and zoom debouncing)
+    // Render duration tracking (used for zoom debouncing)
     Uint32 m_lastRenderDuration{300}; // Default to 300ms if no render time measured yet
     
     // Check if we're in page change cooldown period
     bool isInPageChangeCooldown() const {
         return (SDL_GetTicks() - m_lastPageChangeTime) < PAGE_CHANGE_COOLDOWN;
-    }
-    
-    // Check if we should block scrolling after a page change (using dynamic timeout)
-    bool isInScrollTimeout() const {
-        return (SDL_GetTicks() - m_lastPageChangeTime) < m_lastRenderDuration;
     }
 
     // Try a one-shot nudge; if at the edge, flip the page instead.
