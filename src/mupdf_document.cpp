@@ -486,7 +486,7 @@ void MuPdfDocument::prerenderPage(int pageNumber, int scale)
             int nativeWidth = static_cast<int>((bounds.x1 - bounds.x0) * baseScale);
             int nativeHeight = static_cast<int>((bounds.y1 - bounds.y0) * baseScale);
             
-            const float oversizeTolerance = 1.5f;
+            const float oversizeTolerance = 1.0f;
             if (nativeWidth > m_maxWidth * oversizeTolerance || nativeHeight > m_maxHeight * oversizeTolerance)
             {
                 float scaleX = static_cast<float>(m_maxWidth) / nativeWidth;
