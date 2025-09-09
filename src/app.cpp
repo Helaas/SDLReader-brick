@@ -3,7 +3,6 @@
 #include "text_renderer.h"
 #include "document.h"
 #include "mupdf_document.h"
-#include "page_preloader.h"
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
 #endif
@@ -63,13 +62,14 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
           lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".cbz" ||
           lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".zip")) ||
         (lowercaseFilename.size() >= 5 && 
-         lowercaseFilename.substr(lowercaseFilename.size() - 5) == ".epub")) {
+         (lowercaseFilename.substr(lowercaseFilename.size() - 5) == ".epub" ||
+          lowercaseFilename.substr(lowercaseFilename.size() - 5) == ".mobi"))) {
         m_document = std::make_unique<MuPdfDocument>();
     }
     else
     {
         throw std::runtime_error("Unsupported file format: " + filename + 
-                                " (supported: .pdf, .cbz, .zip)");
+                                " (supported: .pdf, .cbz, .zip, .epub, .mobi)");
     }
 
     if (!m_document->open(filename))
@@ -100,22 +100,10 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
 
     // Initialize game controllers
     initializeGameControllers();
-    
-    // Initialize page preloader
-    m_pagePreloader = std::make_unique<PagePreloader>(this, m_document.get());
-    m_pagePreloader->start();
-    
-    // Start preloading pages ahead of current page
-    m_pagePreloader->requestPreload(m_currentPage, m_currentScale);
 }
 
 App::~App()
 {
-    // Stop page preloader first
-    if (m_pagePreloader) {
-        m_pagePreloader->stop();
-    }
-    
 #ifdef TG5040_PLATFORM
     if (m_powerHandler) {
         m_powerHandler->stop();
@@ -686,13 +674,6 @@ void App::renderCurrentPage()
 {
     Uint32 renderStart = SDL_GetTicks();
     
-    // Try to use preloaded page first
-    if (tryRenderPreloadedPage(renderStart)) {
-        return;
-    }
-    
-    // Fall back to regular rendering if no preloaded page available
-    std::cout << "FALLBACK: Using direct render for page " << m_currentPage << " at scale " << m_currentScale << std::endl;
     m_renderer->clear(255, 255, 255, 255);
 
     int winW = m_renderer->getWindowWidth();
@@ -739,110 +720,15 @@ void App::renderCurrentPage()
                              static_cast<double>(m_rotation),
                              currentFlipFlags());
     
-    // Measure total render time for dynamic timeout
-    m_lastRenderDuration = SDL_GetTicks() - renderStart;
-}
-
-bool App::tryRenderPreloadedPage(Uint32 renderStart)
-{
-    if (!m_pagePreloader) {
-        return false;
+    // Trigger prerendering of adjacent pages for faster page changes
+    // Do this after the main render to avoid blocking the current page display
+    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+    if (muPdfDoc) {
+        muPdfDoc->prerenderAdjacentPagesAsync(m_currentPage, m_currentScale);
     }
-    
-    // Try to get preloaded page
-    auto preloadedPage = m_pagePreloader->getPreloadedPage(m_currentPage, m_currentScale);
-    if (!preloadedPage) {
-        std::cout << "PRELOAD MISS: No preloaded page for page " << m_currentPage << " at scale " << m_currentScale << std::endl;
-        return false; // No preloaded page available
-    }
-    
-    std::cout << "PRELOAD HIT: Using preloaded page " << m_currentPage << " at scale " << m_currentScale << std::endl;
-    
-    // Additional safety check: verify page data is valid before using it
-    if (preloadedPage->pixelData.empty() || preloadedPage->width <= 0 || preloadedPage->height <= 0) {
-        std::cerr << "App: Invalid preloaded page data for page " << m_currentPage 
-                  << ", falling back to direct render" << std::endl;
-        return false; // Page data is corrupted, fall back to direct rendering
-    }
-    
-    m_renderer->clear(255, 255, 255, 255);
-
-    int winW = m_renderer->getWindowWidth();
-    int winH = m_renderer->getWindowHeight();
-
-    int srcW = preloadedPage->width;
-    int srcH = preloadedPage->height;
-
-    // displayed page size after rotation
-    if (m_rotation % 180 == 0)
-    {
-        m_pageWidth = srcW;
-        m_pageHeight = srcH;
-    }
-    else
-    {
-        m_pageWidth = srcH;
-        m_pageHeight = srcW;
-    }
-
-    int posX = (winW - m_pageWidth) / 2 + m_scrollX;
-
-    int posY;
-    if (m_pageHeight <= winH)
-    {
-        if (m_topAlignWhenFits || m_forceTopAlignNextRender)
-            posY = 0;
-        else
-            posY = (winH - m_pageHeight) / 2;
-    }
-    else
-    {
-        posY = (winH - m_pageHeight) / 2 + m_scrollY;
-    }
-    m_forceTopAlignNextRender = false;
-
-    // Make a local copy of critical data to avoid race conditions during rendering
-    std::vector<uint8_t> localPixelData;
-    try {
-        // Additional null check before accessing the shared_ptr
-        if (!preloadedPage) {
-            std::cerr << "App: PreloadedPage became null during rendering for page " << m_currentPage << std::endl;
-            return false;
-        }
-        
-        // Check if the pixel data vector is in a valid state before copying
-        if (preloadedPage->pixelData.data() == nullptr && !preloadedPage->pixelData.empty()) {
-            std::cerr << "App: PreloadedPage has corrupted pixel data for page " << m_currentPage << std::endl;
-            return false;
-        }
-        
-        // Reserve space first to avoid potential reallocation issues during copy
-        localPixelData.reserve(preloadedPage->pixelData.size());
-        localPixelData = preloadedPage->pixelData; // Copy pixel data locally
-        
-        // Final validation of local copy
-        if (localPixelData.empty()) {
-            std::cerr << "App: Local pixel data copy is empty for page " << m_currentPage << std::endl;
-            return false;
-        }
-    } catch (const std::exception& e) {
-        std::cerr << "App: Error copying pixel data for page " << m_currentPage 
-                  << ": " << e.what() << std::endl;
-        return false;
-    } catch (...) {
-        std::cerr << "App: Unknown error copying pixel data for page " << m_currentPage << std::endl;
-        return false;
-    }
-
-    m_renderer->renderPageEx(localPixelData, srcW, srcH,
-                             posX, posY, m_pageWidth, m_pageHeight,
-                             static_cast<double>(m_rotation),
-                             currentFlipFlags());
     
     // Measure total render time for dynamic timeout
     m_lastRenderDuration = SDL_GetTicks() - renderStart;
-    
-    return true; // Successfully rendered preloaded page
 }
 
 void App::renderUI()
@@ -1096,11 +982,6 @@ void App::goToNextPage()
         
         // Set cooldown timer to prevent rapid page changes during panning
         m_lastPageChangeTime = SDL_GetTicks();
-        
-        // Request preloading of upcoming pages
-        if (m_pagePreloader) {
-            m_pagePreloader->requestPreload(m_currentPage, m_currentScale);
-        }
     }
 }
 
@@ -1117,11 +998,6 @@ void App::goToPreviousPage()
         
         // Set cooldown timer to prevent rapid page changes during panning
         m_lastPageChangeTime = SDL_GetTicks();
-        
-        // Request preloading of upcoming pages
-        if (m_pagePreloader) {
-            m_pagePreloader->requestPreload(m_currentPage, m_currentScale);
-        }
     }
 }
 
@@ -1135,11 +1011,6 @@ void App::goToPage(int pageNum)
         updateScaleDisplayTime();
         updatePageDisplayTime();
         markDirty();
-        
-        // Request preloading of upcoming pages
-        if (m_pagePreloader) {
-            m_pagePreloader->requestPreload(m_currentPage, m_currentScale);
-        }
     }
 }
 
@@ -1179,11 +1050,13 @@ void App::zoomTo(int scale)
     updatePageDisplayTime();
     markDirty();
     
-    // Only trigger preloading if we're not in the middle of debouncing zoom input
-    // During debouncing, we'll trigger preloading once when the final zoom is applied
-    if (m_pagePreloader && oldScale != m_currentScale && !isZoomDebouncing()) {
-        m_pagePreloader->clearCache();
-        m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
+    // Only clear cache if we're not in the middle of debouncing zoom input
+    // During debouncing, we'll clear cache once when the final zoom is applied
+    if (oldScale != m_currentScale && !isZoomDebouncing()) {
+        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+        if (muPdfDoc) {
+            muPdfDoc->clearCache();
+        }
     }
 }
 
@@ -1206,10 +1079,12 @@ void App::applyPendingZoom()
     updatePageDisplayTime();
     markDirty();
     
-    // Clear cache and request bidirectional preloading at new scale
-    if (m_pagePreloader && oldScale != m_currentScale) {
-        m_pagePreloader->clearCache();
-        m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
+    // Clear cache at new scale
+    if (oldScale != m_currentScale) {
+        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+        if (muPdfDoc) {
+            muPdfDoc->clearCache();
+        }
     }
 
     // Reset pending zoom
@@ -1263,11 +1138,13 @@ void App::fitPageToWindow()
     updatePageDisplayTime();
     markDirty();
     
-    // Only trigger preloading if we're not in the middle of debouncing zoom input
-    // During debouncing, we'll trigger preloading once when the final zoom is applied
-    if (m_pagePreloader && oldScale != m_currentScale && !isZoomDebouncing()) {
-        m_pagePreloader->clearCache();
-        m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
+    // Only clear cache if we're not in the middle of debouncing zoom input
+    // During debouncing, we'll clear cache once when the final zoom is applied
+    if (oldScale != m_currentScale && !isZoomDebouncing()) {
+        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+        if (muPdfDoc) {
+            muPdfDoc->clearCache();
+        }
     }
 }
 
@@ -1404,11 +1281,13 @@ void App::fitPageToWidth()
     updatePageDisplayTime();
     markDirty();
     
-    // Only trigger preloading if we're not in the middle of debouncing zoom input
-    // During debouncing, we'll trigger preloading once when the final zoom is applied  
-    if (m_pagePreloader && oldScale != m_currentScale && !isZoomDebouncing()) {
-        m_pagePreloader->clearCache();
-        m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
+    // Only clear cache if we're not in the middle of debouncing zoom input
+    // During debouncing, we'll clear cache once when the final zoom is applied  
+    if (oldScale != m_currentScale && !isZoomDebouncing()) {
+        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+        if (muPdfDoc) {
+            muPdfDoc->clearCache();
+        }
     }
 }
 
@@ -1479,6 +1358,9 @@ bool App::updateHeldPanning(float dt)
     // Check if we're in scroll timeout after a page change
     bool inScrollTimeout = isInScrollTimeout();
     
+    // Track if scrolling actually happened this frame
+    bool scrollingOccurred = false;
+    
     if (dx != 0.0f || dy != 0.0f)
     {
         if (inScrollTimeout) {
@@ -1512,6 +1394,7 @@ bool App::updateHeldPanning(float dt)
             
             if (m_scrollX != oldScrollX || m_scrollY != oldScrollY) {
                 changed = true;
+                scrollingOccurred = true;
             }
         }
     }
@@ -1527,24 +1410,31 @@ bool App::updateHeldPanning(float dt)
 
     // Reset edge-turn timers during scroll timeout to prevent accumulated time from previous page
     if (inScrollTimeout) {
+        if (m_edgeTurnHoldRight > 0.0f || m_edgeTurnHoldLeft > 0.0f || m_edgeTurnHoldUp > 0.0f || m_edgeTurnHoldDown > 0.0f) {
+            printf("DEBUG: Resetting edge-turn timers due to scroll timeout (timeout duration: %dms)\n", m_lastRenderDuration);
+        }
+        m_edgeTurnHoldRight = 0.0f;
+        m_edgeTurnHoldLeft = 0.0f;
+        m_edgeTurnHoldUp = 0.0f;
+        m_edgeTurnHoldDown = 0.0f;
+    } else if (scrollingOccurred) {
+        // Reset edge-turn timers if user is actively scrolling - only start timer when stationary at edge
+        if (m_edgeTurnHoldRight > 0.0f || m_edgeTurnHoldLeft > 0.0f || m_edgeTurnHoldUp > 0.0f || m_edgeTurnHoldDown > 0.0f) {
+            printf("DEBUG: Resetting edge-turn timers due to active scrolling\n");
+        }
         m_edgeTurnHoldRight = 0.0f;
         m_edgeTurnHoldLeft = 0.0f;
         m_edgeTurnHoldUp = 0.0f;
         m_edgeTurnHoldDown = 0.0f;
     } else {
-        // Only accumulate edge-turn time when not in scroll timeout
+        // Only accumulate edge-turn time when not in scroll timeout AND not actively scrolling
         if (maxX == 0)
         {
-            static bool debugShown = false;
-            if (!debugShown) {
-                printf("DEBUG: Edge-turn conditions met - maxX=0, checking D-pad states\n");
-                debugShown = true;
-            }
             if (m_dpadRightHeld) {
                 float oldTime = m_edgeTurnHoldRight;
                 m_edgeTurnHoldRight += dt;
                 if (oldTime == 0.0f && m_edgeTurnHoldRight > 0.0f) {
-                    printf("DEBUG: Right edge-turn timer started\n");
+                    printf("DEBUG: Right edge-turn timer started (maxX=0)\n");
                 }
             } else {
                 m_edgeTurnHoldRight = 0.0f;
@@ -1553,7 +1443,7 @@ bool App::updateHeldPanning(float dt)
                 float oldTime = m_edgeTurnHoldLeft;
                 m_edgeTurnHoldLeft += dt;
                 if (oldTime == 0.0f && m_edgeTurnHoldLeft > 0.0f) {
-                    printf("DEBUG: Left edge-turn timer started\n");
+                    printf("DEBUG: Left edge-turn timer started (maxX=0)\n");
                 }
             } else {
                 m_edgeTurnHoldLeft = 0.0f;
@@ -1564,28 +1454,30 @@ bool App::updateHeldPanning(float dt)
             // Use small tolerance for edge detection to handle rounding issues
             const int edgeTolerance = 2; // pixels
             
-            static bool debugShown = false;
-            if (!debugShown) {
-                printf("DEBUG: Edge-turn conditions met - maxX=%d>0, scrollX=%d, checking scroll-based edges\n", maxX, m_scrollX);
-                debugShown = true;
-            }
-            
             if (m_scrollX <= (-maxX + edgeTolerance) && m_dpadRightHeld) {
                 float oldTime = m_edgeTurnHoldRight;
                 m_edgeTurnHoldRight += dt;
                 if (oldTime == 0.0f && m_edgeTurnHoldRight > 0.0f) {
-                    printf("DEBUG: Right edge-turn timer started (scroll-based)\n");
+                    printf("DEBUG: Right edge-turn timer started (scroll-based, scrollX=%d, threshold=%d)\n", m_scrollX, -maxX + edgeTolerance);
                 }
             } else {
+                if (m_dpadRightHeld && m_edgeTurnHoldRight > 0.0f) {
+                    printf("DEBUG: Right edge-turn timer stopped (scrollX=%d, threshold=%d, held=%s)\n", 
+                           m_scrollX, -maxX + edgeTolerance, m_dpadRightHeld ? "YES" : "NO");
+                }
                 m_edgeTurnHoldRight = 0.0f;
             }
             if (m_scrollX >= (maxX - edgeTolerance) && m_dpadLeftHeld) {
                 float oldTime = m_edgeTurnHoldLeft;
                 m_edgeTurnHoldLeft += dt;
                 if (oldTime == 0.0f && m_edgeTurnHoldLeft > 0.0f) {
-                    printf("DEBUG: Left edge-turn timer started (scroll-based)\n");
+                    printf("DEBUG: Left edge-turn timer started (scroll-based, scrollX=%d, threshold=%d)\n", m_scrollX, maxX - edgeTolerance);
                 }
             } else {
+                if (m_dpadLeftHeld && m_edgeTurnHoldLeft > 0.0f) {
+                    printf("DEBUG: Left edge-turn timer stopped (scrollX=%d, threshold=%d, held=%s)\n", 
+                           m_scrollX, maxX - edgeTolerance, m_dpadLeftHeld ? "YES" : "NO");
+                }
                 m_edgeTurnHoldLeft = 0.0f;
             }
         }
@@ -1639,8 +1531,8 @@ bool App::updateHeldPanning(float dt)
     // --- VERTICAL edge → page turn (NEW) ---
     const int maxY = getMaxScrollY();
 
-    if (!inScrollTimeout) {
-        // Only accumulate edge-turn time when not in scroll timeout
+    if (!inScrollTimeout && !scrollingOccurred) {
+        // Only accumulate edge-turn time when not in scroll timeout AND not actively scrolling
         if (maxY == 0)
         {
             // Page fits vertically: treat sustained up/down as page turns
@@ -1690,6 +1582,13 @@ bool App::updateHeldPanning(float dt)
                 m_edgeTurnHoldUp = 0.0f;
             }
         }
+    } else if (scrollingOccurred) {
+        // Reset vertical edge-turn timers if actively scrolling
+        if (m_edgeTurnHoldUp > 0.0f || m_edgeTurnHoldDown > 0.0f) {
+            printf("DEBUG: Resetting vertical edge-turn timers due to active scrolling\n");
+        }
+        m_edgeTurnHoldUp = 0.0f;
+        m_edgeTurnHoldDown = 0.0f;
     }
 
     if (m_edgeTurnHoldDown >= m_edgeTurnThreshold)
@@ -1765,8 +1664,9 @@ void App::handleDpadNudgeRight()
 {
     const int maxX = getMaxScrollX();
     
-    printf("DEBUG: Right nudge called - maxX=%d, scrollX=%d, condition=%s\n", 
-           maxX, m_scrollX, (maxX == 0 || m_scrollX <= (-maxX + 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
+    printf("DEBUG: Right nudge called - maxX=%d, scrollX=%d, condition=%s, inScrollTimeout=%s\n", 
+           maxX, m_scrollX, (maxX == 0 || m_scrollX <= (-maxX + 2)) ? "AT_EDGE" : "NOT_AT_EDGE",
+           isInScrollTimeout() ? "YES" : "NO");
     
     // Right nudge while already at right edge
     if (maxX == 0 || m_scrollX <= (-maxX + 2)) // Use same tolerance as edge-turn system
@@ -1778,16 +1678,19 @@ void App::handleDpadNudgeRight()
             {
                 if (m_currentPage < m_pageCount - 1 && !isInPageChangeCooldown())
                 {
+                    printf("DEBUG: Immediate page change via nudge (fit-to-width)\n");
                     goToNextPage();
                     m_scrollX = getMaxScrollX(); // appear at left edge of new page
                     clampScroll();
                 }
             }
+        } else {
+            // For zoomed pages (maxX > 0): defer to progress bar system
+            printf("DEBUG: Zoomed page at edge - deferring to progress bar system\n");
         }
-        // For zoomed pages (maxX > 0): always defer to progress bar system
-        // This ensures a progress bar always appears when holding D-pad at edge
         return;
     }
+    printf("DEBUG: Normal scroll - moving right\n");
     m_scrollX -= 50;
     clampScroll();
 }

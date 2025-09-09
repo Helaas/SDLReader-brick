@@ -9,6 +9,8 @@
 #include <map>
 #include <tuple>
 #include <mutex>
+#include <thread>
+#include <atomic>
 
 /**
  * @brief Document implementation using MuPDF library
@@ -17,6 +19,7 @@
  * - PDF documents (.pdf)
  * - Comic book archives (.cbz, .zip containing images)
  * - EPUB documents (.epub)
+ * - MOBI e-books (.mobi)
  * - And other formats supported by MuPDF
  */
 class MuPdfDocument : public Document {
@@ -34,8 +37,13 @@ public:
     void setMaxRenderSize(int width, int height);
     void close() override;
     
-    // Validate if a page can be safely loaded (check for corruption)
-    bool isPageValid(int pageNumber);
+    // Clear the render cache
+    void clearCache();
+    
+    // Prerender pages for faster page changes
+    void prerenderPage(int pageNumber, int scale);
+    void prerenderAdjacentPages(int currentPage, int scale);
+    void prerenderAdjacentPagesAsync(int currentPage, int scale);
 
 private:
     // Use smart pointers to manage MuPDF types safely
@@ -55,11 +63,22 @@ private:
 
     std::unique_ptr<fz_context, ContextDeleter> m_ctx;
     std::unique_ptr<fz_document, DocumentDeleter> m_doc;
+    
+    // Separate context for background prerendering to avoid race conditions
+    std::unique_ptr<fz_context, ContextDeleter> m_prerenderCtx;
+    std::unique_ptr<fz_document, DocumentDeleter> m_prerenderDoc;
+    std::mutex m_prerenderMutex;  // Protects prerender context operations
+    
     std::map<std::pair<int, int>, std::tuple<std::vector<unsigned char>, int, int>> m_cache;
     std::mutex m_cacheMutex;
-    int m_maxWidth = 1024;
-    int m_maxHeight = 768;
+    std::mutex m_renderMutex;  // Protects MuPDF context operations
+    int m_maxWidth = 2048;   // Increased from 1024 for better quality
+    int m_maxHeight = 1536;  // Increased from 768 for better quality
     int m_pageCount = 0;
+    
+    // Background prerendering support
+    std::thread m_prerenderThread;
+    std::atomic<bool> m_prerenderActive{false};
 };
 
 #endif // MUPDF_DOCUMENT_H

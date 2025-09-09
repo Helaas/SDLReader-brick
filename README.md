@@ -1,6 +1,6 @@
 # SDL Reader
 
-SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and MuPDF. It supports viewing PDF, CBZ/ZIP comic archives, and EPUB books with intuitive navigation, zooming, rotation, and mirroring features. Optimized for embedded devices like the TrimUI Brick (TG5040) running [NextUI](https://github.com/LoveRetro/NextUI). It also runs on desktop platforms including macOS, Linux, and is a work in progress as Wii U homebrew.
+SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and MuPDF. It supports viewing PDF, CBZ/ZIP comic archives, EPUB books, and MOBI e-books with intuitive navigation, zooming, rotation, and mirroring features. Optimized for embedded devices like the TrimUI Brick (TG5040) running [NextUI](https://github.com/LoveRetro/NextUI). It also runs on desktop platforms including macOS, Linux, and is a work in progress as Wii U homebrew.
 
 ## Table of Contents
 * [Features](#features)
@@ -14,7 +14,7 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 * [Architecture](#architecture)
 
 ## Features
-* View PDF documents, comic book archives (CBZ/ZIP), and EPUB books.
+* View PDF documents, comic book archives (CBZ/ZIP), EPUB books, and MOBI e-books.
 * Page navigation (next/previous page).
 * **Smart Edge Navigation**: When at zoomed ≥ 100% & at a page edge, hold D-pad for 300ms to turn pages with visual progress indicator.
 * Quick page jumping (±10 pages).
@@ -31,6 +31,7 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 * **PDF** (`.pdf`)
 * **Comic Book Archive** (`.cbz`, `.zip` containing images)
 * **EPUB** (`.epub`)
+* **MOBI** (`.mobi`)
 
 ## TrimUI Brick Control Scheme
 ![TrimUI Brick Controls](.github/resources/tg5040%20controls.png)
@@ -141,7 +142,7 @@ cd ports/linux && make install-deps
 - **Custom Input Handling**: Gamepad and touch screen support
 
 ## Usage
-After building, run the executable from your project root, providing the path to a PDF, CBZ or EPUB file as an argument:
+After building, run the executable from your project root, providing the path to a PDF, CBZ, EPUB, or MOBI file as an argument:
 
 ```bash
 ./bin/sdl_reader_cli path/to/your_document.pdf
@@ -149,6 +150,8 @@ After building, run the executable from your project root, providing the path to
 ./bin/sdl_reader_cli path/to/your_comic.cbz
 # or
 ./bin/sdl_reader_cli path/to/your_book.epub
+# or
+./bin/sdl_reader_cli path/to/your_ebook.mobi
 ```
 
 ## TG5040 Deployment

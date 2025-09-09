@@ -22,7 +22,7 @@ SDLReader is designed as a cross-platform document reader with a clean separatio
 - Smart error handling with 30-second timeout
 - Battery conservation optimizations
 - Hardware-specific input device monitoring
-- PDF, CBZ, and EPUB document support
+- PDF, CBZ, EPUB, and MOBI document support
 
 **Build Characteristics**:
 - Cross-compilation required
@@ -80,11 +80,11 @@ SDLReader is designed as a cross-platform document reader with a clean separatio
 
 ### Shared Components (`src/`, `include/`, `cli/`)
 Core functionality that works across all platforms:
-- **Document handling**: PDF, CBZ/ZIP, and EPUB support via MuPDF's native format support
+- **Document handling**: PDF, CBZ/ZIP, EPUB, and MOBI support via MuPDF's native format support
 - **Rendering engine**: SDL2-based graphics and text rendering
 - **User interface**: Page navigation, zoom, scroll controls
 - **Application logic**: Event handling, state management, unified document format support
-- **Document types**: PDF documents, comic book archives (CBZ/ZIP), and EPUB books through single document interface
+- **Document types**: PDF documents, comic book archives (CBZ/ZIP), EPUB books, and MOBI e-books through single document interface
 
 ### Platform-Specific Components (`ports/{platform}/`)
 Platform-specific implementations and optimizations:
