@@ -34,7 +34,8 @@ bool MuPdfDocument::open(const std::string &filePath)
     m_ctx.reset(ctx);
     fz_register_document_handlers(ctx);
 
-    volatile fz_document *doc = nullptr; // Use volatile to prevent longjmp clobbering
+    fz_document *doc = nullptr;
+    fz_var(doc);
     fz_try(ctx)
     {
         doc = fz_open_document(ctx, filePath.c_str());
@@ -75,7 +76,8 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int &width,
     float downsampleScale = 1.0f;
     
     // Pre-calculate if we need downsampling to avoid fz_scale_pixmap
-    volatile fz_page *tempPage = nullptr; // Use volatile to prevent longjmp clobbering
+    fz_page *tempPage = nullptr;
+    fz_var(tempPage);
     fz_try(ctx)
     {
         // Check if page number is valid before attempting to load
@@ -148,12 +150,14 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int &width,
     }
 
     fz_matrix transform = fz_scale(baseScale * downsampleScale, baseScale * downsampleScale);
-    volatile fz_pixmap *pix = nullptr; // Use volatile to prevent longjmp clobbering
+    fz_pixmap *pix = nullptr;
+    fz_var(pix);
     std::vector<unsigned char> buffer;
 
     fz_try(ctx)
     {
-        volatile fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        fz_var(page);
         if (!page) {
             throw std::runtime_error("Failed to load page " + std::to_string(pageNumber) + " for rendering");
         }
@@ -216,11 +220,13 @@ int MuPdfDocument::getPageWidthNative(int pageNumber)
 
     fz_context *ctx = m_ctx.get();
     fz_document *doc = m_doc.get();
-    volatile int width = 0; // volatile to survive longjmp across fz_try/fz_catch
+    int width = 0;
+    fz_var(width);
 
     fz_try(ctx)
     {
-        volatile fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        fz_var(page);
         fz_rect bounds = fz_bound_page(ctx, (fz_page*)page);
         width = static_cast<int>(bounds.x1 - bounds.x0);
         fz_drop_page(ctx, (fz_page*)page);
@@ -230,7 +236,7 @@ int MuPdfDocument::getPageWidthNative(int pageNumber)
         width = 0;
     }
 
-    return width; // implicit cast from volatile int to int
+    return width; // implicit cast from int to int
 }
 
 int MuPdfDocument::getPageHeightNative(int pageNumber)
@@ -240,11 +246,13 @@ int MuPdfDocument::getPageHeightNative(int pageNumber)
 
     fz_context *ctx = m_ctx.get();
     fz_document *doc = m_doc.get();
-    volatile int height = 0; // volatile to survive longjmp
+    int height = 0;
+    fz_var(height);
 
     fz_try(ctx)
     {
-        volatile fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        fz_var(page);
         fz_rect bounds = fz_bound_page(ctx, (fz_page*)page);
         height = static_cast<int>(bounds.y1 - bounds.y0);
         fz_drop_page(ctx, (fz_page*)page);
@@ -264,11 +272,13 @@ int MuPdfDocument::getPageWidthEffective(int pageNumber, int zoom)
 
     fz_context *ctx = m_ctx.get();
     fz_document *doc = m_doc.get();
-    volatile int width = 0;
+    int width = 0;
+    fz_var(width);
 
     fz_try(ctx)
     {
-        volatile fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        fz_var(page);
         fz_rect bounds = fz_bound_page(ctx, (fz_page*)page);
         int nativeWidth = static_cast<int>(bounds.x1 - bounds.x0);
         fz_drop_page(ctx, (fz_page*)page);
@@ -311,11 +321,13 @@ int MuPdfDocument::getPageHeightEffective(int pageNumber, int zoom)
 
     fz_context *ctx = m_ctx.get();
     fz_document *doc = m_doc.get();
-    volatile int height = 0;
+    int height = 0;
+    fz_var(height);
 
     fz_try(ctx)
     {
-        volatile fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        fz_page *page = fz_load_page(ctx, doc, pageNumber);
+        fz_var(page);
         fz_rect bounds = fz_bound_page(ctx, (fz_page*)page);
         int nativeWidth = static_cast<int>(bounds.x1 - bounds.x0);
         int nativeHeight = static_cast<int>(bounds.y1 - bounds.y0);
@@ -390,8 +402,10 @@ bool MuPdfDocument::isPageValid(int pageNumber)
     
     fz_context *ctx = m_ctx.get();
     fz_document *doc = m_doc.get();
-    volatile fz_page *page = nullptr;
-    volatile bool isValid = false; // Make volatile to prevent longjmp issues
+    fz_page *page = nullptr;
+    fz_var(page);
+    bool isValid = false;
+    fz_var(isValid);
     
     fz_try(ctx)
     {

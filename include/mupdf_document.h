@@ -17,6 +17,7 @@
  * - PDF documents (.pdf)
  * - Comic book archives (.cbz, .zip containing images)
  * - EPUB documents (.epub)
+ * - MOBI e-books (.mobi)
  * - And other formats supported by MuPDF
  */
 class MuPdfDocument : public Document {

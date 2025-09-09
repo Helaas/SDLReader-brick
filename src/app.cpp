@@ -63,13 +63,14 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
           lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".cbz" ||
           lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".zip")) ||
         (lowercaseFilename.size() >= 5 && 
-         lowercaseFilename.substr(lowercaseFilename.size() - 5) == ".epub")) {
+         (lowercaseFilename.substr(lowercaseFilename.size() - 5) == ".epub" ||
+          lowercaseFilename.substr(lowercaseFilename.size() - 5) == ".mobi"))) {
         m_document = std::make_unique<MuPdfDocument>();
     }
     else
     {
         throw std::runtime_error("Unsupported file format: " + filename + 
-                                " (supported: .pdf, .cbz, .zip)");
+                                " (supported: .pdf, .cbz, .zip, .epub, .mobi)");
     }
 
     if (!m_document->open(filename))
