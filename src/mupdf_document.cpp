@@ -433,54 +433,6 @@ void MuPdfDocument::close()
     }
 }
 
-bool MuPdfDocument::isPageValid(int pageNumber)
-{
-    if (!m_ctx || !m_doc) {
-        return false;
-    }
-    
-    if (pageNumber < 0 || pageNumber >= m_pageCount) {
-        return false;
-    }
-    
-    fz_context *ctx = m_ctx.get();
-    fz_document *doc = m_doc.get();
-    fz_page *page = nullptr;
-    fz_var(page);
-    bool isValid = false;
-    fz_var(isValid);
-    
-    fz_try(ctx)
-    {
-        page = fz_load_page(ctx, doc, pageNumber);
-        if (page) {
-            // Try to get page bounds to verify it's not corrupted
-            fz_rect bounds = fz_bound_page(ctx, (fz_page*)page);
-            // Check if bounds are reasonable
-            if (bounds.x1 > bounds.x0 && bounds.y1 > bounds.y0 && 
-                bounds.x1 - bounds.x0 < 100000 && bounds.y1 - bounds.y0 < 100000) {
-                isValid = true;
-            }
-            fz_drop_page(ctx, (fz_page*)page);
-        }
-    }
-    fz_catch(ctx)
-    {
-        if (page) {
-            fz_drop_page(ctx, (fz_page*)page);
-        }
-        isValid = false;
-        
-        // Log the specific error for debugging
-        const char* fzError = fz_caught_message(ctx);
-        if (fzError) {
-            std::cerr << "MuPdfDocument: Page " << pageNumber << " validation failed: " << fzError << std::endl;
-        }
-    }
-    
-    return isValid;
-}
-
 void MuPdfDocument::clearCache()
 {
     std::lock_guard<std::mutex> lock(m_cacheMutex);
@@ -669,62 +621,4 @@ void MuPdfDocument::prerenderAdjacentPagesAsync(int currentPage, int scale)
         
         m_prerenderActive = false;
     });
-}
-
-fz_rect MuPdfDocument::getPageContentBounds(int pageNumber)
-{
-    std::lock_guard<std::mutex> lock(m_renderMutex);
-    
-    if (!m_ctx || !m_doc)
-        return fz_empty_rect;
-    
-    // Validate page number first
-    if (pageNumber < 0 || pageNumber >= m_pageCount) {
-        return fz_empty_rect;
-    }
-
-    fz_context *ctx = m_ctx.get();
-    fz_document *doc = m_doc.get();
-    
-    fz_rect contentBounds = fz_empty_rect;
-    fz_page *page = nullptr;
-    fz_device *device = nullptr;
-    
-    fz_var(page);
-    fz_var(device);
-    fz_var(contentBounds);
-
-    fz_try(ctx)
-    {
-        page = fz_load_page(ctx, doc, pageNumber);
-        if (!page) {
-            fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to load page");
-        }
-        
-        // Create a bounding box device to capture content bounds
-        device = fz_new_bbox_device(ctx, &contentBounds);
-        if (!device) {
-            fz_drop_page(ctx, page);
-            fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to create bounding box device");
-        }
-        
-        // Run the page content through the device to get content bounds
-        fz_run_page(ctx, page, device, fz_identity, nullptr);
-        
-        fz_close_device(ctx, device);
-        fz_drop_device(ctx, device);
-        fz_drop_page(ctx, page);
-    }
-    fz_catch(ctx)
-    {
-        if (device) {
-            fz_drop_device(ctx, device);
-        }
-        if (page) {
-            fz_drop_page(ctx, page);
-        }
-        contentBounds = fz_empty_rect;
-    }
-    
-    return contentBounds;
 }

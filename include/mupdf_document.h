@@ -37,9 +37,6 @@ public:
     void setMaxRenderSize(int width, int height);
     void close() override;
     
-    // Validate if a page can be safely loaded (check for corruption)
-    bool isPageValid(int pageNumber);
-    
     // Clear the render cache
     void clearCache();
     
@@ -47,9 +44,6 @@ public:
     void prerenderPage(int pageNumber, int scale);
     void prerenderAdjacentPages(int currentPage, int scale);
     void prerenderAdjacentPagesAsync(int currentPage, int scale);
-    
-    // Get the bounding box of actual content on the page (excluding margins)
-    fz_rect getPageContentBounds(int pageNumber);
 
 private:
     // Use smart pointers to manage MuPDF types safely
