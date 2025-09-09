@@ -3,7 +3,6 @@
 #include "text_renderer.h"
 #include "document.h"
 #include "mupdf_document.h"
-#include "page_preloader.h"
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
 #endif
@@ -101,22 +100,10 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
 
     // Initialize game controllers
     initializeGameControllers();
-    
-    // Initialize page preloader
-    m_pagePreloader = std::make_unique<PagePreloader>(this, m_document.get());
-    m_pagePreloader->start();
-    
-    // Start preloading pages ahead of current page
-    m_pagePreloader->requestPreload(m_currentPage, m_currentScale);
 }
 
 App::~App()
 {
-    // Stop page preloader first
-    if (m_pagePreloader) {
-        m_pagePreloader->stop();
-    }
-    
 #ifdef TG5040_PLATFORM
     if (m_powerHandler) {
         m_powerHandler->stop();
@@ -687,13 +674,6 @@ void App::renderCurrentPage()
 {
     Uint32 renderStart = SDL_GetTicks();
     
-    // Try to use preloaded page first
-    if (tryRenderPreloadedPage(renderStart)) {
-        return;
-    }
-    
-    // Fall back to regular rendering if no preloaded page available
-    std::cout << "FALLBACK: Using direct render for page " << m_currentPage << " at scale " << m_currentScale << std::endl;
     m_renderer->clear(255, 255, 255, 255);
 
     int winW = m_renderer->getWindowWidth();
@@ -740,110 +720,15 @@ void App::renderCurrentPage()
                              static_cast<double>(m_rotation),
                              currentFlipFlags());
     
-    // Measure total render time for dynamic timeout
-    m_lastRenderDuration = SDL_GetTicks() - renderStart;
-}
-
-bool App::tryRenderPreloadedPage(Uint32 renderStart)
-{
-    if (!m_pagePreloader) {
-        return false;
+    // Trigger prerendering of adjacent pages for faster page changes
+    // Do this after the main render to avoid blocking the current page display
+    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+    if (muPdfDoc) {
+        muPdfDoc->prerenderAdjacentPagesAsync(m_currentPage, m_currentScale);
     }
-    
-    // Try to get preloaded page
-    auto preloadedPage = m_pagePreloader->getPreloadedPage(m_currentPage, m_currentScale);
-    if (!preloadedPage) {
-        std::cout << "PRELOAD MISS: No preloaded page for page " << m_currentPage << " at scale " << m_currentScale << std::endl;
-        return false; // No preloaded page available
-    }
-    
-    std::cout << "PRELOAD HIT: Using preloaded page " << m_currentPage << " at scale " << m_currentScale << std::endl;
-    
-    // Additional safety check: verify page data is valid before using it
-    if (preloadedPage->pixelData.empty() || preloadedPage->width <= 0 || preloadedPage->height <= 0) {
-        std::cerr << "App: Invalid preloaded page data for page " << m_currentPage 
-                  << ", falling back to direct render" << std::endl;
-        return false; // Page data is corrupted, fall back to direct rendering
-    }
-    
-    m_renderer->clear(255, 255, 255, 255);
-
-    int winW = m_renderer->getWindowWidth();
-    int winH = m_renderer->getWindowHeight();
-
-    int srcW = preloadedPage->width;
-    int srcH = preloadedPage->height;
-
-    // displayed page size after rotation
-    if (m_rotation % 180 == 0)
-    {
-        m_pageWidth = srcW;
-        m_pageHeight = srcH;
-    }
-    else
-    {
-        m_pageWidth = srcH;
-        m_pageHeight = srcW;
-    }
-
-    int posX = (winW - m_pageWidth) / 2 + m_scrollX;
-
-    int posY;
-    if (m_pageHeight <= winH)
-    {
-        if (m_topAlignWhenFits || m_forceTopAlignNextRender)
-            posY = 0;
-        else
-            posY = (winH - m_pageHeight) / 2;
-    }
-    else
-    {
-        posY = (winH - m_pageHeight) / 2 + m_scrollY;
-    }
-    m_forceTopAlignNextRender = false;
-
-    // Make a local copy of critical data to avoid race conditions during rendering
-    std::vector<uint8_t> localPixelData;
-    try {
-        // Additional null check before accessing the shared_ptr
-        if (!preloadedPage) {
-            std::cerr << "App: PreloadedPage became null during rendering for page " << m_currentPage << std::endl;
-            return false;
-        }
-        
-        // Check if the pixel data vector is in a valid state before copying
-        if (preloadedPage->pixelData.data() == nullptr && !preloadedPage->pixelData.empty()) {
-            std::cerr << "App: PreloadedPage has corrupted pixel data for page " << m_currentPage << std::endl;
-            return false;
-        }
-        
-        // Reserve space first to avoid potential reallocation issues during copy
-        localPixelData.reserve(preloadedPage->pixelData.size());
-        localPixelData = preloadedPage->pixelData; // Copy pixel data locally
-        
-        // Final validation of local copy
-        if (localPixelData.empty()) {
-            std::cerr << "App: Local pixel data copy is empty for page " << m_currentPage << std::endl;
-            return false;
-        }
-    } catch (const std::exception& e) {
-        std::cerr << "App: Error copying pixel data for page " << m_currentPage 
-                  << ": " << e.what() << std::endl;
-        return false;
-    } catch (...) {
-        std::cerr << "App: Unknown error copying pixel data for page " << m_currentPage << std::endl;
-        return false;
-    }
-
-    m_renderer->renderPageEx(localPixelData, srcW, srcH,
-                             posX, posY, m_pageWidth, m_pageHeight,
-                             static_cast<double>(m_rotation),
-                             currentFlipFlags());
     
     // Measure total render time for dynamic timeout
     m_lastRenderDuration = SDL_GetTicks() - renderStart;
-    
-    return true; // Successfully rendered preloaded page
 }
 
 void App::renderUI()
@@ -1097,11 +982,6 @@ void App::goToNextPage()
         
         // Set cooldown timer to prevent rapid page changes during panning
         m_lastPageChangeTime = SDL_GetTicks();
-        
-        // Request preloading of upcoming pages
-        if (m_pagePreloader) {
-            m_pagePreloader->requestPreload(m_currentPage, m_currentScale);
-        }
     }
 }
 
@@ -1118,11 +998,6 @@ void App::goToPreviousPage()
         
         // Set cooldown timer to prevent rapid page changes during panning
         m_lastPageChangeTime = SDL_GetTicks();
-        
-        // Request preloading of upcoming pages
-        if (m_pagePreloader) {
-            m_pagePreloader->requestPreload(m_currentPage, m_currentScale);
-        }
     }
 }
 
@@ -1136,11 +1011,6 @@ void App::goToPage(int pageNum)
         updateScaleDisplayTime();
         updatePageDisplayTime();
         markDirty();
-        
-        // Request preloading of upcoming pages
-        if (m_pagePreloader) {
-            m_pagePreloader->requestPreload(m_currentPage, m_currentScale);
-        }
     }
 }
 
@@ -1180,11 +1050,13 @@ void App::zoomTo(int scale)
     updatePageDisplayTime();
     markDirty();
     
-    // Only trigger preloading if we're not in the middle of debouncing zoom input
-    // During debouncing, we'll trigger preloading once when the final zoom is applied
-    if (m_pagePreloader && oldScale != m_currentScale && !isZoomDebouncing()) {
-        m_pagePreloader->clearCache();
-        m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
+    // Only clear cache if we're not in the middle of debouncing zoom input
+    // During debouncing, we'll clear cache once when the final zoom is applied
+    if (oldScale != m_currentScale && !isZoomDebouncing()) {
+        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+        if (muPdfDoc) {
+            muPdfDoc->clearCache();
+        }
     }
 }
 
@@ -1207,10 +1079,12 @@ void App::applyPendingZoom()
     updatePageDisplayTime();
     markDirty();
     
-    // Clear cache and request bidirectional preloading at new scale
-    if (m_pagePreloader && oldScale != m_currentScale) {
-        m_pagePreloader->clearCache();
-        m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
+    // Clear cache at new scale
+    if (oldScale != m_currentScale) {
+        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+        if (muPdfDoc) {
+            muPdfDoc->clearCache();
+        }
     }
 
     // Reset pending zoom
@@ -1264,11 +1138,13 @@ void App::fitPageToWindow()
     updatePageDisplayTime();
     markDirty();
     
-    // Only trigger preloading if we're not in the middle of debouncing zoom input
-    // During debouncing, we'll trigger preloading once when the final zoom is applied
-    if (m_pagePreloader && oldScale != m_currentScale && !isZoomDebouncing()) {
-        m_pagePreloader->clearCache();
-        m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
+    // Only clear cache if we're not in the middle of debouncing zoom input
+    // During debouncing, we'll clear cache once when the final zoom is applied
+    if (oldScale != m_currentScale && !isZoomDebouncing()) {
+        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+        if (muPdfDoc) {
+            muPdfDoc->clearCache();
+        }
     }
 }
 
@@ -1405,11 +1281,13 @@ void App::fitPageToWidth()
     updatePageDisplayTime();
     markDirty();
     
-    // Only trigger preloading if we're not in the middle of debouncing zoom input
-    // During debouncing, we'll trigger preloading once when the final zoom is applied  
-    if (m_pagePreloader && oldScale != m_currentScale && !isZoomDebouncing()) {
-        m_pagePreloader->clearCache();
-        m_pagePreloader->requestBidirectionalPreload(m_currentPage, m_currentScale);
+    // Only clear cache if we're not in the middle of debouncing zoom input
+    // During debouncing, we'll clear cache once when the final zoom is applied  
+    if (oldScale != m_currentScale && !isZoomDebouncing()) {
+        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+        if (muPdfDoc) {
+            muPdfDoc->clearCache();
+        }
     }
 }
 
