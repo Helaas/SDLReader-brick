@@ -472,7 +472,7 @@ void MuPdfDocument::prerenderPage(int pageNumber, int scale)
         float downsampleScale = 1.0f;
         fz_var(downsampleScale);
         
-        // Apply downsampling logic similar to main renderPage
+        // Apply downsampling logic matching renderPage
         fz_page *tempPage = nullptr;
         fz_var(tempPage);
         fz_try(ctx)
@@ -486,19 +486,25 @@ void MuPdfDocument::prerenderPage(int pageNumber, int scale)
             int nativeWidth = static_cast<int>((bounds.x1 - bounds.x0) * baseScale);
             int nativeHeight = static_cast<int>((bounds.y1 - bounds.y0) * baseScale);
             
-            const float oversizeTolerance = 1.5f;
-            if (nativeWidth > m_maxWidth * oversizeTolerance || nativeHeight > m_maxHeight * oversizeTolerance)
+            // Only downsample if the zoomed image is larger than max size
+            // This allows zooming in for detail up to the max render size
+            if (nativeWidth > m_maxWidth || nativeHeight > m_maxHeight)
             {
                 float scaleX = static_cast<float>(m_maxWidth) / nativeWidth;
                 float scaleY = static_cast<float>(m_maxHeight) / nativeHeight;
                 downsampleScale = std::min(scaleX, scaleY);
                 
+                // Gradual scaling for zoom levels - avoid cliff effects
                 if (baseScale > 1.0f) {
-                    float zoomFactor = std::min(baseScale, 3.5f);
+                    // Calculate how much detail we can afford based on zoom level
+                    // Higher zoom = more detail allowed, up to 3.5x window size (350% zoom)
+                    float zoomFactor = std::min(baseScale, 3.5f); // Cap at 3.5x
                     float maxDetailScale = zoomFactor;
                     float detailScaleX = static_cast<float>(m_maxWidth * maxDetailScale) / nativeWidth;
                     float detailScaleY = static_cast<float>(m_maxHeight * maxDetailScale) / nativeHeight;
                     float detailScale = std::min(detailScaleX, detailScaleY);
+                    
+                    // Use the more permissive scale, but ensure smooth transitions
                     downsampleScale = std::max(downsampleScale, detailScale);
                 }
             }
