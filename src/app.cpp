@@ -77,11 +77,13 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
         throw std::runtime_error("Failed to open document: " + filename);
     }
 
-    // Set max render size for downsampling based on current window size
-    if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
-    {
-        muDoc->setMaxRenderSize(m_renderer->getWindowWidth(), m_renderer->getWindowHeight());
-    }
+#ifndef TG5040_PLATFORM
+// Set max render size for downsampling based on current window size
+if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
+{
+    muDoc->setMaxRenderSize(m_renderer->getWindowWidth(), m_renderer->getWindowHeight());
+}
+#endif
 
     m_pageCount = m_document->getPageCount();
     if (m_pageCount == 0)
@@ -1103,13 +1105,13 @@ void App::fitPageToWindow()
     int windowWidth = m_renderer->getWindowWidth();
     int windowHeight = m_renderer->getWindowHeight();
 
-    // Update max render size for downsampling
-    if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
-    {
-        muDoc->setMaxRenderSize(windowWidth, windowHeight);
-    }
-
-    // Use effective sizes so 90/270 rotation swaps W/H
+#ifndef TG5040_PLATFORM
+// Update max render size for downsampling
+if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
+{
+    muDoc->setMaxRenderSize(windowWidth, windowHeight);
+}
+#endif    // Use effective sizes so 90/270 rotation swaps W/H
     int nativeWidth = effectiveNativeWidth();
     int nativeHeight = effectiveNativeHeight();
 
@@ -1129,8 +1131,21 @@ void App::fitPageToWindow()
     if (m_currentScale > 350)
         m_currentScale = 350;
 
-    m_pageWidth = static_cast<int>(nativeWidth * (m_currentScale / 100.0));
-    m_pageHeight = static_cast<int>(nativeHeight * (m_currentScale / 100.0));
+    // Update page dimensions based on effective size (accounting for downsampling)
+    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+    if (muPdfDoc) {
+        m_pageWidth = muPdfDoc->getPageWidthEffective(m_currentPage, m_currentScale);
+        m_pageHeight = muPdfDoc->getPageHeightEffective(m_currentPage, m_currentScale);
+        
+        // Apply rotation
+        if (m_rotation % 180 != 0) {
+            std::swap(m_pageWidth, m_pageHeight);
+        }
+    } else {
+        // Fallback for other document types
+        m_pageWidth = static_cast<int>(nativeWidth * (m_currentScale / 100.0));
+        m_pageHeight = static_cast<int>(nativeHeight * (m_currentScale / 100.0));
+    }
 
     m_scrollX = 0;
     m_scrollY = 0;
@@ -1153,14 +1168,30 @@ void App::recenterScrollOnZoom(int oldScale, int newScale)
     if (oldScale == 0 || newScale == 0)
         return;
 
-    int nativeWidth = effectiveNativeWidth();
-    int nativeHeight = effectiveNativeHeight();
-
-    int oldPageWidth = static_cast<int>(nativeWidth * (oldScale / 100.0));
-    int oldPageHeight = static_cast<int>(nativeHeight * (oldScale / 100.0));
-
-    int newPageWidth = static_cast<int>(nativeWidth * (newScale / 100.0));
-    int newPageHeight = static_cast<int>(nativeHeight * (newScale / 100.0));
+    // Use effective dimensions that account for downsampling
+    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+    int oldPageWidth, oldPageHeight, newPageWidth, newPageHeight;
+    
+    if (muPdfDoc) {
+        oldPageWidth = muPdfDoc->getPageWidthEffective(m_currentPage, oldScale);
+        oldPageHeight = muPdfDoc->getPageHeightEffective(m_currentPage, oldScale);
+        newPageWidth = muPdfDoc->getPageWidthEffective(m_currentPage, newScale);
+        newPageHeight = muPdfDoc->getPageHeightEffective(m_currentPage, newScale);
+        
+        // Apply rotation
+        if (m_rotation % 180 != 0) {
+            std::swap(oldPageWidth, oldPageHeight);
+            std::swap(newPageWidth, newPageHeight);
+        }
+    } else {
+        // Fallback for other document types
+        int nativeWidth = effectiveNativeWidth();
+        int nativeHeight = effectiveNativeHeight();
+        oldPageWidth = static_cast<int>(nativeWidth * (oldScale / 100.0));
+        oldPageHeight = static_cast<int>(nativeHeight * (oldScale / 100.0));
+        newPageWidth = static_cast<int>(nativeWidth * (newScale / 100.0));
+        newPageHeight = static_cast<int>(nativeHeight * (newScale / 100.0));
+    }
 
     int windowWidth = m_renderer->getWindowWidth();
     int windowHeight = m_renderer->getWindowHeight();
@@ -1254,10 +1285,22 @@ void App::fitPageToWidth()
     if (m_currentScale > 350)
         m_currentScale = 350;
 
-    // Update page dimensions based on new scale
-    int nativeHeight = effectiveNativeHeight();
-    m_pageWidth = static_cast<int>(nativeWidth * (m_currentScale / 100.0));
-    m_pageHeight = static_cast<int>(nativeHeight * (m_currentScale / 100.0));
+    // Update page dimensions based on effective size (accounting for downsampling)
+    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+    if (muPdfDoc) {
+        m_pageWidth = muPdfDoc->getPageWidthEffective(m_currentPage, m_currentScale);
+        m_pageHeight = muPdfDoc->getPageHeightEffective(m_currentPage, m_currentScale);
+        
+        // Apply rotation
+        if (m_rotation % 180 != 0) {
+            std::swap(m_pageWidth, m_pageHeight);
+        }
+    } else {
+        // Fallback for other document types
+        int nativeHeight = effectiveNativeHeight();
+        m_pageWidth = static_cast<int>(nativeWidth * (m_currentScale / 100.0));
+        m_pageHeight = static_cast<int>(nativeHeight * (m_currentScale / 100.0));
+    }
 
     // Reset horizontal scroll since we're fitting to width
     m_scrollX = 0;
@@ -1791,18 +1834,35 @@ void App::handleDpadNudgeUp()
 void App::onPageChangedKeepZoom()
 {
     // Predict scaled size for the new page using the current zoom
-    int nativeW = effectiveNativeWidth();
-    int nativeH = effectiveNativeHeight();
+    // Use effective size for MuPdfDocument to account for downsampling
+    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+    int effectiveW, effectiveH;
+    
+    if (muPdfDoc) {
+        effectiveW = muPdfDoc->getPageWidthEffective(m_currentPage, m_currentScale);
+        effectiveH = muPdfDoc->getPageHeightEffective(m_currentPage, m_currentScale);
+        
+        // Apply rotation
+        if (m_rotation % 180 != 0) {
+            std::swap(effectiveW, effectiveH);
+        }
+    } else {
+        // Fallback for other document types
+        int nativeW = effectiveNativeWidth();
+        int nativeH = effectiveNativeHeight();
+        effectiveW = static_cast<int>(nativeW * (m_currentScale / 100.0));
+        effectiveH = static_cast<int>(nativeH * (m_currentScale / 100.0));
+    }
 
     // Guard against bad docs
-    if (nativeW <= 0 || nativeH <= 0)
+    if (effectiveW <= 0 || effectiveH <= 0)
     {
-        std::cerr << "App ERROR: Native page dimensions are zero for page " << m_currentPage << std::endl;
+        std::cerr << "App ERROR: Effective page dimensions are zero for page " << m_currentPage << std::endl;
         return;
     }
 
-    m_pageWidth = static_cast<int>(nativeW * (m_currentScale / 100.0));
-    m_pageHeight = static_cast<int>(nativeH * (m_currentScale / 100.0));
+    m_pageWidth = effectiveW;
+    m_pageHeight = effectiveH;
 
     // Keep current scroll but ensure it's valid for the new page extents
     clampScroll();
