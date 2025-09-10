@@ -159,11 +159,19 @@ void App::run()
                 }
             }
             
-            if (m_needsRedraw || panningChanged) {
+            // Enhanced frame pacing for TG5040: Skip rendering if we're rendering too frequently
+            // This helps prevent warping during rapid input changes
+            static Uint32 lastRenderTime = 0;
+            Uint32 currentTime = SDL_GetTicks();
+            bool shouldRender = (m_needsRedraw || panningChanged) && 
+                               (currentTime - lastRenderTime) >= 16; // Max 60 FPS to prevent overload
+            
+            if (shouldRender) {
                 renderCurrentPage();
                 renderUI();
                 m_renderer->present();
                 m_needsRedraw = false;
+                lastRenderTime = currentTime;
             }
         } else {
             // Fake sleep mode - render black screen
@@ -689,16 +697,29 @@ void App::renderCurrentPage()
         pixelData = m_document->renderPage(m_currentPage, srcW, srcH, m_currentScale);
     }
 
+    // Ensure page dimensions are updated BEFORE calculating positions
+    // This prevents warping when switching between pages with different aspect ratios
+    int newPageWidth, newPageHeight;
+    
     // displayed page size after rotation
     if (m_rotation % 180 == 0)
     {
-        m_pageWidth = srcW;
-        m_pageHeight = srcH;
+        newPageWidth = srcW;
+        newPageHeight = srcH;
     }
     else
     {
-        m_pageWidth = srcH;
-        m_pageHeight = srcW;
+        newPageWidth = srcH;
+        newPageHeight = srcW;
+    }
+    
+    // Only update page dimensions if they've actually changed
+    // This provides more stable rendering during rapid input
+    if (m_pageWidth != newPageWidth || m_pageHeight != newPageHeight) {
+        m_pageWidth = newPageWidth;
+        m_pageHeight = newPageHeight;
+        // Clamp scroll position when page dimensions change to prevent out-of-bounds rendering
+        clampScroll();
     }
 
     int posX = (winW - m_pageWidth) / 2 + m_scrollX;
@@ -724,9 +745,17 @@ void App::renderCurrentPage()
     
     // Trigger prerendering of adjacent pages for faster page changes
     // Do this after the main render to avoid blocking the current page display
-    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-    if (muPdfDoc) {
-        muPdfDoc->prerenderAdjacentPagesAsync(m_currentPage, m_currentScale);
+    // Only prerender if zoom is stable (not debouncing), not actively panning, and not in cooldown
+    static Uint32 lastPrerenderTrigger = 0;
+    Uint32 currentTime = SDL_GetTicks();
+    bool prerenderCooldownActive = (currentTime - lastPrerenderTrigger) < 200; // 200ms cooldown
+    
+    if (!isZoomDebouncing() && !m_isDragging && !prerenderCooldownActive) {
+        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+        if (muPdfDoc && !muPdfDoc->isPrerenderingActive()) {
+            muPdfDoc->prerenderAdjacentPagesAsync(m_currentPage, m_currentScale);
+            lastPrerenderTrigger = currentTime;
+        }
     }
     
     // Measure total render time for dynamic timeout
@@ -982,6 +1011,12 @@ void App::goToNextPage()
         updatePageDisplayTime();
         markDirty();
         
+        // Cancel prerendering since we're changing pages
+        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+        if (muPdfDoc) {
+            muPdfDoc->cancelPrerendering();
+        }
+        
         // Set cooldown timer to prevent rapid page changes during panning
         m_lastPageChangeTime = SDL_GetTicks();
     }
@@ -997,6 +1032,12 @@ void App::goToPreviousPage()
         updateScaleDisplayTime();
         updatePageDisplayTime();
         markDirty();
+        
+        // Cancel prerendering since we're changing pages
+        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+        if (muPdfDoc) {
+            muPdfDoc->cancelPrerendering();
+        }
         
         // Set cooldown timer to prevent rapid page changes during panning
         m_lastPageChangeTime = SDL_GetTicks();
@@ -1020,6 +1061,12 @@ void App::zoom(int delta)
 {
     // Accumulate zoom changes and track input timing for debouncing
     auto now = std::chrono::steady_clock::now();
+    
+    // Cancel any ongoing prerendering since zoom is changing
+    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+    if (muPdfDoc) {
+        muPdfDoc->cancelPrerendering();
+    }
     
     // Add to pending zoom delta
     m_pendingZoomDelta += delta;
@@ -1052,11 +1099,11 @@ void App::zoomTo(int scale)
     updatePageDisplayTime();
     markDirty();
     
-    // Only clear cache if we're not in the middle of debouncing zoom input
-    // During debouncing, we'll clear cache once when the final zoom is applied
-    if (oldScale != m_currentScale && !isZoomDebouncing()) {
+    // Cancel prerendering and clear cache if scale changed
+    if (oldScale != m_currentScale) {
         auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
         if (muPdfDoc) {
+            muPdfDoc->cancelPrerendering();
             muPdfDoc->clearCache();
         }
     }
@@ -1404,11 +1451,15 @@ bool App::updateHeldPanning(float dt)
     // Track if scrolling actually happened this frame
     bool scrollingOccurred = false;
     
+    // Enhanced stability: Force a brief pause after page changes to prevent warping
+    // This gives the rendering system time to stabilize before processing new input
+    bool inStabilizationPeriod = (SDL_GetTicks() - m_lastPageChangeTime) < (m_lastRenderDuration + 50);
+    
     if (dx != 0.0f || dy != 0.0f)
     {
-        if (inScrollTimeout) {
-            // During scroll timeout, don't allow panning movement
-            // This prevents scrolling past the beginning of a new page
+        if (inScrollTimeout || inStabilizationPeriod) {
+            // During scroll timeout or stabilization period, don't allow panning movement
+            // This prevents scrolling past the beginning of a new page and reduces warping
             // But we still need to continue processing edge-turn logic below
         } else {
             float len = std::sqrt(dx * dx + dy * dy);
@@ -1452,14 +1503,32 @@ bool App::updateHeldPanning(float dt)
     float oldEdgeTurnHoldDown = m_edgeTurnHoldDown;
 
     // Reset edge-turn timers during scroll timeout to prevent accumulated time from previous page
-    if (inScrollTimeout) {
-        if (m_edgeTurnHoldRight > 0.0f || m_edgeTurnHoldLeft > 0.0f || m_edgeTurnHoldUp > 0.0f || m_edgeTurnHoldDown > 0.0f) {
-            printf("DEBUG: Resetting edge-turn timers due to scroll timeout (timeout duration: %dms)\n", m_lastRenderDuration);
+    if (inScrollTimeout || inStabilizationPeriod) {
+        // During stabilization period, gradually decay edge-turn timers instead of hard reset
+        // This provides smoother visual feedback and reduces warping appearance
+        if (inStabilizationPeriod && !inScrollTimeout) {
+            // Gradual decay during stabilization period (but not timeout)
+            float decayFactor = 0.95f; // Decay 5% per frame
+            m_edgeTurnHoldRight *= decayFactor;
+            m_edgeTurnHoldLeft *= decayFactor;
+            m_edgeTurnHoldUp *= decayFactor;
+            m_edgeTurnHoldDown *= decayFactor;
+            
+            // Reset to zero when very small to avoid floating point drift
+            if (m_edgeTurnHoldRight < 0.01f) m_edgeTurnHoldRight = 0.0f;
+            if (m_edgeTurnHoldLeft < 0.01f) m_edgeTurnHoldLeft = 0.0f;
+            if (m_edgeTurnHoldUp < 0.01f) m_edgeTurnHoldUp = 0.0f;
+            if (m_edgeTurnHoldDown < 0.01f) m_edgeTurnHoldDown = 0.0f;
+        } else {
+            // Hard reset during scroll timeout
+            if (m_edgeTurnHoldRight > 0.0f || m_edgeTurnHoldLeft > 0.0f || m_edgeTurnHoldUp > 0.0f || m_edgeTurnHoldDown > 0.0f) {
+                printf("DEBUG: Resetting edge-turn timers due to scroll timeout (timeout duration: %dms)\n", m_lastRenderDuration);
+            }
+            m_edgeTurnHoldRight = 0.0f;
+            m_edgeTurnHoldLeft = 0.0f;
+            m_edgeTurnHoldUp = 0.0f;
+            m_edgeTurnHoldDown = 0.0f;
         }
-        m_edgeTurnHoldRight = 0.0f;
-        m_edgeTurnHoldLeft = 0.0f;
-        m_edgeTurnHoldUp = 0.0f;
-        m_edgeTurnHoldDown = 0.0f;
     } else if (scrollingOccurred) {
         // Reset edge-turn timers if user is actively scrolling - only start timer when stationary at edge
         if (m_edgeTurnHoldRight > 0.0f || m_edgeTurnHoldLeft > 0.0f || m_edgeTurnHoldUp > 0.0f || m_edgeTurnHoldDown > 0.0f) {

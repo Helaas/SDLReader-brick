@@ -439,6 +439,15 @@ void MuPdfDocument::clearCache()
     m_cache.clear();
 }
 
+void MuPdfDocument::cancelPrerendering()
+{
+    // Stop any existing background prerendering
+    if (m_prerenderThread.joinable()) {
+        m_prerenderActive = false;
+        m_prerenderThread.join();
+    }
+}
+
 void MuPdfDocument::prerenderPage(int pageNumber, int scale)
 {
     // Validate page number
@@ -594,11 +603,26 @@ void MuPdfDocument::prerenderAdjacentPages(int currentPage, int scale)
 
 void MuPdfDocument::prerenderAdjacentPagesAsync(int currentPage, int scale)
 {
-    // Stop any existing background prerendering
+    // Check cooldown to prevent excessive prerendering
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastPrerenderTime).count();
+    if (elapsed < PRERENDER_COOLDOWN_MS) {
+        return; // Too soon, skip prerendering
+    }
+    
+    // Don't start new prerendering if already active
+    if (m_prerenderActive) {
+        return;
+    }
+    
+    // Stop any existing background prerendering (shouldn't be necessary but safe)
     if (m_prerenderThread.joinable()) {
         m_prerenderActive = false;
         m_prerenderThread.join();
     }
+    
+    // Update last prerender time
+    m_lastPrerenderTime = now;
     
     // Start new background prerendering
     m_prerenderActive = true;

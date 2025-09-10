@@ -40,6 +40,12 @@ public:
     // Clear the render cache
     void clearCache();
     
+    // Cancel any ongoing background prerendering
+    void cancelPrerendering();
+    
+    // Check if background prerendering is currently active
+    bool isPrerenderingActive() const { return m_prerenderActive; }
+    
     // Prerender pages for faster page changes
     void prerenderPage(int pageNumber, int scale);
     void prerenderAdjacentPages(int currentPage, int scale);
@@ -79,6 +85,8 @@ private:
     // Background prerendering support
     std::thread m_prerenderThread;
     std::atomic<bool> m_prerenderActive{false};
+    std::chrono::steady_clock::time_point m_lastPrerenderTime;
+    static constexpr int PRERENDER_COOLDOWN_MS = 50; // Minimum time between prerendering operations
 };
 
 #endif // MUPDF_DOCUMENT_H
