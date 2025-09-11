@@ -77,11 +77,13 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
         throw std::runtime_error("Failed to open document: " + filename);
     }
 
-    // Set max render size for downsampling based on current window size
-    if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
-    {
-        muDoc->setMaxRenderSize(m_renderer->getWindowWidth(), m_renderer->getWindowHeight());
-    }
+#ifndef TG5040_PLATFORM
+// Set max render size for downsampling based on current window size
+if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
+{
+    muDoc->setMaxRenderSize(m_renderer->getWindowWidth(), m_renderer->getWindowHeight());
+}
+#endif
 
     m_pageCount = m_document->getPageCount();
     if (m_pageCount == 0)
@@ -157,11 +159,19 @@ void App::run()
                 }
             }
             
-            if (m_needsRedraw || panningChanged) {
+            // Enhanced frame pacing for TG5040: Skip rendering if we're rendering too frequently
+            // This helps prevent warping during rapid input changes
+            static Uint32 lastRenderTime = 0;
+            Uint32 currentTime = SDL_GetTicks();
+            bool shouldRender = (m_needsRedraw || panningChanged) && 
+                               (currentTime - lastRenderTime) >= 16; // Max 60 FPS to prevent overload
+            
+            if (shouldRender) {
                 renderCurrentPage();
                 renderUI();
                 m_renderer->present();
                 m_needsRedraw = false;
+                lastRenderTime = currentTime;
             }
         } else {
             // Fake sleep mode - render black screen
@@ -687,16 +697,29 @@ void App::renderCurrentPage()
         pixelData = m_document->renderPage(m_currentPage, srcW, srcH, m_currentScale);
     }
 
+    // Ensure page dimensions are updated BEFORE calculating positions
+    // This prevents warping when switching between pages with different aspect ratios
+    int newPageWidth, newPageHeight;
+    
     // displayed page size after rotation
     if (m_rotation % 180 == 0)
     {
-        m_pageWidth = srcW;
-        m_pageHeight = srcH;
+        newPageWidth = srcW;
+        newPageHeight = srcH;
     }
     else
     {
-        m_pageWidth = srcH;
-        m_pageHeight = srcW;
+        newPageWidth = srcH;
+        newPageHeight = srcW;
+    }
+    
+    // Only update page dimensions if they've actually changed
+    // This provides more stable rendering during rapid input
+    if (m_pageWidth != newPageWidth || m_pageHeight != newPageHeight) {
+        m_pageWidth = newPageWidth;
+        m_pageHeight = newPageHeight;
+        // Clamp scroll position when page dimensions change to prevent out-of-bounds rendering
+        clampScroll();
     }
 
     int posX = (winW - m_pageWidth) / 2 + m_scrollX;
@@ -722,9 +745,17 @@ void App::renderCurrentPage()
     
     // Trigger prerendering of adjacent pages for faster page changes
     // Do this after the main render to avoid blocking the current page display
-    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-    if (muPdfDoc) {
-        muPdfDoc->prerenderAdjacentPagesAsync(m_currentPage, m_currentScale);
+    // Only prerender if zoom is stable (not debouncing), not actively panning, and not in cooldown
+    static Uint32 lastPrerenderTrigger = 0;
+    Uint32 currentTime = SDL_GetTicks();
+    bool prerenderCooldownActive = (currentTime - lastPrerenderTrigger) < 200; // 200ms cooldown
+    
+    if (!isZoomDebouncing() && !m_isDragging && !prerenderCooldownActive) {
+        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+        if (muPdfDoc && !muPdfDoc->isPrerenderingActive()) {
+            muPdfDoc->prerenderAdjacentPagesAsync(m_currentPage, m_currentScale);
+            lastPrerenderTrigger = currentTime;
+        }
     }
     
     // Measure total render time for dynamic timeout
@@ -980,6 +1011,12 @@ void App::goToNextPage()
         updatePageDisplayTime();
         markDirty();
         
+        // Cancel prerendering since we're changing pages
+        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+        if (muPdfDoc) {
+            muPdfDoc->cancelPrerendering();
+        }
+        
         // Set cooldown timer to prevent rapid page changes during panning
         m_lastPageChangeTime = SDL_GetTicks();
     }
@@ -995,6 +1032,12 @@ void App::goToPreviousPage()
         updateScaleDisplayTime();
         updatePageDisplayTime();
         markDirty();
+        
+        // Cancel prerendering since we're changing pages
+        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+        if (muPdfDoc) {
+            muPdfDoc->cancelPrerendering();
+        }
         
         // Set cooldown timer to prevent rapid page changes during panning
         m_lastPageChangeTime = SDL_GetTicks();
@@ -1018,6 +1061,12 @@ void App::zoom(int delta)
 {
     // Accumulate zoom changes and track input timing for debouncing
     auto now = std::chrono::steady_clock::now();
+    
+    // Cancel any ongoing prerendering since zoom is changing
+    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+    if (muPdfDoc) {
+        muPdfDoc->cancelPrerendering();
+    }
     
     // Add to pending zoom delta
     m_pendingZoomDelta += delta;
@@ -1050,11 +1099,11 @@ void App::zoomTo(int scale)
     updatePageDisplayTime();
     markDirty();
     
-    // Only clear cache if we're not in the middle of debouncing zoom input
-    // During debouncing, we'll clear cache once when the final zoom is applied
-    if (oldScale != m_currentScale && !isZoomDebouncing()) {
+    // Cancel prerendering and clear cache if scale changed
+    if (oldScale != m_currentScale) {
         auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
         if (muPdfDoc) {
+            muPdfDoc->cancelPrerendering();
             muPdfDoc->clearCache();
         }
     }
@@ -1103,13 +1152,13 @@ void App::fitPageToWindow()
     int windowWidth = m_renderer->getWindowWidth();
     int windowHeight = m_renderer->getWindowHeight();
 
-    // Update max render size for downsampling
-    if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
-    {
-        muDoc->setMaxRenderSize(windowWidth, windowHeight);
-    }
-
-    // Use effective sizes so 90/270 rotation swaps W/H
+#ifndef TG5040_PLATFORM
+// Update max render size for downsampling
+if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
+{
+    muDoc->setMaxRenderSize(windowWidth, windowHeight);
+}
+#endif    // Use effective sizes so 90/270 rotation swaps W/H
     int nativeWidth = effectiveNativeWidth();
     int nativeHeight = effectiveNativeHeight();
 
@@ -1129,8 +1178,21 @@ void App::fitPageToWindow()
     if (m_currentScale > 350)
         m_currentScale = 350;
 
-    m_pageWidth = static_cast<int>(nativeWidth * (m_currentScale / 100.0));
-    m_pageHeight = static_cast<int>(nativeHeight * (m_currentScale / 100.0));
+    // Update page dimensions based on effective size (accounting for downsampling)
+    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+    if (muPdfDoc) {
+        m_pageWidth = muPdfDoc->getPageWidthEffective(m_currentPage, m_currentScale);
+        m_pageHeight = muPdfDoc->getPageHeightEffective(m_currentPage, m_currentScale);
+        
+        // Apply rotation
+        if (m_rotation % 180 != 0) {
+            std::swap(m_pageWidth, m_pageHeight);
+        }
+    } else {
+        // Fallback for other document types
+        m_pageWidth = static_cast<int>(nativeWidth * (m_currentScale / 100.0));
+        m_pageHeight = static_cast<int>(nativeHeight * (m_currentScale / 100.0));
+    }
 
     m_scrollX = 0;
     m_scrollY = 0;
@@ -1153,14 +1215,30 @@ void App::recenterScrollOnZoom(int oldScale, int newScale)
     if (oldScale == 0 || newScale == 0)
         return;
 
-    int nativeWidth = effectiveNativeWidth();
-    int nativeHeight = effectiveNativeHeight();
-
-    int oldPageWidth = static_cast<int>(nativeWidth * (oldScale / 100.0));
-    int oldPageHeight = static_cast<int>(nativeHeight * (oldScale / 100.0));
-
-    int newPageWidth = static_cast<int>(nativeWidth * (newScale / 100.0));
-    int newPageHeight = static_cast<int>(nativeHeight * (newScale / 100.0));
+    // Use effective dimensions that account for downsampling
+    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+    int oldPageWidth, oldPageHeight, newPageWidth, newPageHeight;
+    
+    if (muPdfDoc) {
+        oldPageWidth = muPdfDoc->getPageWidthEffective(m_currentPage, oldScale);
+        oldPageHeight = muPdfDoc->getPageHeightEffective(m_currentPage, oldScale);
+        newPageWidth = muPdfDoc->getPageWidthEffective(m_currentPage, newScale);
+        newPageHeight = muPdfDoc->getPageHeightEffective(m_currentPage, newScale);
+        
+        // Apply rotation
+        if (m_rotation % 180 != 0) {
+            std::swap(oldPageWidth, oldPageHeight);
+            std::swap(newPageWidth, newPageHeight);
+        }
+    } else {
+        // Fallback for other document types
+        int nativeWidth = effectiveNativeWidth();
+        int nativeHeight = effectiveNativeHeight();
+        oldPageWidth = static_cast<int>(nativeWidth * (oldScale / 100.0));
+        oldPageHeight = static_cast<int>(nativeHeight * (oldScale / 100.0));
+        newPageWidth = static_cast<int>(nativeWidth * (newScale / 100.0));
+        newPageHeight = static_cast<int>(nativeHeight * (newScale / 100.0));
+    }
 
     int windowWidth = m_renderer->getWindowWidth();
     int windowHeight = m_renderer->getWindowHeight();
@@ -1254,10 +1332,22 @@ void App::fitPageToWidth()
     if (m_currentScale > 350)
         m_currentScale = 350;
 
-    // Update page dimensions based on new scale
-    int nativeHeight = effectiveNativeHeight();
-    m_pageWidth = static_cast<int>(nativeWidth * (m_currentScale / 100.0));
-    m_pageHeight = static_cast<int>(nativeHeight * (m_currentScale / 100.0));
+    // Update page dimensions based on effective size (accounting for downsampling)
+    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+    if (muPdfDoc) {
+        m_pageWidth = muPdfDoc->getPageWidthEffective(m_currentPage, m_currentScale);
+        m_pageHeight = muPdfDoc->getPageHeightEffective(m_currentPage, m_currentScale);
+        
+        // Apply rotation
+        if (m_rotation % 180 != 0) {
+            std::swap(m_pageWidth, m_pageHeight);
+        }
+    } else {
+        // Fallback for other document types
+        int nativeHeight = effectiveNativeHeight();
+        m_pageWidth = static_cast<int>(nativeWidth * (m_currentScale / 100.0));
+        m_pageHeight = static_cast<int>(nativeHeight * (m_currentScale / 100.0));
+    }
 
     // Reset horizontal scroll since we're fitting to width
     m_scrollX = 0;
@@ -1361,11 +1451,15 @@ bool App::updateHeldPanning(float dt)
     // Track if scrolling actually happened this frame
     bool scrollingOccurred = false;
     
+    // Enhanced stability: Force a brief pause after page changes to prevent warping
+    // This gives the rendering system time to stabilize before processing new input
+    bool inStabilizationPeriod = (SDL_GetTicks() - m_lastPageChangeTime) < (m_lastRenderDuration + 50);
+    
     if (dx != 0.0f || dy != 0.0f)
     {
-        if (inScrollTimeout) {
-            // During scroll timeout, don't allow panning movement
-            // This prevents scrolling past the beginning of a new page
+        if (inScrollTimeout || inStabilizationPeriod) {
+            // During scroll timeout or stabilization period, don't allow panning movement
+            // This prevents scrolling past the beginning of a new page and reduces warping
             // But we still need to continue processing edge-turn logic below
         } else {
             float len = std::sqrt(dx * dx + dy * dy);
@@ -1409,14 +1503,32 @@ bool App::updateHeldPanning(float dt)
     float oldEdgeTurnHoldDown = m_edgeTurnHoldDown;
 
     // Reset edge-turn timers during scroll timeout to prevent accumulated time from previous page
-    if (inScrollTimeout) {
-        if (m_edgeTurnHoldRight > 0.0f || m_edgeTurnHoldLeft > 0.0f || m_edgeTurnHoldUp > 0.0f || m_edgeTurnHoldDown > 0.0f) {
-            printf("DEBUG: Resetting edge-turn timers due to scroll timeout (timeout duration: %dms)\n", m_lastRenderDuration);
+    if (inScrollTimeout || inStabilizationPeriod) {
+        // During stabilization period, gradually decay edge-turn timers instead of hard reset
+        // This provides smoother visual feedback and reduces warping appearance
+        if (inStabilizationPeriod && !inScrollTimeout) {
+            // Gradual decay during stabilization period (but not timeout)
+            float decayFactor = 0.95f; // Decay 5% per frame
+            m_edgeTurnHoldRight *= decayFactor;
+            m_edgeTurnHoldLeft *= decayFactor;
+            m_edgeTurnHoldUp *= decayFactor;
+            m_edgeTurnHoldDown *= decayFactor;
+            
+            // Reset to zero when very small to avoid floating point drift
+            if (m_edgeTurnHoldRight < 0.01f) m_edgeTurnHoldRight = 0.0f;
+            if (m_edgeTurnHoldLeft < 0.01f) m_edgeTurnHoldLeft = 0.0f;
+            if (m_edgeTurnHoldUp < 0.01f) m_edgeTurnHoldUp = 0.0f;
+            if (m_edgeTurnHoldDown < 0.01f) m_edgeTurnHoldDown = 0.0f;
+        } else {
+            // Hard reset during scroll timeout
+            if (m_edgeTurnHoldRight > 0.0f || m_edgeTurnHoldLeft > 0.0f || m_edgeTurnHoldUp > 0.0f || m_edgeTurnHoldDown > 0.0f) {
+                printf("DEBUG: Resetting edge-turn timers due to scroll timeout (timeout duration: %dms)\n", m_lastRenderDuration);
+            }
+            m_edgeTurnHoldRight = 0.0f;
+            m_edgeTurnHoldLeft = 0.0f;
+            m_edgeTurnHoldUp = 0.0f;
+            m_edgeTurnHoldDown = 0.0f;
         }
-        m_edgeTurnHoldRight = 0.0f;
-        m_edgeTurnHoldLeft = 0.0f;
-        m_edgeTurnHoldUp = 0.0f;
-        m_edgeTurnHoldDown = 0.0f;
     } else if (scrollingOccurred) {
         // Reset edge-turn timers if user is actively scrolling - only start timer when stationary at edge
         if (m_edgeTurnHoldRight > 0.0f || m_edgeTurnHoldLeft > 0.0f || m_edgeTurnHoldUp > 0.0f || m_edgeTurnHoldDown > 0.0f) {
@@ -1791,18 +1903,35 @@ void App::handleDpadNudgeUp()
 void App::onPageChangedKeepZoom()
 {
     // Predict scaled size for the new page using the current zoom
-    int nativeW = effectiveNativeWidth();
-    int nativeH = effectiveNativeHeight();
+    // Use effective size for MuPdfDocument to account for downsampling
+    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+    int effectiveW, effectiveH;
+    
+    if (muPdfDoc) {
+        effectiveW = muPdfDoc->getPageWidthEffective(m_currentPage, m_currentScale);
+        effectiveH = muPdfDoc->getPageHeightEffective(m_currentPage, m_currentScale);
+        
+        // Apply rotation
+        if (m_rotation % 180 != 0) {
+            std::swap(effectiveW, effectiveH);
+        }
+    } else {
+        // Fallback for other document types
+        int nativeW = effectiveNativeWidth();
+        int nativeH = effectiveNativeHeight();
+        effectiveW = static_cast<int>(nativeW * (m_currentScale / 100.0));
+        effectiveH = static_cast<int>(nativeH * (m_currentScale / 100.0));
+    }
 
     // Guard against bad docs
-    if (nativeW <= 0 || nativeH <= 0)
+    if (effectiveW <= 0 || effectiveH <= 0)
     {
-        std::cerr << "App ERROR: Native page dimensions are zero for page " << m_currentPage << std::endl;
+        std::cerr << "App ERROR: Effective page dimensions are zero for page " << m_currentPage << std::endl;
         return;
     }
 
-    m_pageWidth = static_cast<int>(nativeW * (m_currentScale / 100.0));
-    m_pageHeight = static_cast<int>(nativeH * (m_currentScale / 100.0));
+    m_pageWidth = effectiveW;
+    m_pageHeight = effectiveH;
 
     // Keep current scroll but ensure it's valid for the new page extents
     clampScroll();

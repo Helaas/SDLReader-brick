@@ -40,6 +40,12 @@ public:
     // Clear the render cache
     void clearCache();
     
+    // Cancel any ongoing background prerendering
+    void cancelPrerendering();
+    
+    // Check if background prerendering is currently active
+    bool isPrerenderingActive() const { return m_prerenderActive; }
+    
     // Prerender pages for faster page changes
     void prerenderPage(int pageNumber, int scale);
     void prerenderAdjacentPages(int currentPage, int scale);
@@ -72,13 +78,15 @@ private:
     std::map<std::pair<int, int>, std::tuple<std::vector<unsigned char>, int, int>> m_cache;
     std::mutex m_cacheMutex;
     std::mutex m_renderMutex;  // Protects MuPDF context operations
-    int m_maxWidth = 2048;   // Increased from 1024 for better quality
-    int m_maxHeight = 1536;  // Increased from 768 for better quality
+    int m_maxWidth = 2560;   // Increased for better performance at high zoom levels
+    int m_maxHeight = 1920;  // Increased for better performance at high zoom levels
     int m_pageCount = 0;
     
     // Background prerendering support
     std::thread m_prerenderThread;
     std::atomic<bool> m_prerenderActive{false};
+    std::chrono::steady_clock::time_point m_lastPrerenderTime;
+    static constexpr int PRERENDER_COOLDOWN_MS = 50; // Minimum time between prerendering operations
 };
 
 #endif // MUPDF_DOCUMENT_H

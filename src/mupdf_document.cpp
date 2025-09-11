@@ -142,22 +142,17 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int &width,
         // This allows zooming in for detail up to the max render size
         if (nativeWidth > m_maxWidth || nativeHeight > m_maxHeight)
         {
+            // Simple and fast downsampling: just fit to max dimensions
             float scaleX = static_cast<float>(m_maxWidth) / nativeWidth;
             float scaleY = static_cast<float>(m_maxHeight) / nativeHeight;
             downsampleScale = std::min(scaleX, scaleY);
             
-            // Gradual scaling for zoom levels - avoid cliff effects
-            if (baseScale > 1.0f) {
-                // Calculate how much detail we can afford based on zoom level
-                // Higher zoom = more detail allowed, up to 3.5x window size (350% zoom)
-                float zoomFactor = std::min(baseScale, 3.5f); // Cap at 3.5x
-                float maxDetailScale = zoomFactor;
-                float detailScaleX = static_cast<float>(m_maxWidth * maxDetailScale) / nativeWidth;
-                float detailScaleY = static_cast<float>(m_maxHeight * maxDetailScale) / nativeHeight;
-                float detailScale = std::min(detailScaleX, detailScaleY);
-                
-                // Use the more permissive scale, but ensure smooth transitions
-                downsampleScale = std::max(downsampleScale, detailScale);
+            // For zoom levels above 150%, allow slightly more detail to prevent quality cliff
+            // But keep it simple to avoid performance issues
+            if (baseScale > 1.5f) {
+                // Allow up to 10% more detail for high zoom levels, but cap it
+                float extraDetail = std::min(baseScale - 1.5f, 0.5f) * 0.1f; // Max 5% extra
+                downsampleScale = std::min(downsampleScale * (1.0f + extraDetail), 1.0f);
             }
         }
         fz_drop_page(ctx, (fz_page*)tempPage);
@@ -173,23 +168,33 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int &width,
     // Check cache using exact zoom level for cache key
     auto key = std::make_pair(pageNumber, zoom); // zoom is already an integer percentage
     
-    std::cout << "Render page " << pageNumber << ": zoom=" << zoom 
-              << "%, baseScale=" << baseScale 
-              << ", downsampleScale=" << downsampleScale 
-              << ", exactZoom=" << zoom << "%" << std::endl;
+    // Reduce debug output frequency for better performance at high zoom levels
+    static int debugCounter = 0;
+    bool shouldDebug = (++debugCounter % 10 == 0) || zoom < 150; // Debug every 10th call or for low zoom
+    
+    if (shouldDebug) {
+        std::cout << "Render page " << pageNumber << ": zoom=" << zoom 
+                  << "%, baseScale=" << baseScale 
+                  << ", downsampleScale=" << downsampleScale 
+                  << ", exactZoom=" << zoom << "%" << std::endl;
+    }
     
     {
         std::lock_guard<std::mutex> lock(m_cacheMutex);
         auto it = m_cache.find(key);
         if (it != m_cache.end())
         {
-            std::cout << "Cache HIT for page " << pageNumber << " at exact zoom " << zoom << "%" << std::endl;
+            if (shouldDebug) {
+                std::cout << "Cache HIT for page " << pageNumber << " at exact zoom " << zoom << "%" << std::endl;
+            }
             auto &[buffer, cachedWidth, cachedHeight] = it->second;
             width = cachedWidth;
             height = cachedHeight;
             return buffer;
         }
-        std::cout << "Cache MISS for page " << pageNumber << " at exact zoom " << zoom << "%" << std::endl;
+        if (shouldDebug) {
+            std::cout << "Cache MISS for page " << pageNumber << " at exact zoom " << zoom << "%" << std::endl;
+        }
     }
 
     fz_matrix transform = fz_scale(baseScale * downsampleScale, baseScale * downsampleScale);
@@ -251,6 +256,20 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int &width,
     // Cache the result
     {
         std::lock_guard<std::mutex> lock(m_cacheMutex);
+        
+        // For high zoom levels, limit cache size to prevent memory issues
+        if (zoom > 200 && m_cache.size() > 10) {
+            // Keep only the most recent entries for high zoom levels
+            auto it = m_cache.begin();
+            std::advance(it, m_cache.size() - 5); // Keep last 5 entries
+            m_cache.erase(m_cache.begin(), it);
+        } else if (m_cache.size() > 20) {
+            // General cache size limit
+            auto it = m_cache.begin();
+            std::advance(it, m_cache.size() - 15); // Keep last 15 entries
+            m_cache.erase(m_cache.begin(), it);
+        }
+        
         m_cache[key] = std::make_tuple(buffer, width, height);
     }
 
@@ -335,11 +354,12 @@ int MuPdfDocument::getPageWidthEffective(int pageNumber, int zoom)
         {
             float downsampleScale = static_cast<float>(m_maxWidth) / scaledWidth;
             
-            // Gradual scaling for zoom levels - avoid cliff effects
-            if (baseScale > 1.0f) {
-                float zoomFactor = std::min(baseScale, 3.5f); // Cap at 3.5x
-                float detailScale = static_cast<float>(m_maxWidth * zoomFactor) / scaledWidth;
-                downsampleScale = std::max(downsampleScale, detailScale);
+            // For zoom levels above 150%, allow slightly more detail to prevent quality cliff
+            // But keep it simple to avoid performance issues
+            if (baseScale > 1.5f) {
+                // Allow up to 10% more detail for high zoom levels, but cap it
+                float extraDetail = std::min(baseScale - 1.5f, 0.5f) * 0.1f; // Max 5% extra
+                downsampleScale = std::min(downsampleScale * (1.0f + extraDetail), 1.0f);
             }
             
             width = static_cast<int>(scaledWidth * downsampleScale);
@@ -388,13 +408,12 @@ int MuPdfDocument::getPageHeightEffective(int pageNumber, int zoom)
             float scaleY = static_cast<float>(m_maxHeight) / scaledHeight;
             float downsampleScale = std::min(scaleX, scaleY);
             
-            // Gradual scaling for zoom levels - avoid cliff effects
-            if (baseScale > 1.0f) {
-                float zoomFactor = std::min(baseScale, 3.5f); // Cap at 3.5x
-                float detailScaleX = static_cast<float>(m_maxWidth * zoomFactor) / scaledWidth;
-                float detailScaleY = static_cast<float>(m_maxHeight * zoomFactor) / scaledHeight;
-                float detailScale = std::min(detailScaleX, detailScaleY);
-                downsampleScale = std::max(downsampleScale, detailScale);
+            // For zoom levels above 150%, allow slightly more detail to prevent quality cliff
+            // But keep it simple to avoid performance issues
+            if (baseScale > 1.5f) {
+                // Allow up to 10% more detail for high zoom levels, but cap it
+                float extraDetail = std::min(baseScale - 1.5f, 0.5f) * 0.1f; // Max 5% extra
+                downsampleScale = std::min(downsampleScale * (1.0f + extraDetail), 1.0f);
             }
             
             height = static_cast<int>(scaledHeight * downsampleScale);
@@ -439,6 +458,15 @@ void MuPdfDocument::clearCache()
     m_cache.clear();
 }
 
+void MuPdfDocument::cancelPrerendering()
+{
+    // Stop any existing background prerendering
+    if (m_prerenderThread.joinable()) {
+        m_prerenderActive = false;
+        m_prerenderThread.join();
+    }
+}
+
 void MuPdfDocument::prerenderPage(int pageNumber, int scale)
 {
     // Validate page number
@@ -472,7 +500,7 @@ void MuPdfDocument::prerenderPage(int pageNumber, int scale)
         float downsampleScale = 1.0f;
         fz_var(downsampleScale);
         
-        // Apply downsampling logic similar to main renderPage
+        // Apply downsampling logic matching renderPage
         fz_page *tempPage = nullptr;
         fz_var(tempPage);
         fz_try(ctx)
@@ -486,20 +514,21 @@ void MuPdfDocument::prerenderPage(int pageNumber, int scale)
             int nativeWidth = static_cast<int>((bounds.x1 - bounds.x0) * baseScale);
             int nativeHeight = static_cast<int>((bounds.y1 - bounds.y0) * baseScale);
             
-            const float oversizeTolerance = 1.5f;
-            if (nativeWidth > m_maxWidth * oversizeTolerance || nativeHeight > m_maxHeight * oversizeTolerance)
+            // Only downsample if the zoomed image is larger than max size
+            // This allows zooming in for detail up to the max render size
+            if (nativeWidth > m_maxWidth || nativeHeight > m_maxHeight)
             {
+                // Simple and fast downsampling: just fit to max dimensions
                 float scaleX = static_cast<float>(m_maxWidth) / nativeWidth;
                 float scaleY = static_cast<float>(m_maxHeight) / nativeHeight;
                 downsampleScale = std::min(scaleX, scaleY);
                 
-                if (baseScale > 1.0f) {
-                    float zoomFactor = std::min(baseScale, 3.5f);
-                    float maxDetailScale = zoomFactor;
-                    float detailScaleX = static_cast<float>(m_maxWidth * maxDetailScale) / nativeWidth;
-                    float detailScaleY = static_cast<float>(m_maxHeight * maxDetailScale) / nativeHeight;
-                    float detailScale = std::min(detailScaleX, detailScaleY);
-                    downsampleScale = std::max(downsampleScale, detailScale);
+                // For zoom levels above 150%, allow slightly more detail to prevent quality cliff
+                // But keep it simple to avoid performance issues
+                if (baseScale > 1.5f) {
+                    // Allow up to 10% more detail for high zoom levels, but cap it
+                    float extraDetail = std::min(baseScale - 1.5f, 0.5f) * 0.1f; // Max 5% extra
+                    downsampleScale = std::min(downsampleScale * (1.0f + extraDetail), 1.0f);
                 }
             }
             fz_drop_page(ctx, tempPage);
@@ -588,11 +617,26 @@ void MuPdfDocument::prerenderAdjacentPages(int currentPage, int scale)
 
 void MuPdfDocument::prerenderAdjacentPagesAsync(int currentPage, int scale)
 {
-    // Stop any existing background prerendering
+    // Check cooldown to prevent excessive prerendering
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastPrerenderTime).count();
+    if (elapsed < PRERENDER_COOLDOWN_MS) {
+        return; // Too soon, skip prerendering
+    }
+    
+    // Don't start new prerendering if already active
+    if (m_prerenderActive) {
+        return;
+    }
+    
+    // Stop any existing background prerendering (shouldn't be necessary but safe)
     if (m_prerenderThread.joinable()) {
         m_prerenderActive = false;
         m_prerenderThread.join();
     }
+    
+    // Update last prerender time
+    m_lastPrerenderTime = now;
     
     // Start new background prerendering
     m_prerenderActive = true;

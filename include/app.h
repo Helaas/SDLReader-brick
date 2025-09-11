@@ -171,9 +171,11 @@ private:
         return (SDL_GetTicks() - m_lastPageChangeTime) < PAGE_CHANGE_COOLDOWN;
     }
     
-    // Check if we should block scrolling after a page change (using dynamic timeout)
+    // Check if we should block scrolling after a page change (using dynamic timeout with minimum)
     bool isInScrollTimeout() const {
-        return (SDL_GetTicks() - m_lastPageChangeTime) < m_lastRenderDuration;
+        Uint32 minTimeout = 100; // Minimum 100ms timeout regardless of render time
+        Uint32 timeoutDuration = std::max(minTimeout, m_lastRenderDuration);
+        return (SDL_GetTicks() - m_lastPageChangeTime) < timeoutDuration;
     }
 
     // Try a one-shot nudge; if at the edge, flip the page instead.
