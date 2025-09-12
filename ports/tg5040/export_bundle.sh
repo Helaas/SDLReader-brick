@@ -77,7 +77,7 @@ cp "$PROJECT_ROOT/pak.json" "$BUNDLE_DIR/"
 # Make all binaries executable
 chmod +x "$BUNDLE_DIR/bin"/* 2>/dev/null || true
 
-# Zip the bundle
+# Zip the bundle with maximum compression
 echo "Creating SDLReader.pak.zip..."
 if ! command -v zip &> /dev/null; then
     echo "Installing zip..."
@@ -85,7 +85,7 @@ if ! command -v zip &> /dev/null; then
 fi
 rm -f "$PROJECT_ROOT/SDLReader.pak.zip"
 cd "$BUNDLE_DIR"
-zip -r "$PROJECT_ROOT/SDLReader.pak.zip" .
+zip -9 -r "$PROJECT_ROOT/SDLReader.pak.zip" .
 
 echo ""
 echo "TG5040 bundle exported successfully to: $BUNDLE_DIR"
