@@ -78,26 +78,32 @@ make help
 #### macOS
 * A C++17 compatible compiler (e.g., g++, clang++)
 * `SDL2` and `SDL2_ttf` development libraries
-* `MuPDF` development libraries  
+* `libarchive` development library (for CBR support)
+* `git` (for automatic MuPDF download)
 * `pkg-config`
 
 **Install dependencies using Homebrew:**
 ```bash
-brew install sdl2 sdl2_ttf mupdf-tools pkg-config
+brew install sdl2 sdl2_ttf libarchive git pkg-config
 ```
+
+**Note**: MuPDF is now built automatically from source with CBR support - no system MuPDF packages needed.
 
 #### Linux
 * A C++17 compatible compiler (e.g., g++, clang++)
 * `SDL2` and `SDL2_ttf` development libraries
-* `MuPDF` development libraries and dependencies
+* `libarchive` development library (for CBR support)
+* `git` (for automatic MuPDF download)
 * `pkg-config`
 
 **Tested on Ubuntu 24.04. Other distributions may require different packages.**
 
 **Install dependencies (Ubuntu/Debian):**
 ```bash
-sudo apt install build-essential pkg-config libsdl2-dev libsdl2-ttf-dev libmupdf-dev libfreetype6-dev libharfbuzz-dev libjpeg-dev libopenjp2-7-dev libjbig2dec0-dev libgumbo-dev libmujs-dev
+sudo apt install build-essential pkg-config libsdl2-dev libsdl2-ttf-dev libfreetype6-dev libharfbuzz-dev libjpeg-dev libopenjp2-7-dev libjbig2dec0-dev libgumbo-dev libmujs-dev libarchive-dev git
 ```
+
+**Note**: MuPDF is now built automatically from source with CBR support - no system MuPDF packages needed.
 
 Or use the automated installer:
 ```bash
