@@ -38,6 +38,8 @@ bool MuPdfDocument::open(const std::string &filePath)
     }
 
     m_ctx.reset(ctx);
+    
+    // Register document handlers
     fz_register_document_handlers(ctx);
 
     // Create separate context for prerendering to avoid race conditions
