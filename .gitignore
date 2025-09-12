@@ -7,6 +7,9 @@
 .DS_Store
 /.vscode
 
+# MuPDF build directories (downloaded and built dynamically)
+/ports/*/mupdf/
+
 # TG5040 bundle artifacts
 /ports/tg5040/pak/lib/*
 /ports/tg5040/pak/res/*
