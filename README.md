@@ -14,7 +14,7 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 * [Architecture](#architecture)
 
 ## Features
-* View PDF documents, comic book archives (CBZ/ZIP), EPUB books, and MOBI e-books.
+* View PDF documents, comic book archives (CBZ/ZIP & CBR/RAR), EPUB books, and MOBI e-books.
 * Page navigation (next/previous page).
 * **Smart Edge Navigation**: When at zoomed ≥ 100% & at a page edge, hold D-pad for 300ms to turn pages with visual progress indicator.
 * Quick page jumping (±10 pages).
