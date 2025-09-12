@@ -19,19 +19,52 @@ LIBS := -lSDL2_ttf -lSDL2 \
   -Lports/tg5040/mupdf/build/release \
   -lmupdf -lmupdf-third -larchive \
   -ljpeg -lopenjp2 -lharfbuzz -ljbig2dec \
-  -lfreetype -lz -lm -lpthread -ldl
+  -lfreetype -lgumbo -lz -lm -lpthread -ldl
 
-.PHONY: all clean export-bundle build-mupdf clean-mupdf
+.PHONY: all clean export-bundle build-mupdf setup-mupdf clean-mupdf
 
 # Default goal
-all: build-mupdf $(TARGET)
+all: setup-mupdf build-mupdf $(TARGET)
+
+# Setup MuPDF repository if it doesn't exist
+setup-mupdf:
+	@if [ ! -d "ports/tg5040/mupdf" ]; then \
+		echo "Cloning MuPDF repository (shallow clone for faster setup)..."; \
+		git clone --depth 1 --branch 1.26.7 https://github.com/ArtifexSoftware/mupdf.git ports/tg5040/mupdf; \
+	fi
+	@echo "Initializing minimal required submodules..."; \
+	cd ports/tg5040/mupdf && git submodule update --init --depth 1 thirdparty/freetype thirdparty/harfbuzz thirdparty/jbig2dec thirdparty/libjpeg thirdparty/openjpeg thirdparty/zlib thirdparty/lcms2
+	@echo "Applying patches to disable barcode compilation when barcode=no..."; \
+	cd ports/tg5040/mupdf && sed -i 's/-std=c++20/-std=c++17/g' Makelists
 
 # Build MuPDF with libarchive support for CBR/CBZ files
 build-mupdf:
-	@echo "Installing libarchive development package for CBR support..."
-	@apt-get update && apt-get install -y libarchive-dev || echo "Warning: Could not install libarchive-dev"
-	@echo "Building MuPDF with libarchive support for CBR/CBZ files..."
-	@cd ports/tg5040/mupdf && $(MAKE) libs HAVE_LIBARCHIVE=yes
+	@echo "Installing development packages for CBR support and HTML parsing..."
+	@apt-get update && apt-get install -y libarchive-dev libgumbo-dev || echo "Warning: Could not install some dev packages"
+	@echo "Building minimal MuPDF with libarchive support for CBR/CBZ files..."
+	@cd ports/tg5040/mupdf && $(MAKE) libs \
+		HAVE_LIBARCHIVE=yes \
+		CFLAGS="-std=c17 -D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0" \
+		CXXFLAGS="-std=c++17 -D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0" \
+		mujs=no \
+		tesseract=no \
+		barcode=no \
+		extract=no \
+		svg=no \
+		brotli=no \
+		xps=no \
+		USE_SYSTEM_LIBS=yes \
+		USE_SYSTEM_FREETYPE=no \
+		USE_SYSTEM_HARFBUZZ=no \
+		USE_SYSTEM_JBIG2DEC=no \
+		USE_SYSTEM_LIBJPEG=no \
+		USE_SYSTEM_OPENJPEG=no \
+		USE_SYSTEM_ZLIB=no \
+		USE_SYSTEM_BROTLI=no \
+		USE_ZXINGCPP=no \
+		CXXFLAGS="-std=c++17 -g -O3 -DFZ_ENABLE_BARCODE=0" \
+		XCXXFLAGS="-std=c++17 -DFZ_ENABLE_BARCODE=0" \
+		USE_SYSTEM_LCMS2=no
 
 # Export complete TG5040 bundle for distribution
 export-bundle: $(TARGET)

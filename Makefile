@@ -34,7 +34,7 @@ clean:
 	-@$(MAKE) -C ports/mac clean 2>/dev/null || true
 	-@$(MAKE) -C ports/wiiu clean 2>/dev/null || true
 	-@$(MAKE) -C ports/linux clean 2>/dev/null || true
-	@rm -rf bin/
+	-@find bin/ -type f -delete 2>/dev/null || true
 
 list-platforms:
 	@echo "Available platforms:"
