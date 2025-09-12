@@ -2,7 +2,7 @@
   "name": "SDLReader",
   "version": "v1.0.3",
   "type": "TOOL",
-  "description": "Read PDF, CBZ/ZIP comic archives, EPUB, and MOBI e-books with smooth navigation, zoom, rotation, and mirroring. SDLReader is a lightweight, cross-platform viewer optimized for the TrimUI Brick (TG5040) running NextUI, built on SDL2 and MuPDF.",
+  "description": "Read PDF, CBZ/ZIP & CBR/RAR comic archives, EPUB, and MOBI e-books with smooth navigation, zoom, rotation, and mirroring. SDLReader is a lightweight, cross-platform viewer optimized for the TrimUI Brick (TG5040) running NextUI, built on SDL2 and MuPDF.",
   "author": "Helaas",
   "repo_url": "https://github.com/Helaas/SDLReader-brick",
   "release_filename": "SDLReader.pak.zip",
