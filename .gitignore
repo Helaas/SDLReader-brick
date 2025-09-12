@@ -6,6 +6,11 @@
 /bundle
 .DS_Store
 /.vscode
+*.trashinfo
+
+# MuPDF build directories (downloaded and built dynamically)
+/ports/*/mupdf/
+/ports/*/libarchive*
 
 # TG5040 bundle artifacts
 /ports/tg5040/pak/lib/*

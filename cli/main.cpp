@@ -24,7 +24,7 @@ int main(int argc, char *argv[])
     if (argc != 2)
     {
         std::cerr << "Usage: " << argv[0] << " <document_file>" << std::endl;
-        std::cerr << "Supported formats: PDF (.pdf), Comic Book Archives (.cbz, .zip), EPUB (.epub), MOBI (.mobi)" << std::endl;
+        std::cerr << "Supported formats: PDF (.pdf), Comic Book Archives (.cbz, .cbr, .rar, .zip), EPUB (.epub), MOBI (.mobi)" << std::endl;
         return 1;
     }
 

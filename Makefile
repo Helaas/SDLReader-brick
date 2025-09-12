@@ -18,7 +18,7 @@ export-tg5040: tg5040
 
 mac:
 	@echo "Building for macOS..."
-	$(MAKE) -f ports/mac/Makefile
+	$(MAKE) -C ports/mac
 
 wiiu:
 	@echo "Building for Wii U..."
@@ -31,10 +31,10 @@ linux:
 clean:
 	@echo "Cleaning all platforms..."
 	-@$(MAKE) -f ports/tg5040/Makefile clean 2>/dev/null || true
-	-@$(MAKE) -f ports/mac/Makefile clean 2>/dev/null || true
+	-@$(MAKE) -C ports/mac clean 2>/dev/null || true
 	-@$(MAKE) -C ports/wiiu clean 2>/dev/null || true
 	-@$(MAKE) -C ports/linux clean 2>/dev/null || true
-	@rm -rf bin/
+	-@find bin/ -type f -delete 2>/dev/null || true
 
 list-platforms:
 	@echo "Available platforms:"

@@ -21,8 +21,9 @@ fi
 # - glibc core (must use device versions)
 # - system dynamic loader
 # - system SDL2 (use device's SDL2 which has the right KMSDRM/fbcon backends)
+# - ICU libraries (not needed with our minimal libarchive build)
 # If the device also provides SDL2_ttf, you can optionally add ^libSDL2_ttf-2\.0\.so\. here too.
-EXCL_REGEX='(^ld-linux-|^libc\.so\.|^libpthread\.so\.|^libm\.so\.|^librt\.so\.|^libdl\.so\.|^libnsl\.so\.|^libresolv\.so\.|^libSDL2-2\.0\.so\.)'
+EXCL_REGEX='(^ld-linux-|^libc\.so\.|^libpthread\.so\.|^libm\.so\.|^librt\.so\.|^libdl\.so\.|^libnsl\.so\.|^libresolv\.so\.|^libSDL2-2\.0\.so\.|^libicu)'
 
 echo "START bundling from: $PWD"
 echo "Binary: $BIN"
@@ -115,6 +116,8 @@ fi
 # Optional: prune heavy libs you likely don't need on the Brick (uncomment if desired)
  rm -f "$LIBDIR"/libpulse*.so* "$LIBDIR"/libsystemd*.so* "$LIBDIR"/libdbus-1*.so* || true
  rm -f "$LIBDIR"/libX*.so* "$LIBDIR"/libSM*.so* "$LIBDIR"/libICE*.so* "$LIBDIR"/libwayland-*.so* || true
+ # Remove ICU and XML libraries (not needed with minimal libarchive)
+ rm -f "$LIBDIR"/libicu*.so* "$LIBDIR"/libxml2*.so* || true
 
 # Size trim (optional)
 strip "$BINDIR/sdl_reader_cli" 2>/dev/null || true

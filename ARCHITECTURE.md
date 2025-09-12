@@ -1,5 +1,24 @@
 # SDLReader Architecture
 
+## Supported Document Formats
+
+SDLReader now provides comprehensive document format support across all platforms:
+
+- **PDF**: Portable Document Format files
+- **CBZ**: Comic Book ZIP archives  
+- **CBR**: Comic Book RAR archives (NEW! - via libarchive integration)
+- **ZIP**: ZIP archives containing images
+- **EPUB**: Electronic book format
+- **MOBI**: Kindle book format
+
+### CBR Support Architecture
+
+Comic Book RAR (CBR) support is implemented through:
+- **MuPDF Integration**: Built-in CBR handler in MuPDF's document loading system
+- **libarchive Dependency**: Automatic RAR archive extraction and reading
+- **Unified Interface**: CBR files handled identically to CBZ files from the application perspective
+- **Cross-Platform**: Available on all supported platforms through self-built MuPDF
+
 ## Multi-Platform Design
 
 SDLReader is designed as a cross-platform document reader with a clean separation between shared functionality and platform-specific features.
@@ -22,13 +41,13 @@ SDLReader is designed as a cross-platform document reader with a clean separatio
 - Smart error handling with 30-second timeout
 - Battery conservation optimizations
 - Hardware-specific input device monitoring
-- PDF, CBZ, EPUB, and MOBI document support
+- PDF, CBZ, CBR, EPUB, and MOBI document support
 
 **Build Characteristics**:
 - Cross-compilation required
 - Docker-based development environment
 - Platform flag: `-DTG5040_PLATFORM`
-- Custom libraries: MuPDF, SDL2
+- Self-built MuPDF with libarchive for CBR support
 - NextUI system integration scripts
 
 ### macOS
@@ -42,8 +61,8 @@ SDLReader is designed as a cross-platform document reader with a clean separatio
 
 **Build Characteristics**:
 - Native compilation
-- pkg-config dependency resolution
-- Standard desktop libraries
+- Homebrew package management for dependencies
+- Self-built MuPDF with libarchive for CBR support
 - No platform-specific flags
 
 ### Linux
@@ -57,8 +76,8 @@ SDLReader is designed as a cross-platform document reader with a clean separatio
 
 **Build Characteristics**:
 - Native compilation
-- apt/system package dependencies
-- Standard Linux libraries
+- System package dependencies (no longer requires system MuPDF)
+- Self-built MuPDF with libarchive for CBR support
 - Automated dependency installation
 
 ### Wii U
@@ -73,18 +92,18 @@ SDLReader is designed as a cross-platform document reader with a clean separatio
 **Build Characteristics**:
 - Cross-compilation with devkitPro
 - Static library linking only
+- Self-built MuPDF with libarchive for CBR support
 - Console-specific libraries
-- Custom MuPDF build required
 
 ## Code Organization
 
 ### Shared Components (`src/`, `include/`, `cli/`)
 Core functionality that works across all platforms:
-- **Document handling**: PDF, CBZ/ZIP, EPUB, and MOBI support via MuPDF's native format support
+- **Document handling**: PDF, CBZ/ZIP, CBR, EPUB, and MOBI support via MuPDF's native format support
 - **Rendering engine**: SDL2-based graphics and text rendering
 - **User interface**: Page navigation, zoom, scroll controls
 - **Application logic**: Event handling, state management, unified document format support
-- **Document types**: PDF documents, comic book archives (CBZ/ZIP), EPUB books, and MOBI e-books through single document interface
+- **Document types**: PDF documents, comic book archives (CBZ/ZIP/CBR), EPUB books, and MOBI e-books through single document interface
 
 ### Platform-Specific Components (`ports/{platform}/`)
 Platform-specific implementations and optimizations:
@@ -130,6 +149,57 @@ The power management system demonstrates the port-specific architecture:
 - **Linux**: Uses standard desktop environment power management
 - **Wii U**: Uses console's built-in power management
 
+## MuPDF Build System Architecture
+
+### Self-Contained MuPDF Strategy
+
+SDLReader now uses a self-contained MuPDF build system instead of relying on system packages:
+
+**Benefits**:
+- **CBR Support**: Guaranteed libarchive integration for RAR archives
+- **Version Control**: Consistent MuPDF 1.26.7 across all platforms  
+- **Reduced Dependencies**: No system MuPDF packages required
+- **Feature Control**: Custom build flags and optimizations
+- **Cross-Platform**: Same MuPDF version and features everywhere
+
+### Per-Port MuPDF Directories
+
+Each platform maintains its own MuPDF build:
+- **Location**: `ports/{platform}/mupdf/`
+- **Version**: MuPDF 1.26.7 (automatically downloaded)
+- **Configuration**: Platform-specific build settings
+- **libarchive**: Integrated for CBR support on all platforms
+
+### Build Process
+
+1. **Automatic Download**: Git clones MuPDF 1.26.7 if directory doesn't exist
+2. **Configuration**: Creates `user.make` with libarchive settings
+3. **Platform-Specific Setup**: Configures paths and dependencies for each platform
+4. **Compilation**: Builds static libraries (`libmupdf.a`, `libmupdf-third.a`)
+5. **Preservation**: MuPDF directory preserved between builds for speed
+
+### Platform-Specific MuPDF Configurations
+
+#### macOS
+- **libarchive Detection**: Automatic Homebrew path detection
+- **PKG_CONFIG_PATH**: Dynamic libarchive.pc discovery
+- **Dependencies**: Homebrew SDL2, libarchive
+
+#### Linux  
+- **libarchive Integration**: System package dependencies
+- **pkg-config**: Standard library detection
+- **Dependencies**: apt packages (libarchive-dev, etc.)
+
+#### TG5040
+- **Cross-Compilation**: Docker environment with proper toolchain
+- **Static Linking**: Embedded Linux compatibility
+- **Dependencies**: Bundled libraries in container
+
+#### Wii U
+- **devkitPro Integration**: Console-specific toolchain
+- **Static Only**: Homebrew linking requirements  
+- **Dependencies**: devkitPro portlibs
+
 ## Build System Architecture
 
 ### Main Makefile (`Makefile`)
@@ -149,21 +219,24 @@ The power management system demonstrates the port-specific architecture:
 1. Sets `-DTG5040_PLATFORM` compiler flag
 2. Includes `ports/tg5040/include` in header search path
 3. Compiles `ports/tg5040/src/power_handler.cpp` as `tg5040_power_handler.o`
-4. Links with embedded Linux libraries (SDL2, SDL2_image, libzip, MuPDF)
-5. Sets up Docker cross-compilation environment
-6. Configures NextUI-compatible system integration
+4. **MuPDF Setup**: Automatically downloads and builds MuPDF with libarchive
+5. Links with embedded Linux libraries (SDL2, SDL2_image, custom MuPDF)
+6. Sets up Docker cross-compilation environment
+7. Configures NextUI-compatible system integration
 
 #### Linux Build  
-1. Uses native compiler toolchain
-2. Resolves dependencies via system package manager
-3. Links with standard Linux desktop libraries
-4. Provides automated dependency installation
+1. **MuPDF Setup**: Automatically downloads and builds MuPDF with libarchive
+2. Uses native compiler toolchain
+3. Resolves dependencies via system package manager
+4. Links with standard Linux desktop libraries and custom MuPDF
+5. Provides automated dependency installation
 
 #### macOS Build
-1. Uses Homebrew for dependency management
-2. Links with macOS-specific frameworks
-3. Excludes Linux-specific source files
-4. Uses pkg-config for library discovery
+1. **MuPDF Setup**: Automatically downloads and builds MuPDF with Homebrew libarchive
+2. Uses Homebrew for dependency management
+3. Links with macOS-specific frameworks and custom MuPDF
+4. Excludes Linux-specific source files
+5. Uses dynamic libarchive.pc discovery
 
 ## Adding New Platforms
 
