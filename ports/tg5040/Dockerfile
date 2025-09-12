@@ -44,20 +44,13 @@ RUN apt-get -y update && apt-get -y install \
     libfontconfig1-dev \
     liblcms2-dev \
     libcurl4-openssl-dev \
+    libarchive-dev \
     pkg-config \
     patchelf \
   && rm -rf /var/lib/apt/lists/*
 
-# Build MuPDF 1.26.7 from source
-RUN cd /tmp && \
-    git clone --depth 1 --branch 1.26.7 https://github.com/ArtifexSoftware/mupdf.git && \
-    cd mupdf && \
-    git submodule update --init && \
-    sed -i 's/-std=c++20/-std=c++17/g' Makelists && \
-    make prefix=/usr/local install-libs && \
-    ldconfig && \
-    cd / && \
-    rm -rf /tmp/mupdf
+# Dependencies are installed above
+# MuPDF is now built per-port during the build process with CBR support
 
 RUN mkdir -p /root/workspace
 WORKDIR /root

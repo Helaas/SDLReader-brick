@@ -3,10 +3,15 @@
 #-------------------------------------------------------------------------------
 
 # Define clean target first, so it works without DEVKITPRO
-.PHONY: clean
+.PHONY: clean clean-mupdf
 clean:
 	@echo clean ...
 	@rm -fr build *.rpx *.elf *.wuhb
+
+# Clean MuPDF (use with caution - will require re-download and rebuild)
+clean-mupdf:
+	@echo "Removing MuPDF directory (will be re-downloaded on next build)..."
+	@rm -rf mupdf
 
 # Check for DEVKITPRO only for build targets
 ifeq ($(strip $(DEVKITPRO)),)
@@ -22,7 +27,7 @@ TOPDIR ?= $(CURDIR)
 
 include $(DEVKITPRO)/wut/share/wut_rules
 
-MUPDF_ROOT	:=	/project/mupdf-devkitppc
+MUPDF_ROOT	:=	mupdf/1.26.7
 
 #-------------------------------------------------------------------------------
 # TARGET is the name of the output

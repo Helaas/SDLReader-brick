@@ -2,7 +2,14 @@
 
 This directory contains the Wii U-specific build configuration for the SDLReader project.
 
-SDLReader is a PDF document reader that compiles and runs on macOS, TG5040, and Wii U. It uses MuPDF for loading PDF files.
+SDLReader is a document reader that compiles and runs on macOS, TG5040, and Wii U. It uses MuPDF for loading PDF and comic book files.
+
+## Key Features
+
+- **Built-in CBR Support**: Now includes support for CBR (Comic Book RAR) files alongside CBZ/ZIP comic books
+- **Self-Contained MuPDF**: Uses port-specific MuPDF build with libarchive support  
+- **Wii U Optimized**: Static linking and console-specific optimizations
+- **Multiple Document Formats**: PDF, CBZ, CBR, ZIP, EPUB support
 
 ## Quick Start
 
@@ -20,7 +27,8 @@ make
 
 ## Requirements
 - devkitPro toolchain with WUT (Wii U Toolchain)
-- Custom MuPDF build for devkitPPC: [mupdf-devkitppc](https://github.com/hito16/mupdf-devkitppc)
+- Git (for automatic MuPDF download)
+- libarchive support (for CBR files)
 
 ## Platform-Specific Features
 The Wii U build:
@@ -28,6 +36,8 @@ The Wii U build:
 - Static linking only (Wii U homebrew requirement)  
 - Uses devkitPro's harfbuzz and freetype libraries
 - Includes Wii U-specific main wrapper (`main_wiiu.cpp`)
+- **CBR Support**: Comic Book RAR files via libarchive integration
+- **Self-built MuPDF**: Automatically downloads and builds MuPDF with CBR support
 
 
 ## Development Status

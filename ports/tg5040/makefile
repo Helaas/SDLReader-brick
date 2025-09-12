@@ -4,7 +4,7 @@
 # Compiler and flags
 CXX      := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTG5040_PLATFORM\
-            -Isrc -Iinclude -Iports/tg5040/include -D_REENTRANT -I/usr/include/SDL2
+            -Isrc -Iinclude -Iports/tg5040/include -Imupdf/1.26.7/include -D_REENTRANT -I/usr/include/SDL2
 
 # Output locations
 BIN_DIR  := bin
@@ -16,15 +16,20 @@ OBJS := $(BUILD_DIR)/mupdf_document.o $(BUILD_DIR)/renderer.o $(BUILD_DIR)/text_
 
 # Libraries (link order matters)
 LIBS := -lSDL2_ttf -lSDL2 \
-  -L/usr/local/opt/mupdf-tools/lib \
-  -lmupdf -lmupdf-third \
+  -Lmupdf/1.26.7/build/release \
+  -lmupdf -lmupdf-third -larchive \
   -ljpeg -lopenjp2 -lharfbuzz -ljbig2dec \
   -lfreetype -lz -lm -lpthread -ldl
 
-.PHONY: all clean export-bundle
+.PHONY: all clean export-bundle build-mupdf clean-mupdf
 
 # Default goal
-all: $(TARGET)
+all: build-mupdf $(TARGET)
+
+# Build MuPDF with libarchive support
+build-mupdf:
+	@echo "Building MuPDF with libarchive support..."
+	@cd mupdf/1.26.7 && $(MAKE) libs
 
 # Export complete TG5040 bundle for distribution
 export-bundle: $(TARGET)
@@ -61,3 +66,8 @@ clean:
 	@echo "Cleaning build artifacts..."
 	rm -rf $(BUILD_DIR)/*.o $(BIN_DIR)/*
 	rm -rf pak/ lib/
+
+# Clean MuPDF (use with caution - will require re-download and rebuild)
+clean-mupdf:
+	@echo "Removing MuPDF directory (will be re-downloaded on next build)..."
+	rm -rf mupdf
