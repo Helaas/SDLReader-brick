@@ -8,6 +8,7 @@ SDLReader now provides comprehensive document format support across all platform
 - **CBZ**: Comic Book ZIP archives  
 - **CBR**: Comic Book RAR archives (NEW! - via libarchive integration)
 - **ZIP**: ZIP archives containing images
+- **RAR**: RAR archives containing images (NEW! - via libarchive integration)
 - **EPUB**: Electronic book format
 - **MOBI**: Kindle book format
 
@@ -99,11 +100,11 @@ SDLReader is designed as a cross-platform document reader with a clean separatio
 
 ### Shared Components (`src/`, `include/`, `cli/`)
 Core functionality that works across all platforms:
-- **Document handling**: PDF, CBZ/ZIP, CBR, EPUB, and MOBI support via MuPDF's native format support
+- **Document handling**: PDF, CBZ/ZIP, CBR/RAR, EPUB, and MOBI support via MuPDF's native format support
 - **Rendering engine**: SDL2-based graphics and text rendering
 - **User interface**: Page navigation, zoom, scroll controls
 - **Application logic**: Event handling, state management, unified document format support
-- **Document types**: PDF documents, comic book archives (CBZ/ZIP/CBR), EPUB books, and MOBI e-books through single document interface
+- **Document types**: PDF documents, comic book archives (CBZ/ZIP/CBR/RAR), EPUB books, and MOBI e-books through single document interface
 
 ### Platform-Specific Components (`ports/{platform}/`)
 Platform-specific implementations and optimizations:
