@@ -29,7 +29,7 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 
 ## Supported Document Types
 * **PDF** (`.pdf`)
-* **Comic Book Archive** (`.cbz`, `.zip` containing images)
+* **Comic Book Archive** (`.cbz`, `.cbr`, `.rar`, `.zip` containing images)
 * **EPUB** (`.epub`)
 * **MOBI** (`.mobi`)
 
