@@ -6,6 +6,7 @@
 /bundle
 .DS_Store
 /.vscode
+*.trashinfo
 
 # MuPDF build directories (downloaded and built dynamically)
 /ports/*/mupdf/

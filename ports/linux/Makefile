@@ -53,10 +53,9 @@ all: $(BIN_DIR) $(BUILD_DIR) setup-mupdf build-mupdf $(TARGET)
 setup-mupdf:
 	@if [ ! -d "mupdf" ]; then \
 		echo "Cloning MuPDF repository..."; \
-		git clone --depth 1 --branch 1.26.7 https://github.com/ArtifexSoftware/mupdf.git; \
+		git clone --recursive --depth 1 --branch 1.26.7 https://github.com/ArtifexSoftware/mupdf.git; \
 		echo "Setting up MuPDF for CBR support..."; \
-		echo "USE_LIBARCHIVE=yes" > mupdf/user.make; \
-		echo "XCFLAGS += -DHAVE_LIBARCHIVE" >> mupdf/user.make; \
+		cd mupdf && git checkout 12b4cdcd0b70231e0dc5cd777abd9339d61230ab; \
 	else \
 		echo "MuPDF repository already exists"; \
 	fi
@@ -64,7 +63,7 @@ setup-mupdf:
 # Build MuPDF with libarchive support
 build-mupdf:
 	@echo "Building MuPDF with libarchive support..."
-	@cd mupdf && $(MAKE) libs
+	@cd mupdf && $(MAKE) libs HAVE_LIBARCHIVE=yes USE_SYSTEM_LIBS=no USE_SYSTEM_FREETYPE=no USE_SYSTEM_HARFBUZZ=no USE_SYSTEM_JBIG2DEC=no USE_SYSTEM_LIBJPEG=no USE_SYSTEM_OPENJPEG=no USE_SYSTEM_ZLIB=no USE_SYSTEM_BROTLI=no
 
 # Rule to create the bin directory
 $(BIN_DIR):
@@ -76,14 +75,14 @@ $(BUILD_DIR):
 
 # Link the executable
 $(TARGET): $(OBJS) | $(BIN_DIR)
-	$(CXX) $(OBJS) -L$(MUPDF_BUILD_PATH) -lmupdf -lmupdf-third -larchive $(shell pkg-config --libs sdl2 SDL2_ttf) -lfreetype -lharfbuzz -ljpeg -lopenjp2 -ljbig2dec -lgumbo -lmujs -lz -lm -lpthread -o $@
+	$(CXX) $(OBJS) -L$(MUPDF_BUILD_PATH) -lmupdf -lmupdf-third -larchive $(shell pkg-config --libs sdl2 SDL2_ttf freetype2 harfbuzz) -lz -lm -lpthread -o $@
 
 # Compile source files into object files in the build directory
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(shell pkg-config --cflags sdl2 SDL2_ttf freetype2 harfbuzz) -c $< -o $@
 
 $(BUILD_DIR)/%.o: $(CLI_DIR)/%.cpp | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(shell pkg-config --cflags sdl2 SDL2_ttf freetype2 harfbuzz) -c $< -o $@
 
 # Install dependencies (Ubuntu/Debian)
 install-deps:
