@@ -74,6 +74,7 @@ make help
 #### TG5040 (Embedded Linux)
 * Cross-compilation toolchain for the target device
 * Docker environment available (see `ports/tg5040/` for Docker setup)
+* **No external dependencies**: libarchive built automatically for optimal bundle size
 
 #### macOS
 * A C++17 compatible compiler (e.g., g++, clang++)

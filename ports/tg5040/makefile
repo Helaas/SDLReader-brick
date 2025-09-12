@@ -26,7 +26,7 @@ LIBS := -lSDL2_ttf -lSDL2 \
 .PHONY: all clean export-bundle build-mupdf setup-mupdf clean-mupdf build-libarchive clean-libarchive
 
 # Default goal
-all: setup-mupdf build-mupdf $(TARGET)
+all: setup-mupdf build-libarchive build-mupdf $(TARGET)
 
 # Setup MuPDF repository if it doesn't exist
 setup-mupdf:
@@ -40,6 +40,11 @@ setup-mupdf:
 	cd ports/tg5040/mupdf && sed -i 's/-std=c++20/-std=c++17/g' Makelists
 
 # Build minimal libarchive without ICU/XML dependencies
+# This creates a custom static libarchive build that excludes:
+# - ICU libraries (libicudata, libicui18n, libicuuc) 
+# - XML2 library support
+# - Internationalization features
+# This results in a much smaller bundle while maintaining CBR/CBZ functionality
 build-libarchive:
 	@echo "Building minimal libarchive without ICU dependencies..."
 	@if [ ! -d "ports/tg5040/libarchive-3.3.3" ]; then \
