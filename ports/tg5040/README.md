@@ -7,7 +7,8 @@ Based on the [Trimui toolchain Docker image](https://git.crowdedwood.com/trimui-
 ## Key Features
 
 - **Built-in CBR Support**: Now includes support for CBR (Comic Book RAR) files alongside CBZ/ZIP comic books
-- **Self-Contained MuPDF**: Automatically downloads and builds MuPDF 1.26.7 with custom libarchive support
+- **WebP Image Support**: Enhanced WebP format support in PDF documents and comic book archives
+- **Self-Contained MuPDF**: Automatically downloads and builds MuPDF 1.26.7 with custom libarchive and WebP support
 - **Custom libarchive**: Builds minimal libarchive without ICU/XML dependencies for optimal bundle size
 - **Hardware Power Management**: NextUI-compatible power button handling
 - **Complete Bundle Export**: Creates self-contained distribution packages
@@ -120,14 +121,15 @@ The TG5040 build includes:
   - CBZ/ZIP comic book archives via MuPDF native support
   - CBR comic book archives via custom-built minimal libarchive (no ICU dependencies)
   - EPUB e-books via MuPDF native support
+  - **WebP images**: Enhanced WebP format support within documents and archives
 - **Platform-optimized build flags**: `-DTG5040_PLATFORM`
 - **Port-specific source structure**: 
   - `include/power_handler.h` - TG5040 power management interface
   - `src/power_handler.cpp` - Hardware-specific power button implementation with NextUI compatibility
 - **Embedded Linux-specific libraries and dependencies**
   - SDL2, SDL2_ttf for graphics and input
-  - Self-built MuPDF 1.26.7 with custom libarchive for CBR support (no ICU dependencies)
-  - Document rendering support: PDF, CBZ, CBR, XPS, EPUB
+  - Self-built MuPDF 1.26.7 with custom libarchive for CBR support and WebP for enhanced image format support (no ICU dependencies)
+  - Document rendering support: PDF, CBZ, CBR, XPS, EPUB with WebP image support
 
 See [setup-env.sh](./support/setup-env.sh) for some useful vars for compiling that are exported automatically.
 

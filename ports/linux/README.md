@@ -7,7 +7,8 @@ This directory contains the Linux-specific build configuration for SDL Reader.
 ## Key Features
 
 - **Built-in CBR Support**: Now includes support for CBR (Comic Book RAR) files alongside CBZ/ZIP comic books
-- **Self-Contained MuPDF**: Automatically downloads and builds MuPDF 1.26.7 with libarchive support
+- **WebP Image Support**: Supports WebP images in PDF documents and comic book archives
+- **Self-Contained MuPDF**: Automatically downloads and builds MuPDF 1.26.7 with libarchive and WebP support
 - **No System MuPDF Required**: No longer depends on system MuPDF packages
 
 ## Dependencies
@@ -15,7 +16,7 @@ This directory contains the Linux-specific build configuration for SDL Reader.
 ### Ubuntu/Debian
 ```bash
 sudo apt update
-sudo apt install build-essential pkg-config libsdl2-dev libsdl2-ttf-dev libfreetype6-dev libharfbuzz-dev libjpeg-dev libopenjp2-7-dev libjbig2dec0-dev libgumbo-dev libmujs-dev libarchive-dev git
+sudo apt install build-essential pkg-config libsdl2-dev libsdl2-ttf-dev libfreetype6-dev libharfbuzz-dev libjpeg-dev libopenjp2-7-dev libjbig2dec0-dev libgumbo-dev libmujs-dev libarchive-dev libwebp-dev git
 ```
 
 ### Other Distributions (Untested)
@@ -23,20 +24,20 @@ The following package lists are provided as a starting point but **have not been
 
 #### Fedora/RHEL/CentOS
 ```bash
-sudo dnf install gcc-c++ pkg-config SDL2-devel SDL2_ttf-devel freetype-devel libarchive-devel git
+sudo dnf install gcc-c++ pkg-config SDL2-devel SDL2_ttf-devel freetype-devel libarchive-devel libwebp-devel git
 ```
 
 #### Arch Linux
 ```bash
-sudo pacman -S base-devel pkg-config sdl2 sdl2_ttf freetype2 libarchive git
+sudo pacman -S base-devel pkg-config sdl2 sdl2_ttf freetype2 libarchive libwebp git
 ```
 
 #### openSUSE
 ```bash
-sudo zypper install gcc-c++ pkg-config libSDL2-devel libSDL2_ttf-devel libarchive-devel git
+sudo zypper install gcc-c++ pkg-config libSDL2-devel libSDL2_ttf-devel libarchive-devel libwebp-devel git
 ```
 
-**Note**: The system no longer requires MuPDF packages as it builds its own copy with CBR support.
+**Note**: The system no longer requires MuPDF packages as it builds its own copy with CBR and WebP support.
 
 ## Building
 
@@ -56,7 +57,9 @@ make
 
 1. **Automatic MuPDF Setup**: On first build, the system will:
    - Clone MuPDF 1.26.7 from GitHub
+   - Apply WebP patch for enhanced image format support
    - Configure it with libarchive support for CBR files
+   - Configure it with WebP support for WebP images
    - Build the required MuPDF libraries
 
 2. **Subsequent Builds**: The MuPDF directory is preserved between builds for faster compilation.
@@ -100,14 +103,16 @@ Run it from the project root with:
 - **ZIP**: ZIP archives containing images
 - **EPUB**: Electronic book format
 - **MOBI**: Kindle book format
+- **WebP Images**: WebP format images within documents and archives (NEW!)
 
 ## Troubleshooting
 
 ### Build Dependencies
-The build system now automatically handles MuPDF compilation. If you encounter issues, ensure you have:
+The build system now automatically handles MuPDF compilation with WebP support. If you encounter issues, ensure you have:
 
 - **git**: Required to clone MuPDF repository
 - **libarchive-dev**: Required for CBR support
+- **libwebp-dev**: Required for WebP image support
 - **Standard build tools**: gcc, g++, make, pkg-config
 
 ### Distribution-Specific Issues
@@ -117,7 +122,7 @@ This build configuration has only been tested on **Ubuntu 24.04**. If you're usi
 2. Some dependencies may not be available in default repositories  
 3. Additional system configuration may be required
 
-The self-built MuPDF approach reduces dependency issues compared to using system packages.
+The self-built MuPDF approach with WebP support reduces dependency issues compared to using system packages.
 
 ### SDL2 Support Issues
 Make sure you have SDL2 and SDL2_ttf development packages installed:
@@ -135,7 +140,7 @@ Ensure `pkg-config` is installed on your system. It's required to locate the SDL
 If MuPDF fails to build:
 1. Ensure you have internet access (required to clone the repository)
 2. Check that `git` is installed
-3. Verify `libarchive-dev` is installed for CBR support
+3. Verify `libarchive-dev` and `libwebp-dev` are installed for CBR and WebP support
 4. Try cleaning and rebuilding: `make clean && make`
 
 ### Contributing

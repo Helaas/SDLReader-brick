@@ -21,7 +21,7 @@ LIBS := -lSDL2_ttf -lSDL2 \
   -lmupdf -lmupdf-third \
   -L/usr/local/libarchive-minimal/lib -larchive \
   -ljpeg -lopenjp2 -lharfbuzz -ljbig2dec \
-  -lfreetype -lgumbo -lz -llzma -lm -lpthread -ldl
+  -lfreetype -lgumbo -lz -llzma -lm -lpthread -ldl -lwebp -lwebpdemux
 
 .PHONY: all clean export-bundle build-mupdf setup-mupdf clean-mupdf build-libarchive clean-libarchive
 
@@ -33,6 +33,8 @@ setup-mupdf:
 	@if [ ! -d "ports/tg5040/mupdf" ]; then \
 		echo "Cloning MuPDF repository (shallow clone for faster setup)..."; \
 		git clone --depth 1 --branch 1.26.7 https://github.com/ArtifexSoftware/mupdf.git ports/tg5040/mupdf; \
+		echo "Applying WebP patch for enhanced image format support..."; \
+		cd ports/tg5040/mupdf && patch -p1 < ../../../patches/mudpdf-webp.patch; \
 	fi
 	@echo "Initializing minimal required submodules..."; \
 	cd ports/tg5040/mupdf && git submodule update --init --depth 1 thirdparty/freetype thirdparty/harfbuzz thirdparty/jbig2dec thirdparty/libjpeg thirdparty/openjpeg thirdparty/zlib thirdparty/lcms2
@@ -63,13 +65,14 @@ build-libarchive:
 		make install; \
 	fi
 
-# Build MuPDF with custom libarchive support for CBR/CBZ files  
+# Build MuPDF with custom libarchive support for CBR/CBZ files and WebP support
 build-mupdf: build-libarchive
 	@echo "Installing development packages for CBR support and HTML parsing..."
-	@apt-get update && apt-get install -y libgumbo-dev || echo "Warning: Could not install some dev packages"
-	@echo "Building minimal MuPDF with custom libarchive support for CBR/CBZ files..."
+	@apt-get update && apt-get install -y libgumbo-dev libwebp-dev || echo "Warning: Could not install some dev packages"
+	@echo "Building minimal MuPDF with custom libarchive support for CBR/CBZ files and WebP support..."
 	@cd ports/tg5040/mupdf && $(MAKE) libs \
 		HAVE_LIBARCHIVE=yes \
+		HAVE_WEBP=yes \
 		CFLAGS="-std=c17 -D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0 -Iinclude" \
 		CXXFLAGS="-std=c++17 -D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0 -Iinclude" \
 		mujs=no \

@@ -45,12 +45,13 @@ RUN apt-get -y update && apt-get -y install \
     liblcms2-dev \
     libcurl4-openssl-dev \
     libarchive-dev \
+    libwebp-dev \
     pkg-config \
     patchelf \
   && rm -rf /var/lib/apt/lists/*
 
 # Dependencies are installed above
-# MuPDF is now built per-port during the build process with CBR support
+# MuPDF is now built per-port during the build process with CBR and WebP support
 
 RUN mkdir -p /root/workspace
 WORKDIR /root

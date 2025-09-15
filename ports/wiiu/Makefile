@@ -13,6 +13,17 @@ clean-mupdf:
 	@echo "Removing MuPDF directory (will be re-downloaded on next build)..."
 	@rm -rf mupdf
 
+# Setup target to download and build MuPDF if needed
+.PHONY: setup-mupdf
+setup-mupdf:
+	@if [ ! -d $(MUPDF_ROOT) ]; then \
+		echo "Downloading MuPDF 1.26.7..."; \
+		git clone --depth 1 --branch 1.26.7 https://github.com/ArtifexSoftware/mupdf.git $(MUPDF_ROOT); \
+		echo "Applying WebP patch..."; \
+		cd $(MUPDF_ROOT) && patch -p1 < ../../../patches/mudpdf-webp.patch || true; \
+	fi
+	@echo "Note: WebP support requires libwebp libraries for Wii U (not currently available in devkitPro)"
+
 # Check for DEVKITPRO only for build targets
 ifeq ($(strip $(DEVKITPRO)),)
 ifneq ($(MAKECMDGOALS),clean)
@@ -156,12 +167,12 @@ export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 .PHONY: $(BUILD) clean all dist
 
 #-------------------------------------------------------------------------------
-all: $(BUILD)
+all: setup-mupdf $(BUILD)
 
 dist: all
 	@cp $(TARGET).rpx $(TARGET).wuhb dist/wiiu/apps/SDLReader/
 
-$(BUILD):
+$(BUILD): setup-mupdf
 	@[ -d $@ ] || mkdir -p $@
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 

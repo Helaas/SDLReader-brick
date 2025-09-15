@@ -38,7 +38,8 @@ INC_PATHS = $(shell pkg-config --cflags sdl2 SDL2_ttf freetype2 harfbuzz)
 
 # Library paths and libraries to link
 # Using pkg-config for available libraries and manual linking for MuPDF dependencies
-LIBS = $(shell pkg-config --libs sdl2 SDL2_ttf freetype2 harfbuzz) -lmupdf -lz -lm
+# Libraries
+LIBS = -lmupdf -lmupdf-third -larchive $(shell pkg-config --libs sdl2 SDL2_ttf freetype2 harfbuzz libjpeg libopenjp2 libjbig2dec libgumbo mujs) -lwebp -lwebpdemux
 
 # All object files (will be placed in the build directory)
 OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS))) \
@@ -49,15 +50,23 @@ OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS
 # Default target
 all: $(BIN_DIR) $(BUILD_DIR) setup-mupdf build-mupdf $(TARGET)
 
-# Setup MuPDF repository if it doesn't exist
+# Setup target to download and build MuPDF if needed
+.PHONY: setup-mupdf
 setup-mupdf:
-	@if [ ! -d "mupdf" ]; then \
-		echo "Cloning MuPDF repository..."; \
-		git clone --recursive --depth 1 --branch 1.26.7 https://github.com/ArtifexSoftware/mupdf.git; \
-		echo "Setting up MuPDF for CBR support..."; \
-		cd mupdf && git checkout 12b4cdcd0b70231e0dc5cd777abd9339d61230ab; \
-	else \
-		echo "MuPDF repository already exists"; \
+	@if [ ! -d $(MUPDF_DIR) ]; then \
+		echo "Downloading MuPDF $(MUPDF_VERSION)..."; \
+		git clone --depth 1 --branch $(MUPDF_VERSION) https://github.com/ArtifexSoftware/mupdf.git $(MUPDF_DIR); \
+		echo "Applying WebP patch..."; \
+		cd $(MUPDF_DIR) && patch -p1 < ../../../patches/mudpdf-webp.patch; \
+	fi
+	@echo "Configuring MuPDF for libarchive and WebP support..."
+	@echo "HAVE_LIBARCHIVE = yes" > $(MUPDF_DIR)/user.make
+	@echo "SYS_LIBARCHIVE_LIBS = -larchive" >> $(MUPDF_DIR)/user.make
+	@echo "HAVE_WEBP = yes" >> $(MUPDF_DIR)/user.make
+	@echo "SYS_WEBP_LIBS = -lwebp -lwebpdemux" >> $(MUPDF_DIR)/user.make
+	@if [ ! -f $(MUPDF_DIR)/build/release/libmupdf.a ]; then \
+		echo "Building MuPDF..."; \
+		$(MAKE) -C $(MUPDF_DIR) libs; \
 	fi
 
 # Build MuPDF with libarchive support
@@ -85,10 +94,21 @@ $(BUILD_DIR)/%.o: $(CLI_DIR)/%.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $(shell pkg-config --cflags sdl2 SDL2_ttf freetype2 harfbuzz) -c $< -o $@
 
 # Install dependencies (Ubuntu/Debian)
-install-deps:
-	@echo "Installing dependencies for Ubuntu/Debian..."
+# Dependency installation targets for various distributions
+.PHONY: install-deps install-deps-ubuntu install-deps-debian install-deps-fedora install-deps-arch
+install-deps: install-deps-ubuntu
+
+install-deps-ubuntu:
 	sudo apt update
-	sudo apt install -y build-essential pkg-config libsdl2-dev libsdl2-ttf-dev libfreetype6-dev libharfbuzz-dev libjpeg-dev libopenjp2-7-dev libjbig2dec0-dev libgumbo-dev libmujs-dev libarchive-dev git
+	sudo apt install build-essential pkg-config libsdl2-dev libsdl2-ttf-dev libfreetype6-dev libharfbuzz-dev libjpeg-dev libopenjp2-7-dev libjbig2dec0-dev libgumbo-dev libmujs-dev libarchive-dev libwebp-dev git
+
+install-deps-debian: install-deps-ubuntu
+
+install-deps-fedora:
+	sudo dnf install gcc-c++ pkg-config SDL2-devel SDL2_ttf-devel freetype-devel libarchive-devel libwebp-devel git
+
+install-deps-arch:
+	sudo pacman -S base-devel pkg-config sdl2 sdl2_ttf freetype2 libarchive libwebp git
 
 # Install dependencies for other distributions
 install-deps-fedora:
