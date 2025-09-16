@@ -4,7 +4,7 @@ AVAILABLE_PLATFORMS := tg5040 mac wiiu linux
 DEFAULT_PLATFORM := tg5040
 PLATFORM ?= $(DEFAULT_PLATFORM)
 
-.PHONY: all clean help list-platforms export-tg5040 $(AVAILABLE_PLATFORMS)
+.PHONY: all clean clean-local help list-platforms export-tg5040 $(AVAILABLE_PLATFORMS)
 
 all: $(PLATFORM)
 
@@ -30,11 +30,16 @@ linux:
 
 clean:
 	@echo "Cleaning all platforms..."
-	-@$(MAKE) -f ports/tg5040/Makefile clean 2>/dev/null || true
+	@$(MAKE) -C . clean-local
 	-@$(MAKE) -C ports/mac clean 2>/dev/null || true
 	-@$(MAKE) -C ports/wiiu clean 2>/dev/null || true
 	-@$(MAKE) -C ports/linux clean 2>/dev/null || true
-	-@find bin/ -type f -delete 2>/dev/null || true
+	-@$(MAKE) -C ports/tg5040 clean 2>/dev/null || true
+
+clean-local:
+	@echo "Cleaning build artifacts..."
+	rm -rf ./build/*.o ./bin/*
+	rm -rf lib/
 
 list-platforms:
 	@echo "Available platforms:"

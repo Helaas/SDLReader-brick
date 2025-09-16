@@ -148,7 +148,10 @@ $(BUILD_DIR)/tg5040_power_handler.o: $(BASE_PATH)/src/power_handler.cpp
 clean:
 	@echo "Cleaning build artifacts..."
 	rm -rf $(BUILD_DIR)/*.o $(BIN_DIR)/*
-	rm -rf pak/ lib/
+	rm -rf pak/lib/*
+	rm -f pak/bin/sdl_reader_cli
+	rm -f pak/README.md pak/pak.json
+	rm -rf lib/
 
 # Clean custom libarchive build
 clean-libarchive:
