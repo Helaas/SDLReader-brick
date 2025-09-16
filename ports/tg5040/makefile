@@ -2,15 +2,13 @@
 # This Makefile contains the build configuration specific to the TG5040 platform
 
 # Determine base path - if we're in ports/tg5040, use relative paths, otherwise use full paths
-ifneq ($(wildcard ../../patches),)
+ifneq ($(wildcard ../../src),)
   # We're being called from ports/tg5040 directory
   BASE_PATH := .
-  PATCH_PATH := ../../patches
   WORKSPACE_PATH := ../..
 else
   # We're being called from workspace root
   BASE_PATH := ports/tg5040
-  PATCH_PATH := patches
   WORKSPACE_PATH := .
 endif
 
@@ -46,8 +44,12 @@ setup-mupdf:
 	@if [ ! -d "$(BASE_PATH)/mupdf" ]; then \
 		echo "Cloning MuPDF repository (shallow clone for faster setup)..."; \
 		git clone --depth 1 --branch 1.26.7 https://github.com/ArtifexSoftware/mupdf.git $(BASE_PATH)/mupdf; \
-		echo "Applying WebP patch for enhanced image format support..."; \
-		cd $(BASE_PATH)/mupdf && patch -p1 < $(PATCH_PATH)/mudpdf-webp.patch; \
+		echo "Downloading and applying WebP patch for enhanced image format support..."; \
+		if [ ! -f webp-upstream-697749.patch ]; then \
+			curl -o webp-upstream-697749.patch \
+				https://raw.githubusercontent.com/koreader/koreader-base/30ddfa05d67a8db1118326141b02bb002e2e11c4/thirdparty/mupdf/webp-upstream-697749.patch; \
+		fi; \
+		cd $(BASE_PATH)/mupdf && patch -p1 < ../webp-upstream-697749.patch; \
 	fi
 	@echo "Setting up MuPDF for CBR and WebP support..."; \
 	echo "USE_LIBARCHIVE=yes" > $(BASE_PATH)/mupdf/user.make; \
@@ -152,6 +154,7 @@ clean:
 	rm -f pak/bin/sdl_reader_cli
 	rm -f pak/README.md pak/pak.json
 	rm -rf lib/
+	rm -f webp-upstream-697749.patch
 
 # Clean custom libarchive build
 clean-libarchive:

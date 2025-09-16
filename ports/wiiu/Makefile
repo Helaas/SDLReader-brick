@@ -7,6 +7,7 @@
 clean:
 	@echo clean ...
 	@rm -fr build *.rpx *.elf *.wuhb
+	@rm -f webp-upstream-697749.patch
 
 # Clean MuPDF (use with caution - will require re-download and rebuild)
 clean-mupdf:
@@ -19,8 +20,12 @@ setup-mupdf:
 	@if [ ! -d $(MUPDF_ROOT) ]; then \
 		echo "Downloading MuPDF 1.26.7..."; \
 		git clone --depth 1 --branch 1.26.7 https://github.com/ArtifexSoftware/mupdf.git $(MUPDF_ROOT); \
-		echo "Applying WebP patch..."; \
-		cd $(MUPDF_ROOT) && patch -p1 < ../../../patches/mudpdf-webp.patch || true; \
+		echo "Downloading and applying WebP patch..."; \
+		if [ ! -f webp-upstream-697749.patch ]; then \
+			curl -o webp-upstream-697749.patch \
+				https://raw.githubusercontent.com/koreader/koreader-base/30ddfa05d67a8db1118326141b02bb002e2e11c4/thirdparty/mupdf/webp-upstream-697749.patch; \
+		fi; \
+		cd $(MUPDF_ROOT) && patch -p1 < ../webp-upstream-697749.patch || true; \
 	fi
 	@echo "Note: WebP support requires libwebp libraries for Wii U (not currently available in devkitPro)"
 

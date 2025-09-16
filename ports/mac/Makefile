@@ -73,8 +73,12 @@ setup-mupdf:
 		echo "SYS_LIBARCHIVE_LIBS := -L/opt/homebrew/opt/libarchive/lib -larchive" >> mupdf/user.make; \
 		echo "SYS_WEBP_CFLAGS := -I/opt/homebrew/opt/webp/include" >> mupdf/user.make; \
 		echo "SYS_WEBP_LIBS := -L/opt/homebrew/opt/webp/lib -lwebp -lwebpdemux" >> mupdf/user.make; \
-		echo "Applying mudpdf-webp.patch to MuPDF..."; \
-		patch -d mupdf -p1 < ../../patches/mudpdf-webp.patch; \
+		echo "Downloading and applying WebP patch..."; \
+		if [ ! -f webp-upstream-697749.patch ]; then \
+			curl -o webp-upstream-697749.patch \
+				https://raw.githubusercontent.com/koreader/koreader-base/30ddfa05d67a8db1118326141b02bb002e2e11c4/thirdparty/mupdf/webp-upstream-697749.patch; \
+		fi; \
+		patch -d mupdf -p1 < webp-upstream-697749.patch; \
 	else \
 		echo "MuPDF repository already exists"; \
 	fi
@@ -122,6 +126,7 @@ $(BUILD_DIR)/%.o: $(CLI_DIR)/%.cpp | $(BUILD_DIR)
 clean:
 	rm -rf $(BUILD_DIR)
 	rm -f $(TARGET)
+	rm -f webp-upstream-697749.patch
 
 # Clean MuPDF (use with caution - will require re-download and rebuild)
 clean-mupdf:

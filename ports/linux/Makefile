@@ -1,15 +1,13 @@
 # Makefile for SDL Reader on Linux
 
 # Determine base path - if we're in ports/linux, use relative paths, otherwise use full paths
-ifneq ($(wildcard ../../patches),)
+ifneq ($(wildcard ../../src),)
   # We're being called from ports/linux directory
   BASE_PATH := .
-  PATCH_PATH := ../../patches
   WORKSPACE_PATH := ../..
 else
   # We're being called from workspace root
   BASE_PATH := ports/linux
-  PATCH_PATH := patches
   WORKSPACE_PATH := .
 endif
 
@@ -71,8 +69,12 @@ setup-mupdf:
 	@if [ ! -d $(MUPDF_DIR) ]; then \
 		echo "Downloading MuPDF $(MUPDF_VERSION)..."; \
 		git clone --recursive --depth 1 --branch $(MUPDF_VERSION) https://github.com/ArtifexSoftware/mupdf.git $(MUPDF_DIR); \
-		echo "Applying WebP patch..."; \
-		cd $(MUPDF_DIR) && patch -p1 < $(PATCH_PATH)/mudpdf-webp.patch; \
+		echo "Downloading and applying WebP patch..."; \
+		if [ ! -f webp-upstream-697749.patch ]; then \
+			curl -o webp-upstream-697749.patch \
+				https://raw.githubusercontent.com/koreader/koreader-base/30ddfa05d67a8db1118326141b02bb002e2e11c4/thirdparty/mupdf/webp-upstream-697749.patch; \
+		fi; \
+		cd $(MUPDF_DIR) && patch -p1 < ../webp-upstream-697749.patch; \
 	fi
 	@echo "Configuring MuPDF for libarchive and WebP support..."
 	@echo "HAVE_LIBARCHIVE = yes" > $(MUPDF_DIR)/user.make
@@ -132,6 +134,7 @@ install-deps-arch:
 clean:
 	rm -rf $(BUILD_DIR)
 	rm -f $(TARGET)
+	rm -f webp-upstream-697749.patch
 
 # Clean MuPDF (use with caution - will require re-download and rebuild)
 clean-mupdf:

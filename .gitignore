@@ -22,3 +22,4 @@
 SDLReader.pak.zip
 ports/tg5040/pak/README.md
 ports/tg5040/pak/pak.json
+ports/mac/webp-upstream-697749.patch
