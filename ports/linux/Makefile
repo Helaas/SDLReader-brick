@@ -9,6 +9,8 @@ CLI_DIR = ../../cli
 INCLUDE_DIR = ../../include
 
 # Local MuPDF Build Paths (using our custom build with libarchive support)
+MUPDF_DIR = mupdf
+MUPDF_VERSION = 1.26.7
 MUPDF_BUILD_PATH = mupdf/build/release
 
 # Build directory for all object files
@@ -55,7 +57,7 @@ all: $(BIN_DIR) $(BUILD_DIR) setup-mupdf build-mupdf $(TARGET)
 setup-mupdf:
 	@if [ ! -d $(MUPDF_DIR) ]; then \
 		echo "Downloading MuPDF $(MUPDF_VERSION)..."; \
-		git clone --depth 1 --branch $(MUPDF_VERSION) https://github.com/ArtifexSoftware/mupdf.git $(MUPDF_DIR); \
+		git clone --recursive --depth 1 --branch $(MUPDF_VERSION) https://github.com/ArtifexSoftware/mupdf.git $(MUPDF_DIR); \
 		echo "Applying WebP patch..."; \
 		cd $(MUPDF_DIR) && patch -p1 < ../../../patches/mudpdf-webp.patch; \
 	fi
@@ -64,6 +66,7 @@ setup-mupdf:
 	@echo "SYS_LIBARCHIVE_LIBS = -larchive" >> $(MUPDF_DIR)/user.make
 	@echo "HAVE_WEBP = yes" >> $(MUPDF_DIR)/user.make
 	@echo "SYS_WEBP_LIBS = -lwebp -lwebpdemux" >> $(MUPDF_DIR)/user.make
+	@echo "USE_SYSTEM_LIBS = no" >> $(MUPDF_DIR)/user.make
 	@if [ ! -f $(MUPDF_DIR)/build/release/libmupdf.a ]; then \
 		echo "Building MuPDF..."; \
 		$(MAKE) -C $(MUPDF_DIR) libs; \
