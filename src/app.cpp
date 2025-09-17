@@ -80,10 +80,14 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
     }
 
 #ifndef TG5040_PLATFORM
-// Set max render size for downsampling based on current window size
+// Set max render size for downsampling - allow for meaningful zoom levels on non-TG5040 platforms
+// Use 4x window size to enable proper zooming while TG5040 has no limit
 if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
 {
-    muDoc->setMaxRenderSize(m_renderer->getWindowWidth(), m_renderer->getWindowHeight());
+    int windowWidth = m_renderer->getWindowWidth();
+    int windowHeight = m_renderer->getWindowHeight();
+    // Allow 4x zoom by setting max render size to 4x window size
+    muDoc->setMaxRenderSize(windowWidth * 4, windowHeight * 4);
 }
 #endif
 
@@ -917,10 +921,40 @@ void App::renderUI()
         }
     }
     
-    // Render edge-turn progress indicator - only show when D-pad is actively held and scale >= 100%
+    // Render edge-turn progress indicator - only show when:
+    // 1. D-pad is actively held and timer is active
+    // 2. Content doesn't fit on screen in the movement direction (scrollable)
+    // 3. There's a valid page to navigate to in the pressed direction
     bool dpadHeld = m_dpadLeftHeld || m_dpadRightHeld || m_dpadUpHeld || m_dpadDownHeld;
     float maxEdgeHold = std::max({m_edgeTurnHoldRight, m_edgeTurnHoldLeft, m_edgeTurnHoldUp, m_edgeTurnHoldDown});
-    if (dpadHeld && maxEdgeHold > 0.0f && m_currentScale >= 100) {
+    
+    // Check scroll limits for each direction
+    const int maxScrollX = getMaxScrollX();
+    const int maxScrollY = getMaxScrollY();
+    
+    // Check if there are valid pages to navigate to in each direction
+    bool canGoLeft = m_currentPage > 0;
+    bool canGoRight = m_currentPage < m_pageCount - 1; 
+    bool canGoUp = m_currentPage > 0;
+    bool canGoDown = m_currentPage < m_pageCount - 1;
+    
+    // Only show progress bar when content doesn't fit in the movement direction
+    // AND there's a valid page to navigate to
+    bool validDirection = false;
+    if (m_dpadRightHeld && m_edgeTurnHoldRight > 0.0f && canGoRight && maxScrollX > 0) {
+        validDirection = true; // Show for horizontal movement when content doesn't fit horizontally
+    }
+    if (m_dpadLeftHeld && m_edgeTurnHoldLeft > 0.0f && canGoLeft && maxScrollX > 0) {
+        validDirection = true; // Show for horizontal movement when content doesn't fit horizontally
+    }
+    if (m_dpadDownHeld && m_edgeTurnHoldDown > 0.0f && canGoDown && maxScrollY > 0) {
+        validDirection = true; // Show for vertical movement when content doesn't fit vertically
+    }
+    if (m_dpadUpHeld && m_edgeTurnHoldUp > 0.0f && canGoUp && maxScrollY > 0) {
+        validDirection = true; // Show for vertical movement when content doesn't fit vertically
+    }
+    
+    if (dpadHeld && maxEdgeHold > 0.0f && validDirection) {
         float progress = maxEdgeHold / m_edgeTurnThreshold;
         if (progress > 0.05f) { // Only show indicator after 5% progress to avoid flicker
             // Determine which edge and direction
@@ -1155,10 +1189,12 @@ void App::fitPageToWindow()
     int windowHeight = m_renderer->getWindowHeight();
 
 #ifndef TG5040_PLATFORM
-// Update max render size for downsampling
+// Update max render size for downsampling - allow for meaningful zoom levels on non-TG5040 platforms
+// Use 4x window size to enable proper zooming while TG5040 has no limit
 if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
 {
-    muDoc->setMaxRenderSize(windowWidth, windowHeight);
+    // Allow 4x zoom by setting max render size to 4x window size
+    muDoc->setMaxRenderSize(windowWidth * 4, windowHeight * 4);
 }
 #endif    // Use effective sizes so 90/270 rotation swaps W/H
     int nativeWidth = effectiveNativeWidth();
