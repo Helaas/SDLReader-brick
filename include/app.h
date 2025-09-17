@@ -234,11 +234,21 @@ private:
     
     // Zoom throttling to prevent rapid operations
     std::chrono::steady_clock::time_point m_lastZoomTime;
+#ifdef TG5040_PLATFORM
+    static constexpr int ZOOM_THROTTLE_MS = 50; // Slower throttle for TG5040
+    static constexpr int ZOOM_DEBOUNCE_MS = 150; // Longer debounce for slow hardware
+#else
     static constexpr int ZOOM_THROTTLE_MS = 25; // 25ms minimum between zoom operations for smoother response
+    static constexpr int ZOOM_DEBOUNCE_MS = 75; // Faster for other platforms
+#endif
 
     // Zoom debouncing for performance on slow machines
     int m_pendingZoomDelta{0};
     std::chrono::steady_clock::time_point m_lastZoomInputTime;
+    
+    // Zoom processing indicators
+    bool m_zoomProcessing{false};
+    std::chrono::steady_clock::time_point m_zoomProcessingStartTime;
     
     // Rendering optimization
     bool m_needsRedraw{true}; // Flag to indicate when screen needs to be redrawn

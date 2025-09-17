@@ -28,6 +28,7 @@ public:
     ~MuPdfDocument() override;
 
     std::vector<unsigned char> renderPage(int page, int& width, int& height, int scale) override;
+    std::vector<uint32_t> renderPageARGB(int page, int& width, int& height, int scale);
     int getPageWidthNative(int page) override;
     int getPageHeightNative(int page) override;
     int getPageWidthEffective(int page, int zoom);
@@ -76,6 +77,7 @@ private:
     std::mutex m_prerenderMutex;  // Protects prerender context operations
     
     std::map<std::pair<int, int>, std::tuple<std::vector<unsigned char>, int, int>> m_cache;
+    std::map<std::pair<int, int>, std::tuple<std::vector<uint32_t>, int, int>> m_argbCache;
     std::mutex m_cacheMutex;
     std::mutex m_renderMutex;  // Protects MuPDF context operations
     int m_maxWidth = 2560;   // Increased for better performance at high zoom levels

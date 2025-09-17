@@ -159,7 +159,15 @@ void App::run()
             if (m_pendingZoomDelta != 0) {
                 auto now = std::chrono::steady_clock::now();
                 auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastZoomInputTime).count();
-                if (elapsed >= m_lastRenderDuration) {
+                
+                // Use platform-specific debounce time, with minimum based on render performance
+#ifdef TG5040_PLATFORM
+                int debounceTime = std::max(ZOOM_DEBOUNCE_MS, static_cast<int>(m_lastRenderDuration));
+#else
+                int debounceTime = std::max(ZOOM_DEBOUNCE_MS, static_cast<int>(m_lastRenderDuration));
+#endif
+                
+                if (elapsed >= debounceTime) {
                     // Zoom input has settled, apply the final accumulated zoom
                     applyPendingZoom();
                 }
@@ -696,11 +704,34 @@ void App::renderCurrentPage()
     int winH = m_renderer->getWindowHeight();
 
     int srcW, srcH;
-    std::vector<uint8_t> pixelData;
+    std::vector<uint32_t> argbData;
     {
         // Lock the document mutex to ensure thread-safe access
         std::lock_guard<std::mutex> lock(m_documentMutex);
-        pixelData = m_document->renderPage(m_currentPage, srcW, srcH, m_currentScale);
+        
+        // Try to use ARGB rendering for better performance
+        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+        if (muPdfDoc) {
+            try {
+                argbData = muPdfDoc->renderPageARGB(m_currentPage, srcW, srcH, m_currentScale);
+            } catch (const std::exception& e) {
+                // Fallback to RGB rendering
+                std::vector<uint8_t> rgbData = m_document->renderPage(m_currentPage, srcW, srcH, m_currentScale);
+                // Convert to ARGB manually
+                argbData.resize(srcW * srcH);
+                for (int i = 0; i < srcW * srcH; ++i) {
+                    argbData[i] = rgb24_to_argb32(rgbData[i*3], rgbData[i*3+1], rgbData[i*3+2]);
+                }
+            }
+        } else {
+            // Fallback to RGB rendering for other document types
+            std::vector<uint8_t> rgbData = m_document->renderPage(m_currentPage, srcW, srcH, m_currentScale);
+            // Convert to ARGB manually
+            argbData.resize(srcW * srcH);
+            for (int i = 0; i < srcW * srcH; ++i) {
+                argbData[i] = rgb24_to_argb32(rgbData[i*3], rgbData[i*3+1], rgbData[i*3+2]);
+            }
+        }
     }
 
     // Ensure page dimensions are updated BEFORE calculating positions
@@ -744,10 +775,10 @@ void App::renderCurrentPage()
     }
     m_forceTopAlignNextRender = false;
 
-    m_renderer->renderPageEx(pixelData, srcW, srcH,
-                             posX, posY, m_pageWidth, m_pageHeight,
-                             static_cast<double>(m_rotation),
-                             currentFlipFlags());
+    m_renderer->renderPageExARGB(argbData, srcW, srcH,
+                                 posX, posY, m_pageWidth, m_pageHeight,
+                                 static_cast<double>(m_rotation),
+                                 currentFlipFlags());
     
     // Trigger prerendering of adjacent pages for faster page changes
     // Do this after the main render to avoid blocking the current page display
@@ -793,6 +824,32 @@ void App::renderUI()
         m_textRenderer->renderText(scaleInfo,
                                    currentWindowWidth - static_cast<int>(scaleInfo.length()) * 8 - 10,
                                    10, textColor);
+    }
+    
+    // Render zoom processing indicator
+    if (m_zoomProcessing || isZoomDebouncing()) {
+        SDL_Color processingColor = {255, 255, 0, 255}; // Yellow text
+        SDL_Color processingBgColor = {0, 0, 0, 180}; // Semi-transparent black background
+        
+        std::string processingText = "Processing zoom...";
+        
+        // Use current font size for processing indicator
+        int avgCharWidth = 8; // Approximate character width at 100% scale
+        int textWidth = static_cast<int>(processingText.length()) * avgCharWidth;
+        int textHeight = 16; // Base font height
+        
+        // Position in top-left corner
+        int textX = 10;
+        int textY = 10;
+        
+        // Draw background
+        SDL_Rect bgRect = {textX - 5, textY - 2, textWidth + 10, textHeight + 4};
+        SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), processingBgColor.r, processingBgColor.g, processingBgColor.b, processingBgColor.a);
+        SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
+        SDL_RenderFillRect(m_renderer->getSDLRenderer(), &bgRect);
+        
+        // Draw text
+        m_textRenderer->renderText(processingText, textX, textY, processingColor);
     }
     
     // Render error message if active
@@ -1108,6 +1165,13 @@ void App::zoom(int delta)
     m_pendingZoomDelta += delta;
     m_lastZoomInputTime = now;
     
+    // Set zoom processing indicator and force immediate redraw
+    if (!m_zoomProcessing) {
+        m_zoomProcessing = true;
+        m_zoomProcessingStartTime = now;
+    }
+    markDirty(); // Ensure UI updates to show processing indicator immediately
+    
     // If there's already a pending zoom, don't apply immediately
     // The render loop will check for settled input and apply the final zoom
 }
@@ -1172,8 +1236,9 @@ void App::applyPendingZoom()
         }
     }
 
-    // Reset pending zoom
+    // Reset pending zoom and clear processing indicator
     m_pendingZoomDelta = 0;
+    m_zoomProcessing = false;
 }
 
 bool App::isZoomDebouncing() const

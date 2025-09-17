@@ -24,6 +24,7 @@ MuPdfDocument::~MuPdfDocument()
     // Clear cache
     std::lock_guard<std::mutex> lock(m_cacheMutex);
     m_cache.clear();
+    m_argbCache.clear();
 }
 
 bool MuPdfDocument::open(const std::string &filePath)
@@ -277,6 +278,65 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int &width,
 
     return buffer;
 }
+
+std::vector<uint32_t> MuPdfDocument::renderPageARGB(int pageNumber, int &width, int &height, int zoom)
+{
+    if (!m_ctx || !m_doc)
+    {
+        throw std::runtime_error("Document not open");
+    }
+
+    // Validate page number
+    if (pageNumber < 0 || pageNumber >= m_pageCount) {
+        throw std::runtime_error("Invalid page number: " + std::to_string(pageNumber));
+    }
+
+    // Check ARGB cache using exact zoom level for cache key
+    auto key = std::make_pair(pageNumber, zoom);
+    
+    {
+        std::lock_guard<std::mutex> lock(m_cacheMutex);
+        auto it = m_argbCache.find(key);
+        if (it != m_argbCache.end())
+        {
+            auto &[buffer, cachedWidth, cachedHeight] = it->second;
+            width = cachedWidth;
+            height = cachedHeight;
+            return buffer;
+        }
+    }
+
+    // Get RGB data WITHOUT holding the render mutex to avoid deadlock
+    std::vector<unsigned char> rgbData = renderPage(pageNumber, width, height, zoom);
+    
+    // Convert RGB to ARGB once and cache it
+    std::vector<uint32_t> argbBuffer(width * height);
+    const uint8_t* src = rgbData.data();
+    uint32_t* dst = argbBuffer.data();
+    
+    for (int i = 0; i < width * height; ++i) {
+        dst[i] = rgb24_to_argb32(src[i*3], src[i*3+1], src[i*3+2]);
+    }
+    
+    // Cache ARGB result with size management
+    {
+        std::lock_guard<std::mutex> lock(m_cacheMutex);
+        
+        // Aggressive cache management for ARGB data (larger memory footprint)
+#ifdef TG5040_PLATFORM
+        if (m_argbCache.size() >= 2) { // Keep only 2 ARGB pages for TG5040
+#else
+        if (m_argbCache.size() >= 5) { // Keep 5 ARGB pages for other platforms
+#endif
+            // Remove oldest entry
+            m_argbCache.erase(m_argbCache.begin());
+        }
+        
+        m_argbCache[key] = std::make_tuple(argbBuffer, width, height);
+    }
+    
+    return argbBuffer;
+}
 int MuPdfDocument::getPageWidthNative(int pageNumber)
 {
     if (!m_ctx || !m_doc)
@@ -458,6 +518,7 @@ void MuPdfDocument::clearCache()
 {
     std::lock_guard<std::mutex> lock(m_cacheMutex);
     m_cache.clear();
+    m_argbCache.clear();
 }
 
 void MuPdfDocument::cancelPrerendering()
