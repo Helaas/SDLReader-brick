@@ -1095,11 +1095,14 @@ void App::renderUI()
             int progressWidth = static_cast<int>(barWidth * visualProgress);
             if (progressWidth > 0) {
                 SDL_Rect progressRect = {indicatorX, indicatorY, progressWidth, barHeight};
-                // Color transitions from yellow to green as it fills - use actual progress for color calculation
-                // to ensure proper yellow-to-green transition throughout the entire progress range
-                uint8_t red = static_cast<uint8_t>(255 * (1.0f - progress));
+                
+                // More dramatic color transition: bright yellow to bright green
+                // Use a more aggressive curve to make the transition more visible
+                float colorProgress = std::min(progress * 1.2f, 1.0f); // Accelerate color change
+                uint8_t red = static_cast<uint8_t>(255 * (1.0f - colorProgress));
                 uint8_t green = 255;
-                uint8_t blue = 0;
+                uint8_t blue = static_cast<uint8_t>(colorProgress < 0.5f ? 0 : 100 * (colorProgress - 0.5f) * 2); // Add some blue at the end for more green
+                
                 SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), red, green, blue, 200);
                 SDL_RenderFillRect(m_renderer->getSDLRenderer(), &progressRect);
             }
