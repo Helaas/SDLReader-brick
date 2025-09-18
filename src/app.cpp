@@ -839,7 +839,7 @@ void App::renderUI()
     }
     
     // Render zoom processing indicator
-    if (m_zoomProcessing || isZoomDebouncing()) {
+    if (shouldShowZoomProcessingIndicator()) {
         SDL_Color processingColor = {255, 255, 0, 255}; // Bright yellow text for high visibility
         SDL_Color processingBgColor = {0, 0, 0, 250}; // Nearly opaque background
         
@@ -1189,11 +1189,19 @@ void App::zoom(int delta)
     m_pendingZoomDelta += delta;
     m_lastZoomInputTime = now;
     
-    // Set zoom processing indicator - do NOT mark dirty to prevent immediate page re-render
-    // The UI will show the processing indicator on the next natural render cycle
+    // Set zoom processing indicator and show it immediately for expensive operations
     if (!m_zoomProcessing) {
         m_zoomProcessing = true;
         m_zoomProcessingStartTime = now;
+        
+        // Show immediate processing indicator if recent renders have been expensive
+        // Only render UI overlay, not the expensive page content
+        if (isNextRenderLikelyExpensive()) {
+            // Clear screen and show processing message without expensive page render
+            m_renderer->clear(0, 0, 0, 255); // Black background
+            renderUI(); // Only render the UI overlay with processing message
+            m_renderer->present();
+        }
     }
     
     // If there's already a pending zoom, don't apply immediately
@@ -1215,11 +1223,19 @@ void App::zoomTo(int scale)
     m_pendingZoomDelta = targetDelta;
     m_lastZoomInputTime = std::chrono::steady_clock::now();
     
-    // Set zoom processing indicator - do NOT mark dirty to prevent immediate page re-render
-    // The UI will show the processing indicator on the next natural render cycle
+    // Set zoom processing indicator and show it immediately for expensive operations
     if (!m_zoomProcessing) {
         m_zoomProcessing = true;
         m_zoomProcessingStartTime = m_lastZoomInputTime;
+        
+        // Show immediate processing indicator if recent renders have been expensive
+        // Only render UI overlay, not the expensive page content
+        if (isNextRenderLikelyExpensive()) {
+            // Clear screen and show processing message without expensive page render
+            m_renderer->clear(0, 0, 0, 255); // Black background
+            renderUI(); // Only render the UI overlay with processing message
+            m_renderer->present();
+        }
     }
 }
 
@@ -1242,17 +1258,17 @@ void App::applyPendingZoom()
     updatePageDisplayTime();
     markDirty();
     
-    // Clear cache at new scale
-    if (oldScale != m_currentScale) {
-        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-        if (muPdfDoc) {
-            muPdfDoc->clearCache();
+    // Reset pending zoom and clear processing indicator (respecting minimum display time)
+    m_pendingZoomDelta = 0;
+    
+    // Only clear zoom processing if minimum display time has elapsed
+    if (m_zoomProcessing) {
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - m_zoomProcessingStartTime).count();
+        if (elapsed >= ZOOM_PROCESSING_MIN_DISPLAY_MS) {
+            m_zoomProcessing = false;
         }
     }
-
-    // Reset pending zoom and clear processing indicator
-    m_pendingZoomDelta = 0;
-    m_zoomProcessing = false;
 }
 
 bool App::isZoomDebouncing() const
@@ -1262,8 +1278,6 @@ bool App::isZoomDebouncing() const
 
 void App::fitPageToWindow()
 {
-    int oldScale = m_currentScale; // Track old scale for preloader
-    
     int windowWidth = m_renderer->getWindowWidth();
     int windowHeight = m_renderer->getWindowHeight();
 
@@ -1317,14 +1331,6 @@ if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
     updatePageDisplayTime();
     markDirty();
     
-    // Only clear cache if we're not in the middle of debouncing zoom input
-    // During debouncing, we'll clear cache once when the final zoom is applied
-    if (oldScale != m_currentScale && !isZoomDebouncing()) {
-        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-        if (muPdfDoc) {
-            muPdfDoc->clearCache();
-        }
-    }
 }
 
 void App::recenterScrollOnZoom(int oldScale, int newScale)
@@ -1424,8 +1430,6 @@ void App::toggleMirrorHorizontal()
 
 void App::fitPageToWidth()
 {
-    int oldScale = m_currentScale; // Track old scale for preloader
-    
     int windowWidth = m_renderer->getWindowWidth();
 
     // Use effective sizes so 90/270 rotation swaps W/H
@@ -1487,15 +1491,6 @@ void App::fitPageToWidth()
     updateScaleDisplayTime();
     updatePageDisplayTime();
     markDirty();
-    
-    // Only clear cache if we're not in the middle of debouncing zoom input
-    // During debouncing, we'll clear cache once when the final zoom is applied  
-    if (oldScale != m_currentScale && !isZoomDebouncing()) {
-        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-        if (muPdfDoc) {
-            muPdfDoc->clearCache();
-        }
-    }
 }
 
 void App::printAppState()
