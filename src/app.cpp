@@ -180,7 +180,19 @@ void App::run()
             bool shouldRender = (m_needsRedraw || panningChanged) && 
                                (currentTime - lastRenderTime) >= 16; // Max 60 FPS to prevent overload
             
-            if (shouldRender) {
+            if (isZoomDebouncing()) {
+                // During zoom processing, show processing indicator with minimal rendering
+                // Re-render the current page at current scale with indicator overlay
+                if ((currentTime - lastRenderTime) >= 100) { // Even slower update rate to minimize flicker
+                    renderCurrentPage();  // Render at current (stable) zoom level
+                    renderUI();          // Add processing indicator
+                    m_renderer->present();
+                    lastRenderTime = currentTime;
+                    // Important: Don't reset m_needsRedraw - preserve for final zoom render
+                }
+            }
+            else if (shouldRender) {
+                // Normal rendering when not processing zoom
                 renderCurrentPage();
                 renderUI();
                 m_renderer->present();
@@ -828,28 +840,36 @@ void App::renderUI()
     
     // Render zoom processing indicator
     if (m_zoomProcessing || isZoomDebouncing()) {
-        SDL_Color processingColor = {255, 255, 0, 255}; // Yellow text
-        SDL_Color processingBgColor = {0, 0, 0, 180}; // Semi-transparent black background
+        SDL_Color processingColor = {255, 255, 0, 255}; // Bright yellow text for high visibility
+        SDL_Color processingBgColor = {0, 0, 0, 250}; // Nearly opaque background
         
         std::string processingText = "Processing zoom...";
         
-        // Use current font size for processing indicator
-        int avgCharWidth = 8; // Approximate character width at 100% scale
+        // Use larger font for better visibility during longer operations
+        m_textRenderer->setFontSize(150); // Even larger for better visibility
+        int avgCharWidth = 12; // Adjusted for larger font
         int textWidth = static_cast<int>(processingText.length()) * avgCharWidth;
-        int textHeight = 16; // Base font height
+        int textHeight = 24; // Adjusted for larger font
         
-        // Position in top-left corner
-        int textX = 10;
-        int textY = 10;
+        // Position prominently in top-center
+        int textX = (currentWindowWidth - textWidth) / 2;
+        int textY = 20;
         
-        // Draw background
-        SDL_Rect bgRect = {textX - 5, textY - 2, textWidth + 10, textHeight + 4};
+        // Draw prominent background with extra padding
+        SDL_Rect bgRect = {textX - 20, textY - 10, textWidth + 40, textHeight + 20};
         SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), processingBgColor.r, processingBgColor.g, processingBgColor.b, processingBgColor.a);
         SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
         SDL_RenderFillRect(m_renderer->getSDLRenderer(), &bgRect);
         
+        // Draw bright border for maximum visibility
+        SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 255, 255, 0, 255);
+        SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &bgRect);
+        
         // Draw text
         m_textRenderer->renderText(processingText, textX, textY, processingColor);
+        
+        // Restore font size
+        m_textRenderer->setFontSize(100);
     }
     
     // Render error message if active
@@ -1014,6 +1034,9 @@ void App::renderUI()
     if (dpadHeld && maxEdgeHold > 0.0f && validDirection) {
         float progress = maxEdgeHold / m_edgeTurnThreshold;
         if (progress > 0.05f) { // Only show indicator after 5% progress to avoid flicker
+            // Enhance progress visualization for better completion feedback
+            float visualProgress = std::min(progress * 1.1f, 1.0f); // Slightly faster visual progress
+            
             // Determine which edge and direction
             std::string direction;
             int indicatorX = 0, indicatorY = 0;
@@ -1069,10 +1092,11 @@ void App::renderUI()
             SDL_RenderFillRect(m_renderer->getSDLRenderer(), &bgRect);
             
             // Draw progress bar
-            int progressWidth = static_cast<int>(barWidth * std::min(progress, 1.0f));
+            int progressWidth = static_cast<int>(barWidth * visualProgress);
             if (progressWidth > 0) {
                 SDL_Rect progressRect = {indicatorX, indicatorY, progressWidth, barHeight};
-                // Color transitions from yellow to green as it fills
+                // Color transitions from yellow to green as it fills - use actual progress for color calculation
+                // to ensure proper yellow-to-green transition throughout the entire progress range
                 uint8_t red = static_cast<uint8_t>(255 * (1.0f - progress));
                 uint8_t green = 255;
                 uint8_t blue = 0;
@@ -1165,12 +1189,12 @@ void App::zoom(int delta)
     m_pendingZoomDelta += delta;
     m_lastZoomInputTime = now;
     
-    // Set zoom processing indicator and force immediate redraw
+    // Set zoom processing indicator - do NOT mark dirty to prevent immediate page re-render
+    // The UI will show the processing indicator on the next natural render cycle
     if (!m_zoomProcessing) {
         m_zoomProcessing = true;
         m_zoomProcessingStartTime = now;
     }
-    markDirty(); // Ensure UI updates to show processing indicator immediately
     
     // If there's already a pending zoom, don't apply immediately
     // The render loop will check for settled input and apply the final zoom
@@ -1178,34 +1202,24 @@ void App::zoom(int delta)
 
 void App::zoomTo(int scale)
 {
-    // Throttle zoom operations to prevent rapid cache clearing and bus errors
-    auto now = std::chrono::steady_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastZoomTime).count();
-    if (elapsed < ZOOM_THROTTLE_MS) {
-        return; // Too soon, ignore this zoom request
-    }
-    m_lastZoomTime = now;
-
-    int oldScale = m_currentScale;
-    m_currentScale = scale;
-    if (m_currentScale < 10)
-        m_currentScale = 10;
-    if (m_currentScale > 350)
-        m_currentScale = 350;
-
-    recenterScrollOnZoom(oldScale, m_currentScale);
-    clampScroll();
-    updateScaleDisplayTime();
-    updatePageDisplayTime();
-    markDirty();
+    // Always use debouncing for consistent behavior
+    int targetDelta = scale - m_currentScale;
     
-    // Cancel prerendering and clear cache if scale changed
-    if (oldScale != m_currentScale) {
-        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-        if (muPdfDoc) {
-            muPdfDoc->cancelPrerendering();
-            muPdfDoc->clearCache();
-        }
+    // Cancel any ongoing prerendering since zoom is changing
+    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+    if (muPdfDoc) {
+        muPdfDoc->cancelPrerendering();
+    }
+    
+    // Set pending zoom delta to target and use debouncing
+    m_pendingZoomDelta = targetDelta;
+    m_lastZoomInputTime = std::chrono::steady_clock::now();
+    
+    // Set zoom processing indicator - do NOT mark dirty to prevent immediate page re-render
+    // The UI will show the processing indicator on the next natural render cycle
+    if (!m_zoomProcessing) {
+        m_zoomProcessing = true;
+        m_zoomProcessingStartTime = m_lastZoomInputTime;
     }
 }
 
