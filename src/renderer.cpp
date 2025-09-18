@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <vector>
 #include <numeric>
+#include <cstring> // For memcpy
 
 // Removed custom deleters for SDL_Window and SDL_Renderer as they are no longer owned by Renderer.
 // void SDL_Window_Deleter::operator()(SDL_Window* window) const {
@@ -87,6 +88,58 @@ void Renderer::renderPageEx(const std::vector<uint8_t> &pixelData,
         {
             destRow[x] = rgb24_to_argb32(srcRow[x * 3], srcRow[x * 3 + 1], srcRow[x * 3 + 2]);
         }
+    }
+
+    SDL_UnlockTexture(m_texture.get());
+
+    SDL_Rect destRect = {destX, destY, destWidth, destHeight};
+    SDL_RenderCopyEx(m_renderer, m_texture.get(), NULL, &destRect, angleDeg, /*center*/ nullptr, flip);
+}
+
+void Renderer::renderPageExARGB(const std::vector<uint32_t> &argbData,
+                               int srcWidth, int srcHeight,
+                               int destX, int destY, int destWidth, int destHeight,
+                               double angleDeg, SDL_RendererFlip flip)
+{
+    if (argbData.empty() || srcWidth == 0 || srcHeight == 0)
+    {
+        std::cerr << "Warning: Attempted to render empty or zero-dimension ARGB data." << std::endl;
+        return;
+    }
+
+    // Reuse the same persistent streaming texture path
+    if (!m_texture || srcWidth != m_currentTexWidth || srcHeight != m_currentTexHeight)
+    {
+        if (m_texture)
+            m_texture.reset();
+        m_texture.reset(SDL_CreateTexture(m_renderer,
+                                          SDL_PIXELFORMAT_ARGB8888,
+                                          SDL_TEXTUREACCESS_STREAMING,
+                                          srcWidth, srcHeight));
+        if (!m_texture)
+        {
+            std::cerr << "Error: Unable to create texture! SDL_Error: " << SDL_GetError() << std::endl;
+            return;
+        }
+        m_currentTexWidth = srcWidth;
+        m_currentTexHeight = srcHeight;
+    }
+
+    void *pixels;
+    int pitch;
+    if (SDL_LockTexture(m_texture.get(), NULL, &pixels, &pitch) != 0)
+    {
+        std::cerr << "Error: Unable to lock texture! SDL_Error: " << SDL_GetError() << std::endl;
+        return;
+    }
+
+    // Direct copy of ARGB data - much faster than RGB conversion
+    const uint32_t* srcData = argbData.data();
+    for (int y = 0; y < srcHeight; ++y)
+    {
+        uint32_t *destRow = reinterpret_cast<uint32_t *>(static_cast<uint8_t *>(pixels) + (static_cast<size_t>(y) * pitch));
+        const uint32_t *srcRow = srcData + (static_cast<size_t>(y) * srcWidth);
+        memcpy(destRow, srcRow, srcWidth * sizeof(uint32_t));
     }
 
     SDL_UnlockTexture(m_texture.get());

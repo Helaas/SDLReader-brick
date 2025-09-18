@@ -80,10 +80,14 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
     }
 
 #ifndef TG5040_PLATFORM
-// Set max render size for downsampling based on current window size
+// Set max render size for downsampling - allow for meaningful zoom levels on non-TG5040 platforms
+// Use 4x window size to enable proper zooming while TG5040 has no limit
 if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
 {
-    muDoc->setMaxRenderSize(m_renderer->getWindowWidth(), m_renderer->getWindowHeight());
+    int windowWidth = m_renderer->getWindowWidth();
+    int windowHeight = m_renderer->getWindowHeight();
+    // Allow 4x zoom by setting max render size to 4x window size
+    muDoc->setMaxRenderSize(windowWidth * 4, windowHeight * 4);
 }
 #endif
 
@@ -155,7 +159,15 @@ void App::run()
             if (m_pendingZoomDelta != 0) {
                 auto now = std::chrono::steady_clock::now();
                 auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastZoomInputTime).count();
-                if (elapsed >= m_lastRenderDuration) {
+                
+                // Use platform-specific debounce time, with minimum based on render performance
+#ifdef TG5040_PLATFORM
+                int debounceTime = std::max(ZOOM_DEBOUNCE_MS, static_cast<int>(m_lastRenderDuration));
+#else
+                int debounceTime = std::max(ZOOM_DEBOUNCE_MS, static_cast<int>(m_lastRenderDuration));
+#endif
+                
+                if (elapsed >= debounceTime) {
                     // Zoom input has settled, apply the final accumulated zoom
                     applyPendingZoom();
                 }
@@ -168,7 +180,19 @@ void App::run()
             bool shouldRender = (m_needsRedraw || panningChanged) && 
                                (currentTime - lastRenderTime) >= 16; // Max 60 FPS to prevent overload
             
-            if (shouldRender) {
+            if (isZoomDebouncing()) {
+                // During zoom processing, show processing indicator with minimal rendering
+                // Re-render the current page at current scale with indicator overlay
+                if ((currentTime - lastRenderTime) >= 100) { // Even slower update rate to minimize flicker
+                    renderCurrentPage();  // Render at current (stable) zoom level
+                    renderUI();          // Add processing indicator
+                    m_renderer->present();
+                    lastRenderTime = currentTime;
+                    // Important: Don't reset m_needsRedraw - preserve for final zoom render
+                }
+            }
+            else if (shouldRender) {
+                // Normal rendering when not processing zoom
                 renderCurrentPage();
                 renderUI();
                 m_renderer->present();
@@ -692,11 +716,34 @@ void App::renderCurrentPage()
     int winH = m_renderer->getWindowHeight();
 
     int srcW, srcH;
-    std::vector<uint8_t> pixelData;
+    std::vector<uint32_t> argbData;
     {
         // Lock the document mutex to ensure thread-safe access
         std::lock_guard<std::mutex> lock(m_documentMutex);
-        pixelData = m_document->renderPage(m_currentPage, srcW, srcH, m_currentScale);
+        
+        // Try to use ARGB rendering for better performance
+        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+        if (muPdfDoc) {
+            try {
+                argbData = muPdfDoc->renderPageARGB(m_currentPage, srcW, srcH, m_currentScale);
+            } catch (const std::exception& e) {
+                // Fallback to RGB rendering
+                std::vector<uint8_t> rgbData = m_document->renderPage(m_currentPage, srcW, srcH, m_currentScale);
+                // Convert to ARGB manually
+                argbData.resize(srcW * srcH);
+                for (int i = 0; i < srcW * srcH; ++i) {
+                    argbData[i] = rgb24_to_argb32(rgbData[i*3], rgbData[i*3+1], rgbData[i*3+2]);
+                }
+            }
+        } else {
+            // Fallback to RGB rendering for other document types
+            std::vector<uint8_t> rgbData = m_document->renderPage(m_currentPage, srcW, srcH, m_currentScale);
+            // Convert to ARGB manually
+            argbData.resize(srcW * srcH);
+            for (int i = 0; i < srcW * srcH; ++i) {
+                argbData[i] = rgb24_to_argb32(rgbData[i*3], rgbData[i*3+1], rgbData[i*3+2]);
+            }
+        }
     }
 
     // Ensure page dimensions are updated BEFORE calculating positions
@@ -740,10 +787,10 @@ void App::renderCurrentPage()
     }
     m_forceTopAlignNextRender = false;
 
-    m_renderer->renderPageEx(pixelData, srcW, srcH,
-                             posX, posY, m_pageWidth, m_pageHeight,
-                             static_cast<double>(m_rotation),
-                             currentFlipFlags());
+    m_renderer->renderPageExARGB(argbData, srcW, srcH,
+                                 posX, posY, m_pageWidth, m_pageHeight,
+                                 static_cast<double>(m_rotation),
+                                 currentFlipFlags());
     
     // Trigger prerendering of adjacent pages for faster page changes
     // Do this after the main render to avoid blocking the current page display
@@ -789,6 +836,40 @@ void App::renderUI()
         m_textRenderer->renderText(scaleInfo,
                                    currentWindowWidth - static_cast<int>(scaleInfo.length()) * 8 - 10,
                                    10, textColor);
+    }
+    
+    // Render zoom processing indicator
+    if (shouldShowZoomProcessingIndicator()) {
+        SDL_Color processingColor = {255, 255, 0, 255}; // Bright yellow text for high visibility
+        SDL_Color processingBgColor = {0, 0, 0, 250}; // Nearly opaque background
+        
+        std::string processingText = "Processing zoom...";
+        
+        // Use larger font for better visibility during longer operations
+        m_textRenderer->setFontSize(150); // Even larger for better visibility
+        int avgCharWidth = 12; // Adjusted for larger font
+        int textWidth = static_cast<int>(processingText.length()) * avgCharWidth;
+        int textHeight = 24; // Adjusted for larger font
+        
+        // Position prominently in top-center
+        int textX = (currentWindowWidth - textWidth) / 2;
+        int textY = 20;
+        
+        // Draw prominent background with extra padding
+        SDL_Rect bgRect = {textX - 20, textY - 10, textWidth + 40, textHeight + 20};
+        SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), processingBgColor.r, processingBgColor.g, processingBgColor.b, processingBgColor.a);
+        SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
+        SDL_RenderFillRect(m_renderer->getSDLRenderer(), &bgRect);
+        
+        // Draw bright border for maximum visibility
+        SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 255, 255, 0, 255);
+        SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &bgRect);
+        
+        // Draw text
+        m_textRenderer->renderText(processingText, textX, textY, processingColor);
+        
+        // Restore font size
+        m_textRenderer->setFontSize(100);
     }
     
     // Render error message if active
@@ -917,12 +998,45 @@ void App::renderUI()
         }
     }
     
-    // Render edge-turn progress indicator - only show when D-pad is actively held and scale >= 100%
+    // Render edge-turn progress indicator - only show when:
+    // 1. D-pad is actively held and timer is active
+    // 2. Content doesn't fit on screen in the movement direction (scrollable)
+    // 3. There's a valid page to navigate to in the pressed direction
     bool dpadHeld = m_dpadLeftHeld || m_dpadRightHeld || m_dpadUpHeld || m_dpadDownHeld;
     float maxEdgeHold = std::max({m_edgeTurnHoldRight, m_edgeTurnHoldLeft, m_edgeTurnHoldUp, m_edgeTurnHoldDown});
-    if (dpadHeld && maxEdgeHold > 0.0f && m_currentScale >= 100) {
+    
+    // Check scroll limits for each direction
+    const int maxScrollX = getMaxScrollX();
+    const int maxScrollY = getMaxScrollY();
+    
+    // Check if there are valid pages to navigate to in each direction
+    bool canGoLeft = m_currentPage > 0;
+    bool canGoRight = m_currentPage < m_pageCount - 1; 
+    bool canGoUp = m_currentPage > 0;
+    bool canGoDown = m_currentPage < m_pageCount - 1;
+    
+    // Only show progress bar when content doesn't fit in the movement direction
+    // AND there's a valid page to navigate to
+    bool validDirection = false;
+    if (m_dpadRightHeld && m_edgeTurnHoldRight > 0.0f && canGoRight && maxScrollX > 0) {
+        validDirection = true; // Show for horizontal movement when content doesn't fit horizontally
+    }
+    if (m_dpadLeftHeld && m_edgeTurnHoldLeft > 0.0f && canGoLeft && maxScrollX > 0) {
+        validDirection = true; // Show for horizontal movement when content doesn't fit horizontally
+    }
+    if (m_dpadDownHeld && m_edgeTurnHoldDown > 0.0f && canGoDown && maxScrollY > 0) {
+        validDirection = true; // Show for vertical movement when content doesn't fit vertically
+    }
+    if (m_dpadUpHeld && m_edgeTurnHoldUp > 0.0f && canGoUp && maxScrollY > 0) {
+        validDirection = true; // Show for vertical movement when content doesn't fit vertically
+    }
+    
+    if (dpadHeld && maxEdgeHold > 0.0f && validDirection) {
         float progress = maxEdgeHold / m_edgeTurnThreshold;
         if (progress > 0.05f) { // Only show indicator after 5% progress to avoid flicker
+            // Enhance progress visualization for better completion feedback
+            float visualProgress = std::min(progress * 1.1f, 1.0f); // Slightly faster visual progress
+            
             // Determine which edge and direction
             std::string direction;
             int indicatorX = 0, indicatorY = 0;
@@ -978,13 +1092,17 @@ void App::renderUI()
             SDL_RenderFillRect(m_renderer->getSDLRenderer(), &bgRect);
             
             // Draw progress bar
-            int progressWidth = static_cast<int>(barWidth * std::min(progress, 1.0f));
+            int progressWidth = static_cast<int>(barWidth * visualProgress);
             if (progressWidth > 0) {
                 SDL_Rect progressRect = {indicatorX, indicatorY, progressWidth, barHeight};
-                // Color transitions from yellow to green as it fills
-                uint8_t red = static_cast<uint8_t>(255 * (1.0f - progress));
+                
+                // More dramatic color transition: bright yellow to bright green
+                // Use a more aggressive curve to make the transition more visible
+                float colorProgress = std::min(progress * 1.2f, 1.0f); // Accelerate color change
+                uint8_t red = static_cast<uint8_t>(255 * (1.0f - colorProgress));
                 uint8_t green = 255;
-                uint8_t blue = 0;
+                uint8_t blue = static_cast<uint8_t>(colorProgress < 0.5f ? 0 : 100 * (colorProgress - 0.5f) * 2); // Add some blue at the end for more green
+                
                 SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), red, green, blue, 200);
                 SDL_RenderFillRect(m_renderer->getSDLRenderer(), &progressRect);
             }
@@ -1074,39 +1192,52 @@ void App::zoom(int delta)
     m_pendingZoomDelta += delta;
     m_lastZoomInputTime = now;
     
+    // Set zoom processing indicator and show it immediately for expensive operations
+    if (!m_zoomProcessing) {
+        m_zoomProcessing = true;
+        m_zoomProcessingStartTime = now;
+        
+        // Show immediate processing indicator if recent renders have been expensive
+        // Only render UI overlay, not the expensive page content
+        if (isNextRenderLikelyExpensive()) {
+            // Clear screen and show processing message without expensive page render
+            m_renderer->clear(0, 0, 0, 255); // Black background
+            renderUI(); // Only render the UI overlay with processing message
+            m_renderer->present();
+        }
+    }
+    
     // If there's already a pending zoom, don't apply immediately
     // The render loop will check for settled input and apply the final zoom
 }
 
 void App::zoomTo(int scale)
 {
-    // Throttle zoom operations to prevent rapid cache clearing and bus errors
-    auto now = std::chrono::steady_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastZoomTime).count();
-    if (elapsed < ZOOM_THROTTLE_MS) {
-        return; // Too soon, ignore this zoom request
-    }
-    m_lastZoomTime = now;
-
-    int oldScale = m_currentScale;
-    m_currentScale = scale;
-    if (m_currentScale < 10)
-        m_currentScale = 10;
-    if (m_currentScale > 350)
-        m_currentScale = 350;
-
-    recenterScrollOnZoom(oldScale, m_currentScale);
-    clampScroll();
-    updateScaleDisplayTime();
-    updatePageDisplayTime();
-    markDirty();
+    // Always use debouncing for consistent behavior
+    int targetDelta = scale - m_currentScale;
     
-    // Cancel prerendering and clear cache if scale changed
-    if (oldScale != m_currentScale) {
-        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-        if (muPdfDoc) {
-            muPdfDoc->cancelPrerendering();
-            muPdfDoc->clearCache();
+    // Cancel any ongoing prerendering since zoom is changing
+    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+    if (muPdfDoc) {
+        muPdfDoc->cancelPrerendering();
+    }
+    
+    // Set pending zoom delta to target and use debouncing
+    m_pendingZoomDelta = targetDelta;
+    m_lastZoomInputTime = std::chrono::steady_clock::now();
+    
+    // Set zoom processing indicator and show it immediately for expensive operations
+    if (!m_zoomProcessing) {
+        m_zoomProcessing = true;
+        m_zoomProcessingStartTime = m_lastZoomInputTime;
+        
+        // Show immediate processing indicator if recent renders have been expensive
+        // Only render UI overlay, not the expensive page content
+        if (isNextRenderLikelyExpensive()) {
+            // Clear screen and show processing message without expensive page render
+            m_renderer->clear(0, 0, 0, 255); // Black background
+            renderUI(); // Only render the UI overlay with processing message
+            m_renderer->present();
         }
     }
 }
@@ -1130,16 +1261,17 @@ void App::applyPendingZoom()
     updatePageDisplayTime();
     markDirty();
     
-    // Clear cache at new scale
-    if (oldScale != m_currentScale) {
-        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-        if (muPdfDoc) {
-            muPdfDoc->clearCache();
+    // Reset pending zoom and clear processing indicator (respecting minimum display time)
+    m_pendingZoomDelta = 0;
+    
+    // Only clear zoom processing if minimum display time has elapsed
+    if (m_zoomProcessing) {
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - m_zoomProcessingStartTime).count();
+        if (elapsed >= ZOOM_PROCESSING_MIN_DISPLAY_MS) {
+            m_zoomProcessing = false;
         }
     }
-
-    // Reset pending zoom
-    m_pendingZoomDelta = 0;
 }
 
 bool App::isZoomDebouncing() const
@@ -1149,16 +1281,16 @@ bool App::isZoomDebouncing() const
 
 void App::fitPageToWindow()
 {
-    int oldScale = m_currentScale; // Track old scale for preloader
-    
     int windowWidth = m_renderer->getWindowWidth();
     int windowHeight = m_renderer->getWindowHeight();
 
 #ifndef TG5040_PLATFORM
-// Update max render size for downsampling
+// Update max render size for downsampling - allow for meaningful zoom levels on non-TG5040 platforms
+// Use 4x window size to enable proper zooming while TG5040 has no limit
 if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
 {
-    muDoc->setMaxRenderSize(windowWidth, windowHeight);
+    // Allow 4x zoom by setting max render size to 4x window size
+    muDoc->setMaxRenderSize(windowWidth * 4, windowHeight * 4);
 }
 #endif    // Use effective sizes so 90/270 rotation swaps W/H
     int nativeWidth = effectiveNativeWidth();
@@ -1202,14 +1334,6 @@ if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
     updatePageDisplayTime();
     markDirty();
     
-    // Only clear cache if we're not in the middle of debouncing zoom input
-    // During debouncing, we'll clear cache once when the final zoom is applied
-    if (oldScale != m_currentScale && !isZoomDebouncing()) {
-        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-        if (muPdfDoc) {
-            muPdfDoc->clearCache();
-        }
-    }
 }
 
 void App::recenterScrollOnZoom(int oldScale, int newScale)
@@ -1309,8 +1433,6 @@ void App::toggleMirrorHorizontal()
 
 void App::fitPageToWidth()
 {
-    int oldScale = m_currentScale; // Track old scale for preloader
-    
     int windowWidth = m_renderer->getWindowWidth();
 
     // Use effective sizes so 90/270 rotation swaps W/H
@@ -1372,15 +1494,6 @@ void App::fitPageToWidth()
     updateScaleDisplayTime();
     updatePageDisplayTime();
     markDirty();
-    
-    // Only clear cache if we're not in the middle of debouncing zoom input
-    // During debouncing, we'll clear cache once when the final zoom is applied  
-    if (oldScale != m_currentScale && !isZoomDebouncing()) {
-        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-        if (muPdfDoc) {
-            muPdfDoc->clearCache();
-        }
-    }
 }
 
 void App::printAppState()

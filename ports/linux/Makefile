@@ -1,21 +1,34 @@
 # Makefile for SDL Reader on Linux
 
+# Determine base path - if we're in ports/linux, use relative paths, otherwise use full paths
+ifneq ($(wildcard ../../src),)
+  # We're being called from ports/linux directory
+  BASE_PATH := .
+  WORKSPACE_PATH := ../..
+else
+  # We're being called from workspace root
+  BASE_PATH := ports/linux
+  WORKSPACE_PATH := .
+endif
+
 # Compiler
 CXX = g++
 
 # Source directories
-SRC_DIR = ../../src
-CLI_DIR = ../../cli
-INCLUDE_DIR = ../../include
+SRC_DIR = $(WORKSPACE_PATH)/src
+CLI_DIR = $(WORKSPACE_PATH)/cli
+INCLUDE_DIR = $(WORKSPACE_PATH)/include
 
 # Local MuPDF Build Paths (using our custom build with libarchive support)
-MUPDF_BUILD_PATH = mupdf/build/release
+MUPDF_DIR = $(BASE_PATH)/mupdf
+MUPDF_VERSION = 1.26.7
+MUPDF_BUILD_PATH = $(BASE_PATH)/mupdf/build/release
 
 # Build directory for all object files
-BUILD_DIR = build
+BUILD_DIR = $(BASE_PATH)/build
 
 # Final executable directory (project root)
-BIN_DIR = ../../bin
+BIN_DIR = $(WORKSPACE_PATH)/bin
 
 # Name of the final executable
 TARGET_NAME = sdl_reader_cli
@@ -30,15 +43,16 @@ SRCS = $(SRC_FILES) $(wildcard $(CLI_DIR)/*.cpp)
 # -Wall -Wextra: Enable common warnings
 # -g: Include debugging information
 # -I$(INCLUDE_DIR): Include path for project's own header files
-# -Imupdf/include: Include path for our custom MuPDF headers with libarchive support
-CXXFLAGS = -std=c++17 -Wall -Wextra -g -I$(INCLUDE_DIR) -Imupdf/include
+# -I$(MUPDF_DIR)/include: Include path for our custom MuPDF headers with libarchive support
+CXXFLAGS = -std=c++17 -Wall -Wextra -g -I$(INCLUDE_DIR) -I$(MUPDF_DIR)/include
 
 # Include paths for SDL2 and SDL2_ttf
 INC_PATHS = $(shell pkg-config --cflags sdl2 SDL2_ttf freetype2 harfbuzz)
 
 # Library paths and libraries to link
 # Using pkg-config for available libraries and manual linking for MuPDF dependencies
-LIBS = $(shell pkg-config --libs sdl2 SDL2_ttf freetype2 harfbuzz) -lmupdf -lz -lm
+# Libraries
+LIBS = -lmupdf -lmupdf-third -larchive $(shell pkg-config --libs sdl2 SDL2_ttf freetype2 harfbuzz libjpeg libopenjp2 libjbig2dec libgumbo mujs) -lwebp -lwebpdemux
 
 # All object files (will be placed in the build directory)
 OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS))) \
@@ -49,15 +63,28 @@ OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS
 # Default target
 all: $(BIN_DIR) $(BUILD_DIR) setup-mupdf build-mupdf $(TARGET)
 
-# Setup MuPDF repository if it doesn't exist
+# Setup target to download and build MuPDF if needed
+.PHONY: setup-mupdf
 setup-mupdf:
-	@if [ ! -d "mupdf" ]; then \
-		echo "Cloning MuPDF repository..."; \
-		git clone --recursive --depth 1 --branch 1.26.7 https://github.com/ArtifexSoftware/mupdf.git; \
-		echo "Setting up MuPDF for CBR support..."; \
-		cd mupdf && git checkout 12b4cdcd0b70231e0dc5cd777abd9339d61230ab; \
-	else \
-		echo "MuPDF repository already exists"; \
+	@if [ ! -d $(MUPDF_DIR) ]; then \
+		echo "Downloading MuPDF $(MUPDF_VERSION)..."; \
+		git clone --recursive --depth 1 --branch $(MUPDF_VERSION) https://github.com/ArtifexSoftware/mupdf.git $(MUPDF_DIR); \
+		echo "Downloading and applying WebP patch..."; \
+		if [ ! -f webp-upstream-697749.patch ]; then \
+			curl -o webp-upstream-697749.patch \
+				https://raw.githubusercontent.com/koreader/koreader-base/30ddfa05d67a8db1118326141b02bb002e2e11c4/thirdparty/mupdf/webp-upstream-697749.patch; \
+		fi; \
+		cd $(MUPDF_DIR) && patch -p1 < ../webp-upstream-697749.patch; \
+	fi
+	@echo "Configuring MuPDF for libarchive and WebP support..."
+	@echo "HAVE_LIBARCHIVE = yes" > $(MUPDF_DIR)/user.make
+	@echo "SYS_LIBARCHIVE_LIBS = -larchive" >> $(MUPDF_DIR)/user.make
+	@echo "HAVE_WEBP = yes" >> $(MUPDF_DIR)/user.make
+	@echo "SYS_WEBP_LIBS = -lwebp -lwebpdemux" >> $(MUPDF_DIR)/user.make
+	@echo "USE_SYSTEM_LIBS = no" >> $(MUPDF_DIR)/user.make
+	@if [ ! -f $(MUPDF_DIR)/build/release/libmupdf.a ]; then \
+		echo "Building MuPDF..."; \
+		$(MAKE) -C $(MUPDF_DIR) libs; \
 	fi
 
 # Build MuPDF with libarchive support
@@ -85,29 +112,34 @@ $(BUILD_DIR)/%.o: $(CLI_DIR)/%.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $(shell pkg-config --cflags sdl2 SDL2_ttf freetype2 harfbuzz) -c $< -o $@
 
 # Install dependencies (Ubuntu/Debian)
-install-deps:
-	@echo "Installing dependencies for Ubuntu/Debian..."
-	sudo apt update
-	sudo apt install -y build-essential pkg-config libsdl2-dev libsdl2-ttf-dev libfreetype6-dev libharfbuzz-dev libjpeg-dev libopenjp2-7-dev libjbig2dec0-dev libgumbo-dev libmujs-dev libarchive-dev git
+# Dependency installation targets for various distributions
+.PHONY: install-deps install-deps-ubuntu install-deps-debian install-deps-fedora install-deps-arch
+install-deps: install-deps-ubuntu
 
-# Install dependencies for other distributions
+install-deps-ubuntu:
+	sudo apt update
+	sudo apt install build-essential pkg-config libsdl2-dev libsdl2-ttf-dev libfreetype6-dev libharfbuzz-dev libjpeg-dev libopenjp2-7-dev libjbig2dec0-dev libgumbo-dev libmujs-dev libarchive-dev libwebp-dev git
+
+install-deps-debian: install-deps-ubuntu
+
 install-deps-fedora:
 	@echo "Installing dependencies for Fedora/RHEL..."
-	sudo dnf install -y gcc-c++ pkg-config SDL2-devel SDL2_ttf-devel freetype-devel libarchive-devel git
+	sudo dnf install -y gcc-c++ pkg-config SDL2-devel SDL2_ttf-devel freetype-devel libarchive-devel libwebp-devel git
 
 install-deps-arch:
 	@echo "Installing dependencies for Arch Linux..."
-	sudo pacman -S --needed base-devel pkg-config sdl2 sdl2_ttf freetype2 libarchive git
+	sudo pacman -S --needed base-devel pkg-config sdl2 sdl2_ttf freetype2 libarchive libwebp git
 
 # Clean up compiled files and directories
 clean:
 	rm -rf $(BUILD_DIR)
 	rm -f $(TARGET)
+	rm -f webp-upstream-697749.patch
 
 # Clean MuPDF (use with caution - will require re-download and rebuild)
 clean-mupdf:
 	@echo "Removing MuPDF directory (will be re-downloaded on next build)..."
-	rm -rf mupdf
+	rm -rf $(MUPDF_DIR)
 
 # Help target
 help:

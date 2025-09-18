@@ -1,15 +1,26 @@
 # TG5040-specific Makefile
 # This Makefile contains the build configuration specific to the TG5040 platform
 
+# Determine base path - if we're in ports/tg5040, use relative paths, otherwise use full paths
+ifneq ($(wildcard ../../src),)
+  # We're being called from ports/tg5040 directory
+  BASE_PATH := .
+  WORKSPACE_PATH := ../..
+else
+  # We're being called from workspace root
+  BASE_PATH := ports/tg5040
+  WORKSPACE_PATH := .
+endif
+
 # Compiler and flags
 CXX      := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTG5040_PLATFORM\
-            -Isrc -Iinclude -Iports/tg5040/include -Iports/tg5040/mupdf/include \
+            -I$(WORKSPACE_PATH)/src -I$(WORKSPACE_PATH)/include -I$(BASE_PATH)/include -I$(BASE_PATH)/mupdf/include \
             -I/usr/local/libarchive-minimal/include -D_REENTRANT -I/usr/include/SDL2
 
 # Output locations
-BIN_DIR  := bin
-BUILD_DIR  := build
+BIN_DIR  := $(WORKSPACE_PATH)/bin
+BUILD_DIR  := $(WORKSPACE_PATH)/build
 TARGET   := $(BIN_DIR)/sdl_reader_cli
 
 # Object files
@@ -17,11 +28,11 @@ OBJS := $(BUILD_DIR)/mupdf_document.o $(BUILD_DIR)/renderer.o $(BUILD_DIR)/text_
 
 # Libraries (link order matters)
 LIBS := -lSDL2_ttf -lSDL2 \
-  -Lports/tg5040/mupdf/build/release \
+  -L$(BASE_PATH)/mupdf/build/release \
   -lmupdf -lmupdf-third \
   -L/usr/local/libarchive-minimal/lib -larchive \
   -ljpeg -lopenjp2 -lharfbuzz -ljbig2dec \
-  -lfreetype -lgumbo -lz -llzma -lm -lpthread -ldl
+  -lfreetype -lgumbo -lz -llzma -lm -lpthread -ldl -lwebp -lwebpdemux
 
 .PHONY: all clean export-bundle build-mupdf setup-mupdf clean-mupdf build-libarchive clean-libarchive
 
@@ -30,14 +41,28 @@ all: setup-mupdf build-libarchive build-mupdf $(TARGET)
 
 # Setup MuPDF repository if it doesn't exist
 setup-mupdf:
-	@if [ ! -d "ports/tg5040/mupdf" ]; then \
+	@if [ ! -d "$(BASE_PATH)/mupdf" ]; then \
 		echo "Cloning MuPDF repository (shallow clone for faster setup)..."; \
-		git clone --depth 1 --branch 1.26.7 https://github.com/ArtifexSoftware/mupdf.git ports/tg5040/mupdf; \
+		git clone --depth 1 --branch 1.26.7 https://github.com/ArtifexSoftware/mupdf.git $(BASE_PATH)/mupdf; \
+		echo "Downloading and applying WebP patch for enhanced image format support..."; \
+		if [ ! -f webp-upstream-697749.patch ]; then \
+			curl -o webp-upstream-697749.patch \
+				https://raw.githubusercontent.com/koreader/koreader-base/30ddfa05d67a8db1118326141b02bb002e2e11c4/thirdparty/mupdf/webp-upstream-697749.patch; \
+		fi; \
+		cd $(BASE_PATH)/mupdf && patch -p1 < ../webp-upstream-697749.patch; \
 	fi
+	@echo "Setting up MuPDF for CBR and WebP support..."; \
+	echo "USE_LIBARCHIVE=yes" > $(BASE_PATH)/mupdf/user.make; \
+	echo "HAVE_WEBP=yes" >> $(BASE_PATH)/mupdf/user.make; \
+	echo "XCFLAGS += -DHAVE_LIBARCHIVE -I/usr/local/libarchive-minimal/include" >> $(BASE_PATH)/mupdf/user.make; \
+	echo "XCFLAGS += -DHAVE_WEBP" >> $(BASE_PATH)/mupdf/user.make; \
+	echo "SYS_LIBARCHIVE_CFLAGS := -I/usr/local/libarchive-minimal/include" >> $(BASE_PATH)/mupdf/user.make; \
+	echo "SYS_LIBARCHIVE_LIBS := -L/usr/local/libarchive-minimal/lib -larchive" >> $(BASE_PATH)/mupdf/user.make; \
+	echo "SYS_WEBP_LIBS := -lwebp -lwebpdemux" >> $(BASE_PATH)/mupdf/user.make
 	@echo "Initializing minimal required submodules..."; \
-	cd ports/tg5040/mupdf && git submodule update --init --depth 1 thirdparty/freetype thirdparty/harfbuzz thirdparty/jbig2dec thirdparty/libjpeg thirdparty/openjpeg thirdparty/zlib thirdparty/lcms2
+	cd $(BASE_PATH)/mupdf && git submodule update --init --depth 1 thirdparty/freetype thirdparty/harfbuzz thirdparty/jbig2dec thirdparty/libjpeg thirdparty/openjpeg thirdparty/zlib thirdparty/lcms2
 	@echo "Applying patches to disable barcode compilation when barcode=no..."; \
-	cd ports/tg5040/mupdf && sed -i 's/-std=c++20/-std=c++17/g' Makelists
+	cd $(BASE_PATH)/mupdf && sed -i 's/-std=c++20/-std=c++17/g' Makelists
 
 # Build minimal libarchive without ICU/XML dependencies
 # This creates a custom static libarchive build that excludes:
@@ -47,8 +72,8 @@ setup-mupdf:
 # This results in a much smaller bundle while maintaining CBR/CBZ functionality
 build-libarchive:
 	@echo "Building minimal libarchive without ICU dependencies..."
-	@if [ ! -d "ports/tg5040/libarchive-3.3.3" ]; then \
-		cd ports/tg5040 && \
+	@if [ ! -d "$(BASE_PATH)/libarchive-3.3.3" ]; then \
+		cd $(BASE_PATH) && \
 		curl -s https://www.libarchive.org/downloads/libarchive-3.3.3.tar.gz | tar -xzf - && \
 		cd libarchive-3.3.3 && \
 		./configure --prefix=/usr/local/libarchive-minimal \
@@ -63,15 +88,14 @@ build-libarchive:
 		make install; \
 	fi
 
-# Build MuPDF with custom libarchive support for CBR/CBZ files  
+# Build MuPDF with custom libarchive support for CBR/CBZ files and WebP support
 build-mupdf: build-libarchive
-	@echo "Installing development packages for CBR support and HTML parsing..."
-	@apt-get update && apt-get install -y libgumbo-dev || echo "Warning: Could not install some dev packages"
-	@echo "Building minimal MuPDF with custom libarchive support for CBR/CBZ files..."
-	@cd ports/tg5040/mupdf && $(MAKE) libs \
+	@echo "Building minimal MuPDF with custom libarchive support for CBR/CBZ files and WebP support..."
+	@cd $(BASE_PATH)/mupdf && $(MAKE) libs \
+		CFLAGS="-std=c17 -D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0 -DHAVE_LIBARCHIVE -DHAVE_WEBP -Iinclude" \
+		CXXFLAGS="-std=c++17 -D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0 -DHAVE_LIBARCHIVE -DHAVE_WEBP -Iinclude" \
 		HAVE_LIBARCHIVE=yes \
-		CFLAGS="-std=c17 -D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0 -Iinclude" \
-		CXXFLAGS="-std=c++17 -D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0 -Iinclude" \
+		HAVE_WEBP=yes \
 		mujs=no \
 		tesseract=no \
 		barcode=no \
@@ -93,7 +117,7 @@ build-mupdf: build-libarchive
 # Export complete TG5040 bundle for distribution
 export-bundle: $(TARGET)
 	@echo "Exporting TG5040 bundle..."
-	@cd ports/tg5040 && ./export_bundle.sh
+	@cd $(BASE_PATH) && ./export_bundle.sh
 
 # Ensure bin/ exists before linking
 $(BIN_DIR):
@@ -106,17 +130,17 @@ $(TARGET): $(OBJS) | $(BIN_DIR)
 	@patchelf --set-rpath '$$ORIGIN/../lib' "$@"
 
 # Compile source to object files
-$(BUILD_DIR)/%.o: src/%.cpp
+$(BUILD_DIR)/%.o: $(WORKSPACE_PATH)/src/%.cpp
 	 @mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # Compile sources from cli/
-$(BUILD_DIR)/%.o: cli/%.cpp
+$(BUILD_DIR)/%.o: $(WORKSPACE_PATH)/cli/%.cpp
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # Compile TG5040-specific power handler
-$(BUILD_DIR)/tg5040_power_handler.o: ports/tg5040/src/power_handler.cpp
+$(BUILD_DIR)/tg5040_power_handler.o: $(BASE_PATH)/src/power_handler.cpp
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
@@ -124,14 +148,18 @@ $(BUILD_DIR)/tg5040_power_handler.o: ports/tg5040/src/power_handler.cpp
 clean:
 	@echo "Cleaning build artifacts..."
 	rm -rf $(BUILD_DIR)/*.o $(BIN_DIR)/*
-	rm -rf pak/ lib/
+	rm -rf pak/lib/*
+	rm -f pak/bin/sdl_reader_cli
+	rm -f pak/README.md pak/pak.json
+	rm -rf lib/
+	rm -f webp-upstream-697749.patch
 
 # Clean custom libarchive build
 clean-libarchive:
 	@echo "Removing custom libarchive build..."
-	rm -rf ports/tg5040/libarchive-3.3.3 /usr/local/libarchive-minimal
+	rm -rf $(BASE_PATH)/libarchive-3.3.3 /usr/local/libarchive-minimal
 
 # Clean MuPDF (use with caution - will require re-download and rebuild)
 clean-mupdf:
 	@echo "Removing MuPDF directory (will be re-downloaded on next build)..."
-	rm -rf ports/tg5040/mupdf
+	rm -rf $(BASE_PATH)/mupdf

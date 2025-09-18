@@ -30,6 +30,7 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 ## Supported Document Types
 * **PDF** (`.pdf`)
 * **Comic Book Archive** (`.cbz`, `.cbr`, `.rar`, `.zip` containing images)
+  * **Enhanced WebP Support**: Supports WebP images within comic book archives
 * **EPUB** (`.epub`)
 * **MOBI** (`.mobi`)
 
@@ -80,20 +81,22 @@ make help
 * A C++17 compatible compiler (e.g., g++, clang++)
 * `SDL2` and `SDL2_ttf` development libraries
 * `libarchive` development library (for CBR support)
+* `libwebp` development library (for WebP image support)
 * `git` (for automatic MuPDF download)
 * `pkg-config`
 
 **Install dependencies using Homebrew:**
 ```bash
-brew install sdl2 sdl2_ttf libarchive git pkg-config
+brew install sdl2 sdl2_ttf libarchive libwebp git pkg-config
 ```
 
-**Note**: MuPDF is now built automatically from source with CBR support - no system MuPDF packages needed.
+**Note**: MuPDF is now built automatically from source with CBR and WebP support - no system MuPDF packages needed.
 
 #### Linux
 * A C++17 compatible compiler (e.g., g++, clang++)
 * `SDL2` and `SDL2_ttf` development libraries
 * `libarchive` development library (for CBR support)
+* `libwebp` development library (for WebP image support)
 * `git` (for automatic MuPDF download)
 * `pkg-config`
 
@@ -101,10 +104,10 @@ brew install sdl2 sdl2_ttf libarchive git pkg-config
 
 **Install dependencies (Ubuntu/Debian):**
 ```bash
-sudo apt install build-essential pkg-config libsdl2-dev libsdl2-ttf-dev libfreetype6-dev libharfbuzz-dev libjpeg-dev libopenjp2-7-dev libjbig2dec0-dev libgumbo-dev libmujs-dev libarchive-dev git
+sudo apt install build-essential pkg-config libsdl2-dev libsdl2-ttf-dev libfreetype6-dev libharfbuzz-dev libjpeg-dev libopenjp2-7-dev libjbig2dec0-dev libgumbo-dev libmujs-dev libarchive-dev libwebp-dev git
 ```
 
-**Note**: MuPDF is now built automatically from source with CBR support - no system MuPDF packages needed.
+**Note**: MuPDF is now built automatically from source with CBR and WebP support - no system MuPDF packages needed.
 
 Or use the automated installer:
 ```bash
@@ -114,6 +117,7 @@ cd ports/linux && make install-deps
 #### Wii U
 * devkitPro toolchain with WUT (Wii U Toolchain)
 * See `ports/wiiu/` for Wii U-specific build instructions
+* **Note**: WebP support may be limited due to devkitPro library availability
 
 ## Platform-Specific Features
 
@@ -359,6 +363,7 @@ Key architectural highlights:
 - [LoveRetro/NextUI](https://github.com/LoveRetro/NextUI), for creating an excellent OS for the TrimUI Brick.
 - <a href="https://github.com/josegonzalez" target="_blank" rel="noopener noreferrer"><img src="https://github.com/josegonzalez.png" alt="@josegonzalez" width="18" height="18" style="border-radius:50%"> josegonzalez</a>, for minui-list and countless other tools.
 - [UncleJunVIP/nextui-pak-store](https://github.com/UncleJunVIP/nextui-pak-store) for the Pak Store
+- [koreader/koreader](https://github.com/koreader/koreader), for the MuPDF WebP Patch.
 - [Claude.ai](https://claude.ai), for creating Sonnet 4. I’m not a C++ programmer, but Sonnet gave me a fighting chance at getting this done in a reasonable timeframe.
 
 # License

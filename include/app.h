@@ -166,6 +166,9 @@ private:
     // Dynamic timeout based on actual rendering time (used for both scroll timeout and zoom debouncing)
     Uint32 m_lastRenderDuration{300}; // Default to 300ms if no render time measured yet
     
+    // Threshold for determining when rendering becomes expensive enough to warrant immediate processing indicator
+    static constexpr Uint32 EXPENSIVE_RENDER_THRESHOLD_MS = 200; // Show immediate indicator if last render took > 200ms
+    
     // Check if we're in page change cooldown period
     bool isInPageChangeCooldown() const {
         return (SDL_GetTicks() - m_lastPageChangeTime) < PAGE_CHANGE_COOLDOWN;
@@ -176,6 +179,19 @@ private:
         Uint32 minTimeout = 100; // Minimum 100ms timeout regardless of render time
         Uint32 timeoutDuration = std::max(minTimeout, m_lastRenderDuration);
         return (SDL_GetTicks() - m_lastPageChangeTime) < timeoutDuration;
+    }
+    
+    // Check if next render is likely to be expensive based on recent rendering performance
+    bool isNextRenderLikelyExpensive() const {
+        return m_lastRenderDuration > EXPENSIVE_RENDER_THRESHOLD_MS;
+    }
+    
+    // Check if zoom processing indicator should remain visible for minimum time
+    bool shouldShowZoomProcessingIndicator() const {
+        if (!m_zoomProcessing) return false;
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - m_zoomProcessingStartTime).count();
+        return elapsed < ZOOM_PROCESSING_MIN_DISPLAY_MS || isZoomDebouncing();
     }
 
     // Try a one-shot nudge; if at the edge, flip the page instead.
@@ -234,11 +250,22 @@ private:
     
     // Zoom throttling to prevent rapid operations
     std::chrono::steady_clock::time_point m_lastZoomTime;
+#ifdef TG5040_PLATFORM
+    static constexpr int ZOOM_THROTTLE_MS = 30; // Slower throttle for TG5040
+    static constexpr int ZOOM_DEBOUNCE_MS = 250; // Longer debounce for slow hardware
+#else
     static constexpr int ZOOM_THROTTLE_MS = 25; // 25ms minimum between zoom operations for smoother response
+    static constexpr int ZOOM_DEBOUNCE_MS = 75; // Faster for other platforms
+#endif
 
     // Zoom debouncing for performance on slow machines
     int m_pendingZoomDelta{0};
     std::chrono::steady_clock::time_point m_lastZoomInputTime;
+    
+    // Zoom processing indicator
+    bool m_zoomProcessing{false};
+    std::chrono::steady_clock::time_point m_zoomProcessingStartTime;
+    static constexpr int ZOOM_PROCESSING_MIN_DISPLAY_MS = 300; // Minimum time to show processing indicator
     
     // Rendering optimization
     bool m_needsRedraw{true}; // Flag to indicate when screen needs to be redrawn

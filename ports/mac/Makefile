@@ -38,13 +38,15 @@ INC_PATHS = $(shell pkg-config --cflags SDL2_ttf SDL2_image sdl2)
 
 # Library paths and libraries to link
 # Library order matters for static libraries - dependencies should come after the libraries that use them
-# MuPDF libraries must come before their dependencies (libarchive)
-# -L$(MUPDF_BUILD_PATH): Library path for our custom MuPDF static libs with libarchive support
+# MuPDF libraries must come before their dependencies (libarchive, libwebp)
+# -L$(MUPDF_BUILD_PATH): Library path for our custom MuPDF static libs with libarchive and WebP support
 # -lmupdf -lmupdf-third: Link against MuPDF's main and third-party libraries
 # -L/opt/homebrew/opt/libarchive/lib -larchive: Link against libarchive for CBR support (must come after MuPDF)
+# -L/opt/homebrew/opt/webp/lib -lwebp -lwebpdemux: Link against libwebp and libwebpdemux for WebP support (must come after MuPDF)
 # pkg-config --libs SDL2_ttf SDL2_image added for library linking (can come last)
 LIBS = -L$(MUPDF_BUILD_PATH) -lmupdf -lmupdf-third \
        -L/opt/homebrew/opt/libarchive/lib -larchive \
+       -L/opt/homebrew/opt/webp/lib -lwebp -lwebpdemux \
        $(shell pkg-config --libs SDL2_ttf SDL2_image sdl2)
 
 # All object files (will be placed in the build directory)
@@ -62,26 +64,41 @@ setup-mupdf:
 	@if [ ! -d "mupdf" ]; then \
 		echo "Cloning MuPDF repository with submodules..."; \
 		git clone --depth 1 --branch 1.26.7 --recurse-submodules https://github.com/ArtifexSoftware/mupdf.git; \
-		echo "Setting up MuPDF for CBR support..."; \
+		echo "Setting up MuPDF for CBR and WebP support..."; \
 		echo "USE_LIBARCHIVE=yes" > mupdf/user.make; \
+		echo "HAVE_WEBP=yes" >> mupdf/user.make; \
 		echo "XCFLAGS += -DHAVE_LIBARCHIVE -I/opt/homebrew/opt/libarchive/include" >> mupdf/user.make; \
+		echo "XCFLAGS += -DHAVE_WEBP -I/opt/homebrew/opt/webp/include" >> mupdf/user.make; \
 		echo "SYS_LIBARCHIVE_CFLAGS := -I/opt/homebrew/opt/libarchive/include" >> mupdf/user.make; \
 		echo "SYS_LIBARCHIVE_LIBS := -L/opt/homebrew/opt/libarchive/lib -larchive" >> mupdf/user.make; \
+		echo "SYS_WEBP_CFLAGS := -I/opt/homebrew/opt/webp/include" >> mupdf/user.make; \
+		echo "SYS_WEBP_LIBS := -L/opt/homebrew/opt/webp/lib -lwebp -lwebpdemux" >> mupdf/user.make; \
+		echo "Downloading and applying WebP patch..."; \
+		if [ ! -f webp-upstream-697749.patch ]; then \
+			curl -o webp-upstream-697749.patch \
+				https://raw.githubusercontent.com/koreader/koreader-base/30ddfa05d67a8db1118326141b02bb002e2e11c4/thirdparty/mupdf/webp-upstream-697749.patch; \
+		fi; \
+		patch -d mupdf -p1 < webp-upstream-697749.patch; \
 	else \
 		echo "MuPDF repository already exists"; \
 	fi
 
-# Build MuPDF with libarchive support
+# Build MuPDF with libarchive and WebP support
 build-mupdf:
-	@echo "Building MuPDF with libarchive support..."
+	@echo "Building MuPDF with libarchive and WebP support..."
 	@LIBARCHIVE_PC=$$(find /opt/homebrew -name "libarchive.pc" -type f | head -1); \
-	if [ -n "$$LIBARCHIVE_PC" ]; then \
+	WEBP_PC=$$(find /opt/homebrew -name "libwebp.pc" -type f | head -1); \
+	if [ -n "$$LIBARCHIVE_PC" ] && [ -n "$$WEBP_PC" ]; then \
 		LIBARCHIVE_DIR=$$(dirname "$$LIBARCHIVE_PC"); \
+		WEBP_DIR=$$(dirname "$$WEBP_PC"); \
 		echo "Found libarchive.pc at: $$LIBARCHIVE_PC"; \
-		echo "Using PKG_CONFIG_PATH: $$LIBARCHIVE_DIR"; \
-		cd mupdf && env PKG_CONFIG_PATH="$$LIBARCHIVE_DIR:$$PKG_CONFIG_PATH" $(MAKE) HAVE_SYS_LIBARCHIVE=yes libs; \
+		echo "Found libwebp.pc at: $$WEBP_PC"; \
+		echo "Using PKG_CONFIG_PATH: $$LIBARCHIVE_DIR:$$WEBP_DIR"; \
+		cd mupdf && env PKG_CONFIG_PATH="$$LIBARCHIVE_DIR:$$WEBP_DIR:$$PKG_CONFIG_PATH" $(MAKE) HAVE_SYS_LIBARCHIVE=yes HAVE_WEBP=yes libs; \
 	else \
-		echo "Error: libarchive.pc not found"; \
+		echo "Error: Required libraries not found"; \
+		if [ -z "$$LIBARCHIVE_PC" ]; then echo "libarchive.pc not found"; fi; \
+		if [ -z "$$WEBP_PC" ]; then echo "libwebp.pc not found"; fi; \
 		exit 1; \
 	fi
 
@@ -109,6 +126,7 @@ $(BUILD_DIR)/%.o: $(CLI_DIR)/%.cpp | $(BUILD_DIR)
 clean:
 	rm -rf $(BUILD_DIR)
 	rm -f $(TARGET)
+	rm -f webp-upstream-697749.patch
 
 # Clean MuPDF (use with caution - will require re-download and rebuild)
 clean-mupdf:
