@@ -90,8 +90,6 @@ build-libarchive:
 
 # Build MuPDF with custom libarchive support for CBR/CBZ files and WebP support
 build-mupdf: build-libarchive
-	@echo "Installing development packages for CBR support and HTML parsing..."
-	@apt-get update && apt-get install -y libgumbo-dev libwebp-dev || echo "Warning: Could not install some dev packages"
 	@echo "Building minimal MuPDF with custom libarchive support for CBR/CBZ files and WebP support..."
 	@cd $(BASE_PATH)/mupdf && $(MAKE) libs \
 		CFLAGS="-std=c17 -D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0 -DHAVE_LIBARCHIVE -DHAVE_WEBP -Iinclude" \
