@@ -129,6 +129,11 @@ if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
         applyFontConfiguration(config);
     });
 
+    // Set up font close callback to trigger redraw
+    m_guiManager->setFontCloseCallback([this]() {
+        markDirty(); // Force redraw to clear menu
+    });
+
     // TODO: Temporarily disable auto-loading saved config to test if that's causing the crash
     /*
     // Now it's safe to apply saved configuration and update GUI
@@ -225,8 +230,9 @@ void App::run()
             if (m_guiManager && m_guiManager->isFontMenuVisible()) {
                 shouldRender = true; // Always render when font menu is visible
             } else {
-                shouldRender = (m_needsRedraw || panningChanged) && 
-                              (currentTime - lastRenderTime) >= 16; // Max 60 FPS to prevent overload
+                // Force render if marked dirty (e.g., after menu close) or other conditions
+                shouldRender = m_needsRedraw || panningChanged || 
+                              ((currentTime - lastRenderTime) >= 16); // More aggressive rendering
             }
             
             bool doRender = false;
@@ -2416,6 +2422,9 @@ void App::applyFontConfiguration(const FontConfig& config)
                 
                 // Force re-render of current page
                 markDirty();
+                
+                // Force cache clear to ensure CSS changes take effect
+                muDoc->clearCache();
                 
                 // Close the font menu after successful application
                 if (m_guiManager && m_guiManager->isFontMenuVisible()) {

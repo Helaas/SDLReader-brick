@@ -72,6 +72,14 @@ public:
     }
 
     /**
+     * @brief Set callback for when font menu is closed
+     * @param callback Function to call when Close is pressed
+     */
+    void setFontCloseCallback(std::function<void()> callback) {
+        m_closeCallback = callback;
+    }
+
+    /**
      * @brief Set the current font configuration (for initialization)
      * @param config Current font config
      */
@@ -99,7 +107,9 @@ private:
     FontManager m_fontManager;
     FontConfig m_currentConfig;
     FontConfig m_tempConfig; // Temporary config for UI editing
+    // Callbacks
     std::function<void(const FontConfig&)> m_fontApplyCallback;
+    std::function<void()> m_closeCallback;
     
     // ImGui font for preview
     ImFont* m_previewFont = nullptr;

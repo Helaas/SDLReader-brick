@@ -246,10 +246,7 @@ void GuiManager::renderFontMenu() {
     ImGui::Text("Preview:");
     ImGui::BeginChild("Preview", ImVec2(0, 100), true);
     
-    // Update preview font if needed
-    updatePreviewFont();
-    
-    // Draw preview text
+    // Show preview text with current selection info
     if (m_previewFont) {
         ImGui::PushFont(m_previewFont);
         ImGui::Text("The quick brown fox jumps over the lazy dog.");
@@ -260,6 +257,11 @@ void GuiManager::renderFontMenu() {
         ImGui::Text("The quick brown fox jumps over the lazy dog.");
         ImGui::Text("0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ");
         ImGui::Text("abcdefghijklmnopqrstuvwxyz !@#$%%^&*()");
+        
+        // Show current selection details
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1), "Selected: %s at %dpt", 
+                          m_tempConfig.fontName.c_str(), m_tempConfig.fontSize);
         ImGui::TextColored(ImVec4(1, 1, 0, 1), "(Preview using default font - selected font will be used in documents)");
     }
     
@@ -307,6 +309,11 @@ void GuiManager::renderFontMenu() {
         int result = snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
         if (result < 0 || result >= sizeof(m_fontSizeInput)) {
             strcpy(m_fontSizeInput, "12");  // Safe fallback
+        }
+        
+        // Trigger redraw to clear menu from screen
+        if (m_closeCallback) {
+            m_closeCallback();
         }
     }
 
