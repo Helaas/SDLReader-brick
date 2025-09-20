@@ -242,6 +242,7 @@ void App::handleEvent(const SDL_Event &event)
             }
             break;
         case SDLK_RIGHT:
+            m_keyboardRightHeld = true;
             if (!isInScrollTimeout()) {
                 handleDpadNudgeRight();
                 updatePageDisplayTime();
@@ -249,6 +250,7 @@ void App::handleEvent(const SDL_Event &event)
             }
             break;
         case SDLK_LEFT:
+            m_keyboardLeftHeld = true;
             if (!isInScrollTimeout()) {
                 handleDpadNudgeLeft();
                 updatePageDisplayTime();
@@ -256,6 +258,7 @@ void App::handleEvent(const SDL_Event &event)
             }
             break;
         case SDLK_UP:
+            m_keyboardUpHeld = true;
             if (!isInScrollTimeout()) {
                 handleDpadNudgeUp();
                 updatePageDisplayTime();
@@ -263,6 +266,7 @@ void App::handleEvent(const SDL_Event &event)
             }
             break;
         case SDLK_DOWN:
+            m_keyboardDownHeld = true;
             if (!isInScrollTimeout()) {
                 handleDpadNudgeDown();
                 updatePageDisplayTime();
@@ -402,6 +406,54 @@ void App::handleEvent(const SDL_Event &event)
             break;
         default:
             // Unknown keys are ignored
+            break;
+        }
+        break;
+    case SDL_KEYUP:
+        switch (event.key.keysym.sym)
+        {
+        case SDLK_RIGHT:
+            m_keyboardRightHeld = false;
+            if (m_edgeTurnHoldRight > 0.0f) { // Only set cooldown if timer was actually running
+                m_edgeTurnCooldownRight = SDL_GetTicks() / 1000.0f;
+                printf("DEBUG: Keyboard Right edge-turn cancelled, timer was %.3f, cooldown set to %.3f\n", 
+                       m_edgeTurnHoldRight, m_edgeTurnCooldownRight);
+            }
+            m_edgeTurnHoldRight = 0.0f; // Reset edge timer when key released
+            markDirty(); // Trigger redraw to hide progress indicator
+            break;
+        case SDLK_LEFT:
+            m_keyboardLeftHeld = false;
+            if (m_edgeTurnHoldLeft > 0.0f) { // Only set cooldown if timer was actually running
+                m_edgeTurnCooldownLeft = SDL_GetTicks() / 1000.0f;
+                printf("DEBUG: Keyboard Left edge-turn cancelled, timer was %.3f, cooldown set to %.3f\n", 
+                       m_edgeTurnHoldLeft, m_edgeTurnCooldownLeft);
+            }
+            m_edgeTurnHoldLeft = 0.0f; // Reset edge timer when key released
+            markDirty(); // Trigger redraw to hide progress indicator
+            break;
+        case SDLK_UP:
+            m_keyboardUpHeld = false;
+            if (m_edgeTurnHoldUp > 0.0f) { // Only set cooldown if timer was actually running
+                m_edgeTurnCooldownUp = SDL_GetTicks() / 1000.0f;
+                printf("DEBUG: Keyboard Up edge-turn cancelled, timer was %.3f, cooldown set to %.3f\n", 
+                       m_edgeTurnHoldUp, m_edgeTurnCooldownUp);
+            }
+            m_edgeTurnHoldUp = 0.0f; // Reset edge timer when key released
+            markDirty(); // Trigger redraw to hide progress indicator
+            break;
+        case SDLK_DOWN:
+            m_keyboardDownHeld = false;
+            if (m_edgeTurnHoldDown > 0.0f) { // Only set cooldown if timer was actually running
+                m_edgeTurnCooldownDown = SDL_GetTicks() / 1000.0f;
+                printf("DEBUG: Keyboard Down edge-turn cancelled, timer was %.3f, cooldown set to %.3f\n", 
+                       m_edgeTurnHoldDown, m_edgeTurnCooldownDown);
+            }
+            m_edgeTurnHoldDown = 0.0f; // Reset edge timer when key released
+            markDirty(); // Trigger redraw to hide progress indicator
+            break;
+        default:
+            // Unknown key releases are ignored
             break;
         }
         break;
@@ -999,10 +1051,11 @@ void App::renderUI()
     }
     
     // Render edge-turn progress indicator - only show when:
-    // 1. D-pad is actively held and timer is active
+    // 1. D-pad or keyboard arrow is actively held and timer is active
     // 2. Content doesn't fit on screen in the movement direction (scrollable)
     // 3. There's a valid page to navigate to in the pressed direction
-    bool dpadHeld = m_dpadLeftHeld || m_dpadRightHeld || m_dpadUpHeld || m_dpadDownHeld;
+    bool inputHeld = m_dpadLeftHeld || m_dpadRightHeld || m_dpadUpHeld || m_dpadDownHeld ||
+                     m_keyboardLeftHeld || m_keyboardRightHeld || m_keyboardUpHeld || m_keyboardDownHeld;
     float maxEdgeHold = std::max({m_edgeTurnHoldRight, m_edgeTurnHoldLeft, m_edgeTurnHoldUp, m_edgeTurnHoldDown});
     
     // Check scroll limits for each direction
@@ -1018,20 +1071,20 @@ void App::renderUI()
     // Only show progress bar when content doesn't fit in the movement direction
     // AND there's a valid page to navigate to
     bool validDirection = false;
-    if (m_dpadRightHeld && m_edgeTurnHoldRight > 0.0f && canGoRight && maxScrollX > 0) {
+    if ((m_dpadRightHeld || m_keyboardRightHeld) && m_edgeTurnHoldRight > 0.0f && canGoRight && maxScrollX > 0) {
         validDirection = true; // Show for horizontal movement when content doesn't fit horizontally
     }
-    if (m_dpadLeftHeld && m_edgeTurnHoldLeft > 0.0f && canGoLeft && maxScrollX > 0) {
+    if ((m_dpadLeftHeld || m_keyboardLeftHeld) && m_edgeTurnHoldLeft > 0.0f && canGoLeft && maxScrollX > 0) {
         validDirection = true; // Show for horizontal movement when content doesn't fit horizontally
     }
-    if (m_dpadDownHeld && m_edgeTurnHoldDown > 0.0f && canGoDown && maxScrollY > 0) {
+    if ((m_dpadDownHeld || m_keyboardDownHeld) && m_edgeTurnHoldDown > 0.0f && canGoDown && maxScrollY > 0) {
         validDirection = true; // Show for vertical movement when content doesn't fit vertically
     }
-    if (m_dpadUpHeld && m_edgeTurnHoldUp > 0.0f && canGoUp && maxScrollY > 0) {
+    if ((m_dpadUpHeld || m_keyboardUpHeld) && m_edgeTurnHoldUp > 0.0f && canGoUp && maxScrollY > 0) {
         validDirection = true; // Show for vertical movement when content doesn't fit vertically
     }
     
-    if (dpadHeld && maxEdgeHold > 0.0f && validDirection) {
+    if (inputHeld && maxEdgeHold > 0.0f && validDirection) {
         float progress = maxEdgeHold / m_edgeTurnThreshold;
         if (progress > 0.05f) { // Only show indicator after 5% progress to avoid flicker
             // Enhance progress visualization for better completion feedback
@@ -1042,19 +1095,19 @@ void App::renderUI()
             int indicatorX = 0, indicatorY = 0;
             int barWidth = 200, barHeight = 20;
             
-            if (m_edgeTurnHoldRight > 0.0f && m_dpadRightHeld) {
+            if (m_edgeTurnHoldRight > 0.0f && (m_dpadRightHeld || m_keyboardRightHeld)) {
                 direction = "Next Page";
                 indicatorX = currentWindowWidth - barWidth - 20;
                 indicatorY = currentWindowHeight / 2;
-            } else if (m_edgeTurnHoldLeft > 0.0f && m_dpadLeftHeld) {
+            } else if (m_edgeTurnHoldLeft > 0.0f && (m_dpadLeftHeld || m_keyboardLeftHeld)) {
                 direction = "Previous Page";
                 indicatorX = 20;
                 indicatorY = currentWindowHeight / 2;
-            } else if (m_edgeTurnHoldDown > 0.0f && m_dpadDownHeld) {
+            } else if (m_edgeTurnHoldDown > 0.0f && (m_dpadDownHeld || m_keyboardDownHeld)) {
                 direction = "Next Page";
                 indicatorX = (currentWindowWidth - barWidth) / 2;
                 indicatorY = currentWindowHeight - 60;
-            } else if (m_edgeTurnHoldUp > 0.0f && m_dpadUpHeld) {
+            } else if (m_edgeTurnHoldUp > 0.0f && (m_dpadUpHeld || m_keyboardUpHeld)) {
                 direction = "Previous Page";
                 indicatorX = (currentWindowWidth - barWidth) / 2;
                 indicatorY = 40;
@@ -1547,16 +1600,16 @@ bool App::updateHeldPanning(float dt)
     bool changed = false;
     float dx = 0.0f, dy = 0.0f;
 
-    if (m_dpadLeftHeld) {
+    if (m_dpadLeftHeld || m_keyboardLeftHeld) {
         dx += 1.0f;
     }
-    if (m_dpadRightHeld) {
+    if (m_dpadRightHeld || m_keyboardRightHeld) {
         dx -= 1.0f;
     }
-    if (m_dpadUpHeld) {
+    if (m_dpadUpHeld || m_keyboardUpHeld) {
         dy += 1.0f;
     }
-    if (m_dpadDownHeld) {
+    if (m_dpadDownHeld || m_keyboardDownHeld) {
         dy -= 1.0f;
     }
 
@@ -1657,7 +1710,7 @@ bool App::updateHeldPanning(float dt)
         // Only accumulate edge-turn time when not in scroll timeout AND not actively scrolling
         if (maxX == 0)
         {
-            if (m_dpadRightHeld) {
+            if (m_dpadRightHeld || m_keyboardRightHeld) {
                 float oldTime = m_edgeTurnHoldRight;
                 m_edgeTurnHoldRight += dt;
                 if (oldTime == 0.0f && m_edgeTurnHoldRight > 0.0f) {
@@ -1666,7 +1719,7 @@ bool App::updateHeldPanning(float dt)
             } else {
                 m_edgeTurnHoldRight = 0.0f;
             }
-            if (m_dpadLeftHeld) {
+            if (m_dpadLeftHeld || m_keyboardLeftHeld) {
                 float oldTime = m_edgeTurnHoldLeft;
                 m_edgeTurnHoldLeft += dt;
                 if (oldTime == 0.0f && m_edgeTurnHoldLeft > 0.0f) {
@@ -1681,29 +1734,29 @@ bool App::updateHeldPanning(float dt)
             // Use small tolerance for edge detection to handle rounding issues
             const int edgeTolerance = 2; // pixels
             
-            if (m_scrollX <= (-maxX + edgeTolerance) && m_dpadRightHeld) {
+            if (m_scrollX <= (-maxX + edgeTolerance) && (m_dpadRightHeld || m_keyboardRightHeld)) {
                 float oldTime = m_edgeTurnHoldRight;
                 m_edgeTurnHoldRight += dt;
                 if (oldTime == 0.0f && m_edgeTurnHoldRight > 0.0f) {
                     printf("DEBUG: Right edge-turn timer started (scroll-based, scrollX=%d, threshold=%d)\n", m_scrollX, -maxX + edgeTolerance);
                 }
             } else {
-                if (m_dpadRightHeld && m_edgeTurnHoldRight > 0.0f) {
+                if ((m_dpadRightHeld || m_keyboardRightHeld) && m_edgeTurnHoldRight > 0.0f) {
                     printf("DEBUG: Right edge-turn timer stopped (scrollX=%d, threshold=%d, held=%s)\n", 
-                           m_scrollX, -maxX + edgeTolerance, m_dpadRightHeld ? "YES" : "NO");
+                           m_scrollX, -maxX + edgeTolerance, (m_dpadRightHeld || m_keyboardRightHeld) ? "YES" : "NO");
                 }
                 m_edgeTurnHoldRight = 0.0f;
             }
-            if (m_scrollX >= (maxX - edgeTolerance) && m_dpadLeftHeld) {
+            if (m_scrollX >= (maxX - edgeTolerance) && (m_dpadLeftHeld || m_keyboardLeftHeld)) {
                 float oldTime = m_edgeTurnHoldLeft;
                 m_edgeTurnHoldLeft += dt;
                 if (oldTime == 0.0f && m_edgeTurnHoldLeft > 0.0f) {
                     printf("DEBUG: Left edge-turn timer started (scroll-based, scrollX=%d, threshold=%d)\n", m_scrollX, maxX - edgeTolerance);
                 }
             } else {
-                if (m_dpadLeftHeld && m_edgeTurnHoldLeft > 0.0f) {
+                if ((m_dpadLeftHeld || m_keyboardLeftHeld) && m_edgeTurnHoldLeft > 0.0f) {
                     printf("DEBUG: Left edge-turn timer stopped (scrollX=%d, threshold=%d, held=%s)\n", 
-                           m_scrollX, maxX - edgeTolerance, m_dpadLeftHeld ? "YES" : "NO");
+                           m_scrollX, maxX - edgeTolerance, (m_dpadLeftHeld || m_keyboardLeftHeld) ? "YES" : "NO");
                 }
                 m_edgeTurnHoldLeft = 0.0f;
             }
@@ -1763,7 +1816,7 @@ bool App::updateHeldPanning(float dt)
         if (maxY == 0)
         {
             // Page fits vertically: treat sustained up/down as page turns
-            if (m_dpadDownHeld) {
+            if (m_dpadDownHeld || m_keyboardDownHeld) {
                 float oldTime = m_edgeTurnHoldDown;
                 m_edgeTurnHoldDown += dt;
                 if (oldTime == 0.0f && m_edgeTurnHoldDown > 0.0f) {
@@ -1772,7 +1825,7 @@ bool App::updateHeldPanning(float dt)
             } else {
                 m_edgeTurnHoldDown = 0.0f;
             }
-            if (m_dpadUpHeld) {
+            if (m_dpadUpHeld || m_keyboardUpHeld) {
                 float oldTime = m_edgeTurnHoldUp;
                 m_edgeTurnHoldUp += dt;
                 if (oldTime == 0.0f && m_edgeTurnHoldUp > 0.0f) {
@@ -1788,7 +1841,7 @@ bool App::updateHeldPanning(float dt)
             const int edgeTolerance = 2; // pixels
             
             // Bottom edge & still pushing down? (down moves view further down in your scheme: dy < 0)
-            if (m_scrollY <= (-maxY + edgeTolerance) && m_dpadDownHeld) {
+            if (m_scrollY <= (-maxY + edgeTolerance) && (m_dpadDownHeld || m_keyboardDownHeld)) {
                 float oldTime = m_edgeTurnHoldDown;
                 m_edgeTurnHoldDown += dt;
                 if (oldTime == 0.0f && m_edgeTurnHoldDown > 0.0f) {
@@ -1799,7 +1852,7 @@ bool App::updateHeldPanning(float dt)
             }
 
             // Top edge & still pushing up?
-            if (m_scrollY >= (maxY - edgeTolerance) && m_dpadUpHeld) {
+            if (m_scrollY >= (maxY - edgeTolerance) && (m_dpadUpHeld || m_keyboardUpHeld)) {
                 float oldTime = m_edgeTurnHoldUp;
                 m_edgeTurnHoldUp += dt;
                 if (oldTime == 0.0f && m_edgeTurnHoldUp > 0.0f) {

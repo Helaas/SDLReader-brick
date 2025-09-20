@@ -101,6 +101,12 @@ private:
     bool m_dpadUpHeld{false};
     bool m_dpadDownHeld{false};
 
+    // Keyboard arrow key hold state
+    bool m_keyboardLeftHeld{false};
+    bool m_keyboardRightHeld{false};
+    bool m_keyboardUpHeld{false};
+    bool m_keyboardDownHeld{false};
+
     // Pan speed (pixels per second)
     float m_dpadPanSpeed{600.0f};
 
