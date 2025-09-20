@@ -729,3 +729,27 @@ void MuPdfDocument::prerenderAdjacentPagesAsync(int currentPage, int scale)
         m_prerenderActive = false;
     });
 }
+
+void MuPdfDocument::setUserCSS(const std::string& css) {
+    std::lock_guard<std::mutex> lock(m_renderMutex);
+    
+    if (!m_ctx || !m_doc) {
+        std::cerr << "Cannot set user CSS: document not open" << std::endl;
+        return;
+    }
+    
+    m_userCSS = css;
+    
+    fz_try(m_ctx.get()) {
+        // Apply CSS to the document
+        fz_set_user_css(m_ctx.get(), css.c_str());
+        
+        // Clear cache since CSS changes affect rendering
+        clearCache();
+        
+        std::cout << "User CSS applied successfully" << std::endl;
+    }
+    fz_catch(m_ctx.get()) {
+        std::cerr << "Failed to set user CSS: " << fz_caught_message(m_ctx.get()) << std::endl;
+    }
+}

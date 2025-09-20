@@ -52,6 +52,10 @@ public:
     void prerenderAdjacentPages(int currentPage, int scale);
     void prerenderAdjacentPagesAsync(int currentPage, int scale);
 
+    // CSS styling for documents (EPUB/MOBI)
+    void setUserCSS(const std::string& css);
+    std::string getUserCSS() const { return m_userCSS; }
+
 private:
     // Use smart pointers to manage MuPDF types safely
     struct ContextDeleter {
@@ -89,6 +93,9 @@ private:
     std::atomic<bool> m_prerenderActive{false};
     std::chrono::steady_clock::time_point m_lastPrerenderTime;
     static constexpr int PRERENDER_COOLDOWN_MS = 50; // Minimum time between prerendering operations
+    
+    // User CSS for styling documents
+    std::string m_userCSS;
 };
 
 #endif // MUPDF_DOCUMENT_H

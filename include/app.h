@@ -4,6 +4,8 @@
 #include "renderer.h"
 #include "document.h"
 #include "text_renderer.h"
+#include "gui_manager.h"
+#include "font_manager.h"
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
 #endif
@@ -34,7 +36,8 @@ public:
         ZoomOut,
         ToggleFullscreen,
         DragStart,
-        DragEnd
+        DragEnd,
+        ToggleFontMenu
     };
 
     // Constructor now accepts pre-initialized SDL_Window* and SDL_Renderer*
@@ -95,6 +98,10 @@ private:
     void toggleMirrorVertical();
     void toggleMirrorHorizontal();
 
+    // Font management
+    void toggleFontMenu();
+    void applyFontConfiguration(const FontConfig& config);
+
     // D-pad hold state
     bool m_dpadLeftHeld{false};
     bool m_dpadRightHeld{false};
@@ -119,6 +126,8 @@ private:
     std::unique_ptr<Renderer> m_renderer;
     std::unique_ptr<Document> m_document;
     std::unique_ptr<TextRenderer> m_textRenderer;
+    std::unique_ptr<GuiManager> m_guiManager;
+    std::unique_ptr<FontManager> m_fontManager;
     
     // Mutex to protect document access from multiple threads
     mutable std::mutex m_documentMutex;

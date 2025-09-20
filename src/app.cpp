@@ -3,6 +3,8 @@
 #include "text_renderer.h"
 #include "document.h"
 #include "mupdf_document.h"
+#include "gui_manager.h"
+#include "font_manager.h"
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
 #endif
@@ -108,6 +110,33 @@ if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
 
     // Initialize game controllers
     initializeGameControllers();
+
+    // Initialize font manager first
+    m_fontManager = std::make_unique<FontManager>();
+
+    // Load saved font configuration (but don't apply it yet)
+    FontConfig savedConfig = m_fontManager->loadConfig();
+    
+    // Initialize GUI manager AFTER font manager
+    m_guiManager = std::make_unique<GuiManager>();
+    if (!m_guiManager->initialize(window, renderer)) {
+        throw std::runtime_error("Failed to initialize GUI manager");
+    }
+
+    // Set up font apply callback AFTER all initialization is complete
+    m_guiManager->setFontApplyCallback([this](const FontConfig& config) {
+        std::cout << "DEBUG: Font apply callback triggered" << std::endl;
+        applyFontConfiguration(config);
+    });
+
+    // TODO: Temporarily disable auto-loading saved config to test if that's causing the crash
+    /*
+    // Now it's safe to apply saved configuration and update GUI
+    if (!savedConfig.fontPath.empty()) {
+        applyFontConfiguration(savedConfig);
+        m_guiManager->setCurrentFontConfig(savedConfig);
+    }
+    */
 }
 
 App::~App()
@@ -134,6 +163,19 @@ void App::run()
     SDL_Event event;
     while (m_running)
     {
+        // Track if we started an ImGui frame this iteration
+        bool imguiFrameStarted = false;
+        
+        // Check if we need to render ImGui this frame (before processing events)
+        bool willRenderImGui = m_guiManager && !m_inFakeSleep && 
+                              (m_guiManager->isFontMenuVisible() || m_needsRedraw);
+        
+        // Start ImGui frame BEFORE event processing if we'll render ImGui
+        if (willRenderImGui) {
+            m_guiManager->newFrame();
+            imguiFrameStarted = true;
+        }
+        
         while (SDL_PollEvent(&event) != 0)
         {
             // In fake sleep mode, ignore all SDL events (power button is handled by PowerHandler)
@@ -177,27 +219,52 @@ void App::run()
             // This helps prevent warping during rapid input changes
             static Uint32 lastRenderTime = 0;
             Uint32 currentTime = SDL_GetTicks();
-            bool shouldRender = (m_needsRedraw || panningChanged) && 
-                               (currentTime - lastRenderTime) >= 16; // Max 60 FPS to prevent overload
+            
+            // Force rendering if the font menu is visible, otherwise use normal logic
+            bool shouldRender = false;
+            if (m_guiManager && m_guiManager->isFontMenuVisible()) {
+                shouldRender = true; // Always render when font menu is visible
+            } else {
+                shouldRender = (m_needsRedraw || panningChanged) && 
+                              (currentTime - lastRenderTime) >= 16; // Max 60 FPS to prevent overload
+            }
+            
+            bool doRender = false;
             
             if (isZoomDebouncing()) {
                 // During zoom processing, show processing indicator with minimal rendering
                 // Re-render the current page at current scale with indicator overlay
                 if ((currentTime - lastRenderTime) >= 100) { // Even slower update rate to minimize flicker
-                    renderCurrentPage();  // Render at current (stable) zoom level
-                    renderUI();          // Add processing indicator
-                    m_renderer->present();
-                    lastRenderTime = currentTime;
+                    doRender = true;
                     // Important: Don't reset m_needsRedraw - preserve for final zoom render
                 }
             }
             else if (shouldRender) {
                 // Normal rendering when not processing zoom
+                doRender = true;
+            }
+            
+            if (doRender) {
+                // Start ImGui frame if we haven't already
+                if (m_guiManager && !imguiFrameStarted) {
+                    m_guiManager->newFrame();
+                }
+                
                 renderCurrentPage();
                 renderUI();
+                
+                // Render ImGui
+                if (m_guiManager) {
+                    m_guiManager->render();
+                }
+                
                 m_renderer->present();
-                m_needsRedraw = false;
                 lastRenderTime = currentTime;
+                
+                // Only reset needsRedraw for normal rendering, not during zoom debouncing
+                if (!isZoomDebouncing()) {
+                    m_needsRedraw = false;
+                }
             }
         } else {
             // Fake sleep mode - render black screen
@@ -213,6 +280,32 @@ void App::run()
 
 void App::handleEvent(const SDL_Event &event)
 {
+    // Debug only ESC key events
+    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
+        std::cout << "ESC key pressed" << std::endl;
+    }
+    
+    // Let ImGui handle the event first
+    if (m_guiManager && m_guiManager->handleEvent(event)) {
+        // If ImGui handled the event, don't process it further for non-keyboard events
+        if (event.type != SDL_KEYDOWN && event.type != SDL_KEYUP) {
+            return;
+        }
+        
+        // For keyboard events, check if ImGui wants keyboard capture only if menu is visible
+        if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
+            // If font menu is visible, let ImGui handle all keyboard input except specific cases
+            if (m_guiManager->isFontMenuVisible()) {
+                // ESC key should close the menu, so don't let ImGui consume it
+                if (event.key.keysym.sym == SDLK_ESCAPE) {
+                    // Let ESC through to close menu
+                } else if (m_guiManager->wantsCaptureKeyboard()) {
+                    return;
+                }
+            }
+        }
+    }
+
     AppAction action = AppAction::None;
 
     switch (event.type)
@@ -234,9 +327,26 @@ void App::handleEvent(const SDL_Event &event)
             action = AppAction::Quit;
             break;
         case SDLK_ESCAPE:
+            if (m_pageJumpInputActive) {
+                cancelPageJumpInput();
+            } else if (m_guiManager && m_guiManager->isFontMenuVisible()) {
+                // Close font menu if it's open
+                m_guiManager->toggleFontMenu();
+                // Force redraw to clear the menu from screen
+                markDirty();
+                // Don't allow quit action when closing menu
+            } else {
+                action = AppAction::Quit;
+            }
+            break;
         case SDLK_q:
             if (m_pageJumpInputActive) {
                 cancelPageJumpInput();
+            } else if (m_guiManager && m_guiManager->isFontMenuVisible()) {
+                // Close font menu if it's open - q key can also close menu
+                m_guiManager->toggleFontMenu();
+                // Force redraw to clear the menu from screen  
+                markDirty();
             } else {
                 action = AppAction::Quit;
             }
@@ -275,12 +385,18 @@ void App::handleEvent(const SDL_Event &event)
             break;
         case SDLK_PAGEDOWN:
             if (!isInPageChangeCooldown()) {
+                std::cout << "DEBUG: PAGEDOWN key pressed - calling goToNextPage" << std::endl;
                 goToNextPage();
+            } else {
+                std::cout << "DEBUG: PAGEDOWN blocked by cooldown" << std::endl;
             }
             break;
         case SDLK_PAGEUP:
             if (!isInPageChangeCooldown()) {
+                std::cout << "DEBUG: PAGEUP key pressed - calling goToPreviousPage" << std::endl;
                 goToPreviousPage();
+            } else {
+                std::cout << "DEBUG: PAGEUP blocked by cooldown" << std::endl;
             }
             break;
         case SDLK_PLUS:
@@ -371,6 +487,10 @@ void App::handleEvent(const SDL_Event &event)
             break;
         case SDLK_g:
             startPageJumpInput();
+            break;
+        case SDLK_m:
+            std::cout << "DEBUG: M key pressed - triggering ToggleFontMenu" << std::endl;
+            action = AppAction::ToggleFontMenu;
             break;
         case SDLK_p:
             printAppState();
@@ -749,6 +869,11 @@ void App::handleEvent(const SDL_Event &event)
     {
         fitPageToWindow();
         markDirty();
+    }
+    else if (action == AppAction::ToggleFontMenu)
+    {
+        std::cout << "DEBUG: Executing ToggleFontMenu action" << std::endl;
+        toggleFontMenu();
     }
 }
 
@@ -1175,9 +1300,11 @@ void App::renderUI()
 
 void App::goToNextPage()
 {
+    std::cout << "DEBUG: goToNextPage called - current page " << m_currentPage << std::endl;
     if (m_currentPage < m_pageCount - 1)
     {
         m_currentPage++;
+        std::cout << "DEBUG: Moving to page " << m_currentPage << std::endl;
         onPageChangedKeepZoom();
         alignToTopOfCurrentPage();
         updateScaleDisplayTime();
@@ -2254,4 +2381,56 @@ void App::confirmPageJumpInput()
     
     m_pageJumpInputActive = false;
     m_pageJumpBuffer.clear();
+}
+
+void App::toggleFontMenu()
+{
+    if (m_guiManager) {
+        m_guiManager->toggleFontMenu();
+        markDirty(); // Force redraw to show/hide the menu
+    }
+}
+
+void App::applyFontConfiguration(const FontConfig& config)
+{
+    if (!m_document) {
+        std::cerr << "Cannot apply font configuration: no document loaded" << std::endl;
+        return;
+    }
+    
+    std::cout << "DEBUG: Applying font config - " << config.fontName 
+              << " at " << config.fontSize << "pt" << std::endl;
+    
+    // Generate CSS from the font configuration
+    if (m_fontManager) {
+        std::string css = m_fontManager->generateCSS(config);
+        std::cout << "DEBUG: Generated CSS: " << css << std::endl;
+        
+        if (!css.empty()) {
+            // Try to cast to MuPDF document and apply CSS
+            if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get())) {
+                muDoc->setUserCSS(css);
+                
+                // Save the configuration
+                m_fontManager->saveConfig(config);
+                
+                // Force re-render of current page
+                markDirty();
+                
+                // Close the font menu after successful application
+                if (m_guiManager && m_guiManager->isFontMenuVisible()) {
+                    m_guiManager->toggleFontMenu();
+                }
+                
+                std::cout << "Applied font configuration: " << config.fontName 
+                         << " at " << config.fontSize << "pt" << std::endl;
+            } else {
+                std::cout << "CSS styling not supported for this document type" << std::endl;
+            }
+        } else {
+            std::cout << "Failed to generate CSS from font configuration" << std::endl;
+        }
+    } else {
+        std::cout << "FontManager not available" << std::endl;
+    }
 }

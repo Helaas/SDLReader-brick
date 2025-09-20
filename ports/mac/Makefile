@@ -21,6 +21,19 @@ TARGET = $(BIN_DIR)/$(TARGET_NAME)
 SRC_FILES = $(filter-out src/power_handler.cpp, $(wildcard $(SRC_DIR)/*.cpp))
 SRCS = $(SRC_FILES) $(wildcard $(CLI_DIR)/*.cpp)
 
+# Dear ImGui source files
+IMGUI_DIR = imgui
+IMGUI_SRCS = $(IMGUI_DIR)/imgui.cpp \
+             $(IMGUI_DIR)/imgui_demo.cpp \
+             $(IMGUI_DIR)/imgui_draw.cpp \
+             $(IMGUI_DIR)/imgui_tables.cpp \
+             $(IMGUI_DIR)/imgui_widgets.cpp \
+             $(IMGUI_DIR)/backends/imgui_impl_sdl2.cpp \
+             $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer2.cpp
+
+# Add ImGui sources to compilation
+SRCS += $(IMGUI_SRCS)
+
 # Local MuPDF Build Paths (using our custom build with libarchive support)
 MUPDF_BUILD_PATH = mupdf/build/release
 
@@ -30,7 +43,9 @@ MUPDF_BUILD_PATH = mupdf/build/release
 # -g: Include debugging information
 # -Imupdf/include: Include path for our custom MuPDF headers with libarchive support
 # -I$(SRC_DIR): Include path for project's own header files (e.g., app.h, document.h)
-CXXFLAGS = -std=c++17 -Wall -Wextra -g -Imupdf/include -I$(SRC_DIR) -I../../include
+# -I$(IMGUI_DIR): Include path for Dear ImGui headers
+# -I$(IMGUI_DIR)/backends: Include path for Dear ImGui backend headers
+CXXFLAGS = -std=c++17 -Wall -Wextra -g -Imupdf/include -I$(SRC_DIR) -I../../include -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends
 
 # Include paths for SDL2, SDL2_ttf, and SDL2_image
 # pkg-config --cflags SDL2_ttf SDL2_image added for explicit header paths
@@ -52,12 +67,28 @@ LIBS = -L$(MUPDF_BUILD_PATH) -lmupdf -lmupdf-third \
 # All object files (will be placed in the build directory)
 # Transforms src/file.cpp into build/file.o and cli/file.cpp into build/file.o
 OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS))) \
-       $(patsubst $(CLI_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(CLI_DIR)/%,$(SRCS)))
+       $(patsubst $(CLI_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(CLI_DIR)/%,$(SRCS))) \
+       $(BUILD_DIR)/imgui.o \
+       $(BUILD_DIR)/imgui_demo.o \
+       $(BUILD_DIR)/imgui_draw.o \
+       $(BUILD_DIR)/imgui_tables.o \
+       $(BUILD_DIR)/imgui_widgets.o \
+       $(BUILD_DIR)/imgui_impl_sdl2.o \
+       $(BUILD_DIR)/imgui_impl_sdlrenderer2.o
 
-.PHONY: all clean build-mupdf setup-mupdf clean-mupdf
+.PHONY: all clean build-mupdf setup-mupdf clean-mupdf setup-imgui
 
 # Default target
-all: $(BIN_DIR) $(BUILD_DIR) setup-mupdf build-mupdf $(TARGET)
+all: $(BIN_DIR) $(BUILD_DIR) setup-imgui setup-mupdf build-mupdf $(TARGET)
+
+# Setup Dear ImGui if it doesn't exist
+setup-imgui:
+	@if [ ! -d "imgui" ]; then \
+		echo "Cloning Dear ImGui repository..."; \
+		git clone --depth 1 --branch v1.90.9 https://github.com/ocornut/imgui.git; \
+	else \
+		echo "Dear ImGui repository already exists"; \
+	fi
 
 # Setup MuPDF repository if it doesn't exist
 setup-mupdf:
@@ -120,6 +151,28 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
 
 $(BUILD_DIR)/%.o: $(CLI_DIR)/%.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+
+# Compile ImGui source files
+$(BUILD_DIR)/imgui.o: $(IMGUI_DIR)/imgui.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+
+$(BUILD_DIR)/imgui_demo.o: $(IMGUI_DIR)/imgui_demo.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+
+$(BUILD_DIR)/imgui_draw.o: $(IMGUI_DIR)/imgui_draw.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+
+$(BUILD_DIR)/imgui_tables.o: $(IMGUI_DIR)/imgui_tables.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+
+$(BUILD_DIR)/imgui_widgets.o: $(IMGUI_DIR)/imgui_widgets.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+
+$(BUILD_DIR)/imgui_impl_sdl2.o: $(IMGUI_DIR)/backends/imgui_impl_sdl2.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+
+$(BUILD_DIR)/imgui_impl_sdlrenderer2.o: $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer2.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
 
 # Clean up compiled files and directories
