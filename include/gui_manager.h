@@ -121,6 +121,9 @@ private:
     char m_fontSizeInput[16] = "12";  // Increased buffer size for safety
     bool m_fontSizeChanged = false;
     
+    // Font names for dropdown (persistent to avoid lifetime issues)
+    std::vector<std::string> m_fontNames;
+    
     /**
      * @brief Render the font selection menu
      */

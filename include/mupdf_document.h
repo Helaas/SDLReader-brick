@@ -56,6 +56,9 @@ public:
     void setUserCSS(const std::string& css);
     std::string getUserCSS() const { return m_userCSS; }
 
+    // Get the MuPDF context for font loader installation
+    fz_context* getContext() { return m_ctx.get(); }
+
 private:
     // Use smart pointers to manage MuPDF types safely
     struct ContextDeleter {

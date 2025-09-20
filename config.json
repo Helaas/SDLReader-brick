@@ -1,5 +1,5 @@
 {
-  "fontPath": "./fonts/Inter-Bold.ttf",
-  "fontName": "Inter Bold",
-  "fontSize": 40
+  "fontPath": "./fonts/JetBrainsMono-Bold.ttf",
+  "fontName": "Jetbrainsmono Bold",
+  "fontSize": 24
 }

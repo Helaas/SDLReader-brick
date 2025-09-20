@@ -55,16 +55,26 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer) {
     m_currentConfig = m_fontManager.loadConfig();
     m_tempConfig = m_currentConfig;
     
+    // Populate font names for dropdown
+    const auto& fonts = m_fontManager.getAvailableFonts();
+    m_fontNames.clear();
+    for (const auto& font : fonts) {
+        m_fontNames.push_back(font.displayName);
+    }
+    
     // Update UI state and ensure we have a valid font selected
     if (!m_currentConfig.fontName.empty()) {
         m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
+        // Ensure the index is valid
+        if (m_selectedFontIndex < 0 || m_selectedFontIndex >= (int)fonts.size()) {
+            m_selectedFontIndex = 0;
+        }
         int result = snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
         if (result < 0 || result >= sizeof(m_fontSizeInput)) {
             strcpy(m_fontSizeInput, "12");  // Safe fallback
         }
     } else {
         // No saved config, initialize with first available font
-        const auto& fonts = m_fontManager.getAvailableFonts();
         if (!fonts.empty()) {
             m_selectedFontIndex = 0;
             m_tempConfig.fontPath = fonts[0].filePath;
@@ -94,27 +104,7 @@ bool GuiManager::handleEvent(const SDL_Event& event) {
         return false;
     }
 
-    // Debug: Print event information
-    if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_KEYDOWN) {
-        std::cout << "GUI: Handling event type " << event.type;
-        if (event.type == SDL_MOUSEBUTTONDOWN) {
-            std::cout << " at (" << event.button.x << "," << event.button.y << ")";
-        }
-        std::cout << std::endl;
-    }
-
     bool handled = ImGui_ImplSDL2_ProcessEvent(&event);
-    
-    // Debug: Check if ImGui wants input
-    if (m_showFontMenu) {
-        ImGuiIO& io = ImGui::GetIO();
-        if (event.type == SDL_MOUSEBUTTONDOWN) {
-            std::cout << "GUI: Mouse event - WantCaptureMouse=" << io.WantCaptureMouse 
-                     << ", MenuVisible=" << m_showFontMenu 
-                     << ", MousePos=(" << io.MousePos.x << "," << io.MousePos.y << ")" << std::endl;
-        }
-    }
-    
     return handled;
 }
 
@@ -186,10 +176,10 @@ void GuiManager::renderFontMenu() {
     ImVec2 center = ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
     
     ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(500, 400), ImGuiCond_Always);
-    ImGui::SetNextWindowFocus();  // Force focus to make it visible
+    // Removed SetNextWindowSize to allow natural sizing
+    // ImGui::SetNextWindowFocus();  // Removed - this can interfere with popup focus
 
-    if (!ImGui::Begin("Font Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse)) {
+    if (!ImGui::Begin("Font Settings", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove)) {
         ImGui::End();
         return;
     }
@@ -202,16 +192,39 @@ void GuiManager::renderFontMenu() {
         ImGui::TextColored(ImVec4(1, 1, 0, 1), "No fonts found in /fonts directory");
         ImGui::Text("Please add .ttf or .otf files to the fonts folder");
     } else {
-        std::vector<const char*> fontNames;
-        for (const auto& font : fonts) {
-            fontNames.push_back(font.displayName.c_str());
+        // Ensure selected index is valid
+        if (m_selectedFontIndex < 0 || m_selectedFontIndex >= (int)fonts.size()) {
+            m_selectedFontIndex = 0;
+        }
+        
+        // Update font names if needed
+        if (m_fontNames.size() != fonts.size()) {
+            m_fontNames.clear();
+            for (const auto& font : fonts) {
+                m_fontNames.push_back(font.displayName);
+            }
+        }
+        
+        // Create const char* array for ImGui
+        std::vector<const char*> fontNamesPtrs;
+        for (const auto& name : m_fontNames) {
+            fontNamesPtrs.push_back(name.c_str());
         }
 
-        if (ImGui::Combo("##FontFamily", &m_selectedFontIndex, fontNames.data(), fontNames.size())) {
-            // Font selection changed
-            const FontInfo& selectedFont = fonts[m_selectedFontIndex];
-            m_tempConfig.fontPath = selectedFont.filePath;
-            m_tempConfig.fontName = selectedFont.displayName;
+        if (ImGui::Combo("##FontFamily", &m_selectedFontIndex, fontNamesPtrs.data(), fontNamesPtrs.size())) {
+            // Font selection changed - ensure index is still valid
+            if (m_selectedFontIndex >= 0 && m_selectedFontIndex < (int)fonts.size()) {
+                const FontInfo& selectedFont = fonts[m_selectedFontIndex];
+                m_tempConfig.fontPath = selectedFont.filePath;
+                m_tempConfig.fontName = selectedFont.displayName;
+            } else {
+                // Reset to first font if index became invalid
+                m_selectedFontIndex = 0;
+                if (!fonts.empty()) {
+                    m_tempConfig.fontPath = fonts[0].filePath;
+                    m_tempConfig.fontName = fonts[0].displayName;
+                }
+            }
         }
     }
 
@@ -351,5 +364,5 @@ int GuiManager::findFontIndex(const std::string& fontName) const {
             return i;
         }
     }
-    return 0;
+    return 0; // Return 0 as safe default
 }

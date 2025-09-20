@@ -65,6 +65,13 @@ public:
     std::string generateCSS(const FontConfig& config) const;
 
     /**
+     * @brief Install custom font loader in MuPDF context
+     * @param ctx MuPDF context to install loader in
+     * @return true if successful, false otherwise
+     */
+    bool installFontLoader(void* ctx);
+
+    /**
      * @brief Save font configuration to file
      * @param config Configuration to save
      * @param configPath Path to save configuration (default: "./config.json")
@@ -80,6 +87,13 @@ public:
     FontConfig loadConfig(const std::string& configPath = "./config.json") const;
 
     /**
+     * @brief Get font file path by display name (public accessor for font loader)
+     * @param displayName The display name to search for
+     * @return Font file path if found, empty string otherwise
+     */
+    std::string getFontPathByName(const std::string& displayName) const;
+
+    /**
      * @brief Extract font name from TTF/OTF file
      * @param fontPath Path to the font file
      * @return Display name extracted from font, or filename if extraction fails
@@ -88,6 +102,7 @@ public:
 
 private:
     std::vector<FontInfo> m_availableFonts;
+    std::map<std::string, std::string> m_fontNameMap; // Maps display names to file paths
     
     /**
      * @brief Check if file has a supported font extension

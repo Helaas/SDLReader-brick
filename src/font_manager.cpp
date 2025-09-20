@@ -4,6 +4,12 @@
 #include <fstream>
 #include <algorithm>
 #include <sstream>
+#include <map>
+
+// MuPDF includes for font loading
+extern "C" {
+#include <mupdf/fitz.h>
+}
 
 // Simple JSON handling for config - in a real project you might use a proper JSON library
 namespace {
@@ -58,15 +64,58 @@ namespace {
         
         return config;
     }
+
+    // Global pointer to FontManager instance for the callback
+    FontManager* g_fontManagerInstance = nullptr;
+
+    /**
+     * @brief Custom font loader callback for MuPDF
+     * This function is called by MuPDF when it needs to load a font
+     */
+    fz_font* customFontLoader(fz_context* ctx, const char* name, int bold, int italic, int needs_exact_metrics) {
+        if (!g_fontManagerInstance || !name) {
+            return nullptr;
+        }
+
+        std::cout << "MuPDF requesting font: " << name 
+                  << " (bold=" << bold << ", italic=" << italic << ")" << std::endl;
+
+        // Use the public method to get the font path
+        std::string fontPath = g_fontManagerInstance->getFontPathByName(name);
+        if (!fontPath.empty()) {
+            std::cout << "Loading custom font: " << fontPath << std::endl;
+            
+            fz_font* font = nullptr;
+            fz_try(ctx) {
+                font = fz_new_font_from_file(ctx, name, fontPath.c_str(), 0, 1);
+            }
+            fz_catch(ctx) {
+                std::cerr << "Failed to load font from file: " << fontPath << std::endl;
+                return nullptr;
+            }
+            
+            if (font) {
+                std::cout << "Successfully loaded custom font: " << name << std::endl;
+                return font;
+            }
+        }
+
+        std::cout << "Font not found in custom loader: " << name << std::endl;
+        return nullptr;
+    }
 }
 
 FontManager::FontManager() {
+    // Set global instance for callback
+    g_fontManagerInstance = this;
+    
     // Constructor - scan fonts on creation
     scanFonts();
 }
 
 void FontManager::scanFonts(const std::string& fontsDir) {
     m_availableFonts.clear();
+    m_fontNameMap.clear();
     
     try {
         if (!std::filesystem::exists(fontsDir)) {
@@ -89,6 +138,16 @@ void FontManager::scanFonts(const std::string& fontsDir) {
                     }
                     
                     m_availableFonts.push_back(fontInfo);
+                    
+                    // Add to font name map for the loader
+                    // Use both the display name and a simplified version
+                    m_fontNameMap[fontInfo.displayName] = fontInfo.filePath;
+                    
+                    // Also add a simplified version without spaces for CSS compatibility
+                    std::string simpleName = fontInfo.displayName;
+                    std::replace(simpleName.begin(), simpleName.end(), ' ', '-');
+                    std::transform(simpleName.begin(), simpleName.end(), simpleName.begin(), ::tolower);
+                    m_fontNameMap[simpleName] = fontInfo.filePath;
                 }
             }
         }
@@ -100,6 +159,7 @@ void FontManager::scanFonts(const std::string& fontsDir) {
                   });
         
         std::cout << "Found " << m_availableFonts.size() << " fonts in " << fontsDir << std::endl;
+        std::cout << "Font name map contains " << m_fontNameMap.size() << " entries" << std::endl;
         
     } catch (const std::exception& e) {
         std::cerr << "Error scanning fonts directory: " << e.what() << std::endl;
@@ -114,22 +174,65 @@ const FontInfo* FontManager::findFontByName(const std::string& displayName) cons
     return (it != m_availableFonts.end()) ? &(*it) : nullptr;
 }
 
+std::string FontManager::getFontPathByName(const std::string& displayName) const {
+    auto it = m_fontNameMap.find(displayName);
+    if (it != m_fontNameMap.end()) {
+        return it->second;
+    }
+    return ""; // Return empty string if not found
+}
+
+bool FontManager::installFontLoader(void* ctx) {
+    if (!ctx) {
+        std::cerr << "Invalid MuPDF context provided to installFontLoader" << std::endl;
+        return false;
+    }
+
+    fz_context* fz_ctx = static_cast<fz_context*>(ctx);
+    
+    std::cout << "Installing custom font loader in MuPDF context" << std::endl;
+    
+    fz_try(fz_ctx) {
+        // Install our custom font loader
+        fz_install_load_system_font_funcs(fz_ctx, customFontLoader, nullptr, nullptr);
+        std::cout << "Custom font loader installed successfully" << std::endl;
+        return true;
+    }
+    fz_catch(fz_ctx) {
+        std::cerr << "Failed to install custom font loader: " << fz_caught_message(fz_ctx) << std::endl;
+        return false;
+    }
+}
+
 std::string FontManager::generateCSS(const FontConfig& config) const {
-    if (config.fontPath.empty()) {
+    if (config.fontPath.empty() || config.fontName.empty()) {
         return "";
     }
     
     std::ostringstream css;
     
-    // Generate font face declaration
-    css << "@font-face {\n";
-    css << "  font-family: 'UserSelectedFont';\n";
-    css << "  src: url('file://" << config.fontPath << "');\n";
+    // Create a simplified font name for CSS (remove spaces, lowercase)
+    std::string cssFontName = config.fontName;
+    std::replace(cssFontName.begin(), cssFontName.end(), ' ', '-');
+    std::transform(cssFontName.begin(), cssFontName.end(), cssFontName.begin(), ::tolower);
+    
+    // Apply font to all text elements with very high specificity
+    // Use the font name that our custom loader will recognize
+    css << "* {\n";
+    css << "  font-family: '" << config.fontName << "', '" << cssFontName << "', serif !important;\n";
+    css << "  font-size: " << config.fontSize << "pt !important;\n";
+    css << "  line-height: 1.4 !important;\n";
     css << "}\n\n";
     
-    // Apply font to all text elements with high priority
-    css << "body, *, p, div, span, h1, h2, h3, h4, h5, h6 {\n";
-    css << "  font-family: 'UserSelectedFont' !important;\n";
+    // More specific selectors for common EPUB/MOBI elements
+    css << "body, p, div, span, h1, h2, h3, h4, h5, h6 {\n";
+    css << "  font-family: '" << config.fontName << "', '" << cssFontName << "', serif !important;\n";
+    css << "  font-size: " << config.fontSize << "pt !important;\n";
+    css << "}\n\n";
+    
+    // Try to override any existing font-family declarations
+    css << "[style*=\"font-family\"], [style*=\"font-size\"] {\n";
+    css << "  font-family: '" << config.fontName << "', '" << cssFontName << "', serif !important;\n";
     css << "  font-size: " << config.fontSize << "pt !important;\n";
     css << "}\n";
     

@@ -114,6 +114,12 @@ if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
     // Initialize font manager first
     m_fontManager = std::make_unique<FontManager>();
 
+    // Install custom font loader for MuPDF if this is a MuPDF document
+    if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get())) {
+        m_fontManager->installFontLoader(muDoc->getContext());
+        std::cout << "DEBUG: Custom font loader installed for MuPDF document" << std::endl;
+    }
+
     // Load saved font configuration (but don't apply it yet)
     FontConfig savedConfig = m_fontManager->loadConfig();
     
@@ -314,8 +320,7 @@ void App::handleEvent(const SDL_Event &event)
 
     AppAction action = AppAction::None;
 
-    switch (event.type)
-    {
+    switch (event.type) {
     case SDL_QUIT:
         action = AppAction::Quit;
         break;
@@ -391,18 +396,12 @@ void App::handleEvent(const SDL_Event &event)
             break;
         case SDLK_PAGEDOWN:
             if (!isInPageChangeCooldown()) {
-                std::cout << "DEBUG: PAGEDOWN key pressed - calling goToNextPage" << std::endl;
                 goToNextPage();
-            } else {
-                std::cout << "DEBUG: PAGEDOWN blocked by cooldown" << std::endl;
             }
             break;
         case SDLK_PAGEUP:
             if (!isInPageChangeCooldown()) {
-                std::cout << "DEBUG: PAGEUP key pressed - calling goToPreviousPage" << std::endl;
                 goToPreviousPage();
-            } else {
-                std::cout << "DEBUG: PAGEUP blocked by cooldown" << std::endl;
             }
             break;
         case SDLK_PLUS:
@@ -495,7 +494,6 @@ void App::handleEvent(const SDL_Event &event)
             startPageJumpInput();
             break;
         case SDLK_m:
-            std::cout << "DEBUG: M key pressed - triggering ToggleFontMenu" << std::endl;
             action = AppAction::ToggleFontMenu;
             break;
         case SDLK_p:
@@ -542,8 +540,6 @@ void App::handleEvent(const SDL_Event &event)
             m_keyboardRightHeld = false;
             if (m_edgeTurnHoldRight > 0.0f) { // Only set cooldown if timer was actually running
                 m_edgeTurnCooldownRight = SDL_GetTicks() / 1000.0f;
-                printf("DEBUG: Keyboard Right edge-turn cancelled, timer was %.3f, cooldown set to %.3f\n", 
-                       m_edgeTurnHoldRight, m_edgeTurnCooldownRight);
             }
             m_edgeTurnHoldRight = 0.0f; // Reset edge timer when key released
             markDirty(); // Trigger redraw to hide progress indicator
@@ -552,8 +548,6 @@ void App::handleEvent(const SDL_Event &event)
             m_keyboardLeftHeld = false;
             if (m_edgeTurnHoldLeft > 0.0f) { // Only set cooldown if timer was actually running
                 m_edgeTurnCooldownLeft = SDL_GetTicks() / 1000.0f;
-                printf("DEBUG: Keyboard Left edge-turn cancelled, timer was %.3f, cooldown set to %.3f\n", 
-                       m_edgeTurnHoldLeft, m_edgeTurnCooldownLeft);
             }
             m_edgeTurnHoldLeft = 0.0f; // Reset edge timer when key released
             markDirty(); // Trigger redraw to hide progress indicator
@@ -562,8 +556,6 @@ void App::handleEvent(const SDL_Event &event)
             m_keyboardUpHeld = false;
             if (m_edgeTurnHoldUp > 0.0f) { // Only set cooldown if timer was actually running
                 m_edgeTurnCooldownUp = SDL_GetTicks() / 1000.0f;
-                printf("DEBUG: Keyboard Up edge-turn cancelled, timer was %.3f, cooldown set to %.3f\n", 
-                       m_edgeTurnHoldUp, m_edgeTurnCooldownUp);
             }
             m_edgeTurnHoldUp = 0.0f; // Reset edge timer when key released
             markDirty(); // Trigger redraw to hide progress indicator
@@ -572,8 +564,6 @@ void App::handleEvent(const SDL_Event &event)
             m_keyboardDownHeld = false;
             if (m_edgeTurnHoldDown > 0.0f) { // Only set cooldown if timer was actually running
                 m_edgeTurnCooldownDown = SDL_GetTicks() / 1000.0f;
-                printf("DEBUG: Keyboard Down edge-turn cancelled, timer was %.3f, cooldown set to %.3f\n", 
-                       m_edgeTurnHoldDown, m_edgeTurnCooldownDown);
             }
             m_edgeTurnHoldDown = 0.0f; // Reset edge timer when key released
             markDirty(); // Trigger redraw to hide progress indicator
@@ -772,8 +762,6 @@ void App::handleEvent(const SDL_Event &event)
                 m_dpadRightHeld = false;
                 if (m_edgeTurnHoldRight > 0.0f) { // Only set cooldown if timer was actually running
                     m_edgeTurnCooldownRight = SDL_GetTicks() / 1000.0f;
-                    printf("DEBUG: Right edge-turn cancelled, timer was %.3f, cooldown set to %.3f\n", 
-                           m_edgeTurnHoldRight, m_edgeTurnCooldownRight);
                 }
                 m_edgeTurnHoldRight = 0.0f; // Reset edge timer when button released
                 markDirty(); // Trigger redraw to hide progress indicator
@@ -782,8 +770,6 @@ void App::handleEvent(const SDL_Event &event)
                 m_dpadLeftHeld = false;
                 if (m_edgeTurnHoldLeft > 0.0f) { // Only set cooldown if timer was actually running
                     m_edgeTurnCooldownLeft = SDL_GetTicks() / 1000.0f;
-                    printf("DEBUG: Left edge-turn cancelled, timer was %.3f, cooldown set to %.3f\n", 
-                           m_edgeTurnHoldLeft, m_edgeTurnCooldownLeft);
                 }
                 m_edgeTurnHoldLeft = 0.0f; // Reset edge timer when button released
                 markDirty(); // Trigger redraw to hide progress indicator
@@ -792,8 +778,6 @@ void App::handleEvent(const SDL_Event &event)
                 m_dpadUpHeld = false;
                 if (m_edgeTurnHoldUp > 0.0f) { // Only set cooldown if timer was actually running
                     m_edgeTurnCooldownUp = SDL_GetTicks() / 1000.0f;
-                    printf("DEBUG: Up edge-turn cancelled, timer was %.3f, cooldown set to %.3f\n", 
-                           m_edgeTurnHoldUp, m_edgeTurnCooldownUp);
                 }
                 m_edgeTurnHoldUp = 0.0f; // Reset edge timer when button released
                 markDirty(); // Trigger redraw to hide progress indicator
@@ -802,8 +786,6 @@ void App::handleEvent(const SDL_Event &event)
                 m_dpadDownHeld = false;
                 if (m_edgeTurnHoldDown > 0.0f) { // Only set cooldown if timer was actually running
                     m_edgeTurnCooldownDown = SDL_GetTicks() / 1000.0f;
-                    printf("DEBUG: Down edge-turn cancelled, timer was %.3f, cooldown set to %.3f\n", 
-                           m_edgeTurnHoldDown, m_edgeTurnCooldownDown);
                 }
                 m_edgeTurnHoldDown = 0.0f; // Reset edge timer when button released
                 markDirty(); // Trigger redraw to hide progress indicator
@@ -878,7 +860,6 @@ void App::handleEvent(const SDL_Event &event)
     }
     else if (action == AppAction::ToggleFontMenu)
     {
-        std::cout << "DEBUG: Executing ToggleFontMenu action" << std::endl;
         toggleFontMenu();
     }
 }
@@ -1306,11 +1287,9 @@ void App::renderUI()
 
 void App::goToNextPage()
 {
-    std::cout << "DEBUG: goToNextPage called - current page " << m_currentPage << std::endl;
     if (m_currentPage < m_pageCount - 1)
     {
         m_currentPage++;
-        std::cout << "DEBUG: Moving to page " << m_currentPage << std::endl;
         onPageChangedKeepZoom();
         alignToTopOfCurrentPage();
         updateScaleDisplayTime();
@@ -1822,9 +1801,6 @@ bool App::updateHeldPanning(float dt)
             if (m_edgeTurnHoldDown < 0.01f) m_edgeTurnHoldDown = 0.0f;
         } else {
             // Hard reset during scroll timeout
-            if (m_edgeTurnHoldRight > 0.0f || m_edgeTurnHoldLeft > 0.0f || m_edgeTurnHoldUp > 0.0f || m_edgeTurnHoldDown > 0.0f) {
-                printf("DEBUG: Resetting edge-turn timers due to scroll timeout (timeout duration: %dms)\n", m_lastRenderDuration);
-            }
             m_edgeTurnHoldRight = 0.0f;
             m_edgeTurnHoldLeft = 0.0f;
             m_edgeTurnHoldUp = 0.0f;
@@ -1832,9 +1808,6 @@ bool App::updateHeldPanning(float dt)
         }
     } else if (scrollingOccurred) {
         // Reset edge-turn timers if user is actively scrolling - only start timer when stationary at edge
-        if (m_edgeTurnHoldRight > 0.0f || m_edgeTurnHoldLeft > 0.0f || m_edgeTurnHoldUp > 0.0f || m_edgeTurnHoldDown > 0.0f) {
-            printf("DEBUG: Resetting edge-turn timers due to active scrolling\n");
-        }
         m_edgeTurnHoldRight = 0.0f;
         m_edgeTurnHoldLeft = 0.0f;
         m_edgeTurnHoldUp = 0.0f;
@@ -1844,20 +1817,12 @@ bool App::updateHeldPanning(float dt)
         if (maxX == 0)
         {
             if (m_dpadRightHeld || m_keyboardRightHeld) {
-                float oldTime = m_edgeTurnHoldRight;
                 m_edgeTurnHoldRight += dt;
-                if (oldTime == 0.0f && m_edgeTurnHoldRight > 0.0f) {
-                    printf("DEBUG: Right edge-turn timer started (maxX=0)\n");
-                }
             } else {
                 m_edgeTurnHoldRight = 0.0f;
             }
             if (m_dpadLeftHeld || m_keyboardLeftHeld) {
-                float oldTime = m_edgeTurnHoldLeft;
                 m_edgeTurnHoldLeft += dt;
-                if (oldTime == 0.0f && m_edgeTurnHoldLeft > 0.0f) {
-                    printf("DEBUG: Left edge-turn timer started (maxX=0)\n");
-                }
             } else {
                 m_edgeTurnHoldLeft = 0.0f;
             }
