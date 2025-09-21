@@ -174,17 +174,10 @@ void App::run()
     SDL_Event event;
     while (m_running)
     {
-        // Track if we started an ImGui frame this iteration
-        bool imguiFrameStarted = false;
-        
-        // Check if we need to render ImGui this frame (before processing events)
-        bool willRenderImGui = m_guiManager && !m_inFakeSleep && 
-                              (m_guiManager->isFontMenuVisible() || m_needsRedraw);
-        
-        // Start ImGui frame BEFORE event processing if we'll render ImGui
-        if (willRenderImGui) {
+        // Always start ImGui frame at the beginning of each main loop iteration
+        // This ensures proper frame lifecycle management
+        if (m_guiManager && !m_inFakeSleep) {
             m_guiManager->newFrame();
-            imguiFrameStarted = true;
         }
         
         while (SDL_PollEvent(&event) != 0)
@@ -257,15 +250,10 @@ void App::run()
             }
             
             if (doRender) {
-                // Start ImGui frame if we haven't already
-                if (m_guiManager && !imguiFrameStarted) {
-                    m_guiManager->newFrame();
-                }
-                
                 renderCurrentPage();
                 renderUI();
                 
-                // Render ImGui
+                // Always render ImGui if we started a frame (which we always do when not in fake sleep)
                 if (m_guiManager) {
                     m_guiManager->render();
                 }
@@ -276,6 +264,12 @@ void App::run()
                 // Only reset needsRedraw for normal rendering, not during zoom debouncing
                 if (!isZoomDebouncing()) {
                     m_needsRedraw = false;
+                }
+            } else {
+                // Even if we don't render the main content, we must still finish the ImGui frame
+                // to maintain proper frame lifecycle
+                if (m_guiManager) {
+                    m_guiManager->render();
                 }
             }
         } else {
@@ -298,24 +292,33 @@ void App::handleEvent(const SDL_Event &event)
     }
     
     // Let ImGui handle the event first
-    if (m_guiManager && m_guiManager->handleEvent(event)) {
-        // If ImGui handled the event, don't process it further for non-keyboard events
-        if (event.type != SDL_KEYDOWN && event.type != SDL_KEYUP) {
+    bool imguiHandled = false;
+    if (m_guiManager) {
+        imguiHandled = m_guiManager->handleEvent(event);
+    }
+    
+    // Only block events if ImGui actually wants to capture them and the menu is visible
+    if (imguiHandled && m_guiManager && m_guiManager->isFontMenuVisible()) {
+        // For mouse events, only block if ImGui wants mouse capture
+        if ((event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP || 
+             event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEWHEEL) && 
+            m_guiManager->wantsCaptureMouse()) {
             return;
         }
         
-        // For keyboard events, check if ImGui wants keyboard capture only if menu is visible
+        // For keyboard events, be selective about what to block
         if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
-            // If font menu is visible, let ImGui handle all keyboard input except specific cases
-            if (m_guiManager->isFontMenuVisible()) {
-                // ESC key should close the menu, so don't let ImGui consume it
-                if (event.key.keysym.sym == SDLK_ESCAPE) {
-                    // Let ESC through to close menu
-                } else if (m_guiManager->wantsCaptureKeyboard()) {
-                    return;
-                }
+            // Always allow ESC through to close the menu
+            if (event.key.keysym.sym == SDLK_ESCAPE) {
+                // Let ESC through to close menu
+            } else if (m_guiManager->wantsCaptureKeyboard()) {
+                // Only block other keyboard events if ImGui actually wants keyboard capture
+                return;
             }
         }
+        
+        // Never block controller events - always let them through to the main app
+        // This includes SDL_CONTROLLERBUTTONDOWN, SDL_CONTROLLERBUTTONUP, SDL_CONTROLLERAXISMOTION
     }
 
     AppAction action = AppAction::None;
@@ -1367,7 +1370,16 @@ void App::zoom(int delta)
         if (isNextRenderLikelyExpensive()) {
             // Clear screen and show processing message without expensive page render
             m_renderer->clear(0, 0, 0, 255); // Black background
-            renderUI(); // Only render the UI overlay with processing message
+            
+            // Properly manage ImGui frame for direct rendering
+            if (m_guiManager) {
+                m_guiManager->newFrame();
+                renderUI(); // Only render the UI overlay with processing message
+                m_guiManager->render();
+            } else {
+                renderUI(); // Fallback if no GUI manager
+            }
+            
             m_renderer->present();
         }
     }
@@ -1401,7 +1413,16 @@ void App::zoomTo(int scale)
         if (isNextRenderLikelyExpensive()) {
             // Clear screen and show processing message without expensive page render
             m_renderer->clear(0, 0, 0, 255); // Black background
-            renderUI(); // Only render the UI overlay with processing message
+            
+            // Properly manage ImGui frame for direct rendering
+            if (m_guiManager) {
+                m_guiManager->newFrame();
+                renderUI(); // Only render the UI overlay with processing message
+                m_guiManager->render();
+            } else {
+                renderUI(); // Fallback if no GUI manager
+            }
+            
             m_renderer->present();
         }
     }
