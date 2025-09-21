@@ -21,7 +21,8 @@ namespace {
         oss << "{\n";
         oss << "  \"fontPath\": \"" << config.fontPath << "\",\n";
         oss << "  \"fontName\": \"" << config.fontName << "\",\n";
-        oss << "  \"fontSize\": " << config.fontSize << "\n";
+        oss << "  \"fontSize\": " << config.fontSize << ",\n";
+        oss << "  \"zoomStep\": " << config.zoomStep << "\n";
         oss << "}";
         return oss.str();
     }
@@ -46,14 +47,25 @@ namespace {
         auto findIntValue = [&json](const std::string& key) -> int {
             std::string searchKey = "\"" + key + "\": ";
             size_t start = json.find(searchKey);
-            if (start == std::string::npos) return 12;
+            if (start == std::string::npos) {
+                // Return appropriate defaults for different keys
+                if (key == "fontSize") return 12;
+                if (key == "zoomStep") return 10;
+                return 12;
+            }
             start += searchKey.length();
             size_t end = json.find_first_of(",\n}", start);
-            if (end == std::string::npos) return 12;
+            if (end == std::string::npos) {
+                if (key == "fontSize") return 12;
+                if (key == "zoomStep") return 10;
+                return 12;
+            }
             std::string valueStr = json.substr(start, end - start);
             try {
                 return std::stoi(valueStr);
             } catch (...) {
+                if (key == "fontSize") return 12;
+                if (key == "zoomStep") return 10;
                 return 12;
             }
         };
@@ -61,6 +73,7 @@ namespace {
         config.fontPath = findStringValue("fontPath");
         config.fontName = findStringValue("fontName");
         config.fontSize = findIntValue("fontSize");
+        config.zoomStep = findIntValue("zoomStep");
         
         return config;
     }

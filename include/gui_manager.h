@@ -100,6 +100,26 @@ public:
      */
     bool wantsCaptureKeyboard() const;
 
+    /**
+     * @brief Set callback for when jump to page is requested
+     * @param callback Function to call when page jump is requested
+     */
+    void setPageJumpCallback(std::function<void(int)> callback) {
+        m_pageJumpCallback = callback;
+    }
+
+    /**
+     * @brief Set the total page count for page jump validation
+     * @param pageCount Total number of pages in document
+     */
+    void setPageCount(int pageCount) { m_pageCount = pageCount; }
+
+    /**
+     * @brief Set current page number for display in page jump
+     * @param currentPage Current page number (0-based)
+     */
+    void setCurrentPage(int currentPage) { m_currentPage = currentPage; }
+
 private:
     bool m_initialized = false;
     bool m_showFontMenu = false;
@@ -107,18 +127,21 @@ private:
     FontManager m_fontManager;
     FontConfig m_currentConfig;
     FontConfig m_tempConfig; // Temporary config for UI editing
+    
+    // Page navigation
+    int m_pageCount = 0;
+    int m_currentPage = 0;
+    
     // Callbacks
     std::function<void(const FontConfig&)> m_fontApplyCallback;
     std::function<void()> m_closeCallback;
-    
-    // ImGui font for preview
-    ImFont* m_previewFont = nullptr;
-    std::string m_lastPreviewFontPath;
-    int m_lastPreviewFontSize = 0;
+    std::function<void(int)> m_pageJumpCallback;
     
     // UI state
     int m_selectedFontIndex = 0;
     char m_fontSizeInput[16] = "12";  // Increased buffer size for safety
+    char m_zoomStepInput[16] = "10";  // Zoom step input
+    char m_pageJumpInput[16] = "1";   // Page jump input
     bool m_fontSizeChanged = false;
     
     // Font names for dropdown (persistent to avoid lifetime issues)
@@ -128,11 +151,6 @@ private:
      * @brief Render the font selection menu
      */
     void renderFontMenu();
-    
-    /**
-     * @brief Update preview font if needed
-     */
-    void updatePreviewFont();
     
     /**
      * @brief Find index of font in available fonts list

@@ -12,6 +12,15 @@ GuiManager::GuiManager() {
     if (result < 0 || result >= sizeof(m_fontSizeInput)) {
         strcpy(m_fontSizeInput, "12");  // Safe fallback
     }
+    
+    // Initialize zoom step input
+    result = snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_currentConfig.zoomStep);
+    if (result < 0 || result >= sizeof(m_zoomStepInput)) {
+        strcpy(m_zoomStepInput, "10");  // Safe fallback
+    }
+    
+    // Initialize page jump input
+    strcpy(m_pageJumpInput, "1");  // Start with page 1
 }
 
 GuiManager::~GuiManager() {
@@ -146,9 +155,17 @@ void GuiManager::setCurrentFontConfig(const FontConfig& config) {
     if (!config.fontName.empty()) {
         m_selectedFontIndex = findFontIndex(config.fontName);
     }
+    
+    // Update font size input
     int result = snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", config.fontSize);
     if (result < 0 || result >= sizeof(m_fontSizeInput)) {
         strcpy(m_fontSizeInput, "12");  // Safe fallback
+    }
+    
+    // Update zoom step input
+    result = snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", config.zoomStep);
+    if (result < 0 || result >= sizeof(m_zoomStepInput)) {
+        strcpy(m_zoomStepInput, "10");  // Safe fallback
     }
 }
 
@@ -176,14 +193,17 @@ void GuiManager::renderFontMenu() {
     ImVec2 center = ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
     
     ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    // Removed SetNextWindowSize to allow natural sizing
-    // ImGui::SetNextWindowFocus();  // Removed - this can interfere with popup focus
+    ImGui::SetNextWindowSize(ImVec2(400, 0), ImGuiCond_Always); // Fixed width, auto height
 
-    if (!ImGui::Begin("Font Settings", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove)) {
+    if (!ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove)) {
         ImGui::End();
         return;
     }
 
+    // === FONT SETTINGS SECTION ===
+    ImGui::Text("Font Settings");
+    ImGui::Separator();
+    
     // Font selection dropdown
     ImGui::Text("Font Family:");
     
@@ -252,46 +272,87 @@ void GuiManager::renderFontMenu() {
     }
 
     ImGui::Spacing();
-    ImGui::Separator();
     ImGui::Spacing();
 
-    // Preview section
-    ImGui::Text("Preview:");
-    ImGui::BeginChild("Preview", ImVec2(0, 100), true);
+    // === ZOOM SETTINGS SECTION ===
+    ImGui::Text("Zoom Settings");
+    ImGui::Separator();
     
-    // Show preview text with current selection info
-    if (m_previewFont) {
-        ImGui::PushFont(m_previewFont);
-        ImGui::Text("The quick brown fox jumps over the lazy dog.");
-        ImGui::Text("0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-        ImGui::Text("abcdefghijklmnopqrstuvwxyz !@#$%%^&*()");
-        ImGui::PopFont();
-    } else {
-        ImGui::Text("The quick brown fox jumps over the lazy dog.");
-        ImGui::Text("0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-        ImGui::Text("abcdefghijklmnopqrstuvwxyz !@#$%%^&*()");
-        
-        // Show current selection details
-        ImGui::Spacing();
-        ImGui::TextColored(ImVec4(0.8f, 0.8f, 0.8f, 1), "Selected: %s at %dpt", 
-                          m_tempConfig.fontName.c_str(), m_tempConfig.fontSize);
-        ImGui::TextColored(ImVec4(1, 1, 0, 1), "(Preview using default font - selected font will be used in documents)");
+    ImGui::Text("Zoom Step (%%):");
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1), "Amount to zoom in/out with +/- keys");
+    
+    if (ImGui::InputText("##ZoomStep", m_zoomStepInput, sizeof(m_zoomStepInput), ImGuiInputTextFlags_CharsDecimal)) {
+        int newStep = std::atoi(m_zoomStepInput);
+        if (newStep >= 1 && newStep <= 50) {
+            m_tempConfig.zoomStep = newStep;
+        }
     }
     
-    ImGui::EndChild();
+    // Zoom step slider for easier adjustment
+    int tempZoomStep = m_tempConfig.zoomStep;
+    if (ImGui::SliderInt("##ZoomStepSlider", &tempZoomStep, 1, 50)) {
+        m_tempConfig.zoomStep = tempZoomStep;
+        int result = snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", tempZoomStep);
+        if (result < 0 || result >= sizeof(m_zoomStepInput)) {
+            strcpy(m_zoomStepInput, "10");  // Safe fallback
+        }
+    }
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    // === PAGE NAVIGATION SECTION ===
+    ImGui::Text("Page Navigation");
+    ImGui::Separator();
+    
+    // Current page display
+    ImGui::Text("Current Page: %d / %d", m_currentPage + 1, m_pageCount);
+    
+    ImGui::Text("Jump to Page:");
+    ImGui::SetNextItemWidth(100);
+    if (ImGui::InputText("##PageJump", m_pageJumpInput, sizeof(m_pageJumpInput), ImGuiInputTextFlags_CharsDecimal)) {
+        // Input is being edited, but we don't apply until Go button is pressed
+    }
+    
+    ImGui::SameLine();
+    bool validPageInput = false;
+    int targetPage = std::atoi(m_pageJumpInput);
+    if (targetPage >= 1 && targetPage <= m_pageCount) {
+        validPageInput = true;
+    }
+    
+    if (!validPageInput) {
+        ImGui::BeginDisabled();
+    }
+    
+    if (ImGui::Button("Go")) {
+        if (validPageInput && m_pageJumpCallback) {
+            m_pageJumpCallback(targetPage - 1); // Convert to 0-based
+        }
+    }
+    
+    if (!validPageInput) {
+        ImGui::EndDisabled();
+    }
+    
+    if (!validPageInput && targetPage != 0) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "Invalid page number");
+    }
 
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
-    // Buttons
+    // === BUTTONS SECTION ===
     bool hasValidFont = !fonts.empty() && m_selectedFontIndex >= 0 && m_selectedFontIndex < (int)fonts.size();
     
     if (!hasValidFont) {
         ImGui::BeginDisabled();
     }
     
-    if (ImGui::Button("Apply", ImVec2(100, 30))) {
+    if (ImGui::Button("Apply", ImVec2(90, 30))) {
         std::cout << "Apply button clicked!" << std::endl;
         if (hasValidFont && m_fontApplyCallback) {
             // Update current config
@@ -313,15 +374,21 @@ void GuiManager::renderFontMenu() {
 
     ImGui::SameLine();
     
-    if (ImGui::Button("Close", ImVec2(100, 30))) {
+    if (ImGui::Button("Close", ImVec2(90, 30))) {
         std::cout << "Close button clicked!" << std::endl;
         m_showFontMenu = false;
         // Reset temp config to current config
         m_tempConfig = m_currentConfig;
         m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
+        
+        // Reset input fields
         int result = snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
         if (result < 0 || result >= sizeof(m_fontSizeInput)) {
-            strcpy(m_fontSizeInput, "12");  // Safe fallback
+            strcpy(m_fontSizeInput, "12");
+        }
+        result = snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_currentConfig.zoomStep);
+        if (result < 0 || result >= sizeof(m_zoomStepInput)) {
+            strcpy(m_zoomStepInput, "10");
         }
         
         // Trigger redraw to clear menu from screen
@@ -332,29 +399,18 @@ void GuiManager::renderFontMenu() {
 
     ImGui::SameLine();
     
-    if (ImGui::Button("Reset to Default", ImVec2(120, 30))) {
+    if (ImGui::Button("Reset to Default", ImVec2(110, 30))) {
         // Reset to default config
         m_tempConfig = FontConfig();
         m_selectedFontIndex = 0;
-        int result = snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_tempConfig.fontSize);
-        if (result < 0 || result >= sizeof(m_fontSizeInput)) {
-            strcpy(m_fontSizeInput, "12");  // Safe fallback
-        }
+        
+        // Reset input fields to defaults
+        strcpy(m_fontSizeInput, "12");
+        strcpy(m_zoomStepInput, "10");
+        strcpy(m_pageJumpInput, "1");
     }
 
     ImGui::End();
-}
-
-void GuiManager::updatePreviewFont() {
-    // For now, we'll skip loading actual font files for preview since it's complex
-    // In a more sophisticated implementation, you could use ImGui's font loading
-    // to show an actual preview, but that would require more complex font management
-    
-    // This is where you would load the font file if needed:
-    // if (m_tempConfig.fontPath != m_lastPreviewFontPath || 
-    //     m_tempConfig.fontSize != m_lastPreviewFontSize) {
-    //     // Load new font...
-    // }
 }
 
 int GuiManager::findFontIndex(const std::string& fontName) const {

@@ -21,13 +21,14 @@ struct FontConfig {
     std::string fontPath;      // Path to selected font file
     std::string fontName;      // Display name of selected font
     int fontSize = 12;         // Font size in points
+    int zoomStep = 10;         // Zoom increment/decrement step
     
     // Default constructor
     FontConfig() = default;
     
     // Constructor with parameters
-    FontConfig(const std::string& path, const std::string& name, int size)
-        : fontPath(path), fontName(name), fontSize(size) {}
+    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10)
+        : fontPath(path), fontName(name), fontSize(size), zoomStep(zoom) {}
 };
 
 /**

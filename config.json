@@ -1,5 +1,6 @@
 {
-  "fontPath": "./fonts/Inter-Regular.ttf",
-  "fontName": "Inter Regular",
-  "fontSize": 62
+  "fontPath": "",
+  "fontName": "",
+  "fontSize": 12,
+  "zoomStep": 10
 }

@@ -151,6 +151,16 @@ if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
         markDirty(); // Force redraw to clear menu
     });
 
+    // Set up page jump callback
+    m_guiManager->setPageJumpCallback([this](int pageNumber) {
+        std::cout << "DEBUG: Page jump callback triggered to page " << (pageNumber + 1) << std::endl;
+        goToPage(pageNumber);
+    });
+
+    // Initialize page information in GUI manager
+    m_guiManager->setPageCount(m_pageCount);
+    m_guiManager->setCurrentPage(m_currentPage);
+
     // Now set the saved configuration in GUI if it exists
     if (!savedConfig.fontPath.empty()) {
         m_guiManager->setCurrentFontConfig(savedConfig);
@@ -305,33 +315,25 @@ void App::handleEvent(const SDL_Event &event)
     }
     
     // Let ImGui handle the event first
-    bool imguiHandled = false;
     if (m_guiManager) {
-        imguiHandled = m_guiManager->handleEvent(event);
+        m_guiManager->handleEvent(event);
     }
     
-    // Only block events if ImGui actually wants to capture them and the menu is visible
-    if (imguiHandled && m_guiManager && m_guiManager->isFontMenuVisible()) {
-        // For mouse events, only block if ImGui wants mouse capture
-        if ((event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP || 
-             event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEWHEEL) && 
-            m_guiManager->wantsCaptureMouse()) {
+    // Block ALL input events if the settings menu is visible, except ESC to close it
+    if (m_guiManager && m_guiManager->isFontMenuVisible()) {
+        // Always allow ESC and Q to close the menu
+        if (event.type == SDL_KEYDOWN && 
+            (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q)) {
+            // Let ESC/Q through to close menu
+        }
+        // Always allow quit events
+        else if (event.type == SDL_QUIT) {
+            // Let quit through
+        }
+        // Block everything else when menu is visible to prevent bleeding through
+        else {
             return;
         }
-        
-        // For keyboard events, be selective about what to block
-        if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
-            // Always allow ESC through to close the menu
-            if (event.key.keysym.sym == SDLK_ESCAPE) {
-                // Let ESC through to close menu
-            } else if (m_guiManager->wantsCaptureKeyboard()) {
-                // Only block other keyboard events if ImGui actually wants keyboard capture
-                return;
-            }
-        }
-        
-        // Never block controller events - always let them through to the main app
-        // This includes SDL_CONTROLLERBUTTONDOWN, SDL_CONTROLLERBUTTONUP, SDL_CONTROLLERAXISMOTION
     }
 
     AppAction action = AppAction::None;
@@ -422,11 +424,11 @@ void App::handleEvent(const SDL_Event &event)
             break;
         case SDLK_PLUS:
         case SDLK_KP_PLUS:
-            zoom(10);
+            zoom(m_fontManager->loadConfig().zoomStep);
             break;
         case SDLK_MINUS:
         case SDLK_KP_MINUS:
-            zoom(-10);
+            zoom(-m_fontManager->loadConfig().zoomStep);
             break;
         case SDLK_HOME:
             goToPage(0);
@@ -594,7 +596,7 @@ void App::handleEvent(const SDL_Event &event)
         {
             if (SDL_GetModState() & KMOD_CTRL)
             {
-                zoom(10);
+                zoom(m_fontManager->loadConfig().zoomStep);
             }
             else if (!isInScrollTimeout())
             {
@@ -606,7 +608,7 @@ void App::handleEvent(const SDL_Event &event)
         {
             if (SDL_GetModState() & KMOD_CTRL)
             {
-                zoom(-10);
+                zoom(-m_fontManager->loadConfig().zoomStep);
             }
             else if (!isInScrollTimeout())
             {
@@ -734,10 +736,10 @@ void App::handleEvent(const SDL_Event &event)
 
             // --- Y / B: zoom in/out ---
             case SDL_CONTROLLER_BUTTON_Y:
-                zoom(10);
+                zoom(m_fontManager->loadConfig().zoomStep);
                 break;
             case SDL_CONTROLLER_BUTTON_B:
-                zoom(-10);
+                zoom(-m_fontManager->loadConfig().zoomStep);
                 break;
 
             // --- X: Rotate ---
@@ -1322,6 +1324,11 @@ void App::goToNextPage()
         
         // Set cooldown timer to prevent rapid page changes during panning
         m_lastPageChangeTime = SDL_GetTicks();
+        
+        // Update GUI manager with current page
+        if (m_guiManager) {
+            m_guiManager->setCurrentPage(m_currentPage);
+        }
     }
 }
 
@@ -1344,6 +1351,11 @@ void App::goToPreviousPage()
         
         // Set cooldown timer to prevent rapid page changes during panning
         m_lastPageChangeTime = SDL_GetTicks();
+        
+        // Update GUI manager with current page
+        if (m_guiManager) {
+            m_guiManager->setCurrentPage(m_currentPage);
+        }
     }
 }
 
@@ -1357,6 +1369,11 @@ void App::goToPage(int pageNum)
         updateScaleDisplayTime();
         updatePageDisplayTime();
         markDirty();
+        
+        // Update GUI manager with current page
+        if (m_guiManager) {
+            m_guiManager->setCurrentPage(m_currentPage);
+        }
     }
 }
 
