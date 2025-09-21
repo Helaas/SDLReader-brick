@@ -82,6 +82,7 @@ private:
     void zoomTo(int scale);
     void applyPendingZoom();  // Apply accumulated zoom changes
     bool isZoomDebouncing() const;  // Check if zoom is currently being debounced
+    void applyPendingFontChange(); // Apply deferred font configuration changes safely
     void fitPageToWindow();
     void recenterScrollOnZoom(int oldScale, int newScale);
     void fitPageToWidth();
@@ -281,6 +282,10 @@ private:
     bool m_zoomProcessing{false};
     std::chrono::steady_clock::time_point m_zoomProcessingStartTime;
     static constexpr int ZOOM_PROCESSING_MIN_DISPLAY_MS = 300; // Minimum time to show processing indicator
+    
+    // Deferred font configuration change to avoid thread safety issues
+    bool m_pendingFontChange{false};
+    FontConfig m_pendingFontConfig;
     
     // Rendering optimization
     bool m_needsRedraw{true}; // Flag to indicate when screen needs to be redrawn

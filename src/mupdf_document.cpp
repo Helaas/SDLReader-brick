@@ -30,6 +30,9 @@ MuPdfDocument::~MuPdfDocument()
 bool MuPdfDocument::open(const std::string &filePath)
 {
     close();
+    
+    // Store file path for potential reopening
+    m_filePath = filePath;
 
     fz_context *ctx = fz_new_context(nullptr, nullptr, 256 << 20); // 256MB
     if (!ctx)
@@ -42,6 +45,17 @@ bool MuPdfDocument::open(const std::string &filePath)
     
     // Register document handlers
     fz_register_document_handlers(ctx);
+    
+    // Apply user CSS before opening document if it was set
+    if (!m_userCSS.empty()) {
+        fz_try(ctx) {
+            fz_set_user_css(ctx, m_userCSS.c_str());
+            std::cout << "Applied CSS before opening document: " << m_userCSS << std::endl;
+        }
+        fz_catch(ctx) {
+            std::cerr << "Failed to set user CSS before opening: " << fz_caught_message(ctx) << std::endl;
+        }
+    }
 
     // Create separate context for prerendering to avoid race conditions
     fz_context *prerenderCtx = fz_new_context(nullptr, nullptr, 256 << 20); // 256MB
@@ -52,6 +66,16 @@ bool MuPdfDocument::open(const std::string &filePath)
     }
     m_prerenderCtx.reset(prerenderCtx);
     fz_register_document_handlers(prerenderCtx);
+    
+    // Apply user CSS to prerender context as well
+    if (!m_userCSS.empty()) {
+        fz_try(prerenderCtx) {
+            fz_set_user_css(prerenderCtx, m_userCSS.c_str());
+        }
+        fz_catch(prerenderCtx) {
+            std::cerr << "Failed to set user CSS in prerender context: " << fz_caught_message(prerenderCtx) << std::endl;
+        }
+    }
 
     fz_document *doc = nullptr;
     fz_var(doc);
@@ -91,6 +115,60 @@ bool MuPdfDocument::open(const std::string &filePath)
     m_pageCount = fz_count_pages(ctx, doc);
     
     return true;
+}
+
+bool MuPdfDocument::reopenWithCSS(const std::string& css) {
+    if (m_filePath.empty()) {
+        std::cerr << "Cannot reopen document: no file path stored" << std::endl;
+        return false;
+    }
+    
+    std::cout << "Reopening document with new CSS: " << css << std::endl;
+    
+    // Store the file path before any operations
+    std::string savedPath = m_filePath;
+    
+    // Stop background operations first (outside of locks to avoid deadlock)
+    {
+        std::lock_guard<std::mutex> renderLock(m_renderMutex);
+        if (m_prerenderThread.joinable()) {
+            m_prerenderActive = false;
+        }
+    }
+    
+    // Wait for prerender thread to finish (outside of locks)
+    if (m_prerenderThread.joinable()) {
+        m_prerenderThread.join();
+    }
+    
+    // Now safely close everything and clear caches
+    {
+        std::lock_guard<std::mutex> renderLock(m_renderMutex);
+        std::lock_guard<std::mutex> cacheLock(m_cacheMutex);
+        
+        // Clear all caches
+        m_cache.clear();
+        m_argbCache.clear();
+        
+        // Close current document completely
+        m_doc.reset();
+        m_prerenderDoc.reset();
+        m_ctx.reset();
+        m_prerenderCtx.reset();
+        
+        // Set the CSS to be applied
+        m_userCSS = css;
+    }
+    // Release locks before calling open() to prevent deadlock
+    
+    // Reopen with clean state (no locks held)
+    bool result = open(savedPath);
+    
+    if (!result) {
+        std::cerr << "Failed to reopen document with new CSS" << std::endl;
+    }
+    
+    return result;
 }
 
 std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int &width, int &height, int zoom)
@@ -752,4 +830,10 @@ void MuPdfDocument::setUserCSS(const std::string& css) {
     fz_catch(m_ctx.get()) {
         std::cerr << "Failed to set user CSS: " << fz_caught_message(m_ctx.get()) << std::endl;
     }
+}
+
+void MuPdfDocument::setUserCSSBeforeOpen(const std::string& css) {
+    // Store CSS to be applied when document is opened
+    m_userCSS = css;
+    std::cout << "CSS set for application before document opening: " << css << std::endl;
 }

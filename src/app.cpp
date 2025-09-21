@@ -52,6 +52,12 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
     });
 #endif
 
+    // Initialize font manager FIRST, before document creation
+    m_fontManager = std::make_unique<FontManager>();
+    
+    // Load saved font configuration early
+    FontConfig savedConfig = m_fontManager->loadConfig();
+
     // Determine document type based on file extension
     // MuPDF supports PDF, CBZ, ZIP (with images), XPS, EPUB, and other formats
     std::string lowercaseFilename = filename;
@@ -69,6 +75,17 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
          (lowercaseFilename.substr(lowercaseFilename.size() - 5) == ".epub" ||
           lowercaseFilename.substr(lowercaseFilename.size() - 5) == ".mobi"))) {
         m_document = std::make_unique<MuPdfDocument>();
+        
+        // Apply saved CSS configuration BEFORE opening document
+        if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get())) {
+            if (!savedConfig.fontPath.empty()) {
+                std::string css = m_fontManager->generateCSS(savedConfig);
+                if (!css.empty()) {
+                    muDoc->setUserCSSBeforeOpen(css);
+                    std::cout << "Applied saved font CSS before opening document: " << savedConfig.fontName << std::endl;
+                }
+            }
+        }
     }
     else
     {
@@ -111,17 +128,11 @@ if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
     // Initialize game controllers
     initializeGameControllers();
 
-    // Initialize font manager first
-    m_fontManager = std::make_unique<FontManager>();
-
     // Install custom font loader for MuPDF if this is a MuPDF document
     if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get())) {
         m_fontManager->installFontLoader(muDoc->getContext());
         std::cout << "DEBUG: Custom font loader installed for MuPDF document" << std::endl;
     }
-
-    // Load saved font configuration (but don't apply it yet)
-    FontConfig savedConfig = m_fontManager->loadConfig();
     
     // Initialize GUI manager AFTER font manager
     m_guiManager = std::make_unique<GuiManager>();
@@ -140,14 +151,11 @@ if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
         markDirty(); // Force redraw to clear menu
     });
 
-    // TODO: Temporarily disable auto-loading saved config to test if that's causing the crash
-    /*
-    // Now it's safe to apply saved configuration and update GUI
+    // Now set the saved configuration in GUI if it exists
     if (!savedConfig.fontPath.empty()) {
-        applyFontConfiguration(savedConfig);
         m_guiManager->setCurrentFontConfig(savedConfig);
+        std::cout << "Applied saved font configuration: " << savedConfig.fontName << " at " << savedConfig.fontSize << "pt" << std::endl;
     }
-    */
 }
 
 App::~App()
@@ -217,6 +225,11 @@ void App::run()
                     // Zoom input has settled, apply the final accumulated zoom
                     applyPendingZoom();
                 }
+            }
+            
+            // Apply pending font changes safely in the main loop
+            if (m_pendingFontChange) {
+                applyPendingFontChange();
             }
             
             // Enhanced frame pacing for TG5040: Skip rendering if we're rendering too frequently
@@ -1467,6 +1480,86 @@ bool App::isZoomDebouncing() const
     return m_pendingZoomDelta != 0;
 }
 
+void App::applyPendingFontChange()
+{
+    if (!m_pendingFontChange) {
+        return; // No pending font change
+    }
+    
+    std::cout << "DEBUG: Applying pending font change - " << m_pendingFontConfig.fontName 
+              << " at " << m_pendingFontConfig.fontSize << "pt" << std::endl;
+    
+    // Generate CSS from the pending configuration
+    if (m_fontManager) {
+        std::string css = m_fontManager->generateCSS(m_pendingFontConfig);
+        std::cout << "DEBUG: Generated CSS: " << css << std::endl;
+        
+        if (!css.empty()) {
+            // Try to cast to MuPDF document and apply CSS with safer reopening
+            if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get())) {
+                // Store current state to restore after reopening
+                int currentPage = m_currentPage;
+                int currentScale = m_currentScale;
+                int currentScrollX = m_scrollX;
+                int currentScrollY = m_scrollY;
+                
+                // Use the much safer reopening method
+                if (muDoc->reopenWithCSS(css)) {
+                    // Restore state after reopening with bounds checking
+                    int pageCount = m_document->getPageCount();
+                    if (currentPage >= 0 && currentPage < pageCount) {
+                        m_currentPage = currentPage;
+                    } else {
+                        m_currentPage = 0; // Fallback to first page
+                    }
+                    
+                    // Restore scale with reasonable bounds
+                    if (currentScale >= 10 && currentScale <= 350) {
+                        m_currentScale = currentScale;
+                    } else {
+                        m_currentScale = 100; // Fallback to 100%
+                    }
+                    
+                    // Restore scroll position (will be clamped later)
+                    m_scrollX = currentScrollX;
+                    m_scrollY = currentScrollY;
+                    
+                    // Update page count after reopening
+                    m_pageCount = pageCount;
+                    
+                    // Clamp scroll to ensure it's within bounds
+                    clampScroll();
+                    
+                    // Save the configuration
+                    m_fontManager->saveConfig(m_pendingFontConfig);
+                    
+                    // Force re-render of current page
+                    markDirty();
+                    
+                    // Close the font menu after successful application
+                    if (m_guiManager && m_guiManager->isFontMenuVisible()) {
+                        m_guiManager->toggleFontMenu();
+                    }
+                    
+                    std::cout << "Applied font configuration: " << m_pendingFontConfig.fontName 
+                             << " at " << m_pendingFontConfig.fontSize << "pt" << std::endl;
+                } else {
+                    std::cout << "Failed to reopen document with new CSS" << std::endl;
+                }
+            } else {
+                std::cout << "CSS styling not supported for this document type" << std::endl;
+            }
+        } else {
+            std::cout << "Failed to generate CSS from font configuration" << std::endl;
+        }
+    } else {
+        std::cout << "FontManager not available" << std::endl;
+    }
+    
+    // Clear the pending flag
+    m_pendingFontChange = false;
+}
+
 void App::fitPageToWindow()
 {
     int windowWidth = m_renderer->getWindowWidth();
@@ -2392,42 +2485,13 @@ void App::applyFontConfiguration(const FontConfig& config)
         return;
     }
     
-    std::cout << "DEBUG: Applying font config - " << config.fontName 
+    std::cout << "DEBUG: Scheduling deferred font change - " << config.fontName 
               << " at " << config.fontSize << "pt" << std::endl;
     
-    // Generate CSS from the font configuration
-    if (m_fontManager) {
-        std::string css = m_fontManager->generateCSS(config);
-        std::cout << "DEBUG: Generated CSS: " << css << std::endl;
-        
-        if (!css.empty()) {
-            // Try to cast to MuPDF document and apply CSS
-            if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get())) {
-                muDoc->setUserCSS(css);
-                
-                // Save the configuration
-                m_fontManager->saveConfig(config);
-                
-                // Force re-render of current page
-                markDirty();
-                
-                // Force cache clear to ensure CSS changes take effect
-                muDoc->clearCache();
-                
-                // Close the font menu after successful application
-                if (m_guiManager && m_guiManager->isFontMenuVisible()) {
-                    m_guiManager->toggleFontMenu();
-                }
-                
-                std::cout << "Applied font configuration: " << config.fontName 
-                         << " at " << config.fontSize << "pt" << std::endl;
-            } else {
-                std::cout << "CSS styling not supported for this document type" << std::endl;
-            }
-        } else {
-            std::cout << "Failed to generate CSS from font configuration" << std::endl;
-        }
-    } else {
-        std::cout << "FontManager not available" << std::endl;
-    }
+    // Store the configuration for deferred processing in the main loop
+    m_pendingFontConfig = config;
+    m_pendingFontChange = true;
+    
+    // The actual document reopening will happen safely in the main loop
+    // via applyPendingFontChange()
 }

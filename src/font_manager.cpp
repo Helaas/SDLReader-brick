@@ -231,7 +231,7 @@ std::string FontManager::generateCSS(const FontConfig& config) const {
     css << "}\n\n";
     
     // Try to override any existing font-family declarations
-    css << "[style*=\"font-family\"], [style*=\"font-size\"] {\n";
+    css << "[data-font], [style] {\n";
     css << "  font-family: '" << config.fontName << "', '" << cssFontName << "', serif !important;\n";
     css << "  font-size: " << config.fontSize << "pt !important;\n";
     css << "}\n";

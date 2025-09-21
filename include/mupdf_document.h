@@ -34,6 +34,7 @@ public:
     int getPageWidthEffective(int page, int zoom);
     int getPageHeightEffective(int page, int zoom);
     bool open(const std::string& filePath) override;
+    bool reopenWithCSS(const std::string& css); // Reopen document with new CSS
     int getPageCount() const override;
     void setMaxRenderSize(int width, int height);
     void close() override;
@@ -54,6 +55,7 @@ public:
 
     // CSS styling for documents (EPUB/MOBI)
     void setUserCSS(const std::string& css);
+    void setUserCSSBeforeOpen(const std::string& css); // Set CSS before opening document
     std::string getUserCSS() const { return m_userCSS; }
 
     // Get the MuPDF context for font loader installation
@@ -99,6 +101,9 @@ private:
     
     // User CSS for styling documents
     std::string m_userCSS;
+    
+    // Store file path for reopening with new CSS
+    std::string m_filePath;
 };
 
 #endif // MUPDF_DOCUMENT_H
