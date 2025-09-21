@@ -825,6 +825,7 @@ void App::handleEvent(const SDL_Event &event)
     case SDL_JOYBUTTONDOWN:
         // Handle joystick button presses
         {
+            #ifdef TG5040_PLATFORM
             // Handle specific button functions
             switch (event.jbutton.button) {
             case 9:
@@ -839,6 +840,7 @@ void App::handleEvent(const SDL_Event &event)
                 // Other joystick buttons are ignored
                 break;
             }
+            #endif
         }
         break;
     case SDL_JOYBUTTONUP:
