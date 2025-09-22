@@ -60,6 +60,9 @@ public:
      */
     void toggleFontMenu() { 
         m_showFontMenu = !m_showFontMenu; 
+        if (m_showFontMenu) {
+            m_justOpenedFontMenu = true; // Set focus flag when opening
+        }
         std::cout << "Font menu " << (m_showFontMenu ? "opened" : "closed") << std::endl;
     }
 
@@ -148,10 +151,11 @@ private:
     char m_zoomStepInput[16] = "10";  // Zoom step input
     char m_pageJumpInput[16] = "1";   // Page jump input
     bool m_fontSizeChanged = false;
+    bool m_justOpenedFontMenu = false; // Flag to set focus on font dropdown when menu opens
     
     // On-screen number pad state
     bool m_showNumberPad = false;
-    int m_numberPadSelectedRow = 0;    // Selected row in number pad (0-3)
+    int m_numberPadSelectedRow = 0;    // Selected row in number pad (0-4)
     int m_numberPadSelectedCol = 0;    // Selected column in number pad (0-2)
     
     // Debouncing for number pad input

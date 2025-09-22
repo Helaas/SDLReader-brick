@@ -1,6 +1,6 @@
 {
-  "fontPath": "./fonts/NotoSerif_Condensed-Bold.ttf",
-  "fontName": "Notoserif Condensed Bold",
-  "fontSize": 22,
+  "fontPath": "./fonts/JetBrainsMono-Bold.ttf",
+  "fontName": "Jetbrainsmono Bold",
+  "fontSize": 26,
   "zoomStep": 10
 }

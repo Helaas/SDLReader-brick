@@ -86,6 +86,7 @@ namespace {
      * This function is called by MuPDF when it needs to load a font
      */
     fz_font* customFontLoader(fz_context* ctx, const char* name, int bold, int italic, int needs_exact_metrics) {
+        (void)needs_exact_metrics; // Suppress unused parameter warning
         if (!g_fontManagerInstance || !name) {
             return nullptr;
         }
@@ -215,6 +216,7 @@ bool FontManager::installFontLoader(void* ctx) {
         std::cerr << "Failed to install custom font loader: " << fz_caught_message(fz_ctx) << std::endl;
         return false;
     }
+    return false; // Should never reach here, but needed to satisfy compiler
 }
 
 std::string FontManager::generateCSS(const FontConfig& config) const {

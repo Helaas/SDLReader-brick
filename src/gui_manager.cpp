@@ -9,13 +9,13 @@
 GuiManager::GuiManager() {
     // Initialize font size input with default value (with bounds checking)
     int result = snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
-    if (result < 0 || result >= sizeof(m_fontSizeInput)) {
+    if (result < 0 || result >= (int)sizeof(m_fontSizeInput)) {
         strcpy(m_fontSizeInput, "12");  // Safe fallback
     }
     
     // Initialize zoom step input
     result = snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_currentConfig.zoomStep);
-    if (result < 0 || result >= sizeof(m_zoomStepInput)) {
+    if (result < 0 || result >= (int)sizeof(m_zoomStepInput)) {
         strcpy(m_zoomStepInput, "10");  // Safe fallback
     }
     
@@ -79,7 +79,7 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer) {
             m_selectedFontIndex = 0;
         }
         int result = snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
-        if (result < 0 || result >= sizeof(m_fontSizeInput)) {
+        if (result < 0 || result >= (int)sizeof(m_fontSizeInput)) {
             strcpy(m_fontSizeInput, "12");  // Safe fallback
         }
     } else {
@@ -116,10 +116,7 @@ bool GuiManager::handleEvent(const SDL_Event& event) {
     // Handle number pad input first if it's visible - don't let ImGui process controller events
     if (m_showNumberPad) {
         if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP) {
-            std::cout << "[handleEvent] Number pad visible, handling controller event type " << event.type << std::endl;
-            bool result = handleNumberPadInput(event);
-            std::cout << "[handleEvent] Number pad handled: " << (result ? "true" : "false") << std::endl;
-            return result;
+            return handleNumberPadInput(event);
         }
     }
 
@@ -173,13 +170,13 @@ void GuiManager::setCurrentFontConfig(const FontConfig& config) {
     
     // Update font size input
     int result = snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", config.fontSize);
-    if (result < 0 || result >= sizeof(m_fontSizeInput)) {
+    if (result < 0 || result >= (int)sizeof(m_fontSizeInput)) {
         strcpy(m_fontSizeInput, "12");  // Safe fallback
     }
     
     // Update zoom step input
     result = snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", config.zoomStep);
-    if (result < 0 || result >= sizeof(m_zoomStepInput)) {
+    if (result < 0 || result >= (int)sizeof(m_zoomStepInput)) {
         strcpy(m_zoomStepInput, "10");  // Safe fallback
     }
 }
@@ -246,6 +243,12 @@ void GuiManager::renderFontMenu() {
             fontNamesPtrs.push_back(name.c_str());
         }
 
+        // Set focus to font dropdown when menu is first opened
+        if (m_justOpenedFontMenu) {
+            ImGui::SetKeyboardFocusHere();
+            m_justOpenedFontMenu = false; // Reset flag
+        }
+
         if (ImGui::Combo("##FontFamily", &m_selectedFontIndex, fontNamesPtrs.data(), fontNamesPtrs.size())) {
             // Font selection changed - ensure index is still valid
             if (m_selectedFontIndex >= 0 && m_selectedFontIndex < (int)fonts.size()) {
@@ -280,7 +283,7 @@ void GuiManager::renderFontMenu() {
     if (ImGui::SliderInt("##FontSizeSlider", &tempSize, 8, 72)) {
         m_tempConfig.fontSize = tempSize;
         int result = snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", tempSize);
-        if (result < 0 || result >= sizeof(m_fontSizeInput)) {
+        if (result < 0 || result >= (int)sizeof(m_fontSizeInput)) {
             strcpy(m_fontSizeInput, "12");  // Safe fallback
         }
         m_fontSizeChanged = true;
@@ -309,7 +312,7 @@ void GuiManager::renderFontMenu() {
     if (ImGui::SliderInt("##ZoomStepSlider", &tempZoomStep, 1, 50)) {
         m_tempConfig.zoomStep = tempZoomStep;
         int result = snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", tempZoomStep);
-        if (result < 0 || result >= sizeof(m_zoomStepInput)) {
+        if (result < 0 || result >= (int)sizeof(m_zoomStepInput)) {
             strcpy(m_zoomStepInput, "10");  // Safe fallback
         }
     }
@@ -330,34 +333,36 @@ void GuiManager::renderFontMenu() {
         // Input is being edited, but we don't apply until Go button is pressed
     }
     
-    ImGui::SameLine();
-    if (ImGui::Button("Number Pad")) {
-        // Show on-screen number pad for controller input
-        showNumberPad();
-    }
-    
+    // Validate page input
     bool validPageInput = false;
     int targetPage = std::atoi(m_pageJumpInput);
     if (targetPage >= 1 && targetPage <= m_pageCount) {
         validPageInput = true;
     }
     
+    // Go button on same line as textbox
+    ImGui::SameLine();
     if (!validPageInput) {
         ImGui::BeginDisabled();
     }
-    
     if (ImGui::Button("Go")) {
         if (validPageInput && m_pageJumpCallback) {
             m_pageJumpCallback(targetPage - 1); // Convert to 0-based
         }
     }
-    
     if (!validPageInput) {
         ImGui::EndDisabled();
     }
     
+    // Number pad button on same line as textbox
+    ImGui::SameLine();
+    if (ImGui::Button("Number Pad")) {
+        // Show on-screen number pad for controller input
+        showNumberPad();
+    }
+    
+    // Show validation message if needed
     if (!validPageInput && targetPage != 0) {
-        ImGui::SameLine();
         ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "Invalid page number");
     }
 
@@ -403,11 +408,11 @@ void GuiManager::renderFontMenu() {
         
         // Reset input fields
         int result = snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
-        if (result < 0 || result >= sizeof(m_fontSizeInput)) {
+        if (result < 0 || result >= (int)sizeof(m_fontSizeInput)) {
             strcpy(m_fontSizeInput, "12");
         }
         result = snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_currentConfig.zoomStep);
-        if (result < 0 || result >= sizeof(m_zoomStepInput)) {
+        if (result < 0 || result >= (int)sizeof(m_zoomStepInput)) {
             strcpy(m_zoomStepInput, "10");
         }
         
@@ -453,25 +458,29 @@ void GuiManager::renderNumberPad() {
     ImGui::Text("Page: %s", m_pageJumpInput);
     ImGui::Separator();
     
-    // Number pad layout (3x4 grid)
+    // Number pad layout (5x3 grid)
     // Row 0: 7, 8, 9
     // Row 1: 4, 5, 6  
     // Row 2: 1, 2, 3
-    // Row 3: Clear, 0, Backspace
+    // Row 3: Clear, 0, Back
+    // Row 4: Go, Cancel, (empty)
     
-    const char* buttons[4][3] = {
-        {"7", "8", "9"},
-        {"4", "5", "6"},
-        {"1", "2", "3"},
-        {"Clear", "0", "Back"}
+    const char* buttons[5][3] = {
+        {"7", "8", "9"},         // Row 0: numbers
+        {"4", "5", "6"},         // Row 1: numbers
+        {"1", "2", "3"},         // Row 2: numbers
+        {"Clear", "0", "Back"},   // Row 3: utility buttons
+        {"Go", "Cancel", ""}      // Row 4: action buttons
     };
     
     const float buttonSize = 60.0f;
-    const float spacing = 10.0f;
     
-    for (int row = 0; row < 4; row++) {
+    for (int row = 0; row < 5; row++) {
         for (int col = 0; col < 3; col++) {
-            if (col > 0) ImGui::SameLine();
+            // Skip empty buttons
+            if (strlen(buttons[row][col]) == 0) continue;
+            
+            if (col > 0 && strlen(buttons[row][col-1]) > 0) ImGui::SameLine();
             
             // Highlight selected button
             bool isSelected = (m_numberPadSelectedRow == row && m_numberPadSelectedCol == col);
@@ -489,7 +498,6 @@ void GuiManager::renderNumberPad() {
             // This prevents double-input when controller and mouse/ImGui conflict
             Uint32 currentTime = SDL_GetTicks();
             if (buttonPressed && (currentTime - m_lastButtonPressTime > BUTTON_DEBOUNCE_MS)) {
-                std::cout << "[renderNumberPad] ImGui button clicked: " << buttons[row][col] << std::endl;
                 
                 // Handle button press (mouse click only, not controller)
                 const char* buttonText = buttons[row][col];
@@ -503,10 +511,20 @@ void GuiManager::renderNumberPad() {
                     if (len > 0) {
                         m_pageJumpInput[len - 1] = '\0';
                     }
+                } else if (strcmp(buttonText, "Go") == 0) {
+                    // Go to page if valid
+                    int targetPage = strlen(m_pageJumpInput) > 0 ? std::atoi(m_pageJumpInput) : 0;
+                    if (targetPage >= 1 && targetPage <= m_pageCount && m_pageJumpCallback) {
+                        m_pageJumpCallback(targetPage - 1);
+                        hideNumberPad();
+                    }
+                } else if (strcmp(buttonText, "Cancel") == 0) {
+                    // Cancel - close number pad without action
+                    hideNumberPad();
                 } else {
                     // Add digit if there's space
                     int len = strlen(m_pageJumpInput);
-                    if (len < sizeof(m_pageJumpInput) - 1) {
+                    if (len < (int)sizeof(m_pageJumpInput) - 1) {
                         m_pageJumpInput[len] = buttonText[0];
                         m_pageJumpInput[len + 1] = '\0';
                     }
@@ -514,8 +532,6 @@ void GuiManager::renderNumberPad() {
                 
                 // Update debounce timer for mouse clicks too
                 m_lastButtonPressTime = currentTime;
-            } else if (buttonPressed) {
-                std::cout << "[renderNumberPad] ImGui button click BLOCKED due to recent controller input" << std::endl;
             }
             
             if (isSelected) {
@@ -524,37 +540,9 @@ void GuiManager::renderNumberPad() {
         }
     }
     
-    ImGui::Separator();
-    
-    // Action buttons
-    bool validPageInput = false;
+    // Show validation message if needed
     int targetPage = strlen(m_pageJumpInput) > 0 ? std::atoi(m_pageJumpInput) : 0;
-    if (targetPage >= 1 && targetPage <= m_pageCount) {
-        validPageInput = true;
-    }
-    
-    if (!validPageInput) {
-        ImGui::BeginDisabled();
-    }
-    
-    if (ImGui::Button("Go to Page", ImVec2(120, 30))) {
-        if (validPageInput && m_pageJumpCallback) {
-            m_pageJumpCallback(targetPage - 1); // Convert to 0-based
-            hideNumberPad();
-        }
-    }
-    
-    if (!validPageInput) {
-        ImGui::EndDisabled();
-    }
-    
-    ImGui::SameLine();
-    
-    if (ImGui::Button("Cancel", ImVec2(80, 30))) {
-        hideNumberPad();
-    }
-    
-    if (!validPageInput && targetPage != 0) {
+    if (targetPage != 0 && (targetPage < 1 || targetPage > m_pageCount)) {
         ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "Invalid page number");
     }
 
@@ -567,81 +555,95 @@ bool GuiManager::handleNumberPadInput(const SDL_Event& event) {
     }
     
     if (event.type == SDL_CONTROLLERBUTTONDOWN) {
-        // Debug output
-        Uint32 currentTime = SDL_GetTicks();
-        std::cout << "=== CONTROLLER BUTTON DOWN ===" << std::endl;
-        std::cout << "Button: " << (int)event.cbutton.button << std::endl;
-        std::cout << "Current time: " << currentTime << std::endl;
-        std::cout << "Last press time: " << m_lastButtonPressTime << std::endl;
-        std::cout << "Time diff: " << (currentTime - m_lastButtonPressTime) << std::endl;
-        std::cout << "Debounce threshold: " << BUTTON_DEBOUNCE_MS << std::endl;
-        
         // Simple time-based debouncing
+        Uint32 currentTime = SDL_GetTicks();
         if (currentTime - m_lastButtonPressTime < BUTTON_DEBOUNCE_MS) {
-            std::cout << "BLOCKED: Too soon, ignoring" << std::endl;
             return true; // Ignore rapid repeated presses
         }
-        
-        std::cout << "PROCESSING: Button press accepted" << std::endl;
         m_lastButtonPressTime = currentTime;
         
         switch (event.cbutton.button) {
         case SDL_CONTROLLER_BUTTON_DPAD_UP:
-            m_numberPadSelectedRow = (m_numberPadSelectedRow - 1 + 4) % 4;
+            m_numberPadSelectedRow = (m_numberPadSelectedRow - 1 + 5) % 5;
             return true;
         case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-            m_numberPadSelectedRow = (m_numberPadSelectedRow + 1) % 4;
+            m_numberPadSelectedRow = (m_numberPadSelectedRow + 1) % 5;
             return true;
         case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-            m_numberPadSelectedCol = (m_numberPadSelectedCol - 1 + 3) % 3;
+            // Handle navigation - row 4 has only 2 buttons (Go, Cancel)
+            if (m_numberPadSelectedRow == 4) {
+                m_numberPadSelectedCol = (m_numberPadSelectedCol - 1 + 2) % 2;
+            } else {
+                m_numberPadSelectedCol = (m_numberPadSelectedCol - 1 + 3) % 3;
+            }
             return true;
         case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-            m_numberPadSelectedCol = (m_numberPadSelectedCol + 1) % 3;
+            // Handle navigation - row 4 has only 2 buttons (Go, Cancel)
+            if (m_numberPadSelectedRow == 4) {
+                m_numberPadSelectedCol = (m_numberPadSelectedCol + 1) % 2;
+            } else {
+                m_numberPadSelectedCol = (m_numberPadSelectedCol + 1) % 3;
+            }
             return true;
         case SDL_CONTROLLER_BUTTON_A:
             {
-                std::cout << "A BUTTON PRESSED - Processing number selection" << std::endl;
-                
-                // Simulate button press for selected button
-                const char* buttons[4][3] = {
+                // Handle selected button press - use same layout as display
+                const char* buttons[5][3] = {
                     {"7", "8", "9"},
                     {"4", "5", "6"},
                     {"1", "2", "3"},
-                    {"Clear", "0", "Back"}
+                    {"Clear", "0", "Back"},
+                    {"Go", "Cancel", ""}
                 };
                 
                 const char* buttonText = buttons[m_numberPadSelectedRow][m_numberPadSelectedCol];
-                std::cout << "Selected button: " << buttonText << " (row=" << m_numberPadSelectedRow << ", col=" << m_numberPadSelectedCol << ")" << std::endl;
-                std::cout << "Current input before: '" << m_pageJumpInput << "'" << std::endl;
+                
+                // Skip empty buttons
+                if (strlen(buttonText) == 0) {
+                    return true;
+                }
                 
                 if (strcmp(buttonText, "Clear") == 0) {
                     strcpy(m_pageJumpInput, "");
-                    std::cout << "CLEAR - Input cleared" << std::endl;
                 } else if (strcmp(buttonText, "Back") == 0) {
+                    // Backspace - remove last character
                     int len = strlen(m_pageJumpInput);
                     if (len > 0) {
                         m_pageJumpInput[len - 1] = '\0';
-                        std::cout << "BACK - Removed last character" << std::endl;
                     }
+                } else if (strcmp(buttonText, "Go") == 0) {
+                    // Go to page if valid
+                    int targetPage = strlen(m_pageJumpInput) > 0 ? std::atoi(m_pageJumpInput) : 0;
+                    if (targetPage >= 1 && targetPage <= m_pageCount && m_pageJumpCallback) {
+                        m_pageJumpCallback(targetPage - 1);
+                        hideNumberPad();
+                    }
+                } else if (strcmp(buttonText, "Cancel") == 0) {
+                    // Cancel - close number pad without action
+                    hideNumberPad();
                 } else {
                     int len = strlen(m_pageJumpInput);
-                    if (len < sizeof(m_pageJumpInput) - 1) {
+                    if (len < (int)sizeof(m_pageJumpInput) - 1) {
                         m_pageJumpInput[len] = buttonText[0];
                         m_pageJumpInput[len + 1] = '\0';
-                        std::cout << "DIGIT - Added '" << buttonText[0] << "'" << std::endl;
                     }
                 }
-                
-                std::cout << "Current input after: '" << m_pageJumpInput << "'" << std::endl;
-                std::cout << "===========================" << std::endl;
                 return true;
             }
         case SDL_CONTROLLER_BUTTON_B:
-            // Cancel/close number pad
-            hideNumberPad();
-            return true;
+            // Backspace function - remove last character, or cancel if empty
+            {
+                int len = strlen(m_pageJumpInput);
+                if (len > 0) {
+                    m_pageJumpInput[len - 1] = '\0';
+                } else {
+                    // If input is empty, close number pad
+                    hideNumberPad();
+                }
+                return true;
+            }
         case SDL_CONTROLLER_BUTTON_START:
-            // Go to page if valid
+            // Go to page if valid (alternative method)
             {
                 int targetPage = strlen(m_pageJumpInput) > 0 ? std::atoi(m_pageJumpInput) : 0;
                 if (targetPage >= 1 && targetPage <= m_pageCount && m_pageJumpCallback) {
@@ -691,6 +693,9 @@ int GuiManager::findFontIndex(const std::string& fontName) const {
 
 void GuiManager::showNumberPad() {
     m_showNumberPad = true;
+    // Reset selection to top-left (row=0, col=0 = "7")
+    m_numberPadSelectedRow = 0;
+    m_numberPadSelectedCol = 0;
     // Reset debounce timer
     m_lastButtonPressTime = 0;
 }
