@@ -1,6 +1,6 @@
 {
-  "fontPath": "",
-  "fontName": "",
-  "fontSize": 12,
+  "fontPath": "./fonts/NotoSerif_Condensed-Bold.ttf",
+  "fontName": "Notoserif Condensed Bold",
+  "fontSize": 22,
   "zoomStep": 10
 }

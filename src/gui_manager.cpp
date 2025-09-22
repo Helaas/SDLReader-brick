@@ -113,6 +113,16 @@ bool GuiManager::handleEvent(const SDL_Event& event) {
         return false;
     }
 
+    // Handle number pad input first if it's visible - don't let ImGui process controller events
+    if (m_showNumberPad) {
+        if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP) {
+            std::cout << "[handleEvent] Number pad visible, handling controller event type " << event.type << std::endl;
+            bool result = handleNumberPadInput(event);
+            std::cout << "[handleEvent] Number pad handled: " << (result ? "true" : "false") << std::endl;
+            return result;
+        }
+    }
+
     bool handled = ImGui_ImplSDL2_ProcessEvent(&event);
     return handled;
 }
@@ -139,6 +149,11 @@ void GuiManager::render() {
     // Render our font menu
     if (m_showFontMenu) {
         renderFontMenu();
+    }
+
+    // Render number pad if visible
+    if (m_showNumberPad) {
+        renderNumberPad();
     }
 
     // Render ImGui
@@ -316,6 +331,11 @@ void GuiManager::renderFontMenu() {
     }
     
     ImGui::SameLine();
+    if (ImGui::Button("Number Pad")) {
+        // Show on-screen number pad for controller input
+        showNumberPad();
+    }
+    
     bool validPageInput = false;
     int targetPage = std::atoi(m_pageJumpInput);
     if (targetPage >= 1 && targetPage <= m_pageCount) {
@@ -413,6 +433,252 @@ void GuiManager::renderFontMenu() {
     ImGui::End();
 }
 
+void GuiManager::renderNumberPad() {
+    // Center the number pad window
+    ImGuiIO& io = ImGui::GetIO();
+    ImVec2 center = ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
+    
+    ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(300, 400), ImGuiCond_Always);
+
+    if (!ImGui::Begin("Number Pad", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse)) {
+        ImGui::End();
+        return;
+    }
+
+    ImGui::Text("Enter Page Number:");
+    ImGui::Separator();
+    
+    // Display current input
+    ImGui::Text("Page: %s", m_pageJumpInput);
+    ImGui::Separator();
+    
+    // Number pad layout (3x4 grid)
+    // Row 0: 7, 8, 9
+    // Row 1: 4, 5, 6  
+    // Row 2: 1, 2, 3
+    // Row 3: Clear, 0, Backspace
+    
+    const char* buttons[4][3] = {
+        {"7", "8", "9"},
+        {"4", "5", "6"},
+        {"1", "2", "3"},
+        {"Clear", "0", "Back"}
+    };
+    
+    const float buttonSize = 60.0f;
+    const float spacing = 10.0f;
+    
+    for (int row = 0; row < 4; row++) {
+        for (int col = 0; col < 3; col++) {
+            if (col > 0) ImGui::SameLine();
+            
+            // Highlight selected button
+            bool isSelected = (m_numberPadSelectedRow == row && m_numberPadSelectedCol == col);
+            if (isSelected) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.5f, 1.0f, 1.0f)); // Blue highlight
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.6f, 1.0f, 1.0f));
+                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.4f, 0.8f, 1.0f));
+            }
+            
+            // Create button but disable functionality to prevent double input
+            // Controller input is handled separately in handleNumberPadInput
+            bool buttonPressed = ImGui::Button(buttons[row][col], ImVec2(buttonSize, buttonSize));
+            
+            // Only process ImGui button clicks if no controller input happened recently
+            // This prevents double-input when controller and mouse/ImGui conflict
+            Uint32 currentTime = SDL_GetTicks();
+            if (buttonPressed && (currentTime - m_lastButtonPressTime > BUTTON_DEBOUNCE_MS)) {
+                std::cout << "[renderNumberPad] ImGui button clicked: " << buttons[row][col] << std::endl;
+                
+                // Handle button press (mouse click only, not controller)
+                const char* buttonText = buttons[row][col];
+                
+                if (strcmp(buttonText, "Clear") == 0) {
+                    // Clear all input
+                    strcpy(m_pageJumpInput, "");
+                } else if (strcmp(buttonText, "Back") == 0) {
+                    // Backspace - remove last character
+                    int len = strlen(m_pageJumpInput);
+                    if (len > 0) {
+                        m_pageJumpInput[len - 1] = '\0';
+                    }
+                } else {
+                    // Add digit if there's space
+                    int len = strlen(m_pageJumpInput);
+                    if (len < sizeof(m_pageJumpInput) - 1) {
+                        m_pageJumpInput[len] = buttonText[0];
+                        m_pageJumpInput[len + 1] = '\0';
+                    }
+                }
+                
+                // Update debounce timer for mouse clicks too
+                m_lastButtonPressTime = currentTime;
+            } else if (buttonPressed) {
+                std::cout << "[renderNumberPad] ImGui button click BLOCKED due to recent controller input" << std::endl;
+            }
+            
+            if (isSelected) {
+                ImGui::PopStyleColor(3);
+            }
+        }
+    }
+    
+    ImGui::Separator();
+    
+    // Action buttons
+    bool validPageInput = false;
+    int targetPage = strlen(m_pageJumpInput) > 0 ? std::atoi(m_pageJumpInput) : 0;
+    if (targetPage >= 1 && targetPage <= m_pageCount) {
+        validPageInput = true;
+    }
+    
+    if (!validPageInput) {
+        ImGui::BeginDisabled();
+    }
+    
+    if (ImGui::Button("Go to Page", ImVec2(120, 30))) {
+        if (validPageInput && m_pageJumpCallback) {
+            m_pageJumpCallback(targetPage - 1); // Convert to 0-based
+            hideNumberPad();
+        }
+    }
+    
+    if (!validPageInput) {
+        ImGui::EndDisabled();
+    }
+    
+    ImGui::SameLine();
+    
+    if (ImGui::Button("Cancel", ImVec2(80, 30))) {
+        hideNumberPad();
+    }
+    
+    if (!validPageInput && targetPage != 0) {
+        ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "Invalid page number");
+    }
+
+    ImGui::End();
+}
+
+bool GuiManager::handleNumberPadInput(const SDL_Event& event) {
+    if (!m_showNumberPad) {
+        return false;
+    }
+    
+    if (event.type == SDL_CONTROLLERBUTTONDOWN) {
+        // Debug output
+        Uint32 currentTime = SDL_GetTicks();
+        std::cout << "=== CONTROLLER BUTTON DOWN ===" << std::endl;
+        std::cout << "Button: " << (int)event.cbutton.button << std::endl;
+        std::cout << "Current time: " << currentTime << std::endl;
+        std::cout << "Last press time: " << m_lastButtonPressTime << std::endl;
+        std::cout << "Time diff: " << (currentTime - m_lastButtonPressTime) << std::endl;
+        std::cout << "Debounce threshold: " << BUTTON_DEBOUNCE_MS << std::endl;
+        
+        // Simple time-based debouncing
+        if (currentTime - m_lastButtonPressTime < BUTTON_DEBOUNCE_MS) {
+            std::cout << "BLOCKED: Too soon, ignoring" << std::endl;
+            return true; // Ignore rapid repeated presses
+        }
+        
+        std::cout << "PROCESSING: Button press accepted" << std::endl;
+        m_lastButtonPressTime = currentTime;
+        
+        switch (event.cbutton.button) {
+        case SDL_CONTROLLER_BUTTON_DPAD_UP:
+            m_numberPadSelectedRow = (m_numberPadSelectedRow - 1 + 4) % 4;
+            return true;
+        case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+            m_numberPadSelectedRow = (m_numberPadSelectedRow + 1) % 4;
+            return true;
+        case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+            m_numberPadSelectedCol = (m_numberPadSelectedCol - 1 + 3) % 3;
+            return true;
+        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+            m_numberPadSelectedCol = (m_numberPadSelectedCol + 1) % 3;
+            return true;
+        case SDL_CONTROLLER_BUTTON_A:
+            {
+                std::cout << "A BUTTON PRESSED - Processing number selection" << std::endl;
+                
+                // Simulate button press for selected button
+                const char* buttons[4][3] = {
+                    {"7", "8", "9"},
+                    {"4", "5", "6"},
+                    {"1", "2", "3"},
+                    {"Clear", "0", "Back"}
+                };
+                
+                const char* buttonText = buttons[m_numberPadSelectedRow][m_numberPadSelectedCol];
+                std::cout << "Selected button: " << buttonText << " (row=" << m_numberPadSelectedRow << ", col=" << m_numberPadSelectedCol << ")" << std::endl;
+                std::cout << "Current input before: '" << m_pageJumpInput << "'" << std::endl;
+                
+                if (strcmp(buttonText, "Clear") == 0) {
+                    strcpy(m_pageJumpInput, "");
+                    std::cout << "CLEAR - Input cleared" << std::endl;
+                } else if (strcmp(buttonText, "Back") == 0) {
+                    int len = strlen(m_pageJumpInput);
+                    if (len > 0) {
+                        m_pageJumpInput[len - 1] = '\0';
+                        std::cout << "BACK - Removed last character" << std::endl;
+                    }
+                } else {
+                    int len = strlen(m_pageJumpInput);
+                    if (len < sizeof(m_pageJumpInput) - 1) {
+                        m_pageJumpInput[len] = buttonText[0];
+                        m_pageJumpInput[len + 1] = '\0';
+                        std::cout << "DIGIT - Added '" << buttonText[0] << "'" << std::endl;
+                    }
+                }
+                
+                std::cout << "Current input after: '" << m_pageJumpInput << "'" << std::endl;
+                std::cout << "===========================" << std::endl;
+                return true;
+            }
+        case SDL_CONTROLLER_BUTTON_B:
+            // Cancel/close number pad
+            hideNumberPad();
+            return true;
+        case SDL_CONTROLLER_BUTTON_START:
+            // Go to page if valid
+            {
+                int targetPage = strlen(m_pageJumpInput) > 0 ? std::atoi(m_pageJumpInput) : 0;
+                if (targetPage >= 1 && targetPage <= m_pageCount && m_pageJumpCallback) {
+                    m_pageJumpCallback(targetPage - 1);
+                    hideNumberPad();
+                }
+                return true;
+            }
+        default:
+            break;
+        }
+    }
+    
+    // Handle keyboard input as backup
+    if (event.type == SDL_KEYDOWN) {
+        switch (event.key.keysym.sym) {
+        case SDLK_ESCAPE:
+            hideNumberPad();
+            return true;
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER:
+            {
+                int targetPage = strlen(m_pageJumpInput) > 0 ? std::atoi(m_pageJumpInput) : 0;
+                if (targetPage >= 1 && targetPage <= m_pageCount && m_pageJumpCallback) {
+                    m_pageJumpCallback(targetPage - 1);
+                    hideNumberPad();
+                }
+                return true;
+            }
+        default:
+            break;
+        }
+    }
+    
+    return false;
+}
+
 int GuiManager::findFontIndex(const std::string& fontName) const {
     const auto& fonts = m_fontManager.getAvailableFonts();
     for (int i = 0; i < (int)fonts.size(); i++) {
@@ -421,4 +687,16 @@ int GuiManager::findFontIndex(const std::string& fontName) const {
         }
     }
     return 0; // Return 0 as safe default
+}
+
+void GuiManager::showNumberPad() {
+    m_showNumberPad = true;
+    // Reset debounce timer
+    m_lastButtonPressTime = 0;
+}
+
+void GuiManager::hideNumberPad() {
+    m_showNumberPad = false;
+    // Reset debounce timer
+    m_lastButtonPressTime = 0;
 }

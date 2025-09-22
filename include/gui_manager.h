@@ -120,6 +120,11 @@ public:
      */
     void setCurrentPage(int currentPage) { m_currentPage = currentPage; }
 
+    /**
+     * @brief Check if the number pad is currently visible
+     */
+    bool isNumberPadVisible() const { return m_showNumberPad; }
+
 private:
     bool m_initialized = false;
     bool m_showFontMenu = false;
@@ -144,6 +149,15 @@ private:
     char m_pageJumpInput[16] = "1";   // Page jump input
     bool m_fontSizeChanged = false;
     
+    // On-screen number pad state
+    bool m_showNumberPad = false;
+    int m_numberPadSelectedRow = 0;    // Selected row in number pad (0-3)
+    int m_numberPadSelectedCol = 0;    // Selected column in number pad (0-2)
+    
+    // Debouncing for number pad input
+    Uint32 m_lastButtonPressTime = 0;
+    const Uint32 BUTTON_DEBOUNCE_MS = 100;
+    
     // Font names for dropdown (persistent to avoid lifetime issues)
     std::vector<std::string> m_fontNames;
     
@@ -151,6 +165,28 @@ private:
      * @brief Render the font selection menu
      */
     void renderFontMenu();
+    
+    /**
+     * @brief Render the on-screen number pad
+     */
+    void renderNumberPad();
+    
+    /**
+     * @brief Handle controller input for number pad navigation
+     * @param event SDL event to process
+     * @return true if event was handled by number pad
+     */
+    bool handleNumberPadInput(const SDL_Event& event);
+    
+    /**
+     * @brief Show the on-screen number pad
+     */
+    void showNumberPad();
+    
+    /**
+     * @brief Hide the on-screen number pad
+     */
+    void hideNumberPad();
     
     /**
      * @brief Find index of font in available fonts list

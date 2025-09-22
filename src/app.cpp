@@ -320,7 +320,7 @@ void App::handleEvent(const SDL_Event &event)
     }
     
     // Block ALL input events if the settings menu is visible, except ESC to close it
-    if (m_guiManager && m_guiManager->isFontMenuVisible()) {
+    if (m_guiManager && (m_guiManager->isFontMenuVisible() || m_guiManager->isNumberPadVisible())) {
         // Always allow ESC and Q to close the menu
         if (event.type == SDL_KEYDOWN && 
             (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q)) {
@@ -330,7 +330,7 @@ void App::handleEvent(const SDL_Event &event)
         else if (event.type == SDL_QUIT) {
             // Let quit through
         }
-        // Block everything else when menu is visible to prevent bleeding through
+        // Block everything else when menu or number pad is visible to prevent bleeding through
         else {
             return;
         }
