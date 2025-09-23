@@ -87,7 +87,7 @@ make help
 
 **Install dependencies using Homebrew:**
 ```bash
-brew install sdl2 sdl2_ttf libarchive libwebp git pkg-config
+brew install sdl2 sdl2_ttf libarchive webp libarchive git pkg-config
 ```
 
 **Note**: MuPDF is now built automatically from source with CBR and WebP support - no system MuPDF packages needed.

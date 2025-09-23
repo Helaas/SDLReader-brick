@@ -1,4 +1,14 @@
 # Makefile for SDL Reader on macOS (Top-Level - No Explicit Library Build)
+# 
+# This Makefile automatically handles dependencies:
+# - Checks for required system libraries (SDL2, libarchive, webp, etc.)
+# - Downloads and sets up ImGui and MuPDF if needed
+# - Provides targets for dependency management
+#
+# Usage:
+#   make install-deps  # Install system dependencies via Homebrew
+#   make              # Build the project
+#   make help         # Show available targets
 
 # Compiler
 CXX = g++
@@ -76,18 +86,43 @@ OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS
        $(BUILD_DIR)/imgui_impl_sdl2.o \
        $(BUILD_DIR)/imgui_impl_sdlrenderer2.o
 
-.PHONY: all clean build-mupdf setup-mupdf clean-mupdf setup-imgui
+.PHONY: all clean build-mupdf setup-mupdf clean-mupdf setup-imgui check-deps install-deps clean-imgui clean-all help
 
 # Default target
-all: $(BIN_DIR) $(BUILD_DIR) setup-imgui setup-mupdf build-mupdf $(TARGET)
+all: check-deps $(BIN_DIR) $(BUILD_DIR) setup-imgui setup-mupdf build-mupdf $(TARGET)
 
-# Setup Dear ImGui if it doesn't exist
+# Check if required system dependencies are installed
+check-deps:
+	@echo "Checking system dependencies..."
+	@command -v pkg-config >/dev/null 2>&1 || { echo "pkg-config not found. Run 'make install-deps' to install dependencies."; exit 1; }
+	@export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$$(find /opt/homebrew/Cellar -name pkgconfig -type d 2>/dev/null | tr '\n' ':')$$PKG_CONFIG_PATH"; \
+	pkg-config --exists sdl2 || { echo "SDL2 not found. Run 'make install-deps' to install dependencies."; exit 1; }; \
+	pkg-config --exists SDL2_ttf || { echo "SDL2_ttf not found. Run 'make install-deps' to install dependencies."; exit 1; }; \
+	pkg-config --exists SDL2_image || { echo "SDL2_image not found. Run 'make install-deps' to install dependencies."; exit 1; }; \
+	pkg-config --exists libarchive || { echo "libarchive not found. Run 'make install-deps' to install dependencies."; exit 1; }; \
+	pkg-config --exists libwebp || { echo "libwebp not found. Run 'make install-deps' to install dependencies."; exit 1; }
+	@echo "All system dependencies found!"
+
+# Install required system dependencies using Homebrew
+install-deps:
+	@echo "Installing system dependencies via Homebrew..."
+	@command -v brew >/dev/null 2>&1 || { echo "Homebrew not found. Please install Homebrew first: https://brew.sh"; exit 1; }
+	brew install pkg-config sdl2 sdl2_ttf sdl2_image libarchive webp
+	@echo "System dependencies installed successfully!"
+
+# Setup Dear ImGui if it doesn't exist or is incomplete
 setup-imgui:
-	@if [ ! -d "imgui" ]; then \
-		echo "Cloning Dear ImGui repository..."; \
+	@if [ ! -d "imgui" ] || [ ! -f "imgui/imgui.h" ]; then \
+		echo "Setting up Dear ImGui repository..."; \
+		rm -rf imgui; \
 		git clone --depth 1 --branch v1.90.9 https://github.com/ocornut/imgui.git; \
+		if [ ! -f "imgui/imgui.h" ]; then \
+			echo "Error: ImGui setup failed - imgui.h not found"; \
+			exit 1; \
+		fi; \
+		echo "Dear ImGui setup completed successfully"; \
 	else \
-		echo "Dear ImGui repository already exists"; \
+		echo "Dear ImGui repository already exists and is complete"; \
 	fi
 
 # Setup MuPDF repository if it doesn't exist
@@ -181,7 +216,37 @@ clean:
 	rm -f $(TARGET)
 	rm -f webp-upstream-697749.patch
 
+# Clean ImGui (use with caution - will require re-download)
+clean-imgui:
+	@echo "Removing ImGui directory (will be re-downloaded on next build)..."
+	rm -rf imgui
+
 # Clean MuPDF (use with caution - will require re-download and rebuild)
 clean-mupdf:
 	@echo "Removing MuPDF directory (will be re-downloaded on next build)..."
 	rm -rf mupdf
+
+# Clean everything including downloaded dependencies
+clean-all: clean clean-imgui clean-mupdf
+	@echo "All build artifacts and dependencies cleaned"
+
+# Show help information
+help:
+	@echo "SDL Reader - macOS Build System"
+	@echo ""
+	@echo "Available targets:"
+	@echo "  all          - Build the complete project (default)"
+	@echo "  check-deps   - Check if system dependencies are installed"
+	@echo "  install-deps - Install system dependencies via Homebrew"
+	@echo "  setup-imgui  - Setup Dear ImGui library"
+	@echo "  setup-mupdf  - Setup MuPDF library"
+	@echo "  build-mupdf  - Build MuPDF with libarchive and WebP support"
+	@echo "  clean        - Remove build artifacts"
+	@echo "  clean-imgui  - Remove ImGui directory"
+	@echo "  clean-mupdf  - Remove MuPDF directory"
+	@echo "  clean-all    - Remove all build artifacts and dependencies"
+	@echo "  help         - Show this help message"
+	@echo ""
+	@echo "Quick start:"
+	@echo "  1. make install-deps    # Install system dependencies"
+	@echo "  2. make                 # Build the project"
