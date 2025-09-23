@@ -165,6 +165,34 @@ After building, run the executable from your project root, providing the path to
 ./bin/sdl_reader_cli path/to/your_ebook.mobi
 ```
 
+## Configuration
+
+SDL Reader uses a `config.json` file for customizing font settings and display options.
+
+### Setting up Configuration
+1. Copy the example configuration file:
+   ```bash
+   cp config.json.example config.json
+   ```
+
+2. Edit `config.json` to customize settings:
+   ```json
+   {
+     "fontPath": "./fonts/JetBrainsMono-Bold.ttf",
+     "fontName": "Jetbrainsmono Bold", 
+     "fontSize": 16,
+     "zoomStep": 10
+   }
+   ```
+
+### Configuration Options
+- **fontPath**: Path to the TTF font file to use for text rendering
+- **fontName**: Display name for the font (used in UI)
+- **fontSize**: Default font size in pixels
+- **zoomStep**: Percentage increment for zoom operations
+
+**Note**: The `config.json` file is ignored by Git to allow personal customization without affecting the repository.
+
 ## TG5040 Deployment
 
 For TG5040 (Trimui Brick) deployment, use the bundle export system:
