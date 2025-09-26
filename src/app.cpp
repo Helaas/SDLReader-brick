@@ -20,8 +20,6 @@
 App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer)
     : m_running(true), m_currentPage(0), m_currentScale(100),
       m_scrollX(0), m_scrollY(0), m_pageWidth(0), m_pageHeight(0),
-      m_isDragging(false), m_lastTouchX(0.0f), m_lastTouchY(0.0f),
-      m_gameController(nullptr), m_gameControllerInstanceID(-1),
       m_lastZoomTime(std::chrono::steady_clock::now())
 {
 
@@ -125,8 +123,10 @@ if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
     // Initialize page display timer  
     m_pageDisplayTime = SDL_GetTicks();
 
-    // Initialize game controllers
-    initializeGameControllers();
+    // Initialize InputManager
+    m_inputManager = std::make_unique<InputManager>();
+    m_inputManager->setZoomStep(m_optionsManager->loadConfig().zoomStep);
+    m_inputManager->setPageCount(m_pageCount);
 
     // Install custom font loader for MuPDF if this is a MuPDF document
     if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get())) {
@@ -175,7 +175,6 @@ App::~App()
         m_powerHandler->stop();
     }
 #endif
-    closeGameControllers();
 }
 
 void App::run()
@@ -309,11 +308,6 @@ void App::run()
 
 void App::handleEvent(const SDL_Event &event)
 {
-    // Debug only ESC key events
-    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE) {
-        std::cout << "ESC key pressed" << std::endl;
-    }
-    
     // Let ImGui handle the event first
     if (m_guiManager) {
         m_guiManager->handleEvent(event);
@@ -324,564 +318,405 @@ void App::handleEvent(const SDL_Event &event)
         // Always allow ESC and Q to close the menu
         if (event.type == SDL_KEYDOWN && 
             (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q)) {
-            // Let ESC/Q through to close menu
+            if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q) {
+                m_guiManager->toggleFontMenu();
+                markDirty();
+            }
         }
         // Always allow quit events
         else if (event.type == SDL_QUIT) {
-            // Let quit through
+            m_running = false;
         }
         // Block everything else when menu or number pad is visible to prevent bleeding through
-        else {
-            return;
-        }
+        return;
     }
 
-    AppAction action = AppAction::None;
+    // Process input through InputManager
+    InputActionData actionData = m_inputManager->processEvent(event);
+    processInputAction(actionData);
 
-    switch (event.type) {
-    case SDL_QUIT:
-        action = AppAction::Quit;
+    // Update App's input state variables for held button tracking
+    // This is needed for updateHeldPanning() and edge-turn logic
+    updateInputState(event);
+}
+
+void App::processInputAction(const InputActionData& actionData)
+{
+    switch (actionData.action) {
+    case InputAction::Quit:
+        m_running = false;
         break;
-    case SDL_WINDOWEVENT:
-        if (event.window.event == SDL_WINDOWEVENT_RESIZED ||
-            event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
-        {
-            action = AppAction::Resize;
-        }
-        break;
-    case SDL_KEYDOWN:
-        switch (event.key.keysym.sym)
-        {
-        case SDLK_AC_HOME:
-            action = AppAction::Quit;
-            break;
-        case SDLK_ESCAPE:
-            if (m_pageJumpInputActive) {
-                cancelPageJumpInput();
-            } else if (m_guiManager && m_guiManager->isFontMenuVisible()) {
-                // Close font menu if it's open
-                m_guiManager->toggleFontMenu();
-                // Force redraw to clear the menu from screen
-                markDirty();
-                // Don't allow quit action when closing menu
-            } else {
-                action = AppAction::Quit;
-            }
-            break;
-        case SDLK_q:
-            if (m_pageJumpInputActive) {
-                cancelPageJumpInput();
-            } else if (m_guiManager && m_guiManager->isFontMenuVisible()) {
-                // Close font menu if it's open - q key can also close menu
-                m_guiManager->toggleFontMenu();
-                // Force redraw to clear the menu from screen  
-                markDirty();
-            } else {
-                action = AppAction::Quit;
-            }
-            break;
-        case SDLK_RIGHT:
-            m_keyboardRightHeld = true;
-            if (!isInScrollTimeout()) {
-                handleDpadNudgeRight();
-                updatePageDisplayTime();
-                markDirty();
-            }
-            break;
-        case SDLK_LEFT:
-            m_keyboardLeftHeld = true;
-            if (!isInScrollTimeout()) {
-                handleDpadNudgeLeft();
-                updatePageDisplayTime();
-                markDirty();
-            }
-            break;
-        case SDLK_UP:
-            m_keyboardUpHeld = true;
-            if (!isInScrollTimeout()) {
-                handleDpadNudgeUp();
-                updatePageDisplayTime();
-                markDirty();
-            }
-            break;
-        case SDLK_DOWN:
-            m_keyboardDownHeld = true;
-            if (!isInScrollTimeout()) {
-                handleDpadNudgeDown();
-                updatePageDisplayTime();
-                markDirty();
-            }
-            break;
-        case SDLK_PAGEDOWN:
-            if (!isInPageChangeCooldown()) {
-                goToNextPage();
-            }
-            break;
-        case SDLK_PAGEUP:
-            if (!isInPageChangeCooldown()) {
-                goToPreviousPage();
-            }
-            break;
-        case SDLK_PLUS:
-        case SDLK_KP_PLUS:
-            zoom(m_optionsManager->loadConfig().zoomStep);
-            break;
-        case SDLK_MINUS:
-        case SDLK_KP_MINUS:
-            zoom(-m_optionsManager->loadConfig().zoomStep);
-            break;
-        case SDLK_HOME:
-            goToPage(0);
-            break;
-        case SDLK_END:
-            goToPage(m_pageCount - 1);
-            break;
-        case SDLK_0:
-        case SDLK_KP_0:
-            if (m_pageJumpInputActive) {
-                handlePageJumpInput('0');
-            } else {
-                zoomTo(100);
-            }
-            break;
-        case SDLK_1:
-        case SDLK_KP_1:
-            if (m_pageJumpInputActive) {
-                handlePageJumpInput('1');
-            }
-            break;
-        case SDLK_2:
-        case SDLK_KP_2:
-            if (m_pageJumpInputActive) {
-                handlePageJumpInput('2');
-            }
-            break;
-        case SDLK_3:
-        case SDLK_KP_3:
-            if (m_pageJumpInputActive) {
-                handlePageJumpInput('3');
-            }
-            break;
-        case SDLK_4:
-        case SDLK_KP_4:
-            if (m_pageJumpInputActive) {
-                handlePageJumpInput('4');
-            }
-            break;
-        case SDLK_5:
-        case SDLK_KP_5:
-            if (m_pageJumpInputActive) {
-                handlePageJumpInput('5');
-            }
-            break;
-        case SDLK_6:
-        case SDLK_KP_6:
-            if (m_pageJumpInputActive) {
-                handlePageJumpInput('6');
-            }
-            break;
-        case SDLK_7:
-        case SDLK_KP_7:
-            if (m_pageJumpInputActive) {
-                handlePageJumpInput('7');
-            }
-            break;
-        case SDLK_8:
-        case SDLK_KP_8:
-            if (m_pageJumpInputActive) {
-                handlePageJumpInput('8');
-            }
-            break;
-        case SDLK_9:
-        case SDLK_KP_9:
-            if (m_pageJumpInputActive) {
-                handlePageJumpInput('9');
-            }
-            break;
-        case SDLK_RETURN:
-        case SDLK_KP_ENTER:
-            if (m_pageJumpInputActive) {
-                confirmPageJumpInput();
-            }
-            break;
-        case SDLK_f:
-            m_renderer->toggleFullscreen();
-            fitPageToWindow();
-            break;
-        case SDLK_g:
-            startPageJumpInput();
-            break;
-        case SDLK_m:
-            action = AppAction::ToggleFontMenu;
-            break;
-        case SDLK_p:
-            printAppState();
-            break;
-        case SDLK_c:
-            clampScroll();
-            break;
-        case SDLK_w:
-            fitPageToWidth();
-            break;
-        case SDLK_r:
-            if (SDL_GetModState() & KMOD_SHIFT) {
-                rotateClockwise();
-            } else {
-                resetPageView();
-            }
-            break;
-        case SDLK_h:
-            toggleMirrorHorizontal();
-            break;
-        case SDLK_v:
-            toggleMirrorVertical();
-            break;
-        case SDLK_LEFTBRACKET:
-            if (!isInPageChangeCooldown()) {
-                jumpPages(-10);
-            }
-            break;
-        case SDLK_RIGHTBRACKET:
-            if (!isInPageChangeCooldown()) {
-                jumpPages(+10);
-            }
-            break;
-        default:
-            // Unknown keys are ignored
-            break;
-        }
-        break;
-    case SDL_KEYUP:
-        switch (event.key.keysym.sym)
-        {
-        case SDLK_RIGHT:
-            m_keyboardRightHeld = false;
-            if (m_edgeTurnHoldRight > 0.0f) { // Only set cooldown if timer was actually running
-                m_edgeTurnCooldownRight = SDL_GetTicks() / 1000.0f;
-            }
-            m_edgeTurnHoldRight = 0.0f; // Reset edge timer when key released
-            markDirty(); // Trigger redraw to hide progress indicator
-            break;
-        case SDLK_LEFT:
-            m_keyboardLeftHeld = false;
-            if (m_edgeTurnHoldLeft > 0.0f) { // Only set cooldown if timer was actually running
-                m_edgeTurnCooldownLeft = SDL_GetTicks() / 1000.0f;
-            }
-            m_edgeTurnHoldLeft = 0.0f; // Reset edge timer when key released
-            markDirty(); // Trigger redraw to hide progress indicator
-            break;
-        case SDLK_UP:
-            m_keyboardUpHeld = false;
-            if (m_edgeTurnHoldUp > 0.0f) { // Only set cooldown if timer was actually running
-                m_edgeTurnCooldownUp = SDL_GetTicks() / 1000.0f;
-            }
-            m_edgeTurnHoldUp = 0.0f; // Reset edge timer when key released
-            markDirty(); // Trigger redraw to hide progress indicator
-            break;
-        case SDLK_DOWN:
-            m_keyboardDownHeld = false;
-            if (m_edgeTurnHoldDown > 0.0f) { // Only set cooldown if timer was actually running
-                m_edgeTurnCooldownDown = SDL_GetTicks() / 1000.0f;
-            }
-            m_edgeTurnHoldDown = 0.0f; // Reset edge timer when key released
-            markDirty(); // Trigger redraw to hide progress indicator
-            break;
-        default:
-            // Unknown key releases are ignored
-            break;
-        }
-        break;
-    case SDL_MOUSEWHEEL:
-        if (event.wheel.y > 0)
-        {
-            if (SDL_GetModState() & KMOD_CTRL)
-            {
-                zoom(m_optionsManager->loadConfig().zoomStep);
-            }
-            else if (!isInScrollTimeout())
-            {
-                m_scrollY += 50;
-                updatePageDisplayTime();
-            }
-        }
-        else if (event.wheel.y < 0)
-        {
-            if (SDL_GetModState() & KMOD_CTRL)
-            {
-                zoom(-m_optionsManager->loadConfig().zoomStep);
-            }
-            else if (!isInScrollTimeout())
-            {
-                m_scrollY -= 50;
-                updatePageDisplayTime();
-            }
-        }
-        clampScroll();
+    case InputAction::Resize:
+        fitPageToWindow();
         markDirty();
         break;
-    case SDL_MOUSEBUTTONDOWN:
-        if (event.button.button == SDL_BUTTON_LEFT)
-        {
-            m_isDragging = true;
-            m_lastTouchX = static_cast<float>(event.button.x);
-            m_lastTouchY = static_cast<float>(event.button.y);
+    case InputAction::ToggleFontMenu:
+        toggleFontMenu();
+        break;
+    case InputAction::GoToNextPage:
+        if (!isInPageChangeCooldown()) {
+            goToNextPage();
         }
         break;
-    case SDL_MOUSEBUTTONUP:
-        if (event.button.button == SDL_BUTTON_LEFT)
-        {
-            m_isDragging = false;
+    case InputAction::GoToPreviousPage:
+        if (!isInPageChangeCooldown()) {
+            goToPreviousPage();
         }
         break;
-    case SDL_MOUSEMOTION:
-        if (m_isDragging && !isInScrollTimeout())
-        {
-            float dx = static_cast<float>(event.motion.x) - m_lastTouchX;
-            float dy = static_cast<float>(event.motion.y) - m_lastTouchY;
+    case InputAction::ZoomIn:
+        zoom(m_optionsManager->loadConfig().zoomStep);
+        break;
+    case InputAction::ZoomOut:
+        zoom(-m_optionsManager->loadConfig().zoomStep);
+        break;
+    case InputAction::ZoomTo:
+        zoomTo(actionData.intValue > 0 ? actionData.intValue : 100);
+        break;
+    case InputAction::GoToFirstPage:
+        goToPage(0);
+        break;
+    case InputAction::GoToLastPage:
+        goToPage(m_pageCount - 1);
+        break;
+    case InputAction::GoToPage:
+        if (actionData.intValue >= 0 && actionData.intValue < m_pageCount) {
+            goToPage(actionData.intValue);
+        }
+        break;
+    case InputAction::JumpPages:
+        if (!isInPageChangeCooldown()) {
+            jumpPages(actionData.intValue);
+        }
+        break;
+    case InputAction::ToggleFullscreen:
+        m_renderer->toggleFullscreen();
+        fitPageToWindow();
+        break;
+    case InputAction::StartPageJumpInput:
+        startPageJumpInput();
+        break;
+    case InputAction::PrintAppState:
+        printAppState();
+        break;
+    case InputAction::ClampScroll:
+        clampScroll();
+        break;
+    case InputAction::FitPageToWidth:
+        fitPageToWidth();
+        break;
+    case InputAction::FitPageToWindow:
+        fitPageToWindow();
+        break;
+    case InputAction::ResetPageView:
+        resetPageView();
+        break;
+    case InputAction::ToggleMirrorHorizontal:
+        toggleMirrorHorizontal();
+        break;
+    case InputAction::ToggleMirrorVertical:
+        toggleMirrorVertical();
+        break;
+    case InputAction::RotateClockwise:
+        rotateClockwise();
+        break;
+    case InputAction::ScrollUp:
+        if (!isInScrollTimeout()) {
+            m_scrollY += static_cast<int>(actionData.floatValue);
+            updatePageDisplayTime();
+            clampScroll();
+            markDirty();
+        }
+        break;
+    case InputAction::ScrollDown:
+        if (!isInScrollTimeout()) {
+            m_scrollY -= static_cast<int>(actionData.floatValue);
+            updatePageDisplayTime();
+            clampScroll();
+            markDirty();
+        }
+        break;
+    case InputAction::MoveLeft:
+        if (!isInScrollTimeout()) {
+            m_scrollX += static_cast<int>(actionData.floatValue);
+            updatePageDisplayTime();
+            clampScroll();
+            markDirty();
+        }
+        break;
+    case InputAction::MoveRight:
+        if (!isInScrollTimeout()) {
+            m_scrollX -= static_cast<int>(actionData.floatValue);
+            updatePageDisplayTime();
+            clampScroll();
+            markDirty();
+        }
+        break;
+    case InputAction::MoveUp:
+        if (!isInScrollTimeout()) {
+            m_scrollY += static_cast<int>(actionData.floatValue);
+            updatePageDisplayTime();
+            clampScroll();
+            markDirty();
+        }
+        break;
+    case InputAction::MoveDown:
+        if (!isInScrollTimeout()) {
+            m_scrollY -= static_cast<int>(actionData.floatValue);
+            updatePageDisplayTime();
+            clampScroll();
+            markDirty();
+        }
+        break;
+    case InputAction::StartDragging:
+        m_isDragging = true;
+        m_lastTouchX = actionData.floatValue;
+        m_lastTouchY = actionData.deltaX; // Using deltaX as second position value
+        break;
+    case InputAction::StopDragging:
+        m_isDragging = false;
+        break;
+    case InputAction::UpdateDragging:
+        if (m_isDragging && !isInScrollTimeout()) {
+            float dx = actionData.floatValue - m_lastTouchX;
+            float dy = actionData.deltaX - m_lastTouchY;
             m_scrollX += static_cast<int>(dx);
             m_scrollY += static_cast<int>(dy);
-            m_lastTouchX = static_cast<float>(event.motion.x);
-            m_lastTouchY = static_cast<float>(event.motion.y);
+            m_lastTouchX = actionData.floatValue;
+            m_lastTouchY = actionData.deltaX;
             clampScroll();
             updatePageDisplayTime();
             markDirty();
         }
         break;
-    case SDL_CONTROLLERAXISMOTION:
-        if (event.caxis.which == m_gameControllerInstanceID)
-        {
-            const Sint16 AXIS_DEAD_ZONE = 8000;
-            // --- L2 / R2 as analog axes: jump ±10 pages on a strong press ---
-            if (event.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT &&
-                event.caxis.value > AXIS_DEAD_ZONE)
-            {
-                if (!isInPageChangeCooldown()) {
-                    jumpPages(-10);
-                }
-            }
-            if (event.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT &&
-                event.caxis.value > AXIS_DEAD_ZONE)
-            {
-                if (!isInPageChangeCooldown()) {
-                    jumpPages(+10);
-                }
-            }
-
-            switch (event.caxis.axis)
-            {
-            case SDL_CONTROLLER_AXIS_LEFTX:
-            case SDL_CONTROLLER_AXIS_RIGHTX:
-                if (!isInScrollTimeout()) {
-                    if (event.caxis.value < -AXIS_DEAD_ZONE)
-                    {
-                        m_scrollX += 20;
-                    }
-                    else if (event.caxis.value > AXIS_DEAD_ZONE)
-                    {
-                        m_scrollX -= 20;
-                    }
-                }
-                break;
-            case SDL_CONTROLLER_AXIS_LEFTY:
-            case SDL_CONTROLLER_AXIS_RIGHTY:
-                if (!isInScrollTimeout()) {
-                    if (event.caxis.value < -AXIS_DEAD_ZONE)
-                    {
-                        m_scrollY += 20;
-                    }
-                    else if (event.caxis.value > AXIS_DEAD_ZONE)
-                    {
-                        m_scrollY -= 20;
-                    }
-                }
-                break;
-            }
-            clampScroll();
+    case InputAction::HandlePageJumpInput:
+        if (m_pageJumpInputActive) {
+            handlePageJumpInput(actionData.charValue);
         }
         break;
+    case InputAction::ConfirmPageJumpInput:
+        if (m_pageJumpInputActive) {
+            confirmPageJumpInput();
+        }
+        break;
+    case InputAction::CancelPageJumpInput:
+        if (m_pageJumpInputActive) {
+            cancelPageJumpInput();
+        } else if (m_guiManager && m_guiManager->isFontMenuVisible()) {
+            // Close font menu if it's open
+            m_guiManager->toggleFontMenu();
+            // Force redraw to clear the menu from screen
+            markDirty();
+        } else {
+            m_running = false;
+        }
+        break;
+    case InputAction::None:
+    default:
+        // No action to take
+        break;
+    }
+}
+
+void App::updateInputState(const SDL_Event& event)
+{
+    switch (event.type) {
+    case SDL_KEYDOWN:
+        switch (event.key.keysym.sym) {
+        case SDLK_RIGHT:
+            if (!m_keyboardRightHeld) { // Only on true initial press
+                m_keyboardRightHeld = true;
+                if (!isInScrollTimeout()) {
+                    handleDpadNudgeRight();
+                    updatePageDisplayTime();
+                    markDirty();
+                }
+            }
+            break;
+        case SDLK_LEFT:
+            if (!m_keyboardLeftHeld) { // Only on true initial press
+                m_keyboardLeftHeld = true;
+                if (!isInScrollTimeout()) {
+                    handleDpadNudgeLeft();
+                    updatePageDisplayTime();
+                    markDirty();
+                }
+            }
+            break;
+        case SDLK_UP:
+            if (!m_keyboardUpHeld) { // Only on true initial press
+                m_keyboardUpHeld = true;
+                if (!isInScrollTimeout()) {
+                    handleDpadNudgeUp();
+                    updatePageDisplayTime();
+                    markDirty();
+                }
+            }
+            break;
+        case SDLK_DOWN:
+            if (!m_keyboardDownHeld) { // Only on true initial press
+                m_keyboardDownHeld = true;
+                if (!isInScrollTimeout()) {
+                    handleDpadNudgeDown();
+                    updatePageDisplayTime();
+                    markDirty();
+                }
+            }
+            break;
+        }
+        break;
+        
+    case SDL_KEYUP:
+        switch (event.key.keysym.sym) {
+        case SDLK_RIGHT:
+            m_keyboardRightHeld = false;
+            if (m_edgeTurnHoldRight > 0.0f) {
+                m_edgeTurnCooldownRight = SDL_GetTicks() / 1000.0f;
+            }
+            m_edgeTurnHoldRight = 0.0f;
+            markDirty();
+            break;
+        case SDLK_LEFT:
+            m_keyboardLeftHeld = false;
+            if (m_edgeTurnHoldLeft > 0.0f) {
+                m_edgeTurnCooldownLeft = SDL_GetTicks() / 1000.0f;
+            }
+            m_edgeTurnHoldLeft = 0.0f;
+            markDirty();
+            break;
+        case SDLK_UP:
+            m_keyboardUpHeld = false;
+            if (m_edgeTurnHoldUp > 0.0f) {
+                m_edgeTurnCooldownUp = SDL_GetTicks() / 1000.0f;
+            }
+            m_edgeTurnHoldUp = 0.0f;
+            markDirty();
+            break;
+        case SDLK_DOWN:
+            m_keyboardDownHeld = false;
+            if (m_edgeTurnHoldDown > 0.0f) {
+                m_edgeTurnCooldownDown = SDL_GetTicks() / 1000.0f;
+            }
+            m_edgeTurnHoldDown = 0.0f;
+            markDirty();
+            break;
+        }
+        break;
+        
+    case SDL_MOUSEBUTTONDOWN:
+        if (event.button.button == SDL_BUTTON_LEFT) {
+            m_isDragging = true;
+            m_lastTouchX = static_cast<float>(event.button.x);
+            m_lastTouchY = static_cast<float>(event.button.y);
+        }
+        break;
+        
+    case SDL_MOUSEBUTTONUP:
+        if (event.button.button == SDL_BUTTON_LEFT) {
+            m_isDragging = false;
+        }
+        break;
+        
     case SDL_CONTROLLERBUTTONDOWN:
-        if (event.cbutton.which == m_gameControllerInstanceID)
-        {
-            switch (event.cbutton.button)
-            {
-            // --- D-Pad pans (Move) ---
+        if (event.cbutton.which == m_gameControllerInstanceID) {
+            switch (event.cbutton.button) {
             case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-                m_dpadRightHeld = true;
-                handleDpadNudgeRight();
+                if (!m_dpadRightHeld) { // Only on true initial press
+                    m_dpadRightHeld = true;
+                    handleDpadNudgeRight();
+                }
                 break;
             case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-                m_dpadLeftHeld = true;
-                handleDpadNudgeLeft();
+                if (!m_dpadLeftHeld) { // Only on true initial press
+                    m_dpadLeftHeld = true;
+                    handleDpadNudgeLeft();
+                }
                 break;
             case SDL_CONTROLLER_BUTTON_DPAD_UP:
-                m_dpadUpHeld = true;
-                handleDpadNudgeUp();
+                if (!m_dpadUpHeld) { // Only on true initial press
+                    m_dpadUpHeld = true;
+                    handleDpadNudgeUp();
+                }
                 break;
             case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-                m_dpadDownHeld = true;
-                handleDpadNudgeDown();
-                break;
-
-            // --- L1 / R1: page up (previous) ---
-            case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
-                if (!isInPageChangeCooldown()) {
-                    goToPreviousPage();
+                if (!m_dpadDownHeld) { // Only on true initial press
+                    m_dpadDownHeld = true;
+                    handleDpadNudgeDown();
                 }
-                break;
-            case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
-                if (!isInPageChangeCooldown()) {
-                    goToNextPage();
-                }
-                break;
-
-            // --- Y / B: zoom in/out ---
-            case SDL_CONTROLLER_BUTTON_Y:
-                zoom(m_optionsManager->loadConfig().zoomStep);
-                break;
-            case SDL_CONTROLLER_BUTTON_B:
-                zoom(-m_optionsManager->loadConfig().zoomStep);
-                break;
-
-            // --- X: Rotate ---
-            case SDL_CONTROLLER_BUTTON_X:
-                rotateClockwise();
-                break;
-
-            // --- A: Best fit width ---
-            case SDL_CONTROLLER_BUTTON_A:
-                fitPageToWidth();
-                break;
-
-            // --- MENU/START: Quit ---
-            case SDL_CONTROLLER_BUTTON_GUIDE:
-                action = AppAction::Quit;
-                break; // MENU on Brick
-
-            // --- START for horizontal mirroring  ---    
-            case SDL_CONTROLLER_BUTTON_START:
-                toggleMirrorHorizontal();
-                break;
-
-            // --- BACK for vertical mirroring  ---
-            case SDL_CONTROLLER_BUTTON_BACK:
-                toggleMirrorVertical();
-                break; // SELECT
-            default:
                 break;
             }
         }
         break;
+        
     case SDL_CONTROLLERBUTTONUP:
-        if (event.cbutton.which == m_gameControllerInstanceID)
-        {
-            switch (event.cbutton.button)
-            {
+        if (event.cbutton.which == m_gameControllerInstanceID) {
+            switch (event.cbutton.button) {
             case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
                 m_dpadRightHeld = false;
-                if (m_edgeTurnHoldRight > 0.0f) { // Only set cooldown if timer was actually running
+                if (m_edgeTurnHoldRight > 0.0f) {
                     m_edgeTurnCooldownRight = SDL_GetTicks() / 1000.0f;
                 }
-                m_edgeTurnHoldRight = 0.0f; // Reset edge timer when button released
-                markDirty(); // Trigger redraw to hide progress indicator
+                m_edgeTurnHoldRight = 0.0f;
+                markDirty();
                 break;
             case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
                 m_dpadLeftHeld = false;
-                if (m_edgeTurnHoldLeft > 0.0f) { // Only set cooldown if timer was actually running
+                if (m_edgeTurnHoldLeft > 0.0f) {
                     m_edgeTurnCooldownLeft = SDL_GetTicks() / 1000.0f;
                 }
-                m_edgeTurnHoldLeft = 0.0f; // Reset edge timer when button released
-                markDirty(); // Trigger redraw to hide progress indicator
+                m_edgeTurnHoldLeft = 0.0f;
+                markDirty();
                 break;
             case SDL_CONTROLLER_BUTTON_DPAD_UP:
                 m_dpadUpHeld = false;
-                if (m_edgeTurnHoldUp > 0.0f) { // Only set cooldown if timer was actually running
+                if (m_edgeTurnHoldUp > 0.0f) {
                     m_edgeTurnCooldownUp = SDL_GetTicks() / 1000.0f;
                 }
-                m_edgeTurnHoldUp = 0.0f; // Reset edge timer when button released
-                markDirty(); // Trigger redraw to hide progress indicator
+                m_edgeTurnHoldUp = 0.0f;
+                markDirty();
                 break;
             case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
                 m_dpadDownHeld = false;
-                if (m_edgeTurnHoldDown > 0.0f) { // Only set cooldown if timer was actually running
+                if (m_edgeTurnHoldDown > 0.0f) {
                     m_edgeTurnCooldownDown = SDL_GetTicks() / 1000.0f;
                 }
-                m_edgeTurnHoldDown = 0.0f; // Reset edge timer when button released
-                markDirty(); // Trigger redraw to hide progress indicator
-                break;
-            default:
+                m_edgeTurnHoldDown = 0.0f;
+                markDirty();
                 break;
             }
         }
         break;
+        
     case SDL_CONTROLLERDEVICEADDED:
-        if (m_gameController == nullptr)
-        {
+        if (m_gameController == nullptr) {
             m_gameController = SDL_GameControllerOpen(event.cdevice.which);
-            if (m_gameController)
-            {
+            if (m_gameController) {
                 m_gameControllerInstanceID = SDL_JoystickGetDeviceInstanceID(event.cdevice.which);
                 std::cout << "Opened game controller: " << SDL_GameControllerName(m_gameController) << std::endl;
-            }
-            else
-            {
+            } else {
                 std::cerr << "Could not open game controller: " << SDL_GetError() << std::endl;
             }
         }
         break;
+        
     case SDL_CONTROLLERDEVICEREMOVED:
-        if (m_gameController != nullptr && event.cdevice.which == m_gameControllerInstanceID)
-        {
+        if (m_gameController != nullptr && event.cdevice.which == m_gameControllerInstanceID) {
             SDL_GameControllerClose(m_gameController);
             m_gameController = nullptr;
             m_gameControllerInstanceID = -1;
             std::cout << "Game controller disconnected." << std::endl;
         }
         break;
-    case SDL_JOYBUTTONDOWN:
-        // Handle joystick button presses
-        {
-            #ifdef TG5040_PLATFORM
-            // Handle specific button functions
-            switch (event.jbutton.button) {
-            case 9:
-                // Button 9 - Reset page view (like R key)
-                resetPageView();
-                break;
-            case 10:
-                // Button 10 - Set zoom to 200%
-                zoomTo(200);
-                break;
-            default:
-                // Other joystick buttons are ignored
-                break;
-            }
-            #endif
-        }
-        break;
-    case SDL_JOYBUTTONUP:
-        // Joystick button releases are ignored
-        break;
-    case SDL_JOYHATMOTION:
-        // Joystick hat motion is ignored
-        break;
-    case SDL_JOYAXISMOTION:
-        // Joystick axis motion is ignored
-        break;
     }
+}
 
-    if (action == AppAction::Quit)
-    {
-        m_running = false;
-    }
-    else if (action == AppAction::Resize)
-    {
-        fitPageToWindow();
-        markDirty();
-    }
-    else if (action == AppAction::ToggleFontMenu)
-    {
-        toggleFontMenu();
-    }
+bool App::isInPageChangeCooldown() const
+{
+    return (SDL_GetTicks() - m_lastPageChangeTime) < PAGE_CHANGE_COOLDOWN;
+}
+
+bool App::isInScrollTimeout() const
+{
+    return (SDL_GetTicks() - m_lastPageChangeTime) < (m_lastRenderDuration + 50);
 }
 
 void App::loadDocument()

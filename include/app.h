@@ -6,6 +6,7 @@
 #include "text_renderer.h"
 #include "gui_manager.h"
 #include "options_manager.h"
+#include "input_manager.h"
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
 #endif
@@ -66,6 +67,8 @@ private:
 
     // Event Handling
     void handleEvent(const SDL_Event &event);
+    void processInputAction(const InputActionData& actionData);
+    void updateInputState(const SDL_Event& event);
 
     // Page Navigation
     void goToNextPage();
@@ -93,6 +96,10 @@ private:
     // State Management
     void resetPageView();
     void printAppState();
+    
+    // Cooldown and timing checks
+    bool isInPageChangeCooldown() const;
+    bool isInScrollTimeout() const;
 
     // Rotation and mirroring
     void rotateClockwise();
@@ -102,18 +109,16 @@ private:
     // Font management
     void toggleFontMenu();
     void applyFontConfiguration(const FontConfig& config);
-
-    // D-pad hold state
-    bool m_dpadLeftHeld{false};
-    bool m_dpadRightHeld{false};
-    bool m_dpadUpHeld{false};
-    bool m_dpadDownHeld{false};
-
-    // Keyboard arrow key hold state
-    bool m_keyboardLeftHeld{false};
-    bool m_keyboardRightHeld{false};
-    bool m_keyboardUpHeld{false};
-    bool m_keyboardDownHeld{false};
+    
+    // Game controller management
+    void initializeGameControllers();
+    void closeGameControllers();
+    
+    // DPad nudge methods
+    void handleDpadNudgeRight();
+    void handleDpadNudgeLeft();
+    void handleDpadNudgeUp();
+    void handleDpadNudgeDown();
 
     // Pan speed (pixels per second)
     float m_dpadPanSpeed{600.0f};
@@ -129,6 +134,42 @@ private:
     std::unique_ptr<TextRenderer> m_textRenderer;
     std::unique_ptr<GuiManager> m_guiManager;
     std::unique_ptr<OptionsManager> m_optionsManager;
+    std::unique_ptr<InputManager> m_inputManager;
+    
+    // Essential input state variables (still needed by App for compatibility)
+    bool m_isDragging{false};
+    float m_lastTouchX{0.0f};
+    float m_lastTouchY{0.0f};
+    bool m_pageJumpInputActive{false};
+    std::string m_pageJumpBuffer;
+    Uint32 m_pageJumpStartTime{0};
+    static constexpr Uint32 PAGE_JUMP_TIMEOUT = 5000; // 5 seconds
+    
+    // D-pad held state for continuous input
+    bool m_dpadLeftHeld{false};
+    bool m_dpadRightHeld{false};
+    bool m_dpadUpHeld{false};
+    bool m_dpadDownHeld{false};
+    bool m_keyboardLeftHeld{false};
+    bool m_keyboardRightHeld{false};
+    bool m_keyboardUpHeld{false};
+    bool m_keyboardDownHeld{false};
+    
+    // Edge-turn timing for page changes at edges
+    float m_edgeTurnHoldRight{0.0f};
+    float m_edgeTurnHoldLeft{0.0f};
+    float m_edgeTurnHoldUp{0.0f};
+    float m_edgeTurnHoldDown{0.0f};
+    float m_edgeTurnThreshold{0.300f}; // seconds to hold at edge before page turn
+    float m_edgeTurnCooldownRight{0.0f};
+    float m_edgeTurnCooldownLeft{0.0f};
+    float m_edgeTurnCooldownUp{0.0f};
+    float m_edgeTurnCooldownDown{0.0f};
+    float m_edgeTurnCooldownDuration{0.5f}; // seconds to wait before allowing edge-turn again
+    
+    // Game controller support
+    SDL_GameController* m_gameController{nullptr};
+    SDL_JoystickID m_gameControllerInstanceID{-1};
     
     // Mutex to protect document access from multiple threads
     mutable std::mutex m_documentMutex;
@@ -145,35 +186,10 @@ private:
     int m_pageWidth;
     int m_pageHeight;
 
-    bool m_isDragging;
-    float m_lastTouchX;
-    float m_lastTouchY;
 
-    // Game Controller
-    SDL_GameController *m_gameController;
-    SDL_JoystickID m_gameControllerInstanceID;
-
-    // Helper to initialize and close game controllers
-    void initializeGameControllers();
-    void closeGameControllers();
 
     // Per-frame panning when D-pad is held
     bool updateHeldPanning(float dt);
-
-    // --- edge-turn timing ---
-    float m_edgeTurnHoldRight{0.0f};
-    float m_edgeTurnHoldLeft{0.0f};
-    float m_edgeTurnHoldUp{0.0f};
-    float m_edgeTurnHoldDown{0.0f};
-
-    float m_edgeTurnThreshold{0.300f}; // seconds to dwell at edge before flipping
-    
-    // Cooldown timestamps to prevent immediate nudges after edge-turn cancellation
-    float m_edgeTurnCooldownRight{0.0f};
-    float m_edgeTurnCooldownLeft{0.0f};
-    float m_edgeTurnCooldownUp{0.0f};
-    float m_edgeTurnCooldownDown{0.0f};
-    float m_edgeTurnCooldownDuration{0.5f}; // 500ms cooldown after cancellation
 
     // Page change cooldown to prevent rapid page flipping during panning
     Uint32 m_lastPageChangeTime{0};
@@ -185,17 +201,7 @@ private:
     // Threshold for determining when rendering becomes expensive enough to warrant immediate processing indicator
     static constexpr Uint32 EXPENSIVE_RENDER_THRESHOLD_MS = 200; // Show immediate indicator if last render took > 200ms
     
-    // Check if we're in page change cooldown period
-    bool isInPageChangeCooldown() const {
-        return (SDL_GetTicks() - m_lastPageChangeTime) < PAGE_CHANGE_COOLDOWN;
-    }
-    
-    // Check if we should block scrolling after a page change (using dynamic timeout with minimum)
-    bool isInScrollTimeout() const {
-        Uint32 minTimeout = 100; // Minimum 100ms timeout regardless of render time
-        Uint32 timeoutDuration = std::max(minTimeout, m_lastRenderDuration);
-        return (SDL_GetTicks() - m_lastPageChangeTime) < timeoutDuration;
-    }
+
     
     // Check if next render is likely to be expensive based on recent rendering performance
     bool isNextRenderLikelyExpensive() const {
@@ -209,12 +215,6 @@ private:
             std::chrono::steady_clock::now() - m_zoomProcessingStartTime).count();
         return elapsed < ZOOM_PROCESSING_MIN_DISPLAY_MS || isZoomDebouncing();
     }
-
-    // Try a one-shot nudge; if at the edge, flip the page instead.
-    void handleDpadNudgeRight();
-    void handleDpadNudgeLeft();
-    void handleDpadNudgeUp();
-    void handleDpadNudgeDown();
 
     // Scroll extents helpers
     int getMaxScrollX() const;
@@ -250,11 +250,7 @@ private:
     // Fake sleep mode state
     bool m_inFakeSleep{false};
     
-    // Page jump input state
-    bool m_pageJumpInputActive{false};
-    std::string m_pageJumpBuffer;
-    Uint32 m_pageJumpStartTime{0};
-    static constexpr Uint32 PAGE_JUMP_TIMEOUT = 5000; // 5 seconds timeout
+
     
     // Scale display timing
     Uint32 m_scaleDisplayTime{0};
