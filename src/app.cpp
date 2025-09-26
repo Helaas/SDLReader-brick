@@ -18,9 +18,7 @@
 
 // Constructor now accepts pre-initialized SDL_Window* and SDL_Renderer*
 App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer)
-    : m_running(true), m_currentPage(0), m_currentScale(100),
-      m_scrollX(0), m_scrollY(0), m_pageWidth(0), m_pageHeight(0),
-      m_lastZoomTime(std::chrono::steady_clock::now())
+    : m_running(true), m_currentPage(0)
 {
 
     // Pass the pre-initialized window and renderer to the Renderer object
@@ -52,6 +50,9 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
 
     // Initialize font manager FIRST, before document creation
     m_optionsManager = std::make_unique<OptionsManager>();
+    
+    // Initialize viewport manager
+    m_viewportManager = std::make_unique<ViewportManager>(m_renderer.get());
     
     // Load saved font configuration early
     FontConfig savedConfig = m_optionsManager->loadConfig();
@@ -218,22 +219,11 @@ void App::run()
             // Normal rendering - only render if something changed
             bool panningChanged = updateHeldPanning(dt);
             
-            // Check for settled zoom input and apply pending zoom
-            if (m_pendingZoomDelta != 0) {
-                auto now = std::chrono::steady_clock::now();
-                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastZoomInputTime).count();
-                
-                // Use platform-specific debounce time, with minimum based on render performance
-#ifdef TG5040_PLATFORM
-                int debounceTime = std::max(ZOOM_DEBOUNCE_MS, static_cast<int>(m_lastRenderDuration));
-#else
-                int debounceTime = std::max(ZOOM_DEBOUNCE_MS, static_cast<int>(m_lastRenderDuration));
-#endif
-                
-                if (elapsed >= debounceTime) {
-                    // Zoom input has settled, apply the final accumulated zoom
-                    applyPendingZoom();
-                }
+            // Check for settled zoom input and apply pending zoom through ViewportManager
+            if (!m_viewportManager->isZoomDebouncing()) {
+                // Zoom input has settled, apply the final accumulated zoom
+                m_viewportManager->applyPendingZoom(m_document.get(), m_currentPage);
+                markDirty();
             }
             
             // Apply pending font changes safely in the main loop
@@ -258,7 +248,7 @@ void App::run()
             
             bool doRender = false;
             
-            if (isZoomDebouncing()) {
+            if (m_viewportManager->isZoomDebouncing()) {
                 // During zoom processing, show processing indicator with minimal rendering
                 // Re-render the current page at current scale with indicator overlay
                 if ((currentTime - lastRenderTime) >= 100) { // Even slower update rate to minimize flicker
@@ -284,7 +274,7 @@ void App::run()
                 lastRenderTime = currentTime;
                 
                 // Only reset needsRedraw for normal rendering, not during zoom debouncing
-                if (!isZoomDebouncing()) {
+                if (!m_viewportManager->isZoomDebouncing()) {
                     m_needsRedraw = false;
                 }
             } else {
@@ -347,7 +337,7 @@ void App::processInputAction(const InputActionData& actionData)
         m_running = false;
         break;
     case InputAction::Resize:
-        fitPageToWindow();
+        m_viewportManager->fitPageToWindow(m_document.get(), m_currentPage);
         markDirty();
         break;
     case InputAction::ToggleFontMenu:
@@ -364,13 +354,16 @@ void App::processInputAction(const InputActionData& actionData)
         }
         break;
     case InputAction::ZoomIn:
-        zoom(m_optionsManager->loadConfig().zoomStep);
+        m_viewportManager->zoom(m_optionsManager->loadConfig().zoomStep, m_document.get());
+        markDirty();
         break;
     case InputAction::ZoomOut:
-        zoom(-m_optionsManager->loadConfig().zoomStep);
+        m_viewportManager->zoom(-m_optionsManager->loadConfig().zoomStep, m_document.get());
+        markDirty();
         break;
     case InputAction::ZoomTo:
-        zoomTo(actionData.intValue > 0 ? actionData.intValue : 100);
+        m_viewportManager->zoomTo(actionData.intValue > 0 ? actionData.intValue : 100, m_document.get());
+        markDirty();
         break;
     case InputAction::GoToFirstPage:
         goToPage(0);
@@ -390,7 +383,8 @@ void App::processInputAction(const InputActionData& actionData)
         break;
     case InputAction::ToggleFullscreen:
         m_renderer->toggleFullscreen();
-        fitPageToWindow();
+        m_viewportManager->fitPageToWindow(m_document.get(), m_currentPage);
+        markDirty();
         break;
     case InputAction::StartPageJumpInput:
         startPageJumpInput();
@@ -399,71 +393,78 @@ void App::processInputAction(const InputActionData& actionData)
         printAppState();
         break;
     case InputAction::ClampScroll:
-        clampScroll();
+        m_viewportManager->clampScroll();
         break;
     case InputAction::FitPageToWidth:
-        fitPageToWidth();
+        m_viewportManager->fitPageToWidth(m_document.get(), m_currentPage);
+        markDirty();
         break;
     case InputAction::FitPageToWindow:
-        fitPageToWindow();
+        m_viewportManager->fitPageToWindow(m_document.get(), m_currentPage);
+        markDirty();
         break;
     case InputAction::ResetPageView:
-        resetPageView();
+        m_viewportManager->resetPageView(m_document.get());
+        m_currentPage = 0; // Reset to first page
+        markDirty();
         break;
     case InputAction::ToggleMirrorHorizontal:
-        toggleMirrorHorizontal();
+        m_viewportManager->toggleMirrorHorizontal();
+        markDirty();
         break;
     case InputAction::ToggleMirrorVertical:
-        toggleMirrorVertical();
+        m_viewportManager->toggleMirrorVertical();
+        markDirty();
         break;
     case InputAction::RotateClockwise:
-        rotateClockwise();
+        m_viewportManager->rotateClockwise();
+        markDirty();
         break;
     case InputAction::ScrollUp:
         if (!isInScrollTimeout()) {
-            m_scrollY += static_cast<int>(actionData.floatValue);
+            m_viewportManager->setScrollY(m_viewportManager->getScrollY() + static_cast<int>(actionData.floatValue));
             updatePageDisplayTime();
-            clampScroll();
+            m_viewportManager->clampScroll();
             markDirty();
         }
         break;
     case InputAction::ScrollDown:
         if (!isInScrollTimeout()) {
-            m_scrollY -= static_cast<int>(actionData.floatValue);
+            m_viewportManager->setScrollY(m_viewportManager->getScrollY() - static_cast<int>(actionData.floatValue));
             updatePageDisplayTime();
-            clampScroll();
+            m_viewportManager->clampScroll();
             markDirty();
         }
         break;
     case InputAction::MoveLeft:
         if (!isInScrollTimeout()) {
-            m_scrollX += static_cast<int>(actionData.floatValue);
+            m_viewportManager->setScrollX(m_viewportManager->getScrollX() + static_cast<int>(actionData.floatValue));
             updatePageDisplayTime();
-            clampScroll();
+            m_viewportManager->clampScroll();
             markDirty();
         }
         break;
     case InputAction::MoveRight:
         if (!isInScrollTimeout()) {
-            m_scrollX -= static_cast<int>(actionData.floatValue);
+            m_viewportManager->setScrollX(m_viewportManager->getScrollX() - static_cast<int>(actionData.floatValue));
             updatePageDisplayTime();
-            clampScroll();
+            m_viewportManager->clampScroll();
             markDirty();
         }
         break;
     case InputAction::MoveUp:
         if (!isInScrollTimeout()) {
-            m_scrollY += static_cast<int>(actionData.floatValue);
+            m_viewportManager->setScrollY(m_viewportManager->getScrollY() + static_cast<int>(actionData.floatValue));
             updatePageDisplayTime();
-            clampScroll();
+            m_viewportManager->clampScroll();
             markDirty();
         }
         break;
     case InputAction::MoveDown:
         if (!isInScrollTimeout()) {
-            m_scrollY -= static_cast<int>(actionData.floatValue);
+            m_viewportManager->setScrollY(m_viewportManager->getScrollY() - static_cast<int>(actionData.floatValue));
             updatePageDisplayTime();
-            clampScroll();
+            m_viewportManager->clampScroll();
             markDirty();
         }
         break;
@@ -479,11 +480,11 @@ void App::processInputAction(const InputActionData& actionData)
         if (m_isDragging && !isInScrollTimeout()) {
             float dx = actionData.floatValue - m_lastTouchX;
             float dy = actionData.deltaX - m_lastTouchY;
-            m_scrollX += static_cast<int>(dx);
-            m_scrollY += static_cast<int>(dy);
+            m_viewportManager->setScrollX(m_viewportManager->getScrollX() + static_cast<int>(dx));
+            m_viewportManager->setScrollY(m_viewportManager->getScrollY() + static_cast<int>(dy));
             m_lastTouchX = actionData.floatValue;
             m_lastTouchY = actionData.deltaX;
-            clampScroll();
+            m_viewportManager->clampScroll();
             updatePageDisplayTime();
             markDirty();
         }
@@ -722,7 +723,7 @@ bool App::isInScrollTimeout() const
 void App::loadDocument()
 {
     m_currentPage = 0;
-    fitPageToWindow();
+    m_viewportManager->fitPageToWindow(m_document.get(), m_currentPage);
 }
 
 void App::renderCurrentPage()
@@ -744,10 +745,10 @@ void App::renderCurrentPage()
         auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
         if (muPdfDoc) {
             try {
-                argbData = muPdfDoc->renderPageARGB(m_currentPage, srcW, srcH, m_currentScale);
+                argbData = muPdfDoc->renderPageARGB(m_currentPage, srcW, srcH, m_viewportManager->getCurrentScale());
             } catch (const std::exception& e) {
                 // Fallback to RGB rendering
-                std::vector<uint8_t> rgbData = m_document->renderPage(m_currentPage, srcW, srcH, m_currentScale);
+                std::vector<uint8_t> rgbData = m_document->renderPage(m_currentPage, srcW, srcH, m_viewportManager->getCurrentScale());
                 // Convert to ARGB manually
                 argbData.resize(srcW * srcH);
                 for (int i = 0; i < srcW * srcH; ++i) {
@@ -756,7 +757,7 @@ void App::renderCurrentPage()
             }
         } else {
             // Fallback to RGB rendering for other document types
-            std::vector<uint8_t> rgbData = m_document->renderPage(m_currentPage, srcW, srcH, m_currentScale);
+            std::vector<uint8_t> rgbData = m_document->renderPage(m_currentPage, srcW, srcH, m_viewportManager->getCurrentScale());
             // Convert to ARGB manually
             argbData.resize(srcW * srcH);
             for (int i = 0; i < srcW * srcH; ++i) {
@@ -770,7 +771,7 @@ void App::renderCurrentPage()
     int newPageWidth, newPageHeight;
     
     // displayed page size after rotation
-    if (m_rotation % 180 == 0)
+    if (m_viewportManager->getRotation() % 180 == 0)
     {
         newPageWidth = srcW;
         newPageHeight = srcH;
@@ -783,33 +784,33 @@ void App::renderCurrentPage()
     
     // Only update page dimensions if they've actually changed
     // This provides more stable rendering during rapid input
-    if (m_pageWidth != newPageWidth || m_pageHeight != newPageHeight) {
-        m_pageWidth = newPageWidth;
-        m_pageHeight = newPageHeight;
+    if (m_viewportManager->getPageWidth() != newPageWidth || m_viewportManager->getPageHeight() != newPageHeight) {
+        m_viewportManager->setPageDimensions(newPageWidth, newPageHeight);
         // Clamp scroll position when page dimensions change to prevent out-of-bounds rendering
-        clampScroll();
+        m_viewportManager->clampScroll();
     }
 
-    int posX = (winW - m_pageWidth) / 2 + m_scrollX;
+    int posX = (winW - m_viewportManager->getPageWidth()) / 2 + m_viewportManager->getScrollX();
 
     int posY;
-    if (m_pageHeight <= winH)
+    if (m_viewportManager->getPageHeight() <= winH)
     {
-        if (m_topAlignWhenFits || m_forceTopAlignNextRender)
+        const auto& state = m_viewportManager->getState();
+        if (state.topAlignWhenFits || state.forceTopAlignNextRender)
             posY = 0;
         else
-            posY = (winH - m_pageHeight) / 2;
+            posY = (winH - m_viewportManager->getPageHeight()) / 2;
     }
     else
     {
-        posY = (winH - m_pageHeight) / 2 + m_scrollY;
+        posY = (winH - m_viewportManager->getPageHeight()) / 2 + m_viewportManager->getScrollY();
     }
-    m_forceTopAlignNextRender = false;
+    m_viewportManager->setForceTopAlignNextRender(false);
 
     m_renderer->renderPageExARGB(argbData, srcW, srcH,
-                                 posX, posY, m_pageWidth, m_pageHeight,
-                                 static_cast<double>(m_rotation),
-                                 currentFlipFlags());
+                                 posX, posY, m_viewportManager->getPageWidth(), m_viewportManager->getPageHeight(),
+                                 static_cast<double>(m_viewportManager->getRotation()),
+                                 m_viewportManager->currentFlipFlags());
     
     // Trigger prerendering of adjacent pages for faster page changes
     // Do this after the main render to avoid blocking the current page display
@@ -818,10 +819,10 @@ void App::renderCurrentPage()
     Uint32 currentTime = SDL_GetTicks();
     bool prerenderCooldownActive = (currentTime - lastPrerenderTrigger) < 200; // 200ms cooldown
     
-    if (!isZoomDebouncing() && !m_isDragging && !prerenderCooldownActive) {
+    if (!m_viewportManager->isZoomDebouncing() && !m_isDragging && !prerenderCooldownActive) {
         auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
         if (muPdfDoc && !muPdfDoc->isPrerenderingActive()) {
-            muPdfDoc->prerenderAdjacentPagesAsync(m_currentPage, m_currentScale);
+            muPdfDoc->prerenderAdjacentPagesAsync(m_currentPage, m_viewportManager->getCurrentScale());
             lastPrerenderTrigger = currentTime;
         }
     }
@@ -838,7 +839,7 @@ void App::renderUI()
 
     SDL_Color textColor = {0, 0, 0, 255};
     std::string pageInfo = "Page: " + std::to_string(m_currentPage + 1) + "/" + std::to_string(m_pageCount);
-    std::string scaleInfo = "Scale: " + std::to_string(m_currentScale) + "%";
+    std::string scaleInfo = "Scale: " + std::to_string(m_viewportManager->getCurrentScale()) + "%";
 
     int currentWindowWidth = m_renderer->getWindowWidth();
     int currentWindowHeight = m_renderer->getWindowHeight();
@@ -858,7 +859,7 @@ void App::renderUI()
     }
     
     // Render zoom processing indicator
-    if (shouldShowZoomProcessingIndicator()) {
+    if (m_viewportManager->shouldShowZoomProcessingIndicator()) {
         SDL_Color processingColor = {255, 255, 0, 255}; // Bright yellow text for high visibility
         SDL_Color processingBgColor = {0, 0, 0, 250}; // Nearly opaque background
         
@@ -1026,8 +1027,8 @@ void App::renderUI()
     float maxEdgeHold = std::max({m_edgeTurnHoldRight, m_edgeTurnHoldLeft, m_edgeTurnHoldUp, m_edgeTurnHoldDown});
     
     // Check scroll limits for each direction
-    const int maxScrollX = getMaxScrollX();
-    const int maxScrollY = getMaxScrollY();
+    const int maxScrollX = m_viewportManager->getMaxScrollX();
+    const int maxScrollY = m_viewportManager->getMaxScrollY();
     
     // Check if there are valid pages to navigate to in each direction
     bool canGoLeft = m_currentPage > 0;
@@ -1145,8 +1146,8 @@ void App::goToNextPage()
     if (m_currentPage < m_pageCount - 1)
     {
         m_currentPage++;
-        onPageChangedKeepZoom();
-        alignToTopOfCurrentPage();
+        m_viewportManager->onPageChangedKeepZoom(m_document.get(), m_currentPage);
+        m_viewportManager->alignToTopOfCurrentPage();
         updateScaleDisplayTime();
         updatePageDisplayTime();
         markDirty();
@@ -1172,8 +1173,8 @@ void App::goToPreviousPage()
     if (m_currentPage > 0)
     {
         m_currentPage--;
-        onPageChangedKeepZoom();
-        alignToTopOfCurrentPage();
+        m_viewportManager->onPageChangedKeepZoom(m_document.get(), m_currentPage);
+        m_viewportManager->alignToTopOfCurrentPage();
         updateScaleDisplayTime();
         updatePageDisplayTime();
         markDirty();
@@ -1199,8 +1200,8 @@ void App::goToPage(int pageNum)
     if (pageNum >= 0 && pageNum < m_pageCount)
     {
         m_currentPage = pageNum;
-        onPageChangedKeepZoom();
-        alignToTopOfCurrentPage();
+        m_viewportManager->onPageChangedKeepZoom(m_document.get(), m_currentPage);
+        m_viewportManager->alignToTopOfCurrentPage();
         updateScaleDisplayTime();
         updatePageDisplayTime();
         markDirty();
@@ -1212,125 +1213,13 @@ void App::goToPage(int pageNum)
     }
 }
 
-void App::zoom(int delta)
-{
-    // Accumulate zoom changes and track input timing for debouncing
-    auto now = std::chrono::steady_clock::now();
-    
-    // Cancel any ongoing prerendering since zoom is changing
-    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-    if (muPdfDoc) {
-        muPdfDoc->cancelPrerendering();
-    }
-    
-    // Add to pending zoom delta
-    m_pendingZoomDelta += delta;
-    m_lastZoomInputTime = now;
-    
-    // Set zoom processing indicator and show it immediately for expensive operations
-    if (!m_zoomProcessing) {
-        m_zoomProcessing = true;
-        m_zoomProcessingStartTime = now;
-        
-        // Show immediate processing indicator if recent renders have been expensive
-        // Only render UI overlay, not the expensive page content
-        if (isNextRenderLikelyExpensive()) {
-            // Clear screen and show processing message without expensive page render
-            m_renderer->clear(0, 0, 0, 255); // Black background
-            
-            // Properly manage ImGui frame for direct rendering
-            if (m_guiManager) {
-                m_guiManager->newFrame();
-                renderUI(); // Only render the UI overlay with processing message
-                m_guiManager->render();
-            } else {
-                renderUI(); // Fallback if no GUI manager
-            }
-            
-            m_renderer->present();
-        }
-    }
-    
-    // If there's already a pending zoom, don't apply immediately
-    // The render loop will check for settled input and apply the final zoom
-}
 
-void App::zoomTo(int scale)
-{
-    // Always use debouncing for consistent behavior
-    int targetDelta = scale - m_currentScale;
-    
-    // Cancel any ongoing prerendering since zoom is changing
-    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-    if (muPdfDoc) {
-        muPdfDoc->cancelPrerendering();
-    }
-    
-    // Set pending zoom delta to target and use debouncing
-    m_pendingZoomDelta = targetDelta;
-    m_lastZoomInputTime = std::chrono::steady_clock::now();
-    
-    // Set zoom processing indicator and show it immediately for expensive operations
-    if (!m_zoomProcessing) {
-        m_zoomProcessing = true;
-        m_zoomProcessingStartTime = m_lastZoomInputTime;
-        
-        // Show immediate processing indicator if recent renders have been expensive
-        // Only render UI overlay, not the expensive page content
-        if (isNextRenderLikelyExpensive()) {
-            // Clear screen and show processing message without expensive page render
-            m_renderer->clear(0, 0, 0, 255); // Black background
-            
-            // Properly manage ImGui frame for direct rendering
-            if (m_guiManager) {
-                m_guiManager->newFrame();
-                renderUI(); // Only render the UI overlay with processing message
-                m_guiManager->render();
-            } else {
-                renderUI(); // Fallback if no GUI manager
-            }
-            
-            m_renderer->present();
-        }
-    }
-}
 
-void App::applyPendingZoom()
-{
-    if (m_pendingZoomDelta == 0) {
-        return; // No pending zoom to apply
-    }
 
-    int oldScale = m_currentScale;
-    m_currentScale += m_pendingZoomDelta;
-    if (m_currentScale < 10)
-        m_currentScale = 10;
-    if (m_currentScale > 350)
-        m_currentScale = 350;
 
-    recenterScrollOnZoom(oldScale, m_currentScale);
-    clampScroll();
-    updateScaleDisplayTime();
-    updatePageDisplayTime();
-    markDirty();
-    
-    // Reset pending zoom and clear processing indicator (respecting minimum display time)
-    m_pendingZoomDelta = 0;
-    
-    // Only clear zoom processing if minimum display time has elapsed
-    if (m_zoomProcessing) {
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - m_zoomProcessingStartTime).count();
-        if (elapsed >= ZOOM_PROCESSING_MIN_DISPLAY_MS) {
-            m_zoomProcessing = false;
-        }
-    }
-}
 
-bool App::isZoomDebouncing() const
-{
-    return m_pendingZoomDelta != 0;
-}
+
+
 
 void App::applyPendingFontChange()
 {
@@ -1351,9 +1240,9 @@ void App::applyPendingFontChange()
             if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get())) {
                 // Store current state to restore after reopening
                 int currentPage = m_currentPage;
-                int currentScale = m_currentScale;
-                int currentScrollX = m_scrollX;
-                int currentScrollY = m_scrollY;
+                int currentScale = m_viewportManager->getCurrentScale();
+                int currentScrollX = m_viewportManager->getScrollX();
+                int currentScrollY = m_viewportManager->getScrollY();
                 
                 // Use the much safer reopening method
                 if (muDoc->reopenWithCSS(css)) {
@@ -1367,20 +1256,20 @@ void App::applyPendingFontChange()
                     
                     // Restore scale with reasonable bounds
                     if (currentScale >= 10 && currentScale <= 350) {
-                        m_currentScale = currentScale;
+                        m_viewportManager->setCurrentScale(currentScale);
                     } else {
-                        m_currentScale = 100; // Fallback to 100%
+                        m_viewportManager->setCurrentScale(100); // Fallback to 100%
                     }
                     
                     // Restore scroll position (will be clamped later)
-                    m_scrollX = currentScrollX;
-                    m_scrollY = currentScrollY;
+                    m_viewportManager->setScrollX(currentScrollX);
+                    m_viewportManager->setScrollY(currentScrollY);
                     
                     // Update page count after reopening
                     m_pageCount = pageCount;
                     
                     // Clamp scroll to ensure it's within bounds
-                    clampScroll();
+                    m_viewportManager->clampScroll();
                     
                     // Save the configuration
                     m_optionsManager->saveConfig(m_pendingFontConfig);
@@ -1412,130 +1301,13 @@ void App::applyPendingFontChange()
     m_pendingFontChange = false;
 }
 
-void App::fitPageToWindow()
-{
-    int windowWidth = m_renderer->getWindowWidth();
-    int windowHeight = m_renderer->getWindowHeight();
 
-#ifndef TG5040_PLATFORM
-// Update max render size for downsampling - allow for meaningful zoom levels on non-TG5040 platforms
-// Use 4x window size to enable proper zooming while TG5040 has no limit
-if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
-{
-    // Allow 4x zoom by setting max render size to 4x window size
-    muDoc->setMaxRenderSize(windowWidth * 4, windowHeight * 4);
-}
-#endif    // Use effective sizes so 90/270 rotation swaps W/H
-    int nativeWidth = effectiveNativeWidth();
-    int nativeHeight = effectiveNativeHeight();
 
-    if (nativeWidth == 0 || nativeHeight == 0)
-    {
-        std::cerr << "App ERROR: Native page dimensions are zero for page "
-                  << m_currentPage << std::endl;
-        return;
-    }
 
-    int scaleToFitWidth = static_cast<int>((static_cast<double>(windowWidth) / nativeWidth) * 100.0);
-    int scaleToFitHeight = static_cast<int>((static_cast<double>(windowHeight) / nativeHeight) * 100.0);
 
-    m_currentScale = std::min(scaleToFitWidth, scaleToFitHeight);
-    if (m_currentScale < 10)
-        m_currentScale = 10;
-    if (m_currentScale > 350)
-        m_currentScale = 350;
 
-    // Update page dimensions based on effective size (accounting for downsampling)
-    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-    if (muPdfDoc) {
-        m_pageWidth = muPdfDoc->getPageWidthEffective(m_currentPage, m_currentScale);
-        m_pageHeight = muPdfDoc->getPageHeightEffective(m_currentPage, m_currentScale);
-        
-        // Apply rotation
-        if (m_rotation % 180 != 0) {
-            std::swap(m_pageWidth, m_pageHeight);
-        }
-    } else {
-        // Fallback for other document types
-        m_pageWidth = static_cast<int>(nativeWidth * (m_currentScale / 100.0));
-        m_pageHeight = static_cast<int>(nativeHeight * (m_currentScale / 100.0));
-    }
 
-    m_scrollX = 0;
-    m_scrollY = 0;
-    updateScaleDisplayTime();
-    updatePageDisplayTime();
-    markDirty();
-    
-}
 
-void App::recenterScrollOnZoom(int oldScale, int newScale)
-{
-    if (oldScale == 0 || newScale == 0)
-        return;
-
-    // Use effective dimensions that account for downsampling
-    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-    int oldPageWidth, oldPageHeight, newPageWidth, newPageHeight;
-    
-    if (muPdfDoc) {
-        oldPageWidth = muPdfDoc->getPageWidthEffective(m_currentPage, oldScale);
-        oldPageHeight = muPdfDoc->getPageHeightEffective(m_currentPage, oldScale);
-        newPageWidth = muPdfDoc->getPageWidthEffective(m_currentPage, newScale);
-        newPageHeight = muPdfDoc->getPageHeightEffective(m_currentPage, newScale);
-        
-        // Apply rotation
-        if (m_rotation % 180 != 0) {
-            std::swap(oldPageWidth, oldPageHeight);
-            std::swap(newPageWidth, newPageHeight);
-        }
-    } else {
-        // Fallback for other document types
-        int nativeWidth = effectiveNativeWidth();
-        int nativeHeight = effectiveNativeHeight();
-        oldPageWidth = static_cast<int>(nativeWidth * (oldScale / 100.0));
-        oldPageHeight = static_cast<int>(nativeHeight * (oldScale / 100.0));
-        newPageWidth = static_cast<int>(nativeWidth * (newScale / 100.0));
-        newPageHeight = static_cast<int>(nativeHeight * (newScale / 100.0));
-    }
-
-    int windowWidth = m_renderer->getWindowWidth();
-    int windowHeight = m_renderer->getWindowHeight();
-
-    int viewportCenterX = (windowWidth / 2) - m_scrollX;
-    int viewportCenterY = (windowHeight / 2) - m_scrollY;
-
-    int oldRelativeX = viewportCenterX - (windowWidth - oldPageWidth) / 2;
-    int oldRelativeY = viewportCenterY - (windowHeight - oldPageHeight) / 2;
-
-    int newRelativeX = static_cast<int>(oldRelativeX * (static_cast<double>(newPageWidth) / oldPageWidth));
-    int newRelativeY = static_cast<int>(oldRelativeY * (static_cast<double>(newPageHeight) / oldPageHeight));
-
-    m_scrollX = (windowWidth / 2) - newRelativeX - (windowWidth - newPageWidth) / 2;
-    m_scrollY = (windowHeight / 2) - newRelativeY - (windowHeight - newPageHeight) / 2;
-}
-
-void App::clampScroll()
-{
-    int windowWidth = m_renderer->getWindowWidth();
-    int windowHeight = m_renderer->getWindowHeight();
-
-    int maxScrollX = std::max(0, (m_pageWidth - windowWidth) / 2);
-    int maxScrollY = std::max(0, (m_pageHeight - windowHeight) / 2);
-
-    m_scrollX = std::max(-maxScrollX, std::min(maxScrollX, m_scrollX));
-    m_scrollY = std::max(-maxScrollY, std::min(maxScrollY, m_scrollY));
-}
-
-void App::resetPageView()
-{
-    m_currentPage = 0;
-    m_currentScale = 100;
-    m_rotation = 0;          // Reset rotation to 0 degrees
-    m_mirrorH = false;       // Reset horizontal mirroring
-    m_mirrorV = false;       // Reset vertical mirroring
-    fitPageToWindow();
-}
 
 // ---- helpers  ----
 void App::jumpPages(int delta)
@@ -1544,90 +1316,13 @@ void App::jumpPages(int delta)
     goToPage(target);
 }
 
-void App::rotateClockwise()
-{
-    m_rotation = (m_rotation + 90) % 360;
-    onPageChangedKeepZoom();
-    alignToTopOfCurrentPage();
-    markDirty();
-}
 
-void App::toggleMirrorVertical()
-{
-    m_mirrorV = !m_mirrorV;
-    markDirty();
-}
 
-void App::toggleMirrorHorizontal()
-{
-    m_mirrorH = !m_mirrorH;
-    markDirty();
-}
 
-void App::fitPageToWidth()
-{
-    int windowWidth = m_renderer->getWindowWidth();
 
-    // Use effective sizes so 90/270 rotation swaps W/H
-    int nativeWidth = effectiveNativeWidth();
 
-    if (nativeWidth == 0)
-    {
-        std::cerr << "App ERROR: Native page width is zero for page "
-                  << m_currentPage << std::endl;
-        return;
-    }
 
-    // Calculate scale to fit width with a small margin (95% of window width)
-    // This accounts for potential downsampling and provides better visual fit
-    double targetWidth = windowWidth * 0.95; // 5% margin
-    m_currentScale = static_cast<int>((targetWidth / nativeWidth) * 100.0);
-    
-    // Clamp scale to reasonable bounds
-    if (m_currentScale < 10)
-        m_currentScale = 10;
-    if (m_currentScale > 350)
-        m_currentScale = 350;
 
-    // Update page dimensions based on effective size (accounting for downsampling)
-    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-    if (muPdfDoc) {
-        m_pageWidth = muPdfDoc->getPageWidthEffective(m_currentPage, m_currentScale);
-        m_pageHeight = muPdfDoc->getPageHeightEffective(m_currentPage, m_currentScale);
-        
-        // Apply rotation
-        if (m_rotation % 180 != 0) {
-            std::swap(m_pageWidth, m_pageHeight);
-        }
-    } else {
-        // Fallback for other document types
-        int nativeHeight = effectiveNativeHeight();
-        m_pageWidth = static_cast<int>(nativeWidth * (m_currentScale / 100.0));
-        m_pageHeight = static_cast<int>(nativeHeight * (m_currentScale / 100.0));
-    }
-
-    // Reset horizontal scroll since we're fitting to width
-    m_scrollX = 0;
-    
-    // For vertical scroll, if the page is taller than window, start at top
-    int windowHeight = m_renderer->getWindowHeight();
-    if (m_pageHeight > windowHeight)
-    {
-        // Start at top of page (positive maxY in your coordinate system)
-        int maxY = (m_pageHeight - windowHeight) / 2;
-        m_scrollY = maxY;
-    }
-    else
-    {
-        // Page fits vertically, center it
-        m_scrollY = 0;
-    }
-    
-    clampScroll();
-    updateScaleDisplayTime();
-    updatePageDisplayTime();
-    markDirty();
-}
 
 void App::printAppState()
 {
@@ -1636,9 +1331,9 @@ void App::printAppState()
     std::cout << "Native Page Dimensions: "
               << m_document->getPageWidthNative(m_currentPage) << "x"
               << m_document->getPageHeightNative(m_currentPage) << std::endl;
-    std::cout << "Current Scale: " << m_currentScale << "%" << std::endl;
-    std::cout << "Scaled Page Dimensions: " << m_pageWidth << "x" << m_pageHeight << " (Expected/Actual)" << std::endl;
-    std::cout << "Scroll Position (Page Offset): X=" << m_scrollX << ", Y=" << m_scrollY << std::endl;
+    std::cout << "Current Scale: " << m_viewportManager->getCurrentScale() << "%" << std::endl;
+    std::cout << "Scaled Page Dimensions: " << m_viewportManager->getPageWidth() << "x" << m_viewportManager->getPageHeight() << " (Expected/Actual)" << std::endl;
+    std::cout << "Scroll Position (Page Offset): X=" << m_viewportManager->getScrollX() << ", Y=" << m_viewportManager->getScrollY() << std::endl;
     std::cout << "Window Dimensions: " << m_renderer->getWindowWidth() << "x" << m_renderer->getWindowHeight() << std::endl;
     std::cout << "-----------------" << std::endl;
 }
@@ -1714,8 +1409,8 @@ bool App::updateHeldPanning(float dt)
             dx /= len;
             dy /= len;
 
-            int oldScrollX = m_scrollX;
-            int oldScrollY = m_scrollY;
+            int oldScrollX = m_viewportManager->getScrollX();
+            int oldScrollY = m_viewportManager->getScrollY();
             
             float moveX = dx * m_dpadPanSpeed * dt;
             float moveY = dy * m_dpadPanSpeed * dt;
@@ -1730,11 +1425,11 @@ bool App::updateHeldPanning(float dt)
                 pixelMoveY = (dy > 0) ? 1 : -1;
             }
             
-            m_scrollX += pixelMoveX;
-            m_scrollY += pixelMoveY;
-            clampScroll();
+            m_viewportManager->setScrollX(m_viewportManager->getScrollX() + pixelMoveX);
+            m_viewportManager->setScrollY(m_viewportManager->getScrollY() + pixelMoveY);
+            m_viewportManager->clampScroll();
             
-            if (m_scrollX != oldScrollX || m_scrollY != oldScrollY) {
+            if (m_viewportManager->getScrollX() != oldScrollX || m_viewportManager->getScrollY() != oldScrollY) {
                 changed = true;
                 scrollingOccurred = true;
             }
@@ -1742,7 +1437,7 @@ bool App::updateHeldPanning(float dt)
     }
 
     // --- HORIZONTAL edge → page turn ---
-    const int maxX = getMaxScrollX();
+    const int maxX = m_viewportManager->getMaxScrollX();
     
     // Track old edge-turn values to detect changes for progress indicator updates
     float oldEdgeTurnHoldRight = m_edgeTurnHoldRight;
@@ -1800,29 +1495,29 @@ bool App::updateHeldPanning(float dt)
             // Use small tolerance for edge detection to handle rounding issues
             const int edgeTolerance = 2; // pixels
             
-            if (m_scrollX <= (-maxX + edgeTolerance) && (m_dpadRightHeld || m_keyboardRightHeld)) {
+            if (m_viewportManager->getScrollX() <= (-maxX + edgeTolerance) && (m_dpadRightHeld || m_keyboardRightHeld)) {
                 float oldTime = m_edgeTurnHoldRight;
                 m_edgeTurnHoldRight += dt;
                 if (oldTime == 0.0f && m_edgeTurnHoldRight > 0.0f) {
-                    printf("DEBUG: Right edge-turn timer started (scroll-based, scrollX=%d, threshold=%d)\n", m_scrollX, -maxX + edgeTolerance);
+                    printf("DEBUG: Right edge-turn timer started (scroll-based, scrollX=%d, threshold=%d)\n", m_viewportManager->getScrollX(), -maxX + edgeTolerance);
                 }
             } else {
                 if ((m_dpadRightHeld || m_keyboardRightHeld) && m_edgeTurnHoldRight > 0.0f) {
                     printf("DEBUG: Right edge-turn timer stopped (scrollX=%d, threshold=%d, held=%s)\n", 
-                           m_scrollX, -maxX + edgeTolerance, (m_dpadRightHeld || m_keyboardRightHeld) ? "YES" : "NO");
+                           m_viewportManager->getScrollX(), -maxX + edgeTolerance, (m_dpadRightHeld || m_keyboardRightHeld) ? "YES" : "NO");
                 }
                 m_edgeTurnHoldRight = 0.0f;
             }
-            if (m_scrollX >= (maxX - edgeTolerance) && (m_dpadLeftHeld || m_keyboardLeftHeld)) {
+            if (m_viewportManager->getScrollX() >= (maxX - edgeTolerance) && (m_dpadLeftHeld || m_keyboardLeftHeld)) {
                 float oldTime = m_edgeTurnHoldLeft;
                 m_edgeTurnHoldLeft += dt;
                 if (oldTime == 0.0f && m_edgeTurnHoldLeft > 0.0f) {
-                    printf("DEBUG: Left edge-turn timer started (scroll-based, scrollX=%d, threshold=%d)\n", m_scrollX, maxX - edgeTolerance);
+                    printf("DEBUG: Left edge-turn timer started (scroll-based, scrollX=%d, threshold=%d)\n", m_viewportManager->getScrollX(), maxX - edgeTolerance);
                 }
             } else {
                 if ((m_dpadLeftHeld || m_keyboardLeftHeld) && m_edgeTurnHoldLeft > 0.0f) {
                     printf("DEBUG: Left edge-turn timer stopped (scrollX=%d, threshold=%d, held=%s)\n", 
-                           m_scrollX, maxX - edgeTolerance, (m_dpadLeftHeld || m_keyboardLeftHeld) ? "YES" : "NO");
+                           m_viewportManager->getScrollX(), maxX - edgeTolerance, (m_dpadLeftHeld || m_keyboardLeftHeld) ? "YES" : "NO");
                 }
                 m_edgeTurnHoldLeft = 0.0f;
             }
@@ -1840,8 +1535,8 @@ bool App::updateHeldPanning(float dt)
         {
             printf("DEBUG: Right edge-turn completed - page change allowed\n");
             goToNextPage();
-            m_scrollX = getMaxScrollX(); // appear at left edge
-            clampScroll();
+            m_viewportManager->setScrollX(m_viewportManager->getMaxScrollX()); // appear at left edge
+            m_viewportManager->clampScroll();
             changed = true;
         }
         else if (inCooldown)
@@ -1862,8 +1557,8 @@ bool App::updateHeldPanning(float dt)
         {
             printf("DEBUG: Left edge-turn completed - page change allowed\n");
             goToPreviousPage();
-            m_scrollX = -getMaxScrollX(); // appear at right edge
-            clampScroll();
+            m_viewportManager->setScrollX(-m_viewportManager->getMaxScrollX()); // appear at right edge
+            m_viewportManager->clampScroll();
             changed = true;
         }
         else if (inCooldown)
@@ -1875,7 +1570,7 @@ bool App::updateHeldPanning(float dt)
     }
 
     // --- VERTICAL edge → page turn (NEW) ---
-    const int maxY = getMaxScrollY();
+    const int maxY = m_viewportManager->getMaxScrollY();
 
     if (!inScrollTimeout && !scrollingOccurred) {
         // Only accumulate edge-turn time when not in scroll timeout AND not actively scrolling
@@ -1907,7 +1602,7 @@ bool App::updateHeldPanning(float dt)
             const int edgeTolerance = 2; // pixels
             
             // Bottom edge & still pushing down? (down moves view further down in your scheme: dy < 0)
-            if (m_scrollY <= (-maxY + edgeTolerance) && (m_dpadDownHeld || m_keyboardDownHeld)) {
+            if (m_viewportManager->getScrollY() <= (-maxY + edgeTolerance) && (m_dpadDownHeld || m_keyboardDownHeld)) {
                 float oldTime = m_edgeTurnHoldDown;
                 m_edgeTurnHoldDown += dt;
                 if (oldTime == 0.0f && m_edgeTurnHoldDown > 0.0f) {
@@ -1918,7 +1613,7 @@ bool App::updateHeldPanning(float dt)
             }
 
             // Top edge & still pushing up?
-            if (m_scrollY >= (maxY - edgeTolerance) && (m_dpadUpHeld || m_keyboardUpHeld)) {
+            if (m_viewportManager->getScrollY() >= (maxY - edgeTolerance) && (m_dpadUpHeld || m_keyboardUpHeld)) {
                 float oldTime = m_edgeTurnHoldUp;
                 m_edgeTurnHoldUp += dt;
                 if (oldTime == 0.0f && m_edgeTurnHoldUp > 0.0f) {
@@ -1949,8 +1644,8 @@ bool App::updateHeldPanning(float dt)
             printf("DEBUG: Down edge-turn completed - page change allowed\n");
             goToNextPage();
             // Land at the top edge of the new page so motion feels continuous downward
-            m_scrollY = getMaxScrollY();
-            clampScroll();
+            m_viewportManager->setScrollY(m_viewportManager->getMaxScrollY());
+            m_viewportManager->clampScroll();
             changed = true;
         }
         else if (inCooldown)
@@ -1972,8 +1667,8 @@ bool App::updateHeldPanning(float dt)
             printf("DEBUG: Up edge-turn completed - page change allowed\n");
             goToPreviousPage();
             // Land at the bottom edge of the previous page
-            m_scrollY = -getMaxScrollY();
-            clampScroll();
+            m_viewportManager->setScrollY(-m_viewportManager->getMaxScrollY());
+            m_viewportManager->clampScroll();
             changed = true;
         }
         else if (inCooldown)
@@ -1995,27 +1690,18 @@ bool App::updateHeldPanning(float dt)
     return changed;
 }
 
-int App::getMaxScrollX() const
-{
-    int windowWidth = m_renderer->getWindowWidth();
-    return std::max(0, (m_pageWidth - windowWidth) / 2);
-}
-int App::getMaxScrollY() const
-{
-    int windowHeight = m_renderer->getWindowHeight();
-    return std::max(0, (m_pageHeight - windowHeight) / 2);
-}
+
 
 void App::handleDpadNudgeRight()
 {
-    const int maxX = getMaxScrollX();
+    const int maxX = m_viewportManager->getMaxScrollX();
     
     printf("DEBUG: Right nudge called - maxX=%d, scrollX=%d, condition=%s, inScrollTimeout=%s\n", 
-           maxX, m_scrollX, (maxX == 0 || m_scrollX <= (-maxX + 2)) ? "AT_EDGE" : "NOT_AT_EDGE",
+           maxX, m_viewportManager->getScrollX(), (maxX == 0 || m_viewportManager->getScrollX() <= (-maxX + 2)) ? "AT_EDGE" : "NOT_AT_EDGE",
            isInScrollTimeout() ? "YES" : "NO");
     
     // Right nudge while already at right edge
-    if (maxX == 0 || m_scrollX <= (-maxX + 2)) // Use same tolerance as edge-turn system
+    if (maxX == 0 || m_viewportManager->getScrollX() <= (-maxX + 2)) // Use same tolerance as edge-turn system
     {
         if (maxX == 0) {
             // Page fits horizontally (fit-to-width): allow immediate page change via nudge
@@ -2026,8 +1712,8 @@ void App::handleDpadNudgeRight()
                 {
                     printf("DEBUG: Immediate page change via nudge (fit-to-width)\n");
                     goToNextPage();
-                    m_scrollX = getMaxScrollX(); // appear at left edge of new page
-                    clampScroll();
+                    m_viewportManager->setScrollX(m_viewportManager->getMaxScrollX()); // appear at left edge of new page
+                    m_viewportManager->clampScroll();
                 }
             }
         } else {
@@ -2037,19 +1723,19 @@ void App::handleDpadNudgeRight()
         return;
     }
     printf("DEBUG: Normal scroll - moving right\n");
-    m_scrollX -= 50;
-    clampScroll();
+    m_viewportManager->setScrollX(m_viewportManager->getScrollX() - 50);
+    m_viewportManager->clampScroll();
 }
 
 void App::handleDpadNudgeLeft()
 {
-    const int maxX = getMaxScrollX();
+    const int maxX = m_viewportManager->getMaxScrollX();
     
     printf("DEBUG: Left nudge called - maxX=%d, scrollX=%d, condition=%s\n", 
-           maxX, m_scrollX, (maxX == 0 || m_scrollX >= (maxX - 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
+           maxX, m_viewportManager->getScrollX(), (maxX == 0 || m_viewportManager->getScrollX() >= (maxX - 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
     
     // Left nudge while already at left edge
-    if (maxX == 0 || m_scrollX >= (maxX - 2)) // Use same tolerance as edge-turn system
+    if (maxX == 0 || m_viewportManager->getScrollX() >= (maxX - 2)) // Use same tolerance as edge-turn system
     {
         if (maxX == 0) {
             // Page fits horizontally (fit-to-width): allow immediate page change via nudge
@@ -2059,8 +1745,8 @@ void App::handleDpadNudgeLeft()
                 if (m_currentPage > 0 && !isInPageChangeCooldown())
                 {
                     goToPreviousPage();
-                    m_scrollX = -getMaxScrollX(); // appear at right edge of prev page
-                    clampScroll();
+                    m_viewportManager->setScrollX(-m_viewportManager->getMaxScrollX()); // appear at right edge of prev page
+                    m_viewportManager->clampScroll();
                 }
             }
         }
@@ -2068,19 +1754,19 @@ void App::handleDpadNudgeLeft()
         // This ensures a progress bar always appears when holding D-pad at edge
         return;
     }
-    m_scrollX += 50;
-    clampScroll();
+    m_viewportManager->setScrollX(m_viewportManager->getScrollX() + 50);
+    m_viewportManager->clampScroll();
 }
 
 void App::handleDpadNudgeDown()
 {
-    const int maxY = getMaxScrollY();
+    const int maxY = m_viewportManager->getMaxScrollY();
     
     printf("DEBUG: Down nudge called - maxY=%d, scrollY=%d, condition=%s\n", 
-           maxY, m_scrollY, (maxY == 0 || m_scrollY <= (-maxY + 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
+           maxY, m_viewportManager->getScrollY(), (maxY == 0 || m_viewportManager->getScrollY() <= (-maxY + 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
     
     // Down nudge while already at bottom edge
-    if (maxY == 0 || m_scrollY <= (-maxY + 2)) // Use same tolerance as edge-turn system
+    if (maxY == 0 || m_viewportManager->getScrollY() <= (-maxY + 2)) // Use same tolerance as edge-turn system
     {
         if (maxY == 0) {
             // Page fits vertically (fit-to-width): allow immediate page change via nudge
@@ -2090,8 +1776,8 @@ void App::handleDpadNudgeDown()
                 if (m_currentPage < m_pageCount - 1 && !isInPageChangeCooldown())
                 {
                     goToNextPage();
-                    m_scrollY = getMaxScrollY(); // appear at top edge of new page
-                    clampScroll();
+                    m_viewportManager->setScrollY(m_viewportManager->getMaxScrollY()); // appear at top edge of new page
+                    m_viewportManager->clampScroll();
                 }
             }
         }
@@ -2099,19 +1785,19 @@ void App::handleDpadNudgeDown()
         // This ensures a progress bar always appears when holding D-pad at edge
         return;
     }
-    m_scrollY -= 50;
-    clampScroll();
+    m_viewportManager->setScrollY(m_viewportManager->getScrollY() - 50);
+    m_viewportManager->clampScroll();
 }
 
 void App::handleDpadNudgeUp()
 {
-    const int maxY = getMaxScrollY();
+    const int maxY = m_viewportManager->getMaxScrollY();
     
     printf("DEBUG: Up nudge called - maxY=%d, scrollY=%d, condition=%s\n", 
-           maxY, m_scrollY, (maxY == 0 || m_scrollY >= (maxY - 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
+           maxY, m_viewportManager->getScrollY(), (maxY == 0 || m_viewportManager->getScrollY() >= (maxY - 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
     
     // Up nudge while already at top edge
-    if (maxY == 0 || m_scrollY >= (maxY - 2)) // Use same tolerance as edge-turn system
+    if (maxY == 0 || m_viewportManager->getScrollY() >= (maxY - 2)) // Use same tolerance as edge-turn system
     {
         if (maxY == 0) {
             // Page fits vertically (fit-to-width): allow immediate page change via nudge
@@ -2121,8 +1807,8 @@ void App::handleDpadNudgeUp()
                 if (m_currentPage > 0 && !isInPageChangeCooldown())
                 {
                     goToPreviousPage();
-                    m_scrollY = -getMaxScrollY(); // appear at bottom edge of prev page
-                    clampScroll();
+                    m_viewportManager->setScrollY(-m_viewportManager->getMaxScrollY()); // appear at bottom edge of prev page
+                    m_viewportManager->clampScroll();
                 }
             }
         }
@@ -2130,116 +1816,17 @@ void App::handleDpadNudgeUp()
         // This ensures a progress bar always appears when holding D-pad at edge
         return;
     }
-    m_scrollY += 50;
-    clampScroll();
+    m_viewportManager->setScrollY(m_viewportManager->getScrollY() + 50);
+    m_viewportManager->clampScroll();
 }
 
-void App::onPageChangedKeepZoom()
-{
-    // Predict scaled size for the new page using the current zoom
-    // Use effective size for MuPdfDocument to account for downsampling
-    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-    int effectiveW, effectiveH;
-    
-    if (muPdfDoc) {
-        effectiveW = muPdfDoc->getPageWidthEffective(m_currentPage, m_currentScale);
-        effectiveH = muPdfDoc->getPageHeightEffective(m_currentPage, m_currentScale);
-        
-        // Apply rotation
-        if (m_rotation % 180 != 0) {
-            std::swap(effectiveW, effectiveH);
-        }
-    } else {
-        // Fallback for other document types
-        int nativeW = effectiveNativeWidth();
-        int nativeH = effectiveNativeHeight();
-        effectiveW = static_cast<int>(nativeW * (m_currentScale / 100.0));
-        effectiveH = static_cast<int>(nativeH * (m_currentScale / 100.0));
-    }
 
-    // Guard against bad docs
-    if (effectiveW <= 0 || effectiveH <= 0)
-    {
-        std::cerr << "App ERROR: Effective page dimensions are zero for page " << m_currentPage << std::endl;
-        return;
-    }
 
-    m_pageWidth = effectiveW;
-    m_pageHeight = effectiveH;
 
-    // Keep current scroll but ensure it's valid for the new page extents
-    clampScroll();
-}
 
-void App::alignToTopOfCurrentPage()
-{
-    // Recompute extents with current zoom (safe even if already set)
-    // Use effective size for MuPdfDocument to account for downsampling
-    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-    int effectiveW, effectiveH;
-    
-    if (muPdfDoc) {
-        effectiveW = muPdfDoc->getPageWidthEffective(m_currentPage, m_currentScale);
-        effectiveH = muPdfDoc->getPageHeightEffective(m_currentPage, m_currentScale);
-        
-        // Apply rotation
-        if (m_rotation % 180 != 0) {
-            std::swap(effectiveW, effectiveH);
-        }
-    } else {
-        // Fallback for other document types
-        int nativeW = effectiveNativeWidth();
-        int nativeH = effectiveNativeHeight();
-        effectiveW = static_cast<int>(nativeW * (m_currentScale / 100.0));
-        effectiveH = static_cast<int>(nativeH * (m_currentScale / 100.0));
-    }
-    
-    if (effectiveW <= 0 || effectiveH <= 0)
-        return;
 
-    m_pageWidth = effectiveW;
-    m_pageHeight = effectiveH;
 
-    // If the page is taller than the window, place the view at the *top edge*
-    // With your clamp scheme, "top edge" corresponds to +maxY
-    int windowH = m_renderer->getWindowHeight();
-    int maxY = std::max(0, (m_pageHeight - windowH) / 2);
 
-    if (maxY > 0)
-    {
-        m_scrollY = +maxY; // top edge visible
-        clampScroll();
-    }
-    else
-    {
-        // No vertical scroll range (fits): request a top-aligned render once
-        m_forceTopAlignNextRender = true;
-    }
-}
-
-int App::effectiveNativeWidth() const
-{
-    int w = m_document->getPageWidthNative(m_currentPage);
-    int h = m_document->getPageHeightNative(m_currentPage);
-    return (m_rotation % 180 == 0) ? w : h;
-}
-
-int App::effectiveNativeHeight() const
-{
-    int w = m_document->getPageWidthNative(m_currentPage);
-    int h = m_document->getPageHeightNative(m_currentPage);
-    return (m_rotation % 180 == 0) ? h : w;
-}
-
-SDL_RendererFlip App::currentFlipFlags() const
-{
-    SDL_RendererFlip f = SDL_FLIP_NONE;
-    if (m_mirrorH)
-        f = (SDL_RendererFlip)(f | SDL_FLIP_HORIZONTAL);
-    if (m_mirrorV)
-        f = (SDL_RendererFlip)(f | SDL_FLIP_VERTICAL);
-    return f;
-}
 
 void App::showErrorMessage(const std::string& message)
 {

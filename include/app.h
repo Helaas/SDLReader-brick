@@ -7,6 +7,7 @@
 #include "gui_manager.h"
 #include "options_manager.h"
 #include "input_manager.h"
+#include "viewport_manager.h"
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
 #endif
@@ -80,31 +81,15 @@ private:
     void cancelPageJumpInput();
     void confirmPageJumpInput();
 
-    // Zoom and Scaling
-    void zoom(int delta);
-    void zoomTo(int scale);
-    void applyPendingZoom();  // Apply accumulated zoom changes
-    bool isZoomDebouncing() const;  // Check if zoom is currently being debounced
+    // Font management
     void applyPendingFontChange(); // Apply deferred font configuration changes safely
-    void fitPageToWindow();
-    void recenterScrollOnZoom(int oldScale, int newScale);
-    void fitPageToWidth();
-
-    // Scrolling
-    void clampScroll();
 
     // State Management
-    void resetPageView();
     void printAppState();
     
     // Cooldown and timing checks
     bool isInPageChangeCooldown() const;
     bool isInScrollTimeout() const;
-
-    // Rotation and mirroring
-    void rotateClockwise();
-    void toggleMirrorVertical();
-    void toggleMirrorHorizontal();
 
     // Font management
     void toggleFontMenu();
@@ -135,6 +120,7 @@ private:
     std::unique_ptr<GuiManager> m_guiManager;
     std::unique_ptr<OptionsManager> m_optionsManager;
     std::unique_ptr<InputManager> m_inputManager;
+    std::unique_ptr<ViewportManager> m_viewportManager;
     
     // Essential input state variables (still needed by App for compatibility)
     bool m_isDragging{false};
@@ -180,11 +166,6 @@ private:
 
     int m_currentPage;
     int m_pageCount;
-    int m_currentScale;
-    int m_scrollX;
-    int m_scrollY;
-    int m_pageWidth;
-    int m_pageHeight;
 
 
 
@@ -207,40 +188,8 @@ private:
     bool isNextRenderLikelyExpensive() const {
         return m_lastRenderDuration > EXPENSIVE_RENDER_THRESHOLD_MS;
     }
-    
-    // Check if zoom processing indicator should remain visible for minimum time
-    bool shouldShowZoomProcessingIndicator() const {
-        if (!m_zoomProcessing) return false;
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - m_zoomProcessingStartTime).count();
-        return elapsed < ZOOM_PROCESSING_MIN_DISPLAY_MS || isZoomDebouncing();
-    }
 
-    // Scroll extents helpers
-    int getMaxScrollX() const;
-    int getMaxScrollY() const; // if you later want vertical logic
 
-    // Recompute scaled page dims for current page at the existing zoom and clamp scroll.
-    void onPageChangedKeepZoom();
-
-    // Top alignment control when page height <= window height
-    bool m_topAlignWhenFits{true};         // prefer top-align instead of centering when it fits
-    bool m_forceTopAlignNextRender{false}; // one-shot flag after page changes
-
-    // Align the current page so its top is visible
-    void alignToTopOfCurrentPage();
-
-    // --- View transforms ---
-    int m_rotation{0}; // 0, 90, 180, 270
-    bool m_mirrorH{false};
-    bool m_mirrorV{false};
-
-    // Effective (native) page size with rotation
-    int effectiveNativeWidth() const;
-    int effectiveNativeHeight() const;
-
-    // Compose SDL flip flags
-    SDL_RendererFlip currentFlipFlags() const;
     
     // Error message display
     std::string m_errorMessage;
@@ -260,24 +209,7 @@ private:
     Uint32 m_pageDisplayTime{0};
     static constexpr Uint32 PAGE_DISPLAY_DURATION = 2000; // 2 seconds
     
-    // Zoom throttling to prevent rapid operations
-    std::chrono::steady_clock::time_point m_lastZoomTime;
-#ifdef TG5040_PLATFORM
-    static constexpr int ZOOM_THROTTLE_MS = 30; // Slower throttle for TG5040
-    static constexpr int ZOOM_DEBOUNCE_MS = 250; // Longer debounce for slow hardware
-#else
-    static constexpr int ZOOM_THROTTLE_MS = 25; // 25ms minimum between zoom operations for smoother response
-    static constexpr int ZOOM_DEBOUNCE_MS = 75; // Faster for other platforms
-#endif
 
-    // Zoom debouncing for performance on slow machines
-    int m_pendingZoomDelta{0};
-    std::chrono::steady_clock::time_point m_lastZoomInputTime;
-    
-    // Zoom processing indicator
-    bool m_zoomProcessing{false};
-    std::chrono::steady_clock::time_point m_zoomProcessingStartTime;
-    static constexpr int ZOOM_PROCESSING_MIN_DISPLAY_MS = 300; // Minimum time to show processing indicator
     
     // Deferred font configuration change to avoid thread safety issues
     bool m_pendingFontChange{false};
