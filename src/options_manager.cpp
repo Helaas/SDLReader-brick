@@ -1,4 +1,4 @@
-#include "font_manager.h"
+#include "options_manager.h"
 #include <filesystem>
 #include <iostream>
 #include <fstream>
@@ -78,8 +78,8 @@ namespace {
         return config;
     }
 
-    // Global pointer to FontManager instance for the callback
-    FontManager* g_fontManagerInstance = nullptr;
+    // Global pointer to OptionsManager instance for the callback
+    OptionsManager* g_optionsManagerInstance = nullptr;
 
     /**
      * @brief Custom font loader callback for MuPDF
@@ -87,7 +87,7 @@ namespace {
      */
     fz_font* customFontLoader(fz_context* ctx, const char* name, int bold, int italic, int needs_exact_metrics) {
         (void)needs_exact_metrics; // Suppress unused parameter warning
-        if (!g_fontManagerInstance || !name) {
+        if (!g_optionsManagerInstance || !name) {
             return nullptr;
         }
 
@@ -95,7 +95,7 @@ namespace {
                   << " (bold=" << bold << ", italic=" << italic << ")" << std::endl;
 
         // Use the public method to get the font path
-        std::string fontPath = g_fontManagerInstance->getFontPathByName(name);
+        std::string fontPath = g_optionsManagerInstance->getFontPathByName(name);
         if (!fontPath.empty()) {
             std::cout << "Loading custom font: " << fontPath << std::endl;
             
@@ -119,15 +119,15 @@ namespace {
     }
 }
 
-FontManager::FontManager() {
+OptionsManager::OptionsManager() {
     // Set global instance for callback
-    g_fontManagerInstance = this;
+    g_optionsManagerInstance = this;
     
     // Constructor - scan fonts on creation
     scanFonts();
 }
 
-void FontManager::scanFonts(const std::string& fontsDir) {
+void OptionsManager::scanFonts(const std::string& fontsDir) {
     m_availableFonts.clear();
     m_fontNameMap.clear();
     
@@ -180,7 +180,7 @@ void FontManager::scanFonts(const std::string& fontsDir) {
     }
 }
 
-const FontInfo* FontManager::findFontByName(const std::string& displayName) const {
+const FontInfo* OptionsManager::findFontByName(const std::string& displayName) const {
     auto it = std::find_if(m_availableFonts.begin(), m_availableFonts.end(),
                           [&displayName](const FontInfo& font) {
                               return font.displayName == displayName;
@@ -188,7 +188,7 @@ const FontInfo* FontManager::findFontByName(const std::string& displayName) cons
     return (it != m_availableFonts.end()) ? &(*it) : nullptr;
 }
 
-std::string FontManager::getFontPathByName(const std::string& displayName) const {
+std::string OptionsManager::getFontPathByName(const std::string& displayName) const {
     auto it = m_fontNameMap.find(displayName);
     if (it != m_fontNameMap.end()) {
         return it->second;
@@ -196,7 +196,7 @@ std::string FontManager::getFontPathByName(const std::string& displayName) const
     return ""; // Return empty string if not found
 }
 
-bool FontManager::installFontLoader(void* ctx) {
+bool OptionsManager::installFontLoader(void* ctx) {
     if (!ctx) {
         std::cerr << "Invalid MuPDF context provided to installFontLoader" << std::endl;
         return false;
@@ -219,7 +219,7 @@ bool FontManager::installFontLoader(void* ctx) {
     return false; // Should never reach here, but needed to satisfy compiler
 }
 
-std::string FontManager::generateCSS(const FontConfig& config) const {
+std::string OptionsManager::generateCSS(const FontConfig& config) const {
     if (config.fontPath.empty() || config.fontName.empty()) {
         return "";
     }
@@ -254,7 +254,7 @@ std::string FontManager::generateCSS(const FontConfig& config) const {
     return css.str();
 }
 
-bool FontManager::saveConfig(const FontConfig& config, const std::string& configPath) const {
+bool OptionsManager::saveConfig(const FontConfig& config, const std::string& configPath) const {
     try {
         // Create directory if it doesn't exist
         std::filesystem::path path(configPath);
@@ -280,7 +280,7 @@ bool FontManager::saveConfig(const FontConfig& config, const std::string& config
     }
 }
 
-FontConfig FontManager::loadConfig(const std::string& configPath) const {
+FontConfig OptionsManager::loadConfig(const std::string& configPath) const {
     FontConfig defaultConfig;
     
     try {
@@ -316,7 +316,7 @@ FontConfig FontManager::loadConfig(const std::string& configPath) const {
     }
 }
 
-std::string FontManager::extractFontName(const std::string& fontPath) const {
+std::string OptionsManager::extractFontName(const std::string& fontPath) const {
     // For now, we'll use a simple approach and just clean up the filename
     // In a more sophisticated implementation, you could parse the TTF/OTF file
     // to extract the actual font family name from the name table
@@ -327,7 +327,7 @@ std::string FontManager::extractFontName(const std::string& fontPath) const {
     return filenameToDisplayName(filename);
 }
 
-bool FontManager::isSupportedFontFile(const std::string& filename) const {
+bool OptionsManager::isSupportedFontFile(const std::string& filename) const {
     std::string lowercaseFilename = filename;
     std::transform(lowercaseFilename.begin(), lowercaseFilename.end(), 
                    lowercaseFilename.begin(), ::tolower);
@@ -337,7 +337,7 @@ bool FontManager::isSupportedFontFile(const std::string& filename) const {
              lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".otf"));
 }
 
-std::string FontManager::filenameToDisplayName(const std::string& filename) const {
+std::string OptionsManager::filenameToDisplayName(const std::string& filename) const {
     std::string displayName = filename;
     
     // Remove extension if present

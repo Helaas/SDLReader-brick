@@ -54,7 +54,6 @@ public:
     void prerenderAdjacentPagesAsync(int currentPage, int scale);
 
     // CSS styling for documents (EPUB/MOBI)
-    void setUserCSS(const std::string& css);
     void setUserCSSBeforeOpen(const std::string& css); // Set CSS before opening document
     std::string getUserCSS() const { return m_userCSS; }
 

@@ -5,7 +5,7 @@
 #include "document.h"
 #include "text_renderer.h"
 #include "gui_manager.h"
-#include "font_manager.h"
+#include "options_manager.h"
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
 #endif
@@ -128,7 +128,7 @@ private:
     std::unique_ptr<Document> m_document;
     std::unique_ptr<TextRenderer> m_textRenderer;
     std::unique_ptr<GuiManager> m_guiManager;
-    std::unique_ptr<FontManager> m_fontManager;
+    std::unique_ptr<OptionsManager> m_optionsManager;
     
     // Mutex to protect document access from multiple threads
     mutable std::mutex m_documentMutex;

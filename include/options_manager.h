@@ -1,5 +1,5 @@
-#ifndef FONT_MANAGER_H
-#define FONT_MANAGER_H
+#ifndef OPTIONS_MANAGER_H
+#define OPTIONS_MANAGER_H
 
 #include <vector>
 #include <string>
@@ -32,12 +32,12 @@ struct FontConfig {
 };
 
 /**
- * @brief Manages font discovery, configuration, and CSS generation
+ * @brief Manages application options including font discovery, configuration, and CSS generation
  */
-class FontManager {
+class OptionsManager {
 public:
-    FontManager();
-    ~FontManager() = default;
+    OptionsManager();
+    ~OptionsManager() = default;
 
     /**
      * @brief Scan the fonts directory for available fonts
@@ -120,4 +120,4 @@ private:
     std::string filenameToDisplayName(const std::string& filename) const;
 };
 
-#endif // FONT_MANAGER_H
+#endif // OPTIONS_MANAGER_H

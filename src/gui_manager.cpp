@@ -61,11 +61,11 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer) {
     std::cout << "Dear ImGui initialized successfully" << std::endl;
 
     // Initialize font manager and load config
-    m_currentConfig = m_fontManager.loadConfig();
+    m_currentConfig = m_optionsManager.loadConfig();
     m_tempConfig = m_currentConfig;
     
     // Populate font names for dropdown
-    const auto& fonts = m_fontManager.getAvailableFonts();
+    const auto& fonts = m_optionsManager.getAvailableFonts();
     m_fontNames.clear();
     for (const auto& font : fonts) {
         m_fontNames.push_back(font.displayName);
@@ -219,7 +219,7 @@ void GuiManager::renderFontMenu() {
     // Font selection dropdown
     ImGui::Text("Font Family:");
     
-    const auto& fonts = m_fontManager.getAvailableFonts();
+    const auto& fonts = m_optionsManager.getAvailableFonts();
     if (fonts.empty()) {
         ImGui::TextColored(ImVec4(1, 1, 0, 1), "No fonts found in /fonts directory");
         ImGui::Text("Please add .ttf or .otf files to the fonts folder");
@@ -384,7 +384,7 @@ void GuiManager::renderFontMenu() {
             m_currentConfig = m_tempConfig;
             
             // Save config to file
-            m_fontManager.saveConfig(m_currentConfig);
+            m_optionsManager.saveConfig(m_currentConfig);
             
             // Call callback to apply changes
             m_fontApplyCallback(m_currentConfig);
@@ -682,7 +682,7 @@ bool GuiManager::handleNumberPadInput(const SDL_Event& event) {
 }
 
 int GuiManager::findFontIndex(const std::string& fontName) const {
-    const auto& fonts = m_fontManager.getAvailableFonts();
+    const auto& fonts = m_optionsManager.getAvailableFonts();
     for (int i = 0; i < (int)fonts.size(); i++) {
         if (fonts[i].displayName == fontName) {
             return i;

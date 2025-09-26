@@ -4,7 +4,7 @@
 #include "document.h"
 #include "mupdf_document.h"
 #include "gui_manager.h"
-#include "font_manager.h"
+#include "options_manager.h"
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
 #endif
@@ -53,10 +53,10 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
 #endif
 
     // Initialize font manager FIRST, before document creation
-    m_fontManager = std::make_unique<FontManager>();
+    m_optionsManager = std::make_unique<OptionsManager>();
     
     // Load saved font configuration early
-    FontConfig savedConfig = m_fontManager->loadConfig();
+    FontConfig savedConfig = m_optionsManager->loadConfig();
 
     // Determine document type based on file extension
     // MuPDF supports PDF, CBZ, ZIP (with images), XPS, EPUB, and other formats
@@ -79,7 +79,7 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
         // Apply saved CSS configuration BEFORE opening document
         if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get())) {
             if (!savedConfig.fontPath.empty()) {
-                std::string css = m_fontManager->generateCSS(savedConfig);
+                std::string css = m_optionsManager->generateCSS(savedConfig);
                 if (!css.empty()) {
                     muDoc->setUserCSSBeforeOpen(css);
                     std::cout << "Applied saved font CSS before opening document: " << savedConfig.fontName << std::endl;
@@ -130,7 +130,7 @@ if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
 
     // Install custom font loader for MuPDF if this is a MuPDF document
     if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get())) {
-        m_fontManager->installFontLoader(muDoc->getContext());
+        m_optionsManager->installFontLoader(muDoc->getContext());
         std::cout << "DEBUG: Custom font loader installed for MuPDF document" << std::endl;
     }
     
@@ -424,11 +424,11 @@ void App::handleEvent(const SDL_Event &event)
             break;
         case SDLK_PLUS:
         case SDLK_KP_PLUS:
-            zoom(m_fontManager->loadConfig().zoomStep);
+            zoom(m_optionsManager->loadConfig().zoomStep);
             break;
         case SDLK_MINUS:
         case SDLK_KP_MINUS:
-            zoom(-m_fontManager->loadConfig().zoomStep);
+            zoom(-m_optionsManager->loadConfig().zoomStep);
             break;
         case SDLK_HOME:
             goToPage(0);
@@ -596,7 +596,7 @@ void App::handleEvent(const SDL_Event &event)
         {
             if (SDL_GetModState() & KMOD_CTRL)
             {
-                zoom(m_fontManager->loadConfig().zoomStep);
+                zoom(m_optionsManager->loadConfig().zoomStep);
             }
             else if (!isInScrollTimeout())
             {
@@ -608,7 +608,7 @@ void App::handleEvent(const SDL_Event &event)
         {
             if (SDL_GetModState() & KMOD_CTRL)
             {
-                zoom(-m_fontManager->loadConfig().zoomStep);
+                zoom(-m_optionsManager->loadConfig().zoomStep);
             }
             else if (!isInScrollTimeout())
             {
@@ -736,10 +736,10 @@ void App::handleEvent(const SDL_Event &event)
 
             // --- Y / B: zoom in/out ---
             case SDL_CONTROLLER_BUTTON_Y:
-                zoom(m_fontManager->loadConfig().zoomStep);
+                zoom(m_optionsManager->loadConfig().zoomStep);
                 break;
             case SDL_CONTROLLER_BUTTON_B:
-                zoom(-m_fontManager->loadConfig().zoomStep);
+                zoom(-m_optionsManager->loadConfig().zoomStep);
                 break;
 
             // --- X: Rotate ---
@@ -1507,8 +1507,8 @@ void App::applyPendingFontChange()
               << " at " << m_pendingFontConfig.fontSize << "pt" << std::endl;
     
     // Generate CSS from the pending configuration
-    if (m_fontManager) {
-        std::string css = m_fontManager->generateCSS(m_pendingFontConfig);
+    if (m_optionsManager) {
+        std::string css = m_optionsManager->generateCSS(m_pendingFontConfig);
         std::cout << "DEBUG: Generated CSS: " << css << std::endl;
         
         if (!css.empty()) {
@@ -1548,7 +1548,7 @@ void App::applyPendingFontChange()
                     clampScroll();
                     
                     // Save the configuration
-                    m_fontManager->saveConfig(m_pendingFontConfig);
+                    m_optionsManager->saveConfig(m_pendingFontConfig);
                     
                     // Force re-render of current page
                     markDirty();

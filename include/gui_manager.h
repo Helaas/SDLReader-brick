@@ -1,7 +1,7 @@
 #ifndef GUI_MANAGER_H
 #define GUI_MANAGER_H
 
-#include "font_manager.h"
+#include "options_manager.h"
 #include <SDL.h>
 #include <string>
 #include <functional>
@@ -132,7 +132,7 @@ private:
     bool m_initialized = false;
     bool m_showFontMenu = false;
     SDL_Renderer* m_renderer = nullptr; // Store renderer for ImGui
-    FontManager m_fontManager;
+    OptionsManager m_optionsManager;
     FontConfig m_currentConfig;
     FontConfig m_tempConfig; // Temporary config for UI editing
     
