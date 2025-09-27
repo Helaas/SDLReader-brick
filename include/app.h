@@ -8,6 +8,7 @@
 #include "options_manager.h"
 #include "input_manager.h"
 #include "viewport_manager.h"
+#include "navigation_manager.h"
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
 #endif
@@ -71,15 +72,7 @@ private:
     void processInputAction(const InputActionData& actionData);
     void updateInputState(const SDL_Event& event);
 
-    // Page Navigation
-    void goToNextPage();
-    void goToPreviousPage();
-    void goToPage(int pageNum);
-    void jumpPages(int delta);
-    void startPageJumpInput();
-    void handlePageJumpInput(char digit);
-    void cancelPageJumpInput();
-    void confirmPageJumpInput();
+
 
     // Font management
     void applyPendingFontChange(); // Apply deferred font configuration changes safely
@@ -87,9 +80,7 @@ private:
     // State Management
     void printAppState();
     
-    // Cooldown and timing checks
-    bool isInPageChangeCooldown() const;
-    bool isInScrollTimeout() const;
+
 
     // Font management
     void toggleFontMenu();
@@ -121,15 +112,13 @@ private:
     std::unique_ptr<OptionsManager> m_optionsManager;
     std::unique_ptr<InputManager> m_inputManager;
     std::unique_ptr<ViewportManager> m_viewportManager;
+    std::unique_ptr<NavigationManager> m_navigationManager;
     
     // Essential input state variables (still needed by App for compatibility)
     bool m_isDragging{false};
     float m_lastTouchX{0.0f};
     float m_lastTouchY{0.0f};
-    bool m_pageJumpInputActive{false};
-    std::string m_pageJumpBuffer;
-    Uint32 m_pageJumpStartTime{0};
-    static constexpr Uint32 PAGE_JUMP_TIMEOUT = 5000; // 5 seconds
+
     
     // D-pad held state for continuous input
     bool m_dpadLeftHeld{false};
@@ -164,30 +153,14 @@ private:
     std::unique_ptr<PowerHandler> m_powerHandler;
 #endif
 
-    int m_currentPage;
-    int m_pageCount;
+
 
 
 
     // Per-frame panning when D-pad is held
     bool updateHeldPanning(float dt);
 
-    // Page change cooldown to prevent rapid page flipping during panning
-    Uint32 m_lastPageChangeTime{0};
-    static constexpr Uint32 PAGE_CHANGE_COOLDOWN = 300; // 300ms cooldown after page change
-    
-    // Dynamic timeout based on actual rendering time (used for both scroll timeout and zoom debouncing)
-    Uint32 m_lastRenderDuration{300}; // Default to 300ms if no render time measured yet
-    
-    // Threshold for determining when rendering becomes expensive enough to warrant immediate processing indicator
-    static constexpr Uint32 EXPENSIVE_RENDER_THRESHOLD_MS = 200; // Show immediate indicator if last render took > 200ms
-    
 
-    
-    // Check if next render is likely to be expensive based on recent rendering performance
-    bool isNextRenderLikelyExpensive() const {
-        return m_lastRenderDuration > EXPENSIVE_RENDER_THRESHOLD_MS;
-    }
 
 
     
