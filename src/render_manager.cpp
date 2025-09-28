@@ -172,7 +172,6 @@ void RenderManager::renderPageInfo(NavigationManager* navigationManager, int win
     // Only show page info for 2 seconds after it changes
     if ((SDL_GetTicks() - m_state.pageDisplayTime) < RenderState::PAGE_DISPLAY_DURATION)
     {
-        int baseFontSize = 16;
         m_textRenderer->setFontSize(100); // 100% = normal base size
 
         SDL_Color textColor = {0, 0, 0, 255};
@@ -186,6 +185,8 @@ void RenderManager::renderPageInfo(NavigationManager* navigationManager, int win
 
 void RenderManager::renderScaleInfo(ViewportManager* viewportManager, int windowWidth, int windowHeight)
 {
+    (void)windowHeight; // Suppress unused parameter warning
+    
     // Only show scale info for 2 seconds after it changes
     if ((SDL_GetTicks() - m_state.scaleDisplayTime) < RenderState::SCALE_DISPLAY_DURATION)
     {
@@ -202,6 +203,8 @@ void RenderManager::renderScaleInfo(ViewportManager* viewportManager, int window
 
 void RenderManager::renderZoomProcessingIndicator(ViewportManager* viewportManager, int windowWidth, int windowHeight)
 {
+    (void)windowHeight; // Suppress unused parameter warning
+    
     if (viewportManager->shouldShowZoomProcessingIndicator())
     {
         SDL_Color processingColor = {255, 255, 0, 255}; // Bright yellow text for high visibility
@@ -210,10 +213,14 @@ void RenderManager::renderZoomProcessingIndicator(ViewportManager* viewportManag
         std::string processingText = "Processing zoom...";
 
         // Use larger font for better visibility during longer operations
-        m_textRenderer->setFontSize(150); // Even larger for better visibility
-        int avgCharWidth = 12;            // Adjusted for larger font
+        static constexpr int PROCESSING_FONT_SIZE = 150;
+        static constexpr int PROCESSING_AVG_CHAR_WIDTH = 12;
+        static constexpr int PROCESSING_TEXT_HEIGHT = 24;
+
+        m_textRenderer->setFontSize(PROCESSING_FONT_SIZE);
+        int avgCharWidth = PROCESSING_AVG_CHAR_WIDTH;
         int textWidth = static_cast<int>(processingText.length()) * avgCharWidth;
-        int textHeight = 24; // Adjusted for larger font
+        int textHeight = PROCESSING_TEXT_HEIGHT;
 
         // Position prominently in top-center
         int textX = (windowWidth - textWidth) / 2;

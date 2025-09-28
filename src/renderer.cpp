@@ -1,11 +1,11 @@
 #include "renderer.h"
 #include "document.h" // Assuming document.h provides rgb24_to_argb32
-#include <iostream>
-#include <stdexcept>
 #include <algorithm>
-#include <vector>
-#include <numeric>
 #include <cstring> // For memcpy
+#include <iostream>
+#include <numeric>
+#include <stdexcept>
+#include <vector>
 
 // Removed custom deleters for SDL_Window and SDL_Renderer as they are no longer owned by Renderer.
 // void SDL_Window_Deleter::operator()(SDL_Window* window) const {
@@ -19,7 +19,7 @@
 // --- Renderer Class ---
 
 // Constructor now accepts pre-initialized SDL_Window and SDL_Renderer
-Renderer::Renderer(SDL_Window *window, SDL_Renderer *renderer)
+Renderer::Renderer(SDL_Window* window, SDL_Renderer* renderer)
     : m_window(window), m_renderer(renderer),
       m_currentTexWidth(0), m_currentTexHeight(0), m_isFullscreen(false)
 {
@@ -40,7 +40,7 @@ Renderer::Renderer(SDL_Window *window, SDL_Renderer *renderer)
 
 // renderer.cpp
 
-void Renderer::renderPageEx(const std::vector<uint8_t> &pixelData,
+void Renderer::renderPageEx(const std::vector<uint8_t>& pixelData,
                             int srcWidth, int srcHeight,
                             int destX, int destY, int destWidth, int destHeight,
                             double angleDeg, SDL_RendererFlip flip)
@@ -69,7 +69,7 @@ void Renderer::renderPageEx(const std::vector<uint8_t> &pixelData,
         m_currentTexHeight = srcHeight;
     }
 
-    void *pixels;
+    void* pixels;
     int pitch;
     if (SDL_LockTexture(m_texture.get(), NULL, &pixels, &pitch) != 0)
     {
@@ -79,8 +79,8 @@ void Renderer::renderPageEx(const std::vector<uint8_t> &pixelData,
 
     for (int y = 0; y < srcHeight; ++y)
     {
-        const uint8_t *srcRow = pixelData.data() + (static_cast<size_t>(y) * srcWidth * 3);
-        uint32_t *destRow = reinterpret_cast<uint32_t *>(static_cast<uint8_t *>(pixels) + (static_cast<size_t>(y) * pitch));
+        const uint8_t* srcRow = pixelData.data() + (static_cast<size_t>(y) * srcWidth * 3);
+        uint32_t* destRow = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(pixels) + (static_cast<size_t>(y) * pitch));
 
         std::fill(destRow, destRow + (pitch / sizeof(uint32_t)), 0xFFFFFFFF);
 
@@ -96,10 +96,10 @@ void Renderer::renderPageEx(const std::vector<uint8_t> &pixelData,
     SDL_RenderCopyEx(m_renderer, m_texture.get(), NULL, &destRect, angleDeg, /*center*/ nullptr, flip);
 }
 
-void Renderer::renderPageExARGB(const std::vector<uint32_t> &argbData,
-                               int srcWidth, int srcHeight,
-                               int destX, int destY, int destWidth, int destHeight,
-                               double angleDeg, SDL_RendererFlip flip)
+void Renderer::renderPageExARGB(const std::vector<uint32_t>& argbData,
+                                int srcWidth, int srcHeight,
+                                int destX, int destY, int destWidth, int destHeight,
+                                double angleDeg, SDL_RendererFlip flip)
 {
     if (argbData.empty() || srcWidth == 0 || srcHeight == 0)
     {
@@ -125,7 +125,7 @@ void Renderer::renderPageExARGB(const std::vector<uint32_t> &argbData,
         m_currentTexHeight = srcHeight;
     }
 
-    void *pixels;
+    void* pixels;
     int pitch;
     if (SDL_LockTexture(m_texture.get(), NULL, &pixels, &pitch) != 0)
     {
@@ -137,8 +137,8 @@ void Renderer::renderPageExARGB(const std::vector<uint32_t> &argbData,
     const uint32_t* srcData = argbData.data();
     for (int y = 0; y < srcHeight; ++y)
     {
-        uint32_t *destRow = reinterpret_cast<uint32_t *>(static_cast<uint8_t *>(pixels) + (static_cast<size_t>(y) * pitch));
-        const uint32_t *srcRow = srcData + (static_cast<size_t>(y) * srcWidth);
+        uint32_t* destRow = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(pixels) + (static_cast<size_t>(y) * pitch));
+        const uint32_t* srcRow = srcData + (static_cast<size_t>(y) * srcWidth);
         memcpy(destRow, srcRow, srcWidth * sizeof(uint32_t));
     }
 
@@ -162,7 +162,7 @@ void Renderer::present()
     SDL_RenderPresent(m_renderer);
 }
 
-SDL_Renderer *Renderer::getSDLRenderer() const
+SDL_Renderer* Renderer::getSDLRenderer() const
 {
     return m_renderer; // Return raw pointer
 }

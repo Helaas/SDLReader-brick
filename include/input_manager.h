@@ -2,13 +2,14 @@
 #define INPUT_MANAGER_H
 
 #include <SDL.h>
-#include <functional>
 #include <chrono>
+#include <functional>
 
 /**
  * @brief Actions that can be triggered by input events
  */
-enum class InputAction {
+enum class InputAction
+{
     None,
     Quit,
     Resize,
@@ -52,20 +53,22 @@ enum class InputAction {
 /**
  * @brief Structure to hold input action data
  */
-struct InputActionData {
+struct InputActionData
+{
     InputAction action = InputAction::None;
-    int intValue = 0;      // For page numbers, zoom values, etc.
+    int intValue = 0;        // For page numbers, zoom values, etc.
     float floatValue = 0.0f; // For deltas, positions, etc.
-    char charValue = 0;    // For character input
-    float deltaX = 0.0f;   // For mouse/touch movement
-    float deltaY = 0.0f;   // For mouse/touch movement
-    bool isPressed = false; // For key/button state
+    char charValue = 0;      // For character input
+    float deltaX = 0.0f;     // For mouse/touch movement
+    float deltaY = 0.0f;     // For mouse/touch movement
+    bool isPressed = false;  // For key/button state
 };
 
 /**
  * @brief Manages all input handling for the application
  */
-class InputManager {
+class InputManager
+{
 public:
     InputManager();
     ~InputManager() = default;
@@ -87,18 +90,30 @@ public:
     /**
      * @brief Set page jump input as active/inactive
      */
-    void setPageJumpActive(bool active) { m_pageJumpActive = active; }
-    bool isPageJumpActive() const { return m_pageJumpActive; }
+    void setPageJumpActive(bool active)
+    {
+        m_pageJumpActive = active;
+    }
+    bool isPageJumpActive() const
+    {
+        return m_pageJumpActive;
+    }
 
     /**
      * @brief Set current zoom step for zoom actions
      */
-    void setZoomStep(int zoomStep) { m_zoomStep = zoomStep; }
+    void setZoomStep(int zoomStep)
+    {
+        m_zoomStep = zoomStep;
+    }
 
     /**
      * @brief Set page count for validation
      */
-    void setPageCount(int pageCount) { m_pageCount = pageCount; }
+    void setPageCount(int pageCount)
+    {
+        m_pageCount = pageCount;
+    }
 
     /**
      * @brief Check if we're in page change cooldown
@@ -133,7 +148,8 @@ public:
     /**
      * @brief Get current input state for UI purposes
      */
-    struct InputState {
+    struct InputState
+    {
         bool keyboardLeftHeld = false;
         bool keyboardRightHeld = false;
         bool keyboardUpHeld = false;
@@ -145,7 +161,7 @@ public:
         bool isDragging = false;
         float lastTouchX = 0.0f;
         float lastTouchY = 0.0f;
-        
+
         // Edge turn state
         float edgeTurnHoldRight = 0.0f;
         float edgeTurnHoldLeft = 0.0f;
@@ -157,28 +173,31 @@ public:
         float edgeTurnCooldownDown = 0.0f;
     };
 
-    const InputState& getInputState() const { return m_inputState; }
+    const InputState& getInputState() const
+    {
+        return m_inputState;
+    }
 
 private:
     // Input state
     InputState m_inputState;
-    
+
     // Page jump state
     bool m_pageJumpActive = false;
     std::string m_pageJumpBuffer;
-    
+
     // Configuration
     int m_zoomStep = 10;
     int m_pageCount = 1;
-    
+
     // Cooldowns and timeouts
     Uint32 m_lastPageChangeTime = 0;
     Uint32 m_lastScrollTime = 0;
-    
+
     // Game controller
     SDL_GameController* m_gameController = nullptr;
     SDL_JoystickID m_gameControllerInstanceID = -1;
-    
+
     // Constants
     static constexpr Uint32 PAGE_CHANGE_COOLDOWN_MS = 200;
     static constexpr Uint32 SCROLL_TIMEOUT_MS = 100;
@@ -186,14 +205,14 @@ private:
     static constexpr float EDGE_TURN_THRESHOLD = 1.5f;
     static constexpr float EDGE_TURN_COOLDOWN_TIME = 0.5f;
     static constexpr int DPAD_NUDGE_AMOUNT = 20;
-    
+
     // Helper methods
     InputActionData processKeyDown(const SDL_Event& event);
     InputActionData processKeyUp(const SDL_Event& event);
     InputActionData processControllerButton(const SDL_Event& event);
     InputActionData processControllerAxis(const SDL_Event& event);
     InputActionData processMouse(const SDL_Event& event);
-    
+
     void handlePageJumpInput(char c);
     void updateEdgeTurnTimers(float dt);
     bool checkEdgeTurnTrigger();

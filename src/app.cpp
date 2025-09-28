@@ -23,8 +23,8 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
 {
 
     // Store window and renderer for RenderManager initialization
-    SDL_Window* m_window = window;
-    SDL_Renderer* m_sdlRenderer = renderer;
+    SDL_Window* localWindow = window;
+    SDL_Renderer* localSDLRenderer = renderer;
 
 #ifdef TG5040_PLATFORM
     // Initialize power handler
@@ -109,7 +109,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
     {
         int windowWidth, windowHeight;
-        SDL_GetWindowSize(m_window, &windowWidth, &windowHeight);
+        SDL_GetWindowSize(localWindow, &windowWidth, &windowHeight);
         // Allow 4x zoom by setting max render size to 4x window size
         muDoc->setMaxRenderSize(windowWidth * 4, windowHeight * 4);
     }
@@ -177,7 +177,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     }
 
     // Initialize RenderManager LAST after all dependencies are ready
-    m_renderManager = std::make_unique<RenderManager>(m_window, m_sdlRenderer);
+    m_renderManager = std::make_unique<RenderManager>(localWindow, localSDLRenderer);
 
     // Update ViewportManager with the proper renderer from RenderManager
     m_viewportManager->setRenderer(m_renderManager->getRenderer());

@@ -1,7 +1,7 @@
 #include "viewport_manager.h"
-#include "renderer.h"
 #include "document.h"
 #include "mupdf_document.h"
+#include "renderer.h"
 #include <algorithm>
 #include <iostream>
 
@@ -14,23 +14,25 @@ void ViewportManager::zoom(int delta, Document* document)
 {
     // Accumulate zoom changes and track input timing for debouncing
     auto now = std::chrono::steady_clock::now();
-    
+
     // Cancel any ongoing prerendering since zoom is changing
     auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(document);
-    if (muPdfDoc) {
+    if (muPdfDoc)
+    {
         muPdfDoc->cancelPrerendering();
     }
-    
+
     // Add to pending zoom delta
     m_pendingZoomDelta += delta;
     m_lastZoomInputTime = now;
-    
+
     // Set zoom processing indicator
-    if (!m_zoomProcessing) {
+    if (!m_zoomProcessing)
+    {
         m_zoomProcessing = true;
         m_zoomProcessingStartTime = now;
     }
-    
+
     // If there's already a pending zoom, don't apply immediately
     // The caller will check for settled input and apply the final zoom
 }
@@ -39,19 +41,21 @@ void ViewportManager::zoomTo(int scale, Document* document)
 {
     // Always use debouncing for consistent behavior
     int targetDelta = scale - m_state.currentScale;
-    
+
     // Cancel any ongoing prerendering since zoom is changing
     auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(document);
-    if (muPdfDoc) {
+    if (muPdfDoc)
+    {
         muPdfDoc->cancelPrerendering();
     }
-    
+
     // Use the zoom method with delta for consistency
     m_pendingZoomDelta = targetDelta;
     m_lastZoomInputTime = std::chrono::steady_clock::now();
-    
+
     // Set zoom processing indicator
-    if (!m_zoomProcessing) {
+    if (!m_zoomProcessing)
+    {
         m_zoomProcessing = true;
         m_zoomProcessingStartTime = m_lastZoomInputTime;
     }
@@ -59,41 +63,51 @@ void ViewportManager::zoomTo(int scale, Document* document)
 
 void ViewportManager::applyPendingZoom(Document* document, int currentPage)
 {
-    if (m_pendingZoomDelta == 0) {
+    if (m_pendingZoomDelta == 0)
+    {
         return;
     }
-    
+
     int oldScale = m_state.currentScale;
     int newScale = std::clamp(oldScale + m_pendingZoomDelta, 10, 350);
-    
-    if (newScale != oldScale) {
+
+    if (newScale != oldScale)
+    {
         m_state.currentScale = newScale;
         updatePageDimensions(document, currentPage);
         recenterScrollOnZoom(oldScale, newScale);
         clampScroll();
     }
-    
+
     // Clear pending zoom
     m_pendingZoomDelta = 0;
-    
+
     // Update zoom processing state
     m_zoomProcessing = false;
 }
 
 bool ViewportManager::isZoomDebouncing() const
 {
-    if (m_pendingZoomDelta == 0) {
+    if (m_pendingZoomDelta == 0)
+    {
         return false;
     }
-    
+
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - m_lastZoomInputTime).count();
-    
+                       std::chrono::steady_clock::now() - m_lastZoomInputTime)
+                       .count();
+
     return elapsed < ZOOM_DEBOUNCE_MS;
 }
 
 void ViewportManager::fitPageToWindow(Document* document, int currentPage)
 {
+    if (!m_renderer)
+    {
+        std::cerr << "Error: ViewportManager renderer is null in fitPageToWindow" << std::endl;
+        return;
+    }
+
     int windowWidth = m_renderer->getWindowWidth();
     int windowHeight = m_renderer->getWindowHeight();
 
@@ -131,7 +145,7 @@ void ViewportManager::fitPageToWindow(Document* document, int currentPage)
 
     m_state.scrollX = 0;
     m_state.scrollY = 0;
-    
+
     clampScroll();
 }
 
@@ -182,7 +196,8 @@ void ViewportManager::clampScroll()
 
 void ViewportManager::recenterScrollOnZoom(int oldScale, int newScale)
 {
-    if (oldScale == 0) return; // Prevent division by zero
+    if (oldScale == 0)
+        return; // Prevent division by zero
 
     // Calculate the scaling factor
     double scaleFactor = static_cast<double>(newScale) / oldScale;
@@ -196,16 +211,17 @@ void ViewportManager::onPageChangedKeepZoom(Document* document, int newPage)
 {
     // Cancel any ongoing prerendering for the old page
     auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(document);
-    if (muPdfDoc) {
+    if (muPdfDoc)
+    {
         muPdfDoc->cancelPrerendering();
     }
 
     // Recompute scaled page dims for current page at the existing zoom
     updatePageDimensions(document, newPage);
-    
+
     // Set the flag to force top alignment on next render
     m_state.forceTopAlignNextRender = true;
-    
+
     // Clamp scroll to new page dimensions
     clampScroll();
 }
@@ -213,15 +229,18 @@ void ViewportManager::onPageChangedKeepZoom(Document* document, int newPage)
 void ViewportManager::alignToTopOfCurrentPage()
 {
     int windowHeight = m_renderer->getWindowHeight();
-    
-    if (m_state.pageHeight <= windowHeight && m_state.topAlignWhenFits) {
+
+    if (m_state.pageHeight <= windowHeight && m_state.topAlignWhenFits)
+    {
         // Page fits in window height, align to top
         m_state.scrollY = -(windowHeight - m_state.pageHeight) / 2;
-    } else {
+    }
+    else
+    {
         // Page is taller than window, show top of page
         m_state.scrollY = getMaxScrollY();
     }
-    
+
     clampScroll();
 }
 
@@ -237,12 +256,13 @@ void ViewportManager::resetPageView(Document* document)
 void ViewportManager::rotateClockwise()
 {
     m_state.rotation = (m_state.rotation + 90) % 360;
-    
+
     // When rotating, swap width and height for 90/270 degree rotations
-    if (m_state.rotation % 180 != 0) {
+    if (m_state.rotation % 180 != 0)
+    {
         std::swap(m_state.pageWidth, m_state.pageHeight);
     }
-    
+
     // Reset scroll position after rotation
     m_state.scrollX = 0;
     m_state.scrollY = 0;
@@ -272,13 +292,15 @@ int ViewportManager::getMaxScrollY() const
 
 int ViewportManager::effectiveNativeWidth(Document* document, int currentPage) const
 {
-    if (!document) return 0;
-    
+    if (!document)
+        return 0;
+
     int width = document->getPageWidthNative(currentPage);
     int height = document->getPageHeightNative(currentPage);
-    
+
     // Account for rotation
-    if (m_state.rotation % 180 != 0) {
+    if (m_state.rotation % 180 != 0)
+    {
         return height; // Swapped for 90/270 degree rotation
     }
     return width;
@@ -286,13 +308,15 @@ int ViewportManager::effectiveNativeWidth(Document* document, int currentPage) c
 
 int ViewportManager::effectiveNativeHeight(Document* document, int currentPage) const
 {
-    if (!document) return 0;
-    
+    if (!document)
+        return 0;
+
     int width = document->getPageWidthNative(currentPage);
     int height = document->getPageHeightNative(currentPage);
-    
+
     // Account for rotation
-    if (m_state.rotation % 180 != 0) {
+    if (m_state.rotation % 180 != 0)
+    {
         return width; // Swapped for 90/270 degree rotation
     }
     return height;
@@ -301,18 +325,22 @@ int ViewportManager::effectiveNativeHeight(Document* document, int currentPage) 
 SDL_RendererFlip ViewportManager::currentFlipFlags() const
 {
     int flags = SDL_FLIP_NONE;
-    if (m_state.mirrorH) flags |= SDL_FLIP_HORIZONTAL;
-    if (m_state.mirrorV) flags |= SDL_FLIP_VERTICAL;
+    if (m_state.mirrorH)
+        flags |= SDL_FLIP_HORIZONTAL;
+    if (m_state.mirrorV)
+        flags |= SDL_FLIP_VERTICAL;
     return static_cast<SDL_RendererFlip>(flags);
 }
 
 bool ViewportManager::shouldShowZoomProcessingIndicator() const
 {
-    if (!m_zoomProcessing) return false;
-    
+    if (!m_zoomProcessing)
+        return false;
+
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - m_zoomProcessingStartTime).count();
-    
+                       std::chrono::steady_clock::now() - m_zoomProcessingStartTime)
+                       .count();
+
     return elapsed < ZOOM_PROCESSING_MIN_DISPLAY_MS || isZoomDebouncing();
 }
 
@@ -320,15 +348,19 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
 {
     // Update page dimensions based on effective size (accounting for downsampling)
     auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(document);
-    if (muPdfDoc) {
+    if (muPdfDoc)
+    {
         m_state.pageWidth = muPdfDoc->getPageWidthEffective(currentPage, m_state.currentScale);
         m_state.pageHeight = muPdfDoc->getPageHeightEffective(currentPage, m_state.currentScale);
-        
+
         // Apply rotation
-        if (m_state.rotation % 180 != 0) {
+        if (m_state.rotation % 180 != 0)
+        {
             std::swap(m_state.pageWidth, m_state.pageHeight);
         }
-    } else {
+    }
+    else
+    {
         // Fallback for other document types
         int nativeWidth = effectiveNativeWidth(document, currentPage);
         int nativeHeight = effectiveNativeHeight(document, currentPage);

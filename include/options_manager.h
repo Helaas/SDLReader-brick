@@ -1,40 +1,45 @@
 #ifndef OPTIONS_MANAGER_H
 #define OPTIONS_MANAGER_H
 
-#include <vector>
-#include <string>
 #include <map>
+#include <string>
+#include <vector>
 
 /**
  * @brief Structure to hold font information
  */
-struct FontInfo {
-    std::string displayName;    // Font name to display in UI
-    std::string filePath;      // Absolute path to font file
-    std::string fileName;      // Just the filename for easier identification
+struct FontInfo
+{
+    std::string displayName; // Font name to display in UI
+    std::string filePath;    // Absolute path to font file
+    std::string fileName;    // Just the filename for easier identification
 };
 
 /**
  * @brief Font configuration settings
  */
-struct FontConfig {
-    std::string fontPath;      // Path to selected font file
-    std::string fontName;      // Display name of selected font
-    int fontSize = 12;         // Font size in points
-    int zoomStep = 10;         // Zoom increment/decrement step
-    
+struct FontConfig
+{
+    std::string fontPath; // Path to selected font file
+    std::string fontName; // Display name of selected font
+    int fontSize = 12;    // Font size in points
+    int zoomStep = 10;    // Zoom increment/decrement step
+
     // Default constructor
     FontConfig() = default;
-    
+
     // Constructor with parameters
     FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10)
-        : fontPath(path), fontName(name), fontSize(size), zoomStep(zoom) {}
+        : fontPath(path), fontName(name), fontSize(size), zoomStep(zoom)
+    {
+    }
 };
 
 /**
  * @brief Manages application options including font discovery, configuration, and CSS generation
  */
-class OptionsManager {
+class OptionsManager
+{
 public:
     OptionsManager();
     ~OptionsManager() = default;
@@ -49,7 +54,10 @@ public:
      * @brief Get list of available fonts
      * @return Vector of FontInfo structures
      */
-    const std::vector<FontInfo>& getAvailableFonts() const { return m_availableFonts; }
+    const std::vector<FontInfo>& getAvailableFonts() const
+    {
+        return m_availableFonts;
+    }
 
     /**
      * @brief Find font info by display name
@@ -104,14 +112,14 @@ public:
 private:
     std::vector<FontInfo> m_availableFonts;
     std::map<std::string, std::string> m_fontNameMap; // Maps display names to file paths
-    
+
     /**
      * @brief Check if file has a supported font extension
      * @param filename The filename to check
      * @return true if file is .ttf or .otf
      */
     bool isSupportedFontFile(const std::string& filename) const;
-    
+
     /**
      * @brief Convert filename to display name (remove extension and format nicely)
      * @param filename The filename to convert
