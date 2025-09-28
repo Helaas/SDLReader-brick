@@ -22,10 +22,9 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     : m_running(true)
 {
 
-    // Pass the pre-initialized window and renderer to the Renderer object
-    m_renderer = std::make_unique<Renderer>(window, renderer);
-
-    m_textRenderer = std::make_unique<TextRenderer>(m_renderer->getSDLRenderer(), "res/Roboto-Regular.ttf", 16);
+    // Store window and renderer for RenderManager initialization
+    SDL_Window* m_window = window;
+    SDL_Renderer* m_sdlRenderer = renderer;
 
 #ifdef TG5040_PLATFORM
     // Initialize power handler
@@ -51,11 +50,11 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     // Initialize font manager FIRST, before document creation
     m_optionsManager = std::make_unique<OptionsManager>();
 
-    // Initialize viewport manager
-    m_viewportManager = std::make_unique<ViewportManager>(m_renderer.get());
-
     // Initialize navigation manager
     m_navigationManager = std::make_unique<NavigationManager>();
+
+    // Initialize viewport manager (will be updated with proper renderer after RenderManager creation)
+    m_viewportManager = std::make_unique<ViewportManager>(nullptr);
 
     // Load saved font configuration early
     FontConfig savedConfig = m_optionsManager->loadConfig();
@@ -109,8 +108,8 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     // Use 4x window size to enable proper zooming while TG5040 has no limit
     if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
     {
-        int windowWidth = m_renderer->getWindowWidth();
-        int windowHeight = m_renderer->getWindowHeight();
+        int windowWidth, windowHeight;
+        SDL_GetWindowSize(m_window, &windowWidth, &windowHeight);
         // Allow 4x zoom by setting max render size to 4x window size
         muDoc->setMaxRenderSize(windowWidth * 4, windowHeight * 4);
     }
@@ -125,15 +124,6 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     // Set page count in navigation manager
     m_navigationManager->setPageCount(pageCount);
     m_navigationManager->setCurrentPage(0);
-
-    // Initial page load and fit
-    loadDocument();
-
-    // Initialize scale display timer
-    m_scaleDisplayTime = SDL_GetTicks();
-
-    // Initialize page display timer
-    m_pageDisplayTime = SDL_GetTicks();
 
     // Initialize InputManager
     m_inputManager = std::make_unique<InputManager>();
@@ -185,6 +175,15 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
         m_guiManager->setCurrentFontConfig(savedConfig);
         std::cout << "Applied saved font configuration: " << savedConfig.fontName << " at " << savedConfig.fontSize << "pt" << std::endl;
     }
+
+    // Initialize RenderManager LAST after all dependencies are ready
+    m_renderManager = std::make_unique<RenderManager>(m_window, m_sdlRenderer);
+
+    // Update ViewportManager with the proper renderer from RenderManager
+    m_viewportManager->setRenderer(m_renderManager->getRenderer());
+
+    // Now that ViewportManager has a valid renderer, do initial page load and fit
+    loadDocument();
 }
 
 App::~App()
@@ -273,7 +272,7 @@ void App::run()
             else
             {
                 // Force render if marked dirty (e.g., after menu close) or other conditions
-                shouldRender = m_needsRedraw || panningChanged ||
+                shouldRender = (m_renderManager && m_renderManager->needsRedraw()) || panningChanged ||
                                ((currentTime - lastRenderTime) >= 16); // More aggressive rendering
             }
 
@@ -297,8 +296,12 @@ void App::run()
 
             if (doRender)
             {
-                renderCurrentPage();
-                renderUI();
+                if (m_renderManager)
+                {
+                    m_renderManager->renderCurrentPage(m_document.get(), m_navigationManager.get(),
+                                                       m_viewportManager.get(), m_documentMutex, m_isDragging);
+                    m_renderManager->renderUI(m_navigationManager.get(), m_viewportManager.get());
+                }
 
                 // Always render ImGui if we started a frame (which we always do when not in fake sleep)
                 if (m_guiManager)
@@ -306,13 +309,16 @@ void App::run()
                     m_guiManager->render();
                 }
 
-                m_renderer->present();
+                if (m_renderManager)
+                {
+                    m_renderManager->present();
+                }
                 lastRenderTime = currentTime;
 
                 // Only reset needsRedraw for normal rendering, not during zoom debouncing
-                if (!m_viewportManager->isZoomDebouncing())
+                if (!m_viewportManager->isZoomDebouncing() && m_renderManager)
                 {
-                    m_needsRedraw = false;
+                    m_renderManager->clearDirtyFlag();
                 }
             }
             else
@@ -328,12 +334,10 @@ void App::run()
         else
         {
             // Fake sleep mode - render black screen
-            if (m_needsRedraw)
+            if (m_renderManager && m_renderManager->needsRedraw())
             {
-                SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 0, 0, 0, 255);
-                SDL_RenderClear(m_renderer->getSDLRenderer());
-                m_renderer->present();
-                m_needsRedraw = false;
+                m_renderManager->renderFakeSleepScreen();
+                m_renderManager->clearDirtyFlag();
             }
         }
     }
@@ -453,7 +457,8 @@ void App::processInputAction(const InputActionData& actionData)
         }
         break;
     case InputAction::ToggleFullscreen:
-        m_renderer->toggleFullscreen();
+        if (m_renderManager)
+            m_renderManager->getRenderer()->toggleFullscreen();
         m_viewportManager->fitPageToWindow(m_document.get(), m_navigationManager->getCurrentPage());
         markDirty();
         break;
@@ -839,453 +844,6 @@ void App::loadDocument()
     m_viewportManager->fitPageToWindow(m_document.get(), m_navigationManager->getCurrentPage());
 }
 
-void App::renderCurrentPage()
-{
-    Uint32 renderStart = SDL_GetTicks();
-
-    m_renderer->clear(255, 255, 255, 255);
-
-    int winW = m_renderer->getWindowWidth();
-    int winH = m_renderer->getWindowHeight();
-
-    int srcW, srcH;
-    std::vector<uint32_t> argbData;
-    {
-        // Lock the document mutex to ensure thread-safe access
-        std::lock_guard<std::mutex> lock(m_documentMutex);
-
-        // Try to use ARGB rendering for better performance
-        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-        if (muPdfDoc)
-        {
-            try
-            {
-                argbData = muPdfDoc->renderPageARGB(m_navigationManager->getCurrentPage(), srcW, srcH, m_viewportManager->getCurrentScale());
-            }
-            catch (const std::exception& e)
-            {
-                // Fallback to RGB rendering
-                std::vector<uint8_t> rgbData = m_document->renderPage(m_navigationManager->getCurrentPage(), srcW, srcH, m_viewportManager->getCurrentScale());
-                // Convert to ARGB manually
-                argbData.resize(srcW * srcH);
-                for (int i = 0; i < srcW * srcH; ++i)
-                {
-                    argbData[i] = rgb24_to_argb32(rgbData[i * 3], rgbData[i * 3 + 1], rgbData[i * 3 + 2]);
-                }
-            }
-        }
-        else
-        {
-            // Fallback to RGB rendering for other document types
-            std::vector<uint8_t> rgbData = m_document->renderPage(m_navigationManager->getCurrentPage(), srcW, srcH, m_viewportManager->getCurrentScale());
-            // Convert to ARGB manually
-            argbData.resize(srcW * srcH);
-            for (int i = 0; i < srcW * srcH; ++i)
-            {
-                argbData[i] = rgb24_to_argb32(rgbData[i * 3], rgbData[i * 3 + 1], rgbData[i * 3 + 2]);
-            }
-        }
-    }
-
-    // Ensure page dimensions are updated BEFORE calculating positions
-    // This prevents warping when switching between pages with different aspect ratios
-    int newPageWidth, newPageHeight;
-
-    // displayed page size after rotation
-    if (m_viewportManager->getRotation() % 180 == 0)
-    {
-        newPageWidth = srcW;
-        newPageHeight = srcH;
-    }
-    else
-    {
-        newPageWidth = srcH;
-        newPageHeight = srcW;
-    }
-
-    // Only update page dimensions if they've actually changed
-    // This provides more stable rendering during rapid input
-    if (m_viewportManager->getPageWidth() != newPageWidth || m_viewportManager->getPageHeight() != newPageHeight)
-    {
-        m_viewportManager->setPageDimensions(newPageWidth, newPageHeight);
-        // Clamp scroll position when page dimensions change to prevent out-of-bounds rendering
-        m_viewportManager->clampScroll();
-    }
-
-    int posX = (winW - m_viewportManager->getPageWidth()) / 2 + m_viewportManager->getScrollX();
-
-    int posY;
-    if (m_viewportManager->getPageHeight() <= winH)
-    {
-        const auto& state = m_viewportManager->getState();
-        if (state.topAlignWhenFits || state.forceTopAlignNextRender)
-            posY = 0;
-        else
-            posY = (winH - m_viewportManager->getPageHeight()) / 2;
-    }
-    else
-    {
-        posY = (winH - m_viewportManager->getPageHeight()) / 2 + m_viewportManager->getScrollY();
-    }
-    m_viewportManager->setForceTopAlignNextRender(false);
-
-    m_renderer->renderPageExARGB(argbData, srcW, srcH,
-                                 posX, posY, m_viewportManager->getPageWidth(), m_viewportManager->getPageHeight(),
-                                 static_cast<double>(m_viewportManager->getRotation()),
-                                 m_viewportManager->currentFlipFlags());
-
-    // Trigger prerendering of adjacent pages for faster page changes
-    // Do this after the main render to avoid blocking the current page display
-    // Only prerender if zoom is stable (not debouncing), not actively panning, and not in cooldown
-    static Uint32 lastPrerenderTrigger = 0;
-    Uint32 currentTime = SDL_GetTicks();
-    bool prerenderCooldownActive = (currentTime - lastPrerenderTrigger) < 200; // 200ms cooldown
-
-    if (!m_viewportManager->isZoomDebouncing() && !m_isDragging && !prerenderCooldownActive)
-    {
-        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-        if (muPdfDoc && !muPdfDoc->isPrerenderingActive())
-        {
-            muPdfDoc->prerenderAdjacentPagesAsync(m_navigationManager->getCurrentPage(), m_viewportManager->getCurrentScale());
-            lastPrerenderTrigger = currentTime;
-        }
-    }
-
-    // Measure total render time for dynamic timeout
-    m_navigationManager->setLastRenderDuration(SDL_GetTicks() - renderStart);
-}
-
-void App::renderUI()
-{
-    int baseFontSize = 16;
-    // setFontSize expects percentage scale, so 100% = normal base size
-    m_textRenderer->setFontSize(100);
-
-    SDL_Color textColor = {0, 0, 0, 255};
-    std::string pageInfo = "Page: " + std::to_string(m_navigationManager->getCurrentPage() + 1) + "/" + std::to_string(m_navigationManager->getPageCount());
-    std::string scaleInfo = "Scale: " + std::to_string(m_viewportManager->getCurrentScale()) + "%";
-
-    int currentWindowWidth = m_renderer->getWindowWidth();
-    int currentWindowHeight = m_renderer->getWindowHeight();
-
-    // Only show page info for 2 seconds after it changes
-    if ((SDL_GetTicks() - m_pageDisplayTime) < PAGE_DISPLAY_DURATION)
-    {
-        m_textRenderer->renderText(pageInfo,
-                                   (currentWindowWidth - static_cast<int>(pageInfo.length()) * 8) / 2,
-                                   currentWindowHeight - 30, textColor);
-    }
-
-    // Only show scale info for 2 seconds after it changes
-    if ((SDL_GetTicks() - m_scaleDisplayTime) < SCALE_DISPLAY_DURATION)
-    {
-        m_textRenderer->renderText(scaleInfo,
-                                   currentWindowWidth - static_cast<int>(scaleInfo.length()) * 8 - 10,
-                                   10, textColor);
-    }
-
-    // Render zoom processing indicator
-    if (m_viewportManager->shouldShowZoomProcessingIndicator())
-    {
-        SDL_Color processingColor = {255, 255, 0, 255}; // Bright yellow text for high visibility
-        SDL_Color processingBgColor = {0, 0, 0, 250};   // Nearly opaque background
-
-        std::string processingText = "Processing zoom...";
-
-        // Use larger font for better visibility during longer operations
-        m_textRenderer->setFontSize(150); // Even larger for better visibility
-        int avgCharWidth = 12;            // Adjusted for larger font
-        int textWidth = static_cast<int>(processingText.length()) * avgCharWidth;
-        int textHeight = 24; // Adjusted for larger font
-
-        // Position prominently in top-center
-        int textX = (currentWindowWidth - textWidth) / 2;
-        int textY = 20;
-
-        // Draw prominent background with extra padding
-        SDL_Rect bgRect = {textX - 20, textY - 10, textWidth + 40, textHeight + 20};
-        SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), processingBgColor.r, processingBgColor.g, processingBgColor.b, processingBgColor.a);
-        SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
-        SDL_RenderFillRect(m_renderer->getSDLRenderer(), &bgRect);
-
-        // Draw bright border for maximum visibility
-        SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 255, 255, 0, 255);
-        SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &bgRect);
-
-        // Draw text
-        m_textRenderer->renderText(processingText, textX, textY, processingColor);
-
-        // Restore font size
-        m_textRenderer->setFontSize(100);
-    }
-
-    // Render error message if active
-    if (!m_errorMessage.empty() && (SDL_GetTicks() - m_errorMessageTime) < ERROR_MESSAGE_DURATION)
-    {
-        SDL_Color errorColor = {255, 255, 255, 255}; // White text
-        SDL_Color bgColor = {255, 0, 0, 180};        // Semi-transparent red background
-
-        // Use larger font for error messages
-        // TextRenderer.setFontSize expects a percentage scale, not absolute size
-        // Base font is 16, we want 64, so we need 400% scale
-        int errorFontScale = 400; // 400% = 4x larger
-        m_textRenderer->setFontSize(errorFontScale);
-
-        // Calculate actual font size for positioning
-        int actualFontSize = static_cast<int>(baseFontSize * (errorFontScale / 100.0));
-
-        // Split message into two lines if it's too long
-        std::string line1, line2;
-        // Slightly wider character width estimation to break text into two lines earlier for better visual balance
-        int avgCharWidth = actualFontSize * 0.50;
-        int maxCharsPerLine = (currentWindowWidth - 60) / avgCharWidth; // Increased margin from 40 to 60 to further reduce single line capacity
-
-        if (static_cast<int>(m_errorMessage.length()) <= maxCharsPerLine)
-        {
-            // Single line is fine
-            line1 = m_errorMessage;
-        }
-        else
-        {
-            // Split into two lines, preferably at a space
-            size_t splitPos = m_errorMessage.length() / 2;
-
-            // Look for a space near the middle to split at
-            size_t spacePos = m_errorMessage.find_last_of(' ', splitPos + 10);
-            if (spacePos != std::string::npos && spacePos > splitPos - 10)
-            {
-                splitPos = spacePos;
-            }
-
-            line1 = m_errorMessage.substr(0, splitPos);
-            line2 = m_errorMessage.substr(splitPos);
-
-            // Trim leading space from second line
-            if (!line2.empty() && line2[0] == ' ')
-            {
-                line2 = line2.substr(1);
-            }
-        }
-
-        // Calculate dimensions for potentially two lines using more accurate character width
-        int maxLineWidth = std::max(static_cast<int>(line1.length()), static_cast<int>(line2.length())) * avgCharWidth;
-        int totalHeight = line2.empty() ? actualFontSize : (actualFontSize * 2 + 10); // Extra spacing between lines
-
-        // Center the message block properly
-        int messageX = (currentWindowWidth - maxLineWidth) / 2;
-        int messageY = (currentWindowHeight - totalHeight) / 2;
-
-        // Draw background rectangle with 10% more extension on each side
-        int bgExtension = currentWindowWidth * 0.1; // 10% of screen width extension on each side
-        SDL_Rect bgRect = {messageX - 20 - bgExtension / 2, messageY - 10, maxLineWidth + 60 + bgExtension, totalHeight + 20};
-        SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), bgColor.r, bgColor.g, bgColor.b, bgColor.a);
-        SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
-        SDL_RenderFillRect(m_renderer->getSDLRenderer(), &bgRect);
-
-        // Draw first line - center it and shift 5% to the right
-        int line1Width = static_cast<int>(line1.length()) * avgCharWidth;
-        int line1X = (currentWindowWidth - line1Width) / 2 + (currentWindowWidth * 0.05); // 5% shift to the right
-        m_textRenderer->renderText(line1, line1X, messageY, errorColor);
-
-        // Draw second line if it exists
-        if (!line2.empty())
-        {
-            int line2Width = static_cast<int>(line2.length()) * avgCharWidth;
-            int line2X = (currentWindowWidth - line2Width) / 2 + (currentWindowWidth * 0.05); // 5% shift to the right
-            int line2Y = messageY + actualFontSize + 10;                                      // Space between lines
-            m_textRenderer->renderText(line2, line2X, line2Y, errorColor);
-        }
-
-        // Restore original font size for other UI elements
-        m_textRenderer->setFontSize(100);
-    }
-    else if (!m_errorMessage.empty())
-    {
-        // Clear expired error message
-        m_errorMessage.clear();
-    }
-
-    // Render page jump input if active
-    if (m_navigationManager->isPageJumpInputActive())
-    {
-        SDL_Color jumpColor = {255, 255, 255, 255}; // White text
-        SDL_Color jumpBgColor = {0, 100, 200, 200}; // Semi-transparent blue background
-
-        // Use larger font for page jump input
-        int jumpFontScale = 300; // 300% = 3x larger
-        m_textRenderer->setFontSize(jumpFontScale);
-
-        // Calculate actual font size for positioning
-        int actualFontSize = static_cast<int>(baseFontSize * (jumpFontScale / 100.0));
-
-        std::string jumpPrompt = "Go to page: " + m_navigationManager->getPageJumpBuffer() + "_";
-        std::string jumpHint = "Enter page number (1-" + std::to_string(m_navigationManager->getPageCount()) + "), press Enter to confirm, Esc to cancel";
-
-        // Calculate positioning
-        int avgCharWidth = actualFontSize * 0.6;
-        int promptWidth = static_cast<int>(jumpPrompt.length()) * avgCharWidth;
-        int hintWidth = static_cast<int>(jumpHint.length()) * (actualFontSize / 2); // Smaller font for hint
-
-        int promptX = (currentWindowWidth - promptWidth) / 2;
-        int promptY = (currentWindowHeight - actualFontSize * 2) / 2;
-
-        // Draw background rectangle
-        int bgWidth = std::max(promptWidth, hintWidth) + 40;
-        int bgHeight = actualFontSize * 3;
-        SDL_Rect bgRect = {promptX - 20, promptY - 10, bgWidth, bgHeight};
-        SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), jumpBgColor.r, jumpBgColor.g, jumpBgColor.b, jumpBgColor.a);
-        SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
-        SDL_RenderFillRect(m_renderer->getSDLRenderer(), &bgRect);
-
-        // Draw prompt text
-        m_textRenderer->renderText(jumpPrompt, promptX, promptY, jumpColor);
-
-        // Draw hint text (smaller)
-        m_textRenderer->setFontSize(150); // 150% for hint
-        int hintX = (currentWindowWidth - hintWidth) / 2;
-        int hintY = promptY + actualFontSize + 10;
-        m_textRenderer->renderText(jumpHint, hintX, hintY, jumpColor);
-
-        // Restore original font size
-        m_textRenderer->setFontSize(100);
-    }
-
-    // Render edge-turn progress indicator - only show when:
-    // 1. D-pad or keyboard arrow is actively held and timer is active
-    // 2. Content doesn't fit on screen in the movement direction (scrollable)
-    // 3. There's a valid page to navigate to in the pressed direction
-    bool inputHeld = m_dpadLeftHeld || m_dpadRightHeld || m_dpadUpHeld || m_dpadDownHeld ||
-                     m_keyboardLeftHeld || m_keyboardRightHeld || m_keyboardUpHeld || m_keyboardDownHeld;
-    float maxEdgeHold = std::max({m_edgeTurnHoldRight, m_edgeTurnHoldLeft, m_edgeTurnHoldUp, m_edgeTurnHoldDown});
-
-    // Check scroll limits for each direction
-    const int maxScrollX = m_viewportManager->getMaxScrollX();
-    const int maxScrollY = m_viewportManager->getMaxScrollY();
-
-    // Check if there are valid pages to navigate to in each direction
-    bool canGoLeft = m_navigationManager->getCurrentPage() > 0;
-    bool canGoRight = m_navigationManager->getCurrentPage() < m_navigationManager->getPageCount() - 1;
-    bool canGoUp = m_navigationManager->getCurrentPage() > 0;
-    bool canGoDown = m_navigationManager->getCurrentPage() < m_navigationManager->getPageCount() - 1;
-
-    // Only show progress bar when content doesn't fit in the movement direction
-    // AND there's a valid page to navigate to
-    bool validDirection = false;
-    if ((m_dpadRightHeld || m_keyboardRightHeld) && m_edgeTurnHoldRight > 0.0f && canGoRight && maxScrollX > 0)
-    {
-        validDirection = true; // Show for horizontal movement when content doesn't fit horizontally
-    }
-    if ((m_dpadLeftHeld || m_keyboardLeftHeld) && m_edgeTurnHoldLeft > 0.0f && canGoLeft && maxScrollX > 0)
-    {
-        validDirection = true; // Show for horizontal movement when content doesn't fit horizontally
-    }
-    if ((m_dpadDownHeld || m_keyboardDownHeld) && m_edgeTurnHoldDown > 0.0f && canGoDown && maxScrollY > 0)
-    {
-        validDirection = true; // Show for vertical movement when content doesn't fit vertically
-    }
-    if ((m_dpadUpHeld || m_keyboardUpHeld) && m_edgeTurnHoldUp > 0.0f && canGoUp && maxScrollY > 0)
-    {
-        validDirection = true; // Show for vertical movement when content doesn't fit vertically
-    }
-
-    if (inputHeld && maxEdgeHold > 0.0f && validDirection)
-    {
-        float progress = maxEdgeHold / m_edgeTurnThreshold;
-        if (progress > 0.05f)
-        { // Only show indicator after 5% progress to avoid flicker
-            // Enhance progress visualization for better completion feedback
-            float visualProgress = std::min(progress * 1.1f, 1.0f); // Slightly faster visual progress
-
-            // Determine which edge and direction
-            std::string direction;
-            int indicatorX = 0, indicatorY = 0;
-            int barWidth = 200, barHeight = 20;
-
-            if (m_edgeTurnHoldRight > 0.0f && (m_dpadRightHeld || m_keyboardRightHeld))
-            {
-                direction = "Next Page";
-                indicatorX = currentWindowWidth - barWidth - 20;
-                indicatorY = currentWindowHeight / 2;
-            }
-            else if (m_edgeTurnHoldLeft > 0.0f && (m_dpadLeftHeld || m_keyboardLeftHeld))
-            {
-                direction = "Previous Page";
-                indicatorX = 20;
-                indicatorY = currentWindowHeight / 2;
-            }
-            else if (m_edgeTurnHoldDown > 0.0f && (m_dpadDownHeld || m_keyboardDownHeld))
-            {
-                direction = "Next Page";
-                indicatorX = (currentWindowWidth - barWidth) / 2;
-                indicatorY = currentWindowHeight - 60;
-            }
-            else if (m_edgeTurnHoldUp > 0.0f && (m_dpadUpHeld || m_keyboardUpHeld))
-            {
-                direction = "Previous Page";
-                indicatorX = (currentWindowWidth - barWidth) / 2;
-                indicatorY = 40;
-            }
-
-            // Calculate text dimensions for better background sizing
-            int avgCharWidth = 10; // Slightly wider character width estimation for better text spacing
-            int textWidth = static_cast<int>(direction.length()) * avgCharWidth;
-            int textHeight = 20;  // Approximate height at 120% font size
-            int textPadding = 12; // Increased padding around text for wider background
-
-            // Position text above the progress bar
-            int textX = indicatorX + (barWidth - textWidth) / 2;
-            int textY = indicatorY - textHeight - textPadding - 5;
-
-            // Draw text background container with semi-transparent background
-            SDL_Rect textBgRect = {
-                textX - textPadding,
-                textY - textPadding,
-                textWidth + 2 * textPadding,
-                textHeight + 2 * textPadding};
-            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 0, 0, 0, 180); // Semi-transparent black
-            SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
-            SDL_RenderFillRect(m_renderer->getSDLRenderer(), &textBgRect);
-
-            // Draw text background border
-            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 255, 255, 255, 255);
-            SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &textBgRect);
-
-            // Draw progress bar background
-            SDL_Rect bgRect = {indicatorX, indicatorY, barWidth, barHeight};
-            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 50, 50, 50, 150);
-            SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
-            SDL_RenderFillRect(m_renderer->getSDLRenderer(), &bgRect);
-
-            // Draw progress bar
-            int progressWidth = static_cast<int>(barWidth * visualProgress);
-            if (progressWidth > 0)
-            {
-                SDL_Rect progressRect = {indicatorX, indicatorY, progressWidth, barHeight};
-
-                // More dramatic color transition: bright yellow to bright green
-                // Use a more aggressive curve to make the transition more visible
-                float colorProgress = std::min(progress * 1.2f, 1.0f); // Accelerate color change
-                uint8_t red = static_cast<uint8_t>(255 * (1.0f - colorProgress));
-                uint8_t green = 255;
-                uint8_t blue = static_cast<uint8_t>(colorProgress < 0.5f ? 0 : 100 * (colorProgress - 0.5f) * 2); // Add some blue at the end for more green
-
-                SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), red, green, blue, 200);
-                SDL_RenderFillRect(m_renderer->getSDLRenderer(), &progressRect);
-            }
-
-            // Draw progress bar border
-            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 255, 255, 255, 255);
-            SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &bgRect);
-
-            // Draw text label with white text
-            SDL_Color labelColor = {255, 255, 255, 255};
-            m_textRenderer->setFontSize(120); // 120% for visibility
-            m_textRenderer->renderText(direction, textX, textY, labelColor);
-            m_textRenderer->setFontSize(100); // Restore normal size
-        }
-    }
-}
-
 void App::applyPendingFontChange()
 {
     if (!m_pendingFontChange)
@@ -1398,7 +956,10 @@ void App::printAppState()
     std::cout << "Current Scale: " << m_viewportManager->getCurrentScale() << "%" << std::endl;
     std::cout << "Scaled Page Dimensions: " << m_viewportManager->getPageWidth() << "x" << m_viewportManager->getPageHeight() << " (Expected/Actual)" << std::endl;
     std::cout << "Scroll Position (Page Offset): X=" << m_viewportManager->getScrollX() << ", Y=" << m_viewportManager->getScrollY() << std::endl;
-    std::cout << "Window Dimensions: " << m_renderer->getWindowWidth() << "x" << m_renderer->getWindowHeight() << std::endl;
+    if (m_renderManager)
+    {
+        std::cout << "Window Dimensions: " << m_renderManager->getRenderer()->getWindowWidth() << "x" << m_renderManager->getRenderer()->getWindowHeight() << std::endl;
+    }
 
     // Also print navigation state
     m_navigationManager->printNavigationState();
@@ -1974,21 +1535,7 @@ void App::handleDpadNudgeUp()
     m_viewportManager->clampScroll();
 }
 
-void App::showErrorMessage(const std::string& message)
-{
-    m_errorMessage = message;
-    m_errorMessageTime = SDL_GetTicks();
-}
-
-void App::updateScaleDisplayTime()
-{
-    m_scaleDisplayTime = SDL_GetTicks();
-}
-
-void App::updatePageDisplayTime()
-{
-    m_pageDisplayTime = SDL_GetTicks();
-}
+// Utility methods moved to convenience methods in header
 
 void App::toggleFontMenu()
 {
