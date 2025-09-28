@@ -1,24 +1,24 @@
 #include "app.h"
+#include "document.h"
+#include "gui_manager.h"
+#include "mupdf_document.h"
+#include "navigation_manager.h"
+#include "options_manager.h"
 #include "renderer.h"
 #include "text_renderer.h"
-#include "document.h"
-#include "mupdf_document.h"
-#include "gui_manager.h"
-#include "options_manager.h"
-#include "navigation_manager.h"
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
 #endif
 
-#include <iostream>
-#include <stdexcept>
 #include <algorithm>
 #include <cmath>
+#include <iostream>
+#include <stdexcept>
 
 // --- App Class ---
 
 // Constructor now accepts pre-initialized SDL_Window* and SDL_Renderer*
-App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer)
+App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer)
     : m_running(true)
 {
 
@@ -32,7 +32,7 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
     m_powerHandler = std::make_unique<PowerHandler>();
 
     // Register error callback for displaying GUI messages
-    m_powerHandler->setErrorCallback([this](const std::string &message)
+    m_powerHandler->setErrorCallback([this](const std::string& message)
                                      { showErrorMessage(message); });
 
     // Register sleep mode callback for fake sleep functionality
@@ -53,7 +53,7 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
 
     // Initialize viewport manager
     m_viewportManager = std::make_unique<ViewportManager>(m_renderer.get());
-    
+
     // Initialize navigation manager
     m_navigationManager = std::make_unique<NavigationManager>();
 
@@ -80,7 +80,7 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
         m_document = std::make_unique<MuPdfDocument>();
 
         // Apply saved CSS configuration BEFORE opening document
-        if (auto muDoc = dynamic_cast<MuPdfDocument *>(m_document.get()))
+        if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
         {
             if (!savedConfig.fontPath.empty())
             {
@@ -107,7 +107,7 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
 #ifndef TG5040_PLATFORM
     // Set max render size for downsampling - allow for meaningful zoom levels on non-TG5040 platforms
     // Use 4x window size to enable proper zooming while TG5040 has no limit
-    if (auto muDoc = dynamic_cast<MuPdfDocument *>(m_document.get()))
+    if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
     {
         int windowWidth = m_renderer->getWindowWidth();
         int windowHeight = m_renderer->getWindowHeight();
@@ -121,7 +121,7 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
     {
         throw std::runtime_error("Document contains no pages: " + filename);
     }
-    
+
     // Set page count in navigation manager
     m_navigationManager->setPageCount(pageCount);
     m_navigationManager->setCurrentPage(0);
@@ -141,7 +141,7 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
     m_inputManager->setPageCount(pageCount);
 
     // Install custom font loader for MuPDF if this is a MuPDF document
-    if (auto muDoc = dynamic_cast<MuPdfDocument *>(m_document.get()))
+    if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
     {
         m_optionsManager->installFontLoader(muDoc->getContext());
         std::cout << "DEBUG: Custom font loader installed for MuPDF document" << std::endl;
@@ -155,7 +155,7 @@ App::App(const std::string &filename, SDL_Window *window, SDL_Renderer *renderer
     }
 
     // Set up font apply callback AFTER all initialization is complete
-    m_guiManager->setFontApplyCallback([this](const FontConfig &config)
+    m_guiManager->setFontApplyCallback([this](const FontConfig& config)
                                        {
         std::cout << "DEBUG: Font apply callback triggered" << std::endl;
         applyFontConfiguration(config); });
@@ -339,7 +339,7 @@ void App::run()
     }
 }
 
-void App::handleEvent(const SDL_Event &event)
+void App::handleEvent(const SDL_Event& event)
 {
     // Let ImGui handle the event first
     if (m_guiManager)
@@ -378,7 +378,7 @@ void App::handleEvent(const SDL_Event &event)
     updateInputState(event);
 }
 
-void App::processInputAction(const InputActionData &actionData)
+void App::processInputAction(const InputActionData& actionData)
 {
     switch (actionData.action)
     {
@@ -395,19 +395,19 @@ void App::processInputAction(const InputActionData &actionData)
     case InputAction::GoToNextPage:
         if (!m_navigationManager->isInPageChangeCooldown())
         {
-            m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(),
-                                             [this]() { markDirty(); },
-                                             [this]() { updateScaleDisplayTime(); },
-                                             [this]() { updatePageDisplayTime(); });
+            m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+                                              { markDirty(); }, [this]()
+                                              { updateScaleDisplayTime(); }, [this]()
+                                              { updatePageDisplayTime(); });
         }
         break;
     case InputAction::GoToPreviousPage:
         if (!m_navigationManager->isInPageChangeCooldown())
         {
-            m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(),
-                                                 [this]() { markDirty(); },
-                                                 [this]() { updateScaleDisplayTime(); },
-                                                 [this]() { updatePageDisplayTime(); });
+            m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+                                                  { markDirty(); }, [this]()
+                                                  { updateScaleDisplayTime(); }, [this]()
+                                                  { updatePageDisplayTime(); });
         }
         break;
     case InputAction::ZoomIn:
@@ -423,33 +423,33 @@ void App::processInputAction(const InputActionData &actionData)
         markDirty();
         break;
     case InputAction::GoToFirstPage:
-        m_navigationManager->goToPage(0, m_document.get(), m_viewportManager.get(), m_guiManager.get(),
-                                     [this]() { markDirty(); },
-                                     [this]() { updateScaleDisplayTime(); },
-                                     [this]() { updatePageDisplayTime(); });
+        m_navigationManager->goToPage(0, m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+                                      { markDirty(); }, [this]()
+                                      { updateScaleDisplayTime(); }, [this]()
+                                      { updatePageDisplayTime(); });
         break;
     case InputAction::GoToLastPage:
-        m_navigationManager->goToPage(m_navigationManager->getPageCount() - 1, m_document.get(), m_viewportManager.get(), m_guiManager.get(),
-                                     [this]() { markDirty(); },
-                                     [this]() { updateScaleDisplayTime(); },
-                                     [this]() { updatePageDisplayTime(); });
+        m_navigationManager->goToPage(m_navigationManager->getPageCount() - 1, m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+                                      { markDirty(); }, [this]()
+                                      { updateScaleDisplayTime(); }, [this]()
+                                      { updatePageDisplayTime(); });
         break;
     case InputAction::GoToPage:
         if (actionData.intValue >= 0 && actionData.intValue < m_navigationManager->getPageCount())
         {
-            m_navigationManager->goToPage(actionData.intValue, m_document.get(), m_viewportManager.get(), m_guiManager.get(),
-                                         [this]() { markDirty(); },
-                                         [this]() { updateScaleDisplayTime(); },
-                                         [this]() { updatePageDisplayTime(); });
+            m_navigationManager->goToPage(actionData.intValue, m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+                                          { markDirty(); }, [this]()
+                                          { updateScaleDisplayTime(); }, [this]()
+                                          { updatePageDisplayTime(); });
         }
         break;
     case InputAction::JumpPages:
         if (!m_navigationManager->isInPageChangeCooldown())
         {
-            m_navigationManager->jumpPages(actionData.intValue, m_document.get(), m_viewportManager.get(), m_guiManager.get(),
-                                          [this]() { markDirty(); },
-                                          [this]() { updateScaleDisplayTime(); },
-                                          [this]() { updatePageDisplayTime(); });
+            m_navigationManager->jumpPages(actionData.intValue, m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+                                           { markDirty(); }, [this]()
+                                           { updateScaleDisplayTime(); }, [this]()
+                                           { updatePageDisplayTime(); });
         }
         break;
     case InputAction::ToggleFullscreen:
@@ -576,11 +576,11 @@ void App::processInputAction(const InputActionData &actionData)
     case InputAction::ConfirmPageJumpInput:
         if (m_navigationManager->isPageJumpInputActive())
         {
-            m_navigationManager->confirmPageJumpInput(m_document.get(), m_viewportManager.get(), m_guiManager.get(),
-                                                     [this]() { markDirty(); },
-                                                     [this]() { updateScaleDisplayTime(); },
-                                                     [this]() { updatePageDisplayTime(); },
-                                                     [this](const std::string& message) { showErrorMessage(message); });
+            m_navigationManager->confirmPageJumpInput(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+                                                      { markDirty(); }, [this]()
+                                                      { updateScaleDisplayTime(); }, [this]()
+                                                      { updatePageDisplayTime(); }, [this](const std::string& message)
+                                                      { showErrorMessage(message); });
         }
         break;
     case InputAction::CancelPageJumpInput:
@@ -607,7 +607,7 @@ void App::processInputAction(const InputActionData &actionData)
     }
 }
 
-void App::updateInputState(const SDL_Event &event)
+void App::updateInputState(const SDL_Event& event)
 {
     switch (event.type)
     {
@@ -833,8 +833,6 @@ void App::updateInputState(const SDL_Event &event)
     }
 }
 
-
-
 void App::loadDocument()
 {
     m_navigationManager->setCurrentPage(0);
@@ -857,14 +855,14 @@ void App::renderCurrentPage()
         std::lock_guard<std::mutex> lock(m_documentMutex);
 
         // Try to use ARGB rendering for better performance
-        auto *muPdfDoc = dynamic_cast<MuPdfDocument *>(m_document.get());
+        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
         if (muPdfDoc)
         {
             try
             {
                 argbData = muPdfDoc->renderPageARGB(m_navigationManager->getCurrentPage(), srcW, srcH, m_viewportManager->getCurrentScale());
             }
-            catch (const std::exception &e)
+            catch (const std::exception& e)
             {
                 // Fallback to RGB rendering
                 std::vector<uint8_t> rgbData = m_document->renderPage(m_navigationManager->getCurrentPage(), srcW, srcH, m_viewportManager->getCurrentScale());
@@ -919,7 +917,7 @@ void App::renderCurrentPage()
     int posY;
     if (m_viewportManager->getPageHeight() <= winH)
     {
-        const auto &state = m_viewportManager->getState();
+        const auto& state = m_viewportManager->getState();
         if (state.topAlignWhenFits || state.forceTopAlignNextRender)
             posY = 0;
         else
@@ -945,7 +943,7 @@ void App::renderCurrentPage()
 
     if (!m_viewportManager->isZoomDebouncing() && !m_isDragging && !prerenderCooldownActive)
     {
-        auto *muPdfDoc = dynamic_cast<MuPdfDocument *>(m_document.get());
+        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
         if (muPdfDoc && !muPdfDoc->isPrerenderingActive())
         {
             muPdfDoc->prerenderAdjacentPagesAsync(m_navigationManager->getCurrentPage(), m_viewportManager->getCurrentScale());
@@ -1307,7 +1305,7 @@ void App::applyPendingFontChange()
         if (!css.empty())
         {
             // Try to cast to MuPDF document and apply CSS with safer reopening
-            if (auto muDoc = dynamic_cast<MuPdfDocument *>(m_document.get()))
+            if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
             {
                 // Store current state to restore after reopening
                 int currentPage = m_navigationManager->getCurrentPage();
@@ -1401,7 +1399,7 @@ void App::printAppState()
     std::cout << "Scaled Page Dimensions: " << m_viewportManager->getPageWidth() << "x" << m_viewportManager->getPageHeight() << " (Expected/Actual)" << std::endl;
     std::cout << "Scroll Position (Page Offset): X=" << m_viewportManager->getScrollX() << ", Y=" << m_viewportManager->getScrollY() << std::endl;
     std::cout << "Window Dimensions: " << m_renderer->getWindowWidth() << "x" << m_renderer->getWindowHeight() << std::endl;
-    
+
     // Also print navigation state
     m_navigationManager->printNavigationState();
     std::cout << "-----------------" << std::endl;
@@ -1641,10 +1639,10 @@ bool App::updateHeldPanning(float dt)
         if (!inCooldown && m_navigationManager->getCurrentPage() < m_navigationManager->getPageCount() - 1 && !m_navigationManager->isInPageChangeCooldown())
         {
             printf("DEBUG: Right edge-turn completed - page change allowed\n");
-            m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(),
-                                              [this]() { markDirty(); },
-                                              [this]() { updateScaleDisplayTime(); },
-                                              [this]() { updatePageDisplayTime(); });
+            m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+                                              { markDirty(); }, [this]()
+                                              { updateScaleDisplayTime(); }, [this]()
+                                              { updatePageDisplayTime(); });
             m_viewportManager->setScrollX(m_viewportManager->getMaxScrollX()); // appear at left edge
             m_viewportManager->clampScroll();
             changed = true;
@@ -1666,10 +1664,10 @@ bool App::updateHeldPanning(float dt)
         if (!inCooldown && m_navigationManager->getCurrentPage() > 0 && !m_navigationManager->isInPageChangeCooldown())
         {
             printf("DEBUG: Left edge-turn completed - page change allowed\n");
-            m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(),
-                                                  [this]() { markDirty(); },
-                                                  [this]() { updateScaleDisplayTime(); },
-                                                  [this]() { updatePageDisplayTime(); });
+            m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+                                                  { markDirty(); }, [this]()
+                                                  { updateScaleDisplayTime(); }, [this]()
+                                                  { updatePageDisplayTime(); });
             m_viewportManager->setScrollX(-m_viewportManager->getMaxScrollX()); // appear at right edge
             m_viewportManager->clampScroll();
             changed = true;
@@ -1775,10 +1773,10 @@ bool App::updateHeldPanning(float dt)
         if (!inCooldown && m_navigationManager->getCurrentPage() < m_navigationManager->getPageCount() - 1 && !m_navigationManager->isInPageChangeCooldown())
         {
             printf("DEBUG: Down edge-turn completed - page change allowed\n");
-            m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(),
-                                              [this]() { markDirty(); },
-                                              [this]() { updateScaleDisplayTime(); },
-                                              [this]() { updatePageDisplayTime(); });
+            m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+                                              { markDirty(); }, [this]()
+                                              { updateScaleDisplayTime(); }, [this]()
+                                              { updatePageDisplayTime(); });
             // Land at the top edge of the new page so motion feels continuous downward
             m_viewportManager->setScrollY(m_viewportManager->getMaxScrollY());
             m_viewportManager->clampScroll();
@@ -1801,10 +1799,10 @@ bool App::updateHeldPanning(float dt)
         if (!inCooldown && m_navigationManager->getCurrentPage() > 0 && !m_navigationManager->isInPageChangeCooldown())
         {
             printf("DEBUG: Up edge-turn completed - page change allowed\n");
-            m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(),
-                                                  [this]() { markDirty(); },
-                                                  [this]() { updateScaleDisplayTime(); },
-                                                  [this]() { updatePageDisplayTime(); });
+            m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+                                                  { markDirty(); }, [this]()
+                                                  { updateScaleDisplayTime(); }, [this]()
+                                                  { updatePageDisplayTime(); });
             // Land at the bottom edge of the previous page
             m_viewportManager->setScrollY(-m_viewportManager->getMaxScrollY());
             m_viewportManager->clampScroll();
@@ -1850,10 +1848,10 @@ void App::handleDpadNudgeRight()
                 if (m_navigationManager->getCurrentPage() < m_navigationManager->getPageCount() - 1 && !m_navigationManager->isInPageChangeCooldown())
                 {
                     printf("DEBUG: Immediate page change via nudge (fit-to-width)\n");
-                    m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(),
-                                                      [this]() { markDirty(); },
-                                                      [this]() { updateScaleDisplayTime(); },
-                                                      [this]() { updatePageDisplayTime(); });
+                    m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+                                                      { markDirty(); }, [this]()
+                                                      { updateScaleDisplayTime(); }, [this]()
+                                                      { updatePageDisplayTime(); });
                     m_viewportManager->setScrollX(m_viewportManager->getMaxScrollX()); // appear at left edge of new page
                     m_viewportManager->clampScroll();
                 }
@@ -1889,10 +1887,10 @@ void App::handleDpadNudgeLeft()
             {
                 if (m_navigationManager->getCurrentPage() > 0 && !m_navigationManager->isInPageChangeCooldown())
                 {
-                    m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(),
-                                                          [this]() { markDirty(); },
-                                                          [this]() { updateScaleDisplayTime(); },
-                                                          [this]() { updatePageDisplayTime(); });
+                    m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+                                                          { markDirty(); }, [this]()
+                                                          { updateScaleDisplayTime(); }, [this]()
+                                                          { updatePageDisplayTime(); });
                     m_viewportManager->setScrollX(-m_viewportManager->getMaxScrollX()); // appear at right edge of prev page
                     m_viewportManager->clampScroll();
                 }
@@ -1924,10 +1922,10 @@ void App::handleDpadNudgeDown()
             {
                 if (m_navigationManager->getCurrentPage() < m_navigationManager->getPageCount() - 1 && !m_navigationManager->isInPageChangeCooldown())
                 {
-                    m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(),
-                                                      [this]() { markDirty(); },
-                                                      [this]() { updateScaleDisplayTime(); },
-                                                      [this]() { updatePageDisplayTime(); });
+                    m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+                                                      { markDirty(); }, [this]()
+                                                      { updateScaleDisplayTime(); }, [this]()
+                                                      { updatePageDisplayTime(); });
                     m_viewportManager->setScrollY(m_viewportManager->getMaxScrollY()); // appear at top edge of new page
                     m_viewportManager->clampScroll();
                 }
@@ -1959,10 +1957,10 @@ void App::handleDpadNudgeUp()
             {
                 if (m_navigationManager->getCurrentPage() > 0 && !m_navigationManager->isInPageChangeCooldown())
                 {
-                    m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(),
-                                                          [this]() { markDirty(); },
-                                                          [this]() { updateScaleDisplayTime(); },
-                                                          [this]() { updatePageDisplayTime(); });
+                    m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+                                                          { markDirty(); }, [this]()
+                                                          { updateScaleDisplayTime(); }, [this]()
+                                                          { updatePageDisplayTime(); });
                     m_viewportManager->setScrollY(-m_viewportManager->getMaxScrollY()); // appear at bottom edge of prev page
                     m_viewportManager->clampScroll();
                 }
@@ -1976,7 +1974,7 @@ void App::handleDpadNudgeUp()
     m_viewportManager->clampScroll();
 }
 
-void App::showErrorMessage(const std::string &message)
+void App::showErrorMessage(const std::string& message)
 {
     m_errorMessage = message;
     m_errorMessageTime = SDL_GetTicks();
@@ -1992,8 +1990,6 @@ void App::updatePageDisplayTime()
     m_pageDisplayTime = SDL_GetTicks();
 }
 
-
-
 void App::toggleFontMenu()
 {
     if (m_guiManager)
@@ -2003,7 +1999,7 @@ void App::toggleFontMenu()
     }
 }
 
-void App::applyFontConfiguration(const FontConfig &config)
+void App::applyFontConfiguration(const FontConfig& config)
 {
     if (!m_document)
     {
