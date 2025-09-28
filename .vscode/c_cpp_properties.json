@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "name": "Mac",
+            "includePath": [
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/ports/mac/imgui",
+                "${workspaceFolder}/ports/mac/imgui/backends",
+                "${workspaceFolder}/ports/mac/mupdf/include/mupdf",
+                "/opt/homebrew/include/SDL2",
+                "/opt/homebrew/include"
+            ],
+            "defines": [
+                "_THREAD_SAFE"
+            ],
+            "compilerPath": "/usr/bin/clang++",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "macos-clang-arm64"
+        }
+    ],
+    "version": 4
+}
