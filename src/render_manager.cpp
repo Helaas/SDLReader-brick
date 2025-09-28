@@ -185,8 +185,8 @@ void RenderManager::renderPageInfo(NavigationManager* navigationManager, int win
 
 void RenderManager::renderScaleInfo(ViewportManager* viewportManager, int windowWidth, int windowHeight)
 {
-    (void)windowHeight; // Suppress unused parameter warning
-    
+    (void) windowHeight; // Suppress unused parameter warning
+
     // Only show scale info for 2 seconds after it changes
     if ((SDL_GetTicks() - m_state.scaleDisplayTime) < RenderState::SCALE_DISPLAY_DURATION)
     {
@@ -203,8 +203,8 @@ void RenderManager::renderScaleInfo(ViewportManager* viewportManager, int window
 
 void RenderManager::renderZoomProcessingIndicator(ViewportManager* viewportManager, int windowWidth, int windowHeight)
 {
-    (void)windowHeight; // Suppress unused parameter warning
-    
+    (void) windowHeight; // Suppress unused parameter warning
+
     if (viewportManager->shouldShowZoomProcessingIndicator())
     {
         SDL_Color processingColor = {255, 255, 0, 255}; // Bright yellow text for high visibility
