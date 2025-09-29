@@ -115,11 +115,12 @@ bool NuklearGuiManager::handleEvent(const SDL_Event& event)
         return true;
     }
 
-    // Handle keyboard Tab navigation specifically for GUI elements
+    // Handle keyboard navigation specifically for GUI elements
     if ((m_showFontMenu || m_showNumberPad) && event.type == SDL_KEYDOWN)
     {
-        if (event.key.keysym.sym == SDLK_TAB)
+        switch (event.key.keysym.sym)
         {
+        case SDLK_TAB:
             if (event.key.keysym.mod & KMOD_SHIFT)
             {
                 // Shift+Tab for previous control
@@ -135,6 +136,50 @@ bool NuklearGuiManager::handleEvent(const SDL_Event& event)
                 nk_input_key(m_ctx, NK_KEY_TAB, 0);
             }
             return true;
+        case SDLK_UP:
+            // Navigate up - use Shift+Tab for previous control
+            nk_input_key(m_ctx, NK_KEY_SHIFT, 1);
+            nk_input_key(m_ctx, NK_KEY_TAB, 1);
+            nk_input_key(m_ctx, NK_KEY_TAB, 0);
+            nk_input_key(m_ctx, NK_KEY_SHIFT, 0);
+            return true;
+        case SDLK_DOWN:
+            // Navigate down - use Tab for next control
+            nk_input_key(m_ctx, NK_KEY_TAB, 1);
+            nk_input_key(m_ctx, NK_KEY_TAB, 0);
+            return true;
+        case SDLK_LEFT:
+            // Navigate left
+            nk_input_key(m_ctx, NK_KEY_LEFT, 1);
+            return true;
+        case SDLK_RIGHT:
+            // Navigate right
+            nk_input_key(m_ctx, NK_KEY_RIGHT, 1);
+            return true;
+        default:
+            break;
+        }
+    }
+
+    // Handle keyboard key up events to clear key states
+    if ((m_showFontMenu || m_showNumberPad) && event.type == SDL_KEYUP)
+    {
+        switch (event.key.keysym.sym)
+        {
+        case SDLK_UP:
+            nk_input_key(m_ctx, NK_KEY_UP, 0);
+            return true;
+        case SDLK_DOWN:
+            nk_input_key(m_ctx, NK_KEY_DOWN, 0);
+            return true;
+        case SDLK_LEFT:
+            nk_input_key(m_ctx, NK_KEY_LEFT, 0);
+            return true;
+        case SDLK_RIGHT:
+            nk_input_key(m_ctx, NK_KEY_RIGHT, 0);
+            return true;
+        default:
+            break;
         }
     }
 
@@ -149,8 +194,18 @@ void NuklearGuiManager::newFrame()
         return;
     }
 
+    // Begin input processing - handleEvent will add input during event processing
     nk_input_begin(m_ctx);
-    // Input is handled in handleEvent, so we just end input processing
+}
+
+void NuklearGuiManager::endFrame()
+{
+    if (!m_initialized || !m_ctx)
+    {
+        return;
+    }
+
+    // End input processing after all events have been handled
     nk_input_end(m_ctx);
 }
 
@@ -160,6 +215,9 @@ void NuklearGuiManager::render()
     {
         return;
     }
+
+    // End input processing before rendering
+    endFrame();
 
     // Render font menu
     if (m_showFontMenu)
@@ -960,16 +1018,14 @@ bool NuklearGuiManager::handleControllerInput(const SDL_Event& event)
         switch (event.cbutton.button)
         {
         case SDL_CONTROLLER_BUTTON_DPAD_UP:
-            // Navigate up - also send Tab navigation for better field navigation
-            nk_input_key(m_ctx, NK_KEY_UP, 1);
+            // Navigate up - use Shift+Tab for previous control
             nk_input_key(m_ctx, NK_KEY_SHIFT, 1);
             nk_input_key(m_ctx, NK_KEY_TAB, 1);
             nk_input_key(m_ctx, NK_KEY_TAB, 0);
             nk_input_key(m_ctx, NK_KEY_SHIFT, 0);
             return true;
         case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-            // Navigate down - also send Tab navigation for better field navigation
-            nk_input_key(m_ctx, NK_KEY_DOWN, 1);
+            // Navigate down - use Tab for next control
             nk_input_key(m_ctx, NK_KEY_TAB, 1);
             nk_input_key(m_ctx, NK_KEY_TAB, 0);
             return true;

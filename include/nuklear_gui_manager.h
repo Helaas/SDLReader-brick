@@ -47,6 +47,11 @@ public:
     void newFrame() override;
 
     /**
+     * @brief End input processing for the current frame
+     */
+    void endFrame();
+
+    /**
      * @brief Render all Nuklear windows and finish frame
      */
     void render() override;

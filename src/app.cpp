@@ -346,9 +346,10 @@ void App::run()
 void App::handleEvent(const SDL_Event& event)
 {
     // Let GUI handle the event first
+    bool guiHandledEvent = false;
     if (m_guiManager)
     {
-        m_guiManager->handleEvent(event);
+        guiHandledEvent = m_guiManager->handleEvent(event);
     }
 
     // Block ALL input events if the settings menu is visible, except ESC to close it
@@ -369,11 +370,20 @@ void App::handleEvent(const SDL_Event& event)
         {
             m_running = false;
         }
-        // Block everything else when menu or number pad is visible to prevent bleeding through
+        // For GUI events, only process input if GUI didn't handle the event
+        else if (!guiHandledEvent)
+        {
+            InputActionData actionData = m_inputManager->processEvent(event);
+            processInputAction(actionData);
+
+            // Update App's input state variables for held button tracking
+            // This is needed for updateHeldPanning() and edge-turn logic
+            updateInputState(event);
+        }
         return;
     }
 
-    // Process input through InputManager
+    // When GUI is not visible, always process input normally
     InputActionData actionData = m_inputManager->processEvent(event);
     processInputAction(actionData);
 
