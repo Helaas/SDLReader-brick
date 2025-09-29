@@ -12,6 +12,9 @@
 /ports/*/mupdf/
 /ports/*/libarchive*
 
+# Nuklear GUI library (downloaded dynamically)
+/ports/*/nuklear/
+
 # TG5040 bundle artifacts
 /ports/tg5040/pak/lib/*
 /ports/tg5040/pak/fonts/*

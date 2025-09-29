@@ -49,10 +49,10 @@ LIBS := -lSDL2_ttf -lSDL2 \
   -ljpeg -lopenjp2 -lharfbuzz -ljbig2dec \
   -lfreetype -lz -llzma -lm -lpthread -ldl -lwebp -lwebpdemux -lgumbo -lstdc++fs
 
-.PHONY: all clean export-bundle build-mupdf setup-mupdf clean-mupdf build-libarchive clean-libarchive
+.PHONY: all clean export-bundle build-mupdf setup-mupdf clean-mupdf build-libarchive clean-libarchive setup-nuklear clean-nuklear
 
 # Default goal
-all: setup-mupdf build-libarchive build-mupdf $(TARGET)
+all: setup-mupdf setup-nuklear build-libarchive build-mupdf $(TARGET)
 
 
 # Setup MuPDF repository if it doesn't exist
@@ -79,6 +79,13 @@ setup-mupdf:
 	cd $(BASE_PATH)/mupdf && git submodule update --init --depth 1 thirdparty/freetype thirdparty/harfbuzz thirdparty/jbig2dec thirdparty/libjpeg thirdparty/openjpeg thirdparty/zlib thirdparty/lcms2
 	@echo "Applying patches to disable barcode compilation when barcode=no..."; \
 	cd $(BASE_PATH)/mupdf && sed -i 's/-std=c++20/-std=c++17/g' Makelists
+
+# Setup Nuklear GUI library if it doesn't exist
+setup-nuklear:
+	@if [ ! -d "$(BASE_PATH)/nuklear" ]; then \
+		echo "Cloning Nuklear GUI library (shallow clone for faster setup)..."; \
+		git clone --depth 1 --branch 4.12.2 https://github.com/Immediate-Mode-UI/Nuklear.git $(BASE_PATH)/nuklear; \
+	fi
 
 # Build minimal libarchive without ICU/XML dependencies
 # This creates a custom static libarchive build that excludes:
@@ -181,7 +188,10 @@ clean-libarchive:
 	@echo "Removing custom libarchive build..."
 	rm -rf $(BASE_PATH)/libarchive-3.3.3 /usr/local/libarchive-minimal
 
-# Clean nuklear (header-only, nothing to clean)
+# Clean nuklear (remove downloaded repository)
+clean-nuklear:
+	@echo "Removing Nuklear directory (will be re-downloaded on next build)..."
+	rm -rf $(BASE_PATH)/nuklear
 
 # Clean MuPDF (use with caution - will require re-download and rebuild)
 clean-mupdf:
