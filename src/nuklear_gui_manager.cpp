@@ -336,18 +336,24 @@ void NuklearGuiManager::renderFontMenu()
             }
             const char* currentFont = fonts[m_selectedFontIndex].displayName.c_str();
 
-            // Force dropdown to open if requested
-            bool forceOpen = m_openDropdownNextFrame;
+            // Handle font cycling when controller activates
             if (m_openDropdownNextFrame)
             {
-                m_openDropdownNextFrame = false;
-                std::cout << "[DEBUG] Forcing dropdown to open" << std::endl;
+                m_openDropdownNextFrame = false;  
+                // Cycle to next font
+                const auto& fonts = m_optionsManager.getAvailableFonts();
+                if (!fonts.empty())
+                {
+                    m_selectedFontIndex = (m_selectedFontIndex + 1) % fonts.size();
+                    m_tempConfig.fontPath = fonts[m_selectedFontIndex].filePath;
+                    m_tempConfig.fontName = fonts[m_selectedFontIndex].displayName;
+                    std::cout << "[DEBUG] Font cycled to: " << fonts[m_selectedFontIndex].displayName << std::endl;
+                }
             }
-
-            bool comboClicked = nk_combo_begin_label(m_ctx, currentFont, nk_vec2(nk_widget_width(m_ctx), 200)) || forceOpen;
-            if (comboClicked)
+            
+            // Regular combo for mouse users
+            if (nk_combo_begin_label(m_ctx, currentFont, nk_vec2(nk_widget_width(m_ctx), 200)))
             {
-                std::cout << "[DEBUG] Font combo dropdown opened" << std::endl;
                 nk_layout_row_dynamic(m_ctx, 20, 1);
                 for (size_t i = 0; i < fonts.size(); ++i)
                 {
@@ -1237,15 +1243,9 @@ void NuklearGuiManager::activateFocusedWidget()
     switch (m_mainScreenFocusIndex)
     {
     case WIDGET_FONT_DROPDOWN:
-        // Cycle through fonts for now (dropdown opening is complex)
-        {
-            const auto& fonts = m_optionsManager.getAvailableFonts();
-            if (!fonts.empty())
-            {
-                m_selectedFontIndex = (m_selectedFontIndex + 1) % fonts.size();
-                std::cout << "[DEBUG] Font cycled to: " << fonts[m_selectedFontIndex].displayName << std::endl;
-            }
-        }
+        // Open the dropdown for font selection
+        std::cout << "[DEBUG] Setting flag to open font dropdown" << std::endl;
+        m_openDropdownNextFrame = true;
         break;
     case WIDGET_GO_BUTTON:
         // Activate Go button
