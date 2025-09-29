@@ -179,7 +179,7 @@ SDL Reader uses a `config.json` file for customizing font settings and display o
    ```json
    {
      "fontPath": "./fonts/JetBrainsMono-Bold.ttf",
-     "fontName": "Jetbrainsmono Bold", 
+     "fontName": "Jetbrainsmono Bold",
      "fontSize": 16,
      "zoomStep": 10
    }
@@ -304,7 +304,7 @@ The SDL Reader supports the following keyboard, mouse, and game controller input
 | **Analog Sticks**                         |                                                       |
 | `Left/Right Stick X-Axis`                 | Scroll horizontally                                   |
 | `Left/Right Stick Y-Axis`                 | Scroll vertically                                     |
-                 
+
 *Note: Controller button names may vary depending on your controller type (Xbox, PlayStation, etc.). The mappings above use SDL2's standardized button names.*
 
 *Note 2: When using an Xbox controller, D-Pad Left & Right appear to trigger the Brick F1 & F2 functionality in addition to nudging.*
@@ -317,7 +317,7 @@ SDL Reader includes an intelligent edge navigation system for smooth page turnin
 - **Edge Detection**: When zoomed in ≥ 100%, using D-pad controls and reaching a page edge (left, right, top, or bottom), the system detects you're at the boundary
 - **Hold to Turn**: Continue holding the D-pad direction for 300ms to initiate page turning
 - **Visual Feedback**: A progress bar appears showing:
-  - Direction of pending page change (e.g., "Next Page", "Previous Page") 
+  - Direction of pending page change (e.g., "Next Page", "Previous Page")
   - Progress indicator that fills as you approach the 300ms threshold
   - Color transitions from yellow to green as the timer progresses
 - **Immediate Cancellation**: Release the D-pad before 300ms to stay on the current page
@@ -366,7 +366,7 @@ SDLReader-brick/
     │   └── README.md             # Linux-specific instructions
     └── wiiu/                     # Nintendo Wii U homebrew
         └── Makefile              # Wii U build configuration
-```  
+```
 
 ### Development Workflow
 - **Cross-platform code**: Modify files in `src/`, `include/`, `cli/`

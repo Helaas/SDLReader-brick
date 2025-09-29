@@ -16,7 +16,7 @@ Based on the [Trimui toolchain Docker image](https://git.crowdedwood.com/trimui-
 ## Files in this directory
 - `Makefile` - TG5040 application build configuration
 - `Makefile.docker` - Docker environment management
-- `docker-compose.yml` - Docker Compose setup  
+- `docker-compose.yml` - Docker Compose setup
 - `Dockerfile` - TG5040 toolchain container image
 - `export_bundle.sh` - Bundle export script for distribution packages
 - `make_bundle.sh` - Library dependency bundling script (called from `export_bundle.sh`)
@@ -46,7 +46,7 @@ cd ports/tg5040
 # Build toolchain and enter shell
 make -f Makefile.docker shell
 
-# Build the application (inside container)  
+# Build the application (inside container)
 cd /root/workspace
 make tg5040
 ```
@@ -73,7 +73,7 @@ make export-tg5040
 ```
 
 The exported bundle (`ports/tg5040/pak/`) contains:
-- **bin/**: Main binary and utilities (jq, minui-list) 
+- **bin/**: Main binary and utilities (jq, minui-list)
 - **lib/**: All required shared library dependencies
 - **fonts/**: Font files
 - **res/**: Other resource files (if any)
@@ -117,14 +117,14 @@ The TG5040 build includes:
   - Smart error handling: 30-second timeout before showing user errors
   - Event flushing on wake to prevent phantom button presses
   - Wake detection with proper state management
-- **Document Format Support**: 
+- **Document Format Support**:
   - PDF documents via MuPDF integration
   - CBZ/ZIP comic book archives via MuPDF native support
   - CBR comic book archives via custom-built minimal libarchive (no ICU dependencies)
   - EPUB e-books via MuPDF native support
   - **WebP images**: Enhanced WebP format support within documents and archives
 - **Platform-optimized build flags**: `-DTG5040_PLATFORM`
-- **Port-specific source structure**: 
+- **Port-specific source structure**:
   - `include/power_handler.h` - TG5040 power management interface
   - `src/power_handler.cpp` - Hardware-specific power button implementation with NextUI compatibility
 - **Embedded Linux-specific libraries and dependencies**

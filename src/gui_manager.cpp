@@ -5,10 +5,10 @@
 
 // Platform-specific ImGui backends
 #ifdef TG5040_PLATFORM
-#include <imgui_impl_sdl.h>          // TG5040 uses v1.85 headers
-#include <imgui_impl_sdlrenderer.h>  // Compatible with SDL 2.0.9
+#include <imgui_impl_sdl.h>         // TG5040 uses v1.85 headers
+#include <imgui_impl_sdlrenderer.h> // Compatible with SDL 2.0.9
 #else
-#include <imgui_impl_sdl2.h>         // Modern platforms use v1.89+ headers
+#include <imgui_impl_sdl2.h> // Modern platforms use v1.89+ headers
 #include <imgui_impl_sdlrenderer2.h>
 #endif
 

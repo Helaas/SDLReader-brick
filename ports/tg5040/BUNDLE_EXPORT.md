@@ -11,9 +11,9 @@ This document describes the new TG5040 bundle export system that creates a compl
 ### 2. Created Export Script
 - **Script**: `ports/tg5040/export_bundle.sh`
 - **Purpose**: Automated creation of complete TG5040 distribution bundle
-- **Features**: 
+- **Features**:
   - Copies existing pak/bin utilities (jq, minui-list)
-  - Copies main binary (sdl_reader_cli) 
+  - Copies main binary (sdl_reader_cli)
   - Generates library dependencies using make_bundle2.sh
   - Copies resources (fonts, etc.)
   - Creates complete self-contained package
@@ -41,7 +41,7 @@ This document describes the new TG5040 bundle export system that creates a compl
 make export-tg5040
 ```
 
-### Manual Export  
+### Manual Export
 ```bash
 # From ports/tg5040 directory
 ./export_bundle.sh
@@ -103,7 +103,7 @@ pak/
 - Copies main sdl_reader_cli binary
 - Ensures all binaries are executable
 
-### Resource Management  
+### Resource Management
 - Copies all resources needed at runtime
 - Maintains directory structure for proper resource loading
 
