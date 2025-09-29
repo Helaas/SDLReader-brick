@@ -5,11 +5,11 @@
 
 // Platform-specific ImGui backends
 #ifdef TG5040_PLATFORM
-    #include <imgui_impl_opengl2.h>
-    #include <imgui_impl_sdl.h>  // TG5040 uses older ImGui v1.85 with different header names
+#include <imgui_impl_opengl2.h>
+#include <imgui_impl_sdl.h> // TG5040 uses older ImGui v1.85 with different header names
 #else
-    #include <imgui_impl_sdlrenderer2.h>
-    #include <imgui_impl_sdl2.h>  // Modern ImGui v1.90+ uses sdl2 suffix
+#include <imgui_impl_sdl2.h> // Modern ImGui v1.90+ uses sdl2 suffix
+#include <imgui_impl_sdlrenderer2.h>
 #endif
 
 #include <iostream>
