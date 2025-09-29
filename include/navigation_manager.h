@@ -9,7 +9,7 @@
 class Document;
 class MuPdfDocument;
 class ViewportManager;
-class GuiManager;
+class BaseGuiManager;
 
 /**
  * @brief Structure to hold navigation state
@@ -76,16 +76,16 @@ public:
     }
 
     // Page navigation
-    bool goToNextPage(Document* document, ViewportManager* viewportManager, GuiManager* guiManager,
+    bool goToNextPage(Document* document, ViewportManager* viewportManager, BaseGuiManager* guiManager,
                       std::function<void()> markDirtyCallback, std::function<void()> updateScaleDisplayCallback,
                       std::function<void()> updatePageDisplayCallback);
-    bool goToPreviousPage(Document* document, ViewportManager* viewportManager, GuiManager* guiManager,
+    bool goToPreviousPage(Document* document, ViewportManager* viewportManager, BaseGuiManager* guiManager,
                           std::function<void()> markDirtyCallback, std::function<void()> updateScaleDisplayCallback,
                           std::function<void()> updatePageDisplayCallback);
-    bool goToPage(int pageNum, Document* document, ViewportManager* viewportManager, GuiManager* guiManager,
+    bool goToPage(int pageNum, Document* document, ViewportManager* viewportManager, BaseGuiManager* guiManager,
                   std::function<void()> markDirtyCallback, std::function<void()> updateScaleDisplayCallback,
                   std::function<void()> updatePageDisplayCallback);
-    void jumpPages(int delta, Document* document, ViewportManager* viewportManager, GuiManager* guiManager,
+    void jumpPages(int delta, Document* document, ViewportManager* viewportManager, BaseGuiManager* guiManager,
                    std::function<void()> markDirtyCallback, std::function<void()> updateScaleDisplayCallback,
                    std::function<void()> updatePageDisplayCallback);
 
@@ -93,7 +93,7 @@ public:
     void startPageJumpInput();
     void handlePageJumpInput(char digit);
     void cancelPageJumpInput();
-    bool confirmPageJumpInput(Document* document, ViewportManager* viewportManager, GuiManager* guiManager,
+    bool confirmPageJumpInput(Document* document, ViewportManager* viewportManager, BaseGuiManager* guiManager,
                               std::function<void()> markDirtyCallback, std::function<void()> updateScaleDisplayCallback,
                               std::function<void()> updatePageDisplayCallback, std::function<void(const std::string&)> showErrorCallback);
 
@@ -109,7 +109,7 @@ private:
     NavigationState m_state;
 
     // Internal page change implementation
-    void performPageChange(int newPage, Document* document, ViewportManager* viewportManager, GuiManager* guiManager,
+    void performPageChange(int newPage, Document* document, ViewportManager* viewportManager, BaseGuiManager* guiManager,
                            std::function<void()> markDirtyCallback, std::function<void()> updateScaleDisplayCallback,
                            std::function<void()> updatePageDisplayCallback);
 };

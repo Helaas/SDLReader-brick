@@ -2,7 +2,7 @@
 #define APP_H
 
 #include "document.h"
-#include "gui_manager.h"
+#include "nuklear_gui_manager.h"
 #include "input_manager.h"
 #include "navigation_manager.h"
 #include "options_manager.h"
@@ -95,7 +95,7 @@ private:
 
     // Core managers
     std::unique_ptr<Document> m_document;
-    std::unique_ptr<GuiManager> m_guiManager;
+    std::unique_ptr<NuklearGuiManager> m_guiManager;
     std::unique_ptr<OptionsManager> m_optionsManager;
     std::unique_ptr<InputManager> m_inputManager;
     std::unique_ptr<ViewportManager> m_viewportManager;

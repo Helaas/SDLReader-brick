@@ -1,6 +1,6 @@
 #include "app.h"
 #include "document.h"
-#include "gui_manager.h"
+#include "nuklear_gui_manager.h"
 #include "mupdf_document.h"
 #include "navigation_manager.h"
 #include "options_manager.h"
@@ -138,7 +138,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     }
 
     // Initialize GUI manager AFTER font manager
-    m_guiManager = std::make_unique<GuiManager>();
+    m_guiManager = std::make_unique<NuklearGuiManager>();
     if (!m_guiManager->initialize(window, renderer))
     {
         throw std::runtime_error("Failed to initialize GUI manager");

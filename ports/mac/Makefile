@@ -2,7 +2,7 @@
 # 
 # This Makefile automatically handles dependencies:
 # - Checks for required system libraries (SDL2, libarchive, webp, etc.)
-# - Downloads and sets up ImGui and MuPDF if needed
+# - Downloads and sets up Nuklear and MuPDF if needed
 # - Provides targets for dependency management
 #
 # Usage:
@@ -27,22 +27,12 @@ BIN_DIR = ../../bin
 TARGET_NAME = sdl_reader_cli
 TARGET = $(BIN_DIR)/$(TARGET_NAME)
 
-# Source files: Combine all .cpp files from src/ and cli/, excluding Linux-specific files
-SRC_FILES = $(filter-out src/power_handler.cpp, $(wildcard $(SRC_DIR)/*.cpp))
+# Source files: Combine all .cpp files from src/ and cli/, excluding Linux-specific files and old ImGui gui_manager
+SRC_FILES = $(filter-out $(SRC_DIR)/power_handler.cpp $(SRC_DIR)/gui_manager.cpp, $(wildcard $(SRC_DIR)/*.cpp))
 SRCS = $(SRC_FILES) $(wildcard $(CLI_DIR)/*.cpp)
 
-# Dear ImGui source files
-IMGUI_DIR = imgui
-IMGUI_SRCS = $(IMGUI_DIR)/imgui.cpp \
-             $(IMGUI_DIR)/imgui_demo.cpp \
-             $(IMGUI_DIR)/imgui_draw.cpp \
-             $(IMGUI_DIR)/imgui_tables.cpp \
-             $(IMGUI_DIR)/imgui_widgets.cpp \
-             $(IMGUI_DIR)/backends/imgui_impl_sdl2.cpp \
-             $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer2.cpp
-
-# Add ImGui sources to compilation
-SRCS += $(IMGUI_SRCS)
+# Nuklear is header-only, no additional source files needed
+# GUI functionality will be integrated directly into gui_manager.cpp
 
 # Local MuPDF Build Paths (using our custom build with libarchive support)
 MUPDF_BUILD_PATH = mupdf/build/release
@@ -53,9 +43,8 @@ MUPDF_BUILD_PATH = mupdf/build/release
 # -g: Include debugging information
 # -Imupdf/include: Include path for our custom MuPDF headers with libarchive support
 # -I$(SRC_DIR): Include path for project's own header files (e.g., app.h, document.h)
-# -I$(IMGUI_DIR): Include path for Dear ImGui headers
-# -I$(IMGUI_DIR)/backends: Include path for Dear ImGui backend headers
-CXXFLAGS = -std=c++17 -Wall -Wextra -g -Imupdf/include -I$(SRC_DIR) -I../../include -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends
+# -Inuklear: Include path for Nuklear headers
+CXXFLAGS = -std=c++17 -Wall -Wextra -g -Imupdf/include -I$(SRC_DIR) -I../../include -Inuklear
 
 # Include paths for SDL2, SDL2_ttf, and SDL2_image
 # pkg-config --cflags SDL2_ttf SDL2_image added for explicit header paths
@@ -77,19 +66,15 @@ LIBS = -L$(MUPDF_BUILD_PATH) -lmupdf -lmupdf-third \
 # All object files (will be placed in the build directory)
 # Transforms src/file.cpp into build/file.o and cli/file.cpp into build/file.o
 OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS))) \
-       $(patsubst $(CLI_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(CLI_DIR)/%,$(SRCS))) \
-       $(BUILD_DIR)/imgui.o \
-       $(BUILD_DIR)/imgui_demo.o \
-       $(BUILD_DIR)/imgui_draw.o \
-       $(BUILD_DIR)/imgui_tables.o \
-       $(BUILD_DIR)/imgui_widgets.o \
-       $(BUILD_DIR)/imgui_impl_sdl2.o \
-       $(BUILD_DIR)/imgui_impl_sdlrenderer2.o
+       $(patsubst $(CLI_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(CLI_DIR)/%,$(SRCS)))
 
-.PHONY: all clean build-mupdf setup-mupdf clean-mupdf setup-imgui check-deps install-deps clean-imgui clean-all help
+# Nuklear is header-only, no additional object files needed
+# GUI functionality will be integrated directly into gui_manager.cpp
+
+.PHONY: all clean build-mupdf setup-mupdf clean-mupdf setup-nuklear check-deps install-deps clean-nuklear clean-all help
 
 # Default target
-all: check-deps $(BIN_DIR) $(BUILD_DIR) setup-imgui setup-mupdf build-mupdf $(TARGET)
+all: check-deps $(BIN_DIR) $(BUILD_DIR) setup-nuklear setup-mupdf build-mupdf $(TARGET)
 
 # Check if required system dependencies are installed
 check-deps:
@@ -110,19 +95,19 @@ install-deps:
 	brew install pkg-config sdl2 sdl2_ttf sdl2_image libarchive webp
 	@echo "System dependencies installed successfully!"
 
-# Setup Dear ImGui if it doesn't exist or is incomplete
-setup-imgui:
-	@if [ ! -d "imgui" ] || [ ! -f "imgui/imgui.h" ]; then \
-		echo "Setting up Dear ImGui repository..."; \
-		rm -rf imgui; \
-		git clone --depth 1 --branch v1.90.9 https://github.com/ocornut/imgui.git; \
-		if [ ! -f "imgui/imgui.h" ]; then \
-			echo "Error: ImGui setup failed - imgui.h not found"; \
+# Setup Nuklear if it doesn't exist or is incomplete
+setup-nuklear:
+	@if [ ! -d "nuklear" ] || [ ! -f "nuklear/nuklear.h" ]; then \
+		echo "Setting up Nuklear repository..."; \
+		rm -rf nuklear; \
+		git clone --depth 1 --branch 4.12.2 https://github.com/Immediate-Mode-UI/Nuklear.git nuklear; \
+		if [ ! -f "nuklear/nuklear.h" ]; then \
+			echo "Error: Nuklear setup failed - nuklear.h not found"; \
 			exit 1; \
 		fi; \
-		echo "Dear ImGui setup completed successfully"; \
+		echo "Nuklear setup completed successfully"; \
 	else \
-		echo "Dear ImGui repository already exists and is complete"; \
+		echo "Nuklear repository already exists and is complete"; \
 	fi
 
 # Setup MuPDF repository if it doesn't exist
@@ -188,27 +173,7 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
 $(BUILD_DIR)/%.o: $(CLI_DIR)/%.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
 
-# Compile ImGui source files
-$(BUILD_DIR)/imgui.o: $(IMGUI_DIR)/imgui.cpp | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_demo.o: $(IMGUI_DIR)/imgui_demo.cpp | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_draw.o: $(IMGUI_DIR)/imgui_draw.cpp | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_tables.o: $(IMGUI_DIR)/imgui_tables.cpp | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_widgets.o: $(IMGUI_DIR)/imgui_widgets.cpp | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_impl_sdl2.o: $(IMGUI_DIR)/backends/imgui_impl_sdl2.cpp | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_impl_sdlrenderer2.o: $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer2.cpp | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+# Nuklear is header-only, no compilation rules needed
 
 # Clean up compiled files and directories
 clean:
@@ -216,10 +181,10 @@ clean:
 	rm -f $(TARGET)
 	rm -f webp-upstream-697749.patch
 
-# Clean ImGui (use with caution - will require re-download)
-clean-imgui:
-	@echo "Removing ImGui directory (will be re-downloaded on next build)..."
-	rm -rf imgui
+# Clean Nuklear (use with caution - will require re-download)
+clean-nuklear:
+	@echo "Removing Nuklear directory (will be re-downloaded on next build)..."
+	rm -rf nuklear
 
 # Clean MuPDF (use with caution - will require re-download and rebuild)
 clean-mupdf:
@@ -227,7 +192,7 @@ clean-mupdf:
 	rm -rf mupdf
 
 # Clean everything including downloaded dependencies
-clean-all: clean clean-imgui clean-mupdf
+clean-all: clean clean-nuklear clean-mupdf
 	@echo "All build artifacts and dependencies cleaned"
 
 # Show help information
@@ -238,11 +203,11 @@ help:
 	@echo "  all          - Build the complete project (default)"
 	@echo "  check-deps   - Check if system dependencies are installed"
 	@echo "  install-deps - Install system dependencies via Homebrew"
-	@echo "  setup-imgui  - Setup Dear ImGui library"
+	@echo "  setup-nuklear - Setup Nuklear library"
 	@echo "  setup-mupdf  - Setup MuPDF library"
 	@echo "  build-mupdf  - Build MuPDF with libarchive and WebP support"
 	@echo "  clean        - Remove build artifacts"
-	@echo "  clean-imgui  - Remove ImGui directory"
+	@echo "  clean-nuklear - Remove Nuklear directory"
 	@echo "  clean-mupdf  - Remove MuPDF directory"
 	@echo "  clean-all    - Remove all build artifacts and dependencies"
 	@echo "  help         - Show this help message"

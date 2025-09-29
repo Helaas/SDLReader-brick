@@ -1,6 +1,6 @@
 #include "navigation_manager.h"
 #include "document.h"
-#include "gui_manager.h"
+#include "base_gui_manager.h"
 #include "mupdf_document.h"
 #include "viewport_manager.h"
 #include <algorithm>
@@ -12,7 +12,7 @@ NavigationManager::NavigationManager()
     // Default state is already initialized in NavigationState
 }
 
-bool NavigationManager::goToNextPage(Document* document, ViewportManager* viewportManager, GuiManager* guiManager,
+bool NavigationManager::goToNextPage(Document* document, ViewportManager* viewportManager, BaseGuiManager* guiManager,
                                      std::function<void()> markDirtyCallback, std::function<void()> updateScaleDisplayCallback,
                                      std::function<void()> updatePageDisplayCallback)
 {
@@ -25,7 +25,7 @@ bool NavigationManager::goToNextPage(Document* document, ViewportManager* viewpo
     return false;
 }
 
-bool NavigationManager::goToPreviousPage(Document* document, ViewportManager* viewportManager, GuiManager* guiManager,
+bool NavigationManager::goToPreviousPage(Document* document, ViewportManager* viewportManager, BaseGuiManager* guiManager,
                                          std::function<void()> markDirtyCallback, std::function<void()> updateScaleDisplayCallback,
                                          std::function<void()> updatePageDisplayCallback)
 {
@@ -38,7 +38,7 @@ bool NavigationManager::goToPreviousPage(Document* document, ViewportManager* vi
     return false;
 }
 
-bool NavigationManager::goToPage(int pageNum, Document* document, ViewportManager* viewportManager, GuiManager* guiManager,
+bool NavigationManager::goToPage(int pageNum, Document* document, ViewportManager* viewportManager, BaseGuiManager* guiManager,
                                  std::function<void()> markDirtyCallback, std::function<void()> updateScaleDisplayCallback,
                                  std::function<void()> updatePageDisplayCallback)
 {
@@ -51,7 +51,7 @@ bool NavigationManager::goToPage(int pageNum, Document* document, ViewportManage
     return false;
 }
 
-void NavigationManager::jumpPages(int delta, Document* document, ViewportManager* viewportManager, GuiManager* guiManager,
+void NavigationManager::jumpPages(int delta, Document* document, ViewportManager* viewportManager, BaseGuiManager* guiManager,
                                   std::function<void()> markDirtyCallback, std::function<void()> updateScaleDisplayCallback,
                                   std::function<void()> updatePageDisplayCallback)
 {
@@ -59,7 +59,7 @@ void NavigationManager::jumpPages(int delta, Document* document, ViewportManager
     goToPage(target, document, viewportManager, guiManager, markDirtyCallback, updateScaleDisplayCallback, updatePageDisplayCallback);
 }
 
-void NavigationManager::performPageChange(int newPage, Document* document, ViewportManager* viewportManager, GuiManager* guiManager,
+void NavigationManager::performPageChange(int newPage, Document* document, ViewportManager* viewportManager, BaseGuiManager* guiManager,
                                           std::function<void()> markDirtyCallback, std::function<void()> updateScaleDisplayCallback,
                                           std::function<void()> updatePageDisplayCallback)
 {
@@ -144,7 +144,7 @@ void NavigationManager::cancelPageJumpInput()
     }
 }
 
-bool NavigationManager::confirmPageJumpInput(Document* document, ViewportManager* viewportManager, GuiManager* guiManager,
+bool NavigationManager::confirmPageJumpInput(Document* document, ViewportManager* viewportManager, BaseGuiManager* guiManager,
                                              std::function<void()> markDirtyCallback, std::function<void()> updateScaleDisplayCallback,
                                              std::function<void()> updatePageDisplayCallback, std::function<void(const std::string&)> showErrorCallback)
 {
