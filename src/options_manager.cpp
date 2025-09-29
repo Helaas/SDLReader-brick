@@ -121,7 +121,7 @@ fz_font* customFontLoader(fz_context* ctx, const char* name, int bold, int itali
     {
         std::cout << "Loading custom font: " << fontPath << std::endl;
 
-        fz_font* font = nullptr;
+        fz_font* volatile font = nullptr;
         fz_try(ctx)
         {
             font = fz_new_font_from_file(ctx, name, fontPath.c_str(), 0, 1);
