@@ -75,7 +75,8 @@ make export-tg5040
 The exported bundle (`ports/tg5040/pak/`) contains:
 - **bin/**: Main binary and utilities (jq, minui-list) 
 - **lib/**: All required shared library dependencies
-- **res/**: Font and resource files
+- **fonts/**: Font files
+- **res/**: Other resource files (if any)
 - **launch.sh**: Main launcher script
 
 ### Bundle Features

@@ -15,7 +15,7 @@ RenderManager::RenderManager(SDL_Window* window, SDL_Renderer* renderer)
     m_renderer = std::make_unique<Renderer>(window, renderer);
 
     // Initialize text renderer with default font
-    m_textRenderer = std::make_unique<TextRenderer>(m_renderer->getSDLRenderer(), "res/Roboto-Regular.ttf", 16);
+    m_textRenderer = std::make_unique<TextRenderer>(m_renderer->getSDLRenderer(), "fonts/Roboto-Regular.ttf", 16);
 
     // Initialize display timers
     m_state.scaleDisplayTime = SDL_GetTicks();

@@ -5,10 +5,10 @@
 
 // Platform-specific ImGui backends
 #ifdef TG5040_PLATFORM
-#include <imgui_impl_opengl2.h>
-#include <imgui_impl_sdl.h> // TG5040 uses older ImGui v1.85 with different header names
+#include <imgui_impl_sdl.h>          // TG5040 uses v1.85 headers
+#include <imgui_impl_sdlrenderer.h>  // Compatible with SDL 2.0.9
 #else
-#include <imgui_impl_sdl2.h> // Modern ImGui v1.90+ uses sdl2 suffix
+#include <imgui_impl_sdl2.h>         // Modern platforms use v1.89+ headers
 #include <imgui_impl_sdlrenderer2.h>
 #endif
 
@@ -61,17 +61,17 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
 
     // Setup Platform/Renderer backends
 #ifdef TG5040_PLATFORM
-    // TG5040 uses OpenGL2 backend for compatibility with SDL2 2.0.9
-    if (!ImGui_ImplSDL2_InitForOpenGL(window, nullptr))
+    // TG5040 uses v1.85 SDL Renderer backend for framebuffer compatibility (no X11/OpenGL)
+    if (!ImGui_ImplSDL_InitForSDLRenderer(window, renderer))
     {
-        std::cerr << "Failed to initialize ImGui SDL2 backend" << std::endl;
+        std::cerr << "Failed to initialize ImGui SDL backend" << std::endl;
         return false;
     }
 
-    if (!ImGui_ImplOpenGL2_Init())
+    if (!ImGui_ImplSDLRenderer_Init(renderer))
     {
-        std::cerr << "Failed to initialize ImGui OpenGL2 backend" << std::endl;
-        ImGui_ImplSDL2_Shutdown();
+        std::cerr << "Failed to initialize ImGui SDL Renderer backend" << std::endl;
+        ImGui_ImplSDL_Shutdown();
         return false;
     }
 #else
@@ -144,11 +144,12 @@ void GuiManager::cleanup()
     }
 
 #ifdef TG5040_PLATFORM
-    ImGui_ImplOpenGL2_Shutdown();
+    ImGui_ImplSDLRenderer_Shutdown();
+    ImGui_ImplSDL_Shutdown();
 #else
     ImGui_ImplSDLRenderer2_Shutdown();
-#endif
     ImGui_ImplSDL2_Shutdown();
+#endif
     ImGui::DestroyContext();
 
     m_initialized = false;
@@ -187,11 +188,12 @@ void GuiManager::newFrame()
     }
 
 #ifdef TG5040_PLATFORM
-    ImGui_ImplOpenGL2_NewFrame();
+    ImGui_ImplSDLRenderer_NewFrame();
+    ImGui_ImplSDL_NewFrame();
 #else
     ImGui_ImplSDLRenderer2_NewFrame();
-#endif
     ImGui_ImplSDL2_NewFrame();
+#endif
     ImGui::NewFrame();
 }
 
@@ -218,9 +220,9 @@ void GuiManager::render()
     ImGui::Render();
     ImDrawData* draw_data = ImGui::GetDrawData();
 #ifdef TG5040_PLATFORM
-    ImGui_ImplOpenGL2_RenderDrawData(draw_data);
+    ImGui_ImplSDLRenderer_RenderDrawData(draw_data);
 #else
-    ImGui_ImplSDLRenderer2_RenderDrawData(draw_data, m_renderer);
+    ImGui_ImplSDLRenderer2_RenderDrawData(draw_data);
 #endif
 }
 

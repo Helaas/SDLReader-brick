@@ -33,14 +33,14 @@ TARGET   := $(BIN_DIR)/sdl_reader_cli
 SRC_FILES = $(filter-out $(SRC_DIR)/power_handler.cpp, $(wildcard $(SRC_DIR)/*.cpp))
 SRCS = $(SRC_FILES) $(wildcard $(CLI_DIR)/*.cpp)
 
-# Dear ImGui source files (using OpenGL2 backend for TG5040 compatibility with SDL2 2.0.9)
+# Dear ImGui source files (using SDL Renderer backend for TG5040 framebuffer compatibility)
 IMGUI_SRCS = $(IMGUI_DIR)/imgui.cpp \
              $(IMGUI_DIR)/imgui_demo.cpp \
              $(IMGUI_DIR)/imgui_draw.cpp \
              $(IMGUI_DIR)/imgui_tables.cpp \
              $(IMGUI_DIR)/imgui_widgets.cpp \
              $(IMGUI_DIR)/backends/imgui_impl_sdl.cpp \
-             $(IMGUI_DIR)/backends/imgui_impl_opengl2.cpp
+             $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer.cpp
 
 # Add ImGui sources to compilation
 SRCS += $(IMGUI_SRCS)
@@ -55,11 +55,11 @@ OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS
        $(BUILD_DIR)/imgui_tables.o \
        $(BUILD_DIR)/imgui_widgets.o \
        $(BUILD_DIR)/imgui_impl_sdl.o \
-       $(BUILD_DIR)/imgui_impl_opengl2.o \
+       $(BUILD_DIR)/imgui_impl_sdlrenderer.o \
        $(BUILD_DIR)/tg5040_power_handler.o
 
-# Libraries (link order matters)
-LIBS := -lSDL2_ttf -lSDL2 -lGL \
+# Libraries (link order matters) - No OpenGL needed for SDL Renderer backend
+LIBS := -lSDL2_ttf -lSDL2 \
   -L$(BASE_PATH)/mupdf/build/release \
   -lmupdf -lmupdf-third \
   -L/usr/local/libarchive-minimal/lib -larchive \
@@ -216,7 +216,7 @@ $(BUILD_DIR)/imgui_impl_sdl.o: $(IMGUI_DIR)/backends/imgui_impl_sdl.cpp | $(BUIL
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/imgui_impl_opengl2.o: $(IMGUI_DIR)/backends/imgui_impl_opengl2.cpp | $(BUILD_DIR)
+$(BUILD_DIR)/imgui_impl_sdlrenderer.o: $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer.cpp | $(BUILD_DIR)
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 

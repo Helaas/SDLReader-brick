@@ -67,8 +67,10 @@ pak/
 │   ├── libSDL2*.so*         # SDL2 libraries
 │   ├── libmupdf*.so*        # MuPDF libraries
 │   └── ...                  # All other dependencies
-├── res/
-│   └── Roboto-Regular.ttf   # Font resources
+├── fonts/
+│   ├── Roboto-Regular.ttf   # Font resources
+│   ├── JetBrainsMono-Bold.ttf
+│   └── ...                  # All font files
 └── launch.sh                # Main launcher script (preserved)
 ```
 

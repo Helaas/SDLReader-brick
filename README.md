@@ -211,7 +211,8 @@ make export-tg5040
 The exported bundle at `ports/tg5040/pak/` contains:
 - **bin/**: Main executable and utilities (sdl_reader_cli, jq, minui-list)
 - **lib/**: All shared library dependencies with proper RPATH setup
-- **res/**: Font and resource files
+- **fonts/**: Font files
+- **res/**: Other resource files (if any)
 - **launch.sh**: Main launcher script for the device
 
 ### Deployment to Device
@@ -339,7 +340,7 @@ SDLReader-brick/
 ├── src/                          # Shared source code
 ├── include/                      # Shared header files
 ├── cli/                          # Command-line interface
-├── res/                          # Resources (fonts, etc.)
+├── fonts/                        # Font files
 └── ports/                        # Platform-specific builds
     ├── tg5040/                   # TG5040 embedded device
     │   ├── Makefile              # TG5040 build configuration
@@ -351,7 +352,8 @@ SDLReader-brick/
     │   ├── pak/                  # Distribution bundle (created by export)
     │   │   ├── bin/              # Executables (jq, minui-list, sdl_reader_cli)
     │   │   ├── lib/              # Shared libraries and dependencies
-    │   │   ├── res/              # Resources (fonts, etc.)
+    │   │   ├── fonts/            # Font files
+    │   │   ├── res/              # Other resources (if any)
     │   │   └── launch.sh         # Main launcher script
     │   ├── include/              # TG5040-specific headers
     │   │   └── power_handler.h   # Power management for TG5040
