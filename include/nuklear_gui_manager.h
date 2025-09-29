@@ -65,9 +65,19 @@ public:
     /**
      * @brief Toggle the font menu visibility
      */
-    void toggleFontMenu()
+    void toggleFontMenu() override
     {
         m_showFontMenu = !m_showFontMenu;
+        if (m_showFontMenu)
+        {
+            m_fontDropdownHighlightedIndex = m_selectedFontIndex;
+        }
+        else
+        {
+            m_fontDropdownOpen = false;
+            m_fontDropdownSelectRequested = false;
+            m_fontDropdownCancelRequested = false;
+        }
         std::cout << "Font menu " << (m_showFontMenu ? "opened" : "closed") << std::endl;
     }
 
@@ -158,7 +168,7 @@ public:
     /**
      * @brief Check if the number pad is currently visible
      */
-    bool isNumberPadVisible() const
+    bool isNumberPadVisible() const override
     {
         return m_showNumberPad;
     }
@@ -190,7 +200,6 @@ private:
     char m_fontSizeInput[16] = "12";
     char m_zoomStepInput[16] = "10";
     char m_pageJumpInput[16] = "1";
-    bool m_fontSizeChanged = false;
 
     // On-screen number pad state
     bool m_showNumberPad = false;
@@ -198,8 +207,11 @@ private:
     int m_numberPadSelectedCol = 0;
 
     // Main screen focus management (like numpad)
-    int m_mainScreenFocusIndex = 0;       // Which widget has focus
-    bool m_openDropdownNextFrame = false; // Flag to open dropdown
+    int m_mainScreenFocusIndex = 0; // Which widget has focus
+    bool m_fontDropdownOpen = false;
+    int m_fontDropdownHighlightedIndex = 0;
+    bool m_fontDropdownSelectRequested = false;
+    bool m_fontDropdownCancelRequested = false;
     enum MainScreenWidget
     {
         WIDGET_FONT_DROPDOWN = 0,

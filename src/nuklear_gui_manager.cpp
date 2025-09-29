@@ -17,6 +17,136 @@
 // Include the SDL renderer implementation
 #include "../thirdparty/nuklear/demo/sdl_renderer/nuklear_sdl_renderer.h"
 
+namespace
+{
+static nk_bool nk_combo_begin_label_controller(struct nk_context* ctx, const char* selected, struct nk_vec2 size, bool force_open)
+{
+    if (!ctx || !selected || !ctx->current || !ctx->current->layout)
+    {
+        return 0;
+    }
+
+    struct nk_window* win = ctx->current;
+    struct nk_style* style = &ctx->style;
+
+    enum nk_widget_layout_states state;
+    struct nk_rect header;
+    int is_clicked = nk_false;
+    const struct nk_input* in;
+    const struct nk_style_item* background;
+    struct nk_text text;
+
+    state = nk_widget(&header, ctx);
+    if (state == NK_WIDGET_INVALID)
+    {
+        return 0;
+    }
+
+    in = (win->layout->flags & NK_WINDOW_ROM || state == NK_WIDGET_DISABLED || state == NK_WIDGET_ROM) ? nullptr : &ctx->input;
+    if (nk_button_behavior(&ctx->last_widget_state, header, in, NK_BUTTON_DEFAULT))
+    {
+        is_clicked = nk_true;
+    }
+
+    if (force_open)
+    {
+        ctx->last_widget_state |= NK_WIDGET_STATE_ACTIVED;
+        ctx->last_widget_state |= NK_WIDGET_STATE_HOVER;
+        is_clicked = nk_true;
+    }
+
+    if (ctx->last_widget_state & NK_WIDGET_STATE_ACTIVED)
+    {
+        background = &style->combo.active;
+        text.text = style->combo.label_active;
+    }
+    else if (ctx->last_widget_state & NK_WIDGET_STATE_HOVER)
+    {
+        background = &style->combo.hover;
+        text.text = style->combo.label_hover;
+    }
+    else
+    {
+        background = &style->combo.normal;
+        text.text = style->combo.label_normal;
+    }
+
+    text.text = nk_rgb_factor(text.text, style->combo.color_factor);
+
+    switch (background->type)
+    {
+    case NK_STYLE_ITEM_IMAGE:
+        text.background = nk_rgba(0, 0, 0, 0);
+        nk_draw_image(&win->buffer, header, &background->data.image, nk_rgb_factor(nk_white, style->combo.color_factor));
+        break;
+    case NK_STYLE_ITEM_NINE_SLICE:
+        text.background = nk_rgba(0, 0, 0, 0);
+        nk_draw_nine_slice(&win->buffer, header, &background->data.slice, nk_rgb_factor(nk_white, style->combo.color_factor));
+        break;
+    case NK_STYLE_ITEM_COLOR:
+        text.background = background->data.color;
+        nk_fill_rect(&win->buffer, header, style->combo.rounding, nk_rgb_factor(background->data.color, style->combo.color_factor));
+        nk_stroke_rect(&win->buffer, header, style->combo.rounding, style->combo.border, nk_rgb_factor(style->combo.border_color, style->combo.color_factor));
+        break;
+    }
+
+    {
+        struct nk_rect label;
+        struct nk_rect button;
+        struct nk_rect content;
+        int draw_button_symbol;
+
+        enum nk_symbol_type sym;
+        if (ctx->last_widget_state & NK_WIDGET_STATE_HOVER)
+        {
+            sym = style->combo.sym_hover;
+        }
+        else if (is_clicked)
+        {
+            sym = style->combo.sym_active;
+        }
+        else
+        {
+            sym = style->combo.sym_normal;
+        }
+
+        draw_button_symbol = sym != NK_SYMBOL_NONE;
+
+        button.w = header.h - 2 * style->combo.button_padding.y;
+        button.x = (header.x + header.w - header.h) - style->combo.button_padding.x;
+        button.y = header.y + style->combo.button_padding.y;
+        button.h = button.w;
+
+        content.x = button.x + style->combo.button.padding.x;
+        content.y = button.y + style->combo.button.padding.y;
+        content.w = button.w - 2 * style->combo.button.padding.x;
+        content.h = button.h - 2 * style->combo.button.padding.y;
+
+        text.padding = nk_vec2(0, 0);
+        label.x = header.x + style->combo.content_padding.x;
+        label.y = header.y + style->combo.content_padding.y;
+        label.h = header.h - 2 * style->combo.content_padding.y;
+        if (draw_button_symbol)
+        {
+            label.w = button.x - (style->combo.content_padding.x + style->combo.spacing.x) - label.x;
+        }
+        else
+        {
+            label.w = header.w - 2 * style->combo.content_padding.x;
+        }
+
+        nk_widget_text(&win->buffer, label, selected, nk_strlen(selected), &text, NK_TEXT_LEFT, ctx->style.font);
+
+        if (draw_button_symbol)
+        {
+            nk_draw_button_symbol(&win->buffer, &button, &content, ctx->last_widget_state, &ctx->style.combo.button, sym, style->font);
+        }
+    }
+
+    return nk_combo_begin(ctx, win, size, is_clicked, header);
+}
+} // namespace
+
 // NuklearGuiManager implementation
 NuklearGuiManager::NuklearGuiManager()
 {
@@ -69,6 +199,7 @@ bool NuklearGuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
 
     // Find current font index
     m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
+    m_fontDropdownHighlightedIndex = m_selectedFontIndex;
 
     m_initialized = true;
     std::cout << "Nuklear GUI initialized successfully" << std::endl;
@@ -224,6 +355,7 @@ void NuklearGuiManager::setCurrentFontConfig(const FontConfig& config)
     }
 
     m_selectedFontIndex = findFontIndex(config.fontName);
+    m_fontDropdownHighlightedIndex = m_selectedFontIndex;
 }
 
 bool NuklearGuiManager::wantsCaptureMouse() const
@@ -277,9 +409,9 @@ void NuklearGuiManager::renderFontMenu()
         // Store original styles for highlighting focused widgets
         struct nk_style_button originalButtonStyle = m_ctx->style.button;
         struct nk_style_combo originalComboStyle = m_ctx->style.combo;
-        struct nk_style_property originalPropertyStyle = m_ctx->style.property;
         struct nk_style_edit originalEditStyle = m_ctx->style.edit;
         struct nk_style_slider originalSliderStyle = m_ctx->style.slider;
+        struct nk_style_selectable originalSelectableStyle = m_ctx->style.selectable;
 
         // === KEYBOARD NAVIGATION DEBUG ===
         nk_layout_row_dynamic(m_ctx, 20, 1);
@@ -336,36 +468,83 @@ void NuklearGuiManager::renderFontMenu()
             }
             const char* currentFont = fonts[m_selectedFontIndex].displayName.c_str();
 
-            // Handle font cycling when controller activates
-            if (m_openDropdownNextFrame)
+            if (m_fontDropdownHighlightedIndex < 0 || m_fontDropdownHighlightedIndex >= (int) fonts.size())
             {
-                m_openDropdownNextFrame = false;
-                // Cycle to next font
-                const auto& fonts = m_optionsManager.getAvailableFonts();
-                if (!fonts.empty())
-                {
-                    m_selectedFontIndex = (m_selectedFontIndex + 1) % fonts.size();
-                    m_tempConfig.fontPath = fonts[m_selectedFontIndex].filePath;
-                    m_tempConfig.fontName = fonts[m_selectedFontIndex].displayName;
-                    std::cout << "[DEBUG] Font cycled to: " << fonts[m_selectedFontIndex].displayName << std::endl;
-                }
+                m_fontDropdownHighlightedIndex = (m_selectedFontIndex >= 0 && m_selectedFontIndex < (int) fonts.size()) ? m_selectedFontIndex : 0;
             }
 
-            // Regular combo for mouse users
-            if (nk_combo_begin_label(m_ctx, currentFont, nk_vec2(nk_widget_width(m_ctx), 200)))
+            bool forceOpen = m_fontDropdownOpen || m_fontDropdownSelectRequested || m_fontDropdownCancelRequested;
+            if (nk_combo_begin_label_controller(m_ctx, currentFont, nk_vec2(nk_widget_width(m_ctx), 200), forceOpen))
             {
                 nk_layout_row_dynamic(m_ctx, 20, 1);
                 for (size_t i = 0; i < fonts.size(); ++i)
                 {
-                    if (nk_combo_item_label(m_ctx, fonts[i].displayName.c_str(), NK_TEXT_LEFT))
+                    m_ctx->style.selectable = originalSelectableStyle;
+
+                    bool isHighlighted = m_fontDropdownOpen && (m_fontDropdownHighlightedIndex == static_cast<int>(i));
+                    if (isHighlighted)
+                    {
+                        m_ctx->style.selectable.normal = nk_style_item_color(nk_rgb(0, 122, 255));
+                        m_ctx->style.selectable.hover = nk_style_item_color(nk_rgb(30, 142, 255));
+                        m_ctx->style.selectable.pressed = nk_style_item_color(nk_rgb(0, 102, 235));
+                        m_ctx->style.selectable.text_normal = nk_rgb(255, 255, 255);
+                        m_ctx->style.selectable.text_hover = nk_rgb(255, 255, 255);
+                        m_ctx->style.selectable.text_pressed = nk_rgb(255, 255, 255);
+                    }
+
+                    nk_bool isSelected = (m_selectedFontIndex == static_cast<int>(i));
+                    nk_bool selectionChanged = nk_selectable_label(m_ctx, fonts[i].displayName.c_str(), NK_TEXT_LEFT, &isSelected);
+                    if (selectionChanged && isSelected)
                     {
                         std::cout << "[DEBUG] Font selected: " << fonts[i].displayName << std::endl;
                         m_selectedFontIndex = static_cast<int>(i);
                         m_tempConfig.fontPath = fonts[i].filePath;
                         m_tempConfig.fontName = fonts[i].displayName;
+                        m_fontDropdownHighlightedIndex = m_selectedFontIndex;
+                        nk_combo_close(m_ctx);
+                        m_fontDropdownOpen = false;
+                        m_fontDropdownSelectRequested = false;
+                        m_fontDropdownCancelRequested = false;
                     }
                 }
+
+                if (m_fontDropdownSelectRequested)
+                {
+                    if (m_fontDropdownHighlightedIndex >= 0 && m_fontDropdownHighlightedIndex < (int) fonts.size())
+                    {
+                        int chosenIndex = m_fontDropdownHighlightedIndex;
+                        std::cout << "[DEBUG] Font selected (controller): " << fonts[chosenIndex].displayName << std::endl;
+                        m_selectedFontIndex = chosenIndex;
+                        m_tempConfig.fontPath = fonts[chosenIndex].filePath;
+                        m_tempConfig.fontName = fonts[chosenIndex].displayName;
+                    }
+                    nk_combo_close(m_ctx);
+                    m_fontDropdownOpen = false;
+                    m_fontDropdownSelectRequested = false;
+                    m_fontDropdownHighlightedIndex = m_selectedFontIndex;
+                }
+
+                if (m_fontDropdownCancelRequested)
+                {
+                    nk_combo_close(m_ctx);
+                    m_fontDropdownOpen = false;
+                    m_fontDropdownCancelRequested = false;
+                    m_fontDropdownHighlightedIndex = m_selectedFontIndex;
+                }
+
                 nk_combo_end(m_ctx);
+                m_ctx->style.selectable = originalSelectableStyle;
+            }
+            else
+            {
+                if (m_fontDropdownOpen || m_fontDropdownSelectRequested || m_fontDropdownCancelRequested)
+                {
+                    m_fontDropdownOpen = false;
+                    m_fontDropdownSelectRequested = false;
+                    m_fontDropdownCancelRequested = false;
+                    m_fontDropdownHighlightedIndex = m_selectedFontIndex;
+                }
+                m_ctx->style.selectable = originalSelectableStyle;
             }
 
             // Restore combo style
@@ -687,9 +866,13 @@ void NuklearGuiManager::renderFontMenu()
         if (nk_button_label(m_ctx, "Close"))
         {
             m_showFontMenu = false;
+            m_fontDropdownOpen = false;
+            m_fontDropdownSelectRequested = false;
+            m_fontDropdownCancelRequested = false;
             // Reset temp config to current config
             m_tempConfig = m_currentConfig;
             m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
+            m_fontDropdownHighlightedIndex = m_selectedFontIndex;
 
             // Reset input fields
             snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
@@ -709,6 +892,7 @@ void NuklearGuiManager::renderFontMenu()
             // Reset to default config
             m_tempConfig = FontConfig();
             m_selectedFontIndex = 0;
+            m_fontDropdownHighlightedIndex = m_selectedFontIndex;
 
             // Reset input fields to defaults
             strcpy(m_fontSizeInput, "12");
@@ -1063,6 +1247,7 @@ int NuklearGuiManager::findFontIndex(const std::string& fontName) const
 
 void NuklearGuiManager::setFontSelectionCallback(std::function<void(const std::string&)> callback)
 {
+    (void) callback;
     // For now, this can be stored for future use if needed for font callbacks
     // Currently font selection is handled through setFontApplyCallback
 }
@@ -1145,6 +1330,48 @@ bool NuklearGuiManager::handleKeyboardNavigation(const SDL_Event& event)
         }
         m_lastButtonPressTime = currentTime;
 
+        if (m_fontDropdownOpen)
+        {
+            const auto& fonts = m_optionsManager.getAvailableFonts();
+            int fontCount = static_cast<int>(fonts.size());
+            if (fontCount == 0)
+            {
+                m_fontDropdownHighlightedIndex = 0;
+            }
+
+            switch (event.key.keysym.sym)
+            {
+            case SDLK_UP:
+                if (fontCount > 0)
+                {
+                    m_fontDropdownHighlightedIndex = (m_fontDropdownHighlightedIndex - 1 + fontCount) % fontCount;
+                    std::cout << "[DEBUG] Keyboard dropdown UP - highlight: " << m_fontDropdownHighlightedIndex << std::endl;
+                }
+                return true;
+            case SDLK_DOWN:
+                if (fontCount > 0)
+                {
+                    m_fontDropdownHighlightedIndex = (m_fontDropdownHighlightedIndex + 1) % fontCount;
+                    std::cout << "[DEBUG] Keyboard dropdown DOWN - highlight: " << m_fontDropdownHighlightedIndex << std::endl;
+                }
+                return true;
+            case SDLK_RETURN:
+            case SDLK_SPACE:
+                std::cout << "[DEBUG] Keyboard confirm dropdown index " << m_fontDropdownHighlightedIndex << std::endl;
+                m_fontDropdownSelectRequested = true;
+                return true;
+            case SDLK_ESCAPE:
+                std::cout << "[DEBUG] Keyboard cancel dropdown" << std::endl;
+                m_fontDropdownCancelRequested = true;
+                return true;
+            case SDLK_LEFT:
+            case SDLK_RIGHT:
+                return true;
+            default:
+                break;
+            }
+        }
+
         switch (event.key.keysym.sym)
         {
         case SDLK_UP:
@@ -1188,9 +1415,13 @@ bool NuklearGuiManager::handleKeyboardNavigation(const SDL_Event& event)
             if (m_showFontMenu)
             {
                 m_showFontMenu = false;
+                m_fontDropdownOpen = false;
+                m_fontDropdownSelectRequested = false;
+                m_fontDropdownCancelRequested = false;
                 // Reset temp config to current config
                 m_tempConfig = m_currentConfig;
                 m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
+                m_fontDropdownHighlightedIndex = m_selectedFontIndex;
 
                 // Reset input fields
                 snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
@@ -1243,9 +1474,30 @@ void NuklearGuiManager::activateFocusedWidget()
     switch (m_mainScreenFocusIndex)
     {
     case WIDGET_FONT_DROPDOWN:
-        // Open the dropdown for font selection
-        std::cout << "[DEBUG] Setting flag to open font dropdown" << std::endl;
-        m_openDropdownNextFrame = true;
+        if (!m_fontDropdownOpen)
+        {
+            const auto& fonts = m_optionsManager.getAvailableFonts();
+            if (!fonts.empty())
+            {
+                std::cout << "[DEBUG] Opening font dropdown" << std::endl;
+                m_fontDropdownOpen = true;
+                m_fontDropdownSelectRequested = false;
+                m_fontDropdownCancelRequested = false;
+                if (m_selectedFontIndex >= 0 && m_selectedFontIndex < (int) fonts.size())
+                {
+                    m_fontDropdownHighlightedIndex = m_selectedFontIndex;
+                }
+                else
+                {
+                    m_fontDropdownHighlightedIndex = 0;
+                }
+            }
+        }
+        else
+        {
+            std::cout << "[DEBUG] Confirming selection from font dropdown" << std::endl;
+            m_fontDropdownSelectRequested = true;
+        }
         break;
     case WIDGET_GO_BUTTON:
         // Activate Go button
@@ -1280,8 +1532,12 @@ void NuklearGuiManager::activateFocusedWidget()
     case WIDGET_CLOSE_BUTTON:
         // Close menu
         m_showFontMenu = false;
+        m_fontDropdownOpen = false;
+        m_fontDropdownSelectRequested = false;
+        m_fontDropdownCancelRequested = false;
         m_tempConfig = m_currentConfig;
         m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
+        m_fontDropdownHighlightedIndex = m_selectedFontIndex;
         snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
         snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_currentConfig.zoomStep);
         if (m_closeCallback)
@@ -1311,6 +1567,48 @@ bool NuklearGuiManager::handleControllerInput(const SDL_Event& event)
             return true; // Ignore rapid repeated presses
         }
         m_lastButtonPressTime = currentTime;
+
+        if (m_fontDropdownOpen)
+        {
+            const auto& fonts = m_optionsManager.getAvailableFonts();
+            int fontCount = static_cast<int>(fonts.size());
+            if (fontCount == 0)
+            {
+                m_fontDropdownHighlightedIndex = 0;
+            }
+
+            switch (event.cbutton.button)
+            {
+            case SDL_CONTROLLER_BUTTON_DPAD_UP:
+                if (fontCount > 0)
+                {
+                    m_fontDropdownHighlightedIndex = (m_fontDropdownHighlightedIndex - 1 + fontCount) % fontCount;
+                    std::cout << "[DEBUG] Controller dropdown UP - highlight: " << m_fontDropdownHighlightedIndex << std::endl;
+                }
+                return true;
+            case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+                if (fontCount > 0)
+                {
+                    m_fontDropdownHighlightedIndex = (m_fontDropdownHighlightedIndex + 1) % fontCount;
+                    std::cout << "[DEBUG] Controller dropdown DOWN - highlight: " << m_fontDropdownHighlightedIndex << std::endl;
+                }
+                return true;
+            case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+            case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+                // Ignore left/right while dropdown is open
+                return true;
+            case SDL_CONTROLLER_BUTTON_A:
+                std::cout << "[DEBUG] Controller A - confirm dropdown index " << m_fontDropdownHighlightedIndex << std::endl;
+                m_fontDropdownSelectRequested = true;
+                return true;
+            case SDL_CONTROLLER_BUTTON_B:
+                std::cout << "[DEBUG] Controller B - cancel dropdown" << std::endl;
+                m_fontDropdownCancelRequested = true;
+                return true;
+            default:
+                break;
+            }
+        }
 
         // Handle main screen navigation using our custom system
         if (m_showFontMenu)
@@ -1353,9 +1651,13 @@ bool NuklearGuiManager::handleControllerInput(const SDL_Event& event)
             if (m_showFontMenu)
             {
                 m_showFontMenu = false;
+                m_fontDropdownOpen = false;
+                m_fontDropdownSelectRequested = false;
+                m_fontDropdownCancelRequested = false;
                 // Reset temp config to current config
                 m_tempConfig = m_currentConfig;
                 m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
+                m_fontDropdownHighlightedIndex = m_selectedFontIndex;
 
                 // Reset input fields
                 snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
