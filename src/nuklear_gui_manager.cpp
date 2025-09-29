@@ -339,7 +339,7 @@ void NuklearGuiManager::renderFontMenu()
             // Handle font cycling when controller activates
             if (m_openDropdownNextFrame)
             {
-                m_openDropdownNextFrame = false;  
+                m_openDropdownNextFrame = false;
                 // Cycle to next font
                 const auto& fonts = m_optionsManager.getAvailableFonts();
                 if (!fonts.empty())
@@ -350,7 +350,7 @@ void NuklearGuiManager::renderFontMenu()
                     std::cout << "[DEBUG] Font cycled to: " << fonts[m_selectedFontIndex].displayName << std::endl;
                 }
             }
-            
+
             // Regular combo for mouse users
             if (nk_combo_begin_label(m_ctx, currentFont, nk_vec2(nk_widget_width(m_ctx), 200)))
             {
