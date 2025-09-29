@@ -199,6 +199,7 @@ private:
 
     // Main screen focus management (like numpad)
     int m_mainScreenFocusIndex = 0; // Which widget has focus
+    bool m_openDropdownNextFrame = false; // Flag to open dropdown
     enum MainScreenWidget
     {
         WIDGET_FONT_DROPDOWN = 0,
