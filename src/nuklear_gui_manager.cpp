@@ -324,24 +324,26 @@ void NuklearGuiManager::renderFontMenu()
             // Create dropdown
             nk_layout_row_dynamic(m_ctx, 25, 1);
 
-        // Highlight font dropdown if focused
-        if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
-        {
-            m_ctx->style.combo.button.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.combo.button.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-            m_ctx->style.combo.button.active = nk_style_item_color(nk_rgb(0, 102, 235));
-            m_ctx->style.combo.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.combo.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-            m_ctx->style.combo.active = nk_style_item_color(nk_rgb(0, 102, 235));
-        }            const char* currentFont = fonts[m_selectedFontIndex].displayName.c_str();
-            
+            // Highlight font dropdown if focused
+            if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
+            {
+                m_ctx->style.combo.button.normal = nk_style_item_color(nk_rgb(0, 122, 255));
+                m_ctx->style.combo.button.hover = nk_style_item_color(nk_rgb(30, 142, 255));
+                m_ctx->style.combo.button.active = nk_style_item_color(nk_rgb(0, 102, 235));
+                m_ctx->style.combo.normal = nk_style_item_color(nk_rgb(0, 122, 255));
+                m_ctx->style.combo.hover = nk_style_item_color(nk_rgb(30, 142, 255));
+                m_ctx->style.combo.active = nk_style_item_color(nk_rgb(0, 102, 235));
+            }
+            const char* currentFont = fonts[m_selectedFontIndex].displayName.c_str();
+
             // Force dropdown to open if requested
             bool forceOpen = m_openDropdownNextFrame;
-            if (m_openDropdownNextFrame) {
+            if (m_openDropdownNextFrame)
+            {
                 m_openDropdownNextFrame = false;
                 std::cout << "[DEBUG] Forcing dropdown to open" << std::endl;
             }
-            
+
             bool comboClicked = nk_combo_begin_label(m_ctx, currentFont, nk_vec2(nk_widget_width(m_ctx), 200)) || forceOpen;
             if (comboClicked)
             {
@@ -370,17 +372,18 @@ void NuklearGuiManager::renderFontMenu()
 
             // Font size input field
             nk_layout_row_dynamic(m_ctx, 25, 1);
-            
+
             // Highlight font size input if focused
-            if (m_mainScreenFocusIndex == WIDGET_FONT_SIZE_INPUT) {
+            if (m_mainScreenFocusIndex == WIDGET_FONT_SIZE_INPUT)
+            {
                 m_ctx->style.edit.normal = nk_style_item_color(nk_rgb(0, 122, 255));
                 m_ctx->style.edit.hover = nk_style_item_color(nk_rgb(30, 142, 255));
                 m_ctx->style.edit.active = nk_style_item_color(nk_rgb(0, 102, 235));
             }
-            
+
             int editFlags = nk_edit_string_zero_terminated(m_ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_SELECTABLE,
                                                            m_fontSizeInput, sizeof(m_fontSizeInput), nk_filter_decimal);
-            
+
             // Restore edit style
             m_ctx->style.edit = originalEditStyle;
             if (editFlags & NK_EDIT_ACTIVATED)
@@ -412,22 +415,24 @@ void NuklearGuiManager::renderFontMenu()
 
             // Font size slider
             nk_layout_row_dynamic(m_ctx, 20, 1);
-            
-        // Highlight font size slider if focused
-        if (m_mainScreenFocusIndex == WIDGET_FONT_SIZE_SLIDER) {
-            m_ctx->style.slider.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.slider.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-            m_ctx->style.slider.active = nk_style_item_color(nk_rgb(0, 102, 235));
-            m_ctx->style.slider.cursor_normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.slider.cursor_hover = nk_style_item_color(nk_rgb(30, 142, 255));
-            m_ctx->style.slider.cursor_active = nk_style_item_color(nk_rgb(0, 102, 235));
-        }            float fontSize = static_cast<float>(m_tempConfig.fontSize);
+
+            // Highlight font size slider if focused
+            if (m_mainScreenFocusIndex == WIDGET_FONT_SIZE_SLIDER)
+            {
+                m_ctx->style.slider.normal = nk_style_item_color(nk_rgb(0, 122, 255));
+                m_ctx->style.slider.hover = nk_style_item_color(nk_rgb(30, 142, 255));
+                m_ctx->style.slider.active = nk_style_item_color(nk_rgb(0, 102, 235));
+                m_ctx->style.slider.cursor_normal = nk_style_item_color(nk_rgb(0, 122, 255));
+                m_ctx->style.slider.cursor_hover = nk_style_item_color(nk_rgb(30, 142, 255));
+                m_ctx->style.slider.cursor_active = nk_style_item_color(nk_rgb(0, 102, 235));
+            }
+            float fontSize = static_cast<float>(m_tempConfig.fontSize);
             if (nk_slider_float(m_ctx, 8.0f, &fontSize, 72.0f, 1.0f))
             {
                 m_tempConfig.fontSize = static_cast<int>(fontSize);
                 snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_tempConfig.fontSize);
             }
-            
+
             // Restore slider style
             m_ctx->style.slider = originalSliderStyle;
 
@@ -449,17 +454,18 @@ void NuklearGuiManager::renderFontMenu()
 
         // Zoom step input
         nk_layout_row_dynamic(m_ctx, 25, 1);
-        
+
         // Highlight zoom step input if focused
-        if (m_mainScreenFocusIndex == WIDGET_ZOOM_STEP_INPUT) {
+        if (m_mainScreenFocusIndex == WIDGET_ZOOM_STEP_INPUT)
+        {
             m_ctx->style.edit.normal = nk_style_item_color(nk_rgb(0, 122, 255));
             m_ctx->style.edit.hover = nk_style_item_color(nk_rgb(30, 142, 255));
             m_ctx->style.edit.active = nk_style_item_color(nk_rgb(0, 102, 235));
         }
-        
+
         int zoomEditFlags = nk_edit_string_zero_terminated(m_ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_SELECTABLE,
                                                            m_zoomStepInput, sizeof(m_zoomStepInput), nk_filter_decimal);
-        
+
         // Restore edit style
         m_ctx->style.edit = originalEditStyle;
         if (zoomEditFlags & NK_EDIT_COMMITED)
@@ -482,9 +488,10 @@ void NuklearGuiManager::renderFontMenu()
 
         // Zoom step slider
         nk_layout_row_dynamic(m_ctx, 20, 1);
-        
+
         // Highlight zoom step slider if focused
-        if (m_mainScreenFocusIndex == WIDGET_ZOOM_STEP_SLIDER) {
+        if (m_mainScreenFocusIndex == WIDGET_ZOOM_STEP_SLIDER)
+        {
             m_ctx->style.slider.normal = nk_style_item_color(nk_rgb(0, 122, 255));
             m_ctx->style.slider.hover = nk_style_item_color(nk_rgb(30, 142, 255));
             m_ctx->style.slider.active = nk_style_item_color(nk_rgb(0, 102, 235));
@@ -492,14 +499,14 @@ void NuklearGuiManager::renderFontMenu()
             m_ctx->style.slider.cursor_hover = nk_style_item_color(nk_rgb(30, 142, 255));
             m_ctx->style.slider.cursor_active = nk_style_item_color(nk_rgb(0, 102, 235));
         }
-        
+
         float zoomStep = static_cast<float>(m_tempConfig.zoomStep);
         if (nk_slider_float(m_ctx, 1.0f, &zoomStep, 50.0f, 1.0f))
         {
             m_tempConfig.zoomStep = static_cast<int>(zoomStep);
             snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_tempConfig.zoomStep);
         }
-        
+
         // Restore zoom slider style
         m_ctx->style.slider = originalSliderStyle;
 
@@ -532,14 +539,15 @@ void NuklearGuiManager::renderFontMenu()
         nk_layout_row_template_end(m_ctx);
 
         // Highlight page jump input if focused
-        if (m_mainScreenFocusIndex == WIDGET_PAGE_JUMP_INPUT) {
+        if (m_mainScreenFocusIndex == WIDGET_PAGE_JUMP_INPUT)
+        {
             m_ctx->style.edit.normal = nk_style_item_color(nk_rgb(0, 122, 255));
             m_ctx->style.edit.hover = nk_style_item_color(nk_rgb(30, 142, 255));
             m_ctx->style.edit.active = nk_style_item_color(nk_rgb(0, 102, 235));
         }
 
         nk_edit_string_zero_terminated(m_ctx, NK_EDIT_FIELD | NK_EDIT_SELECTABLE, m_pageJumpInput, sizeof(m_pageJumpInput), nk_filter_decimal);
-        
+
         // Restore edit style
         m_ctx->style.edit = originalEditStyle;
 
@@ -556,14 +564,15 @@ void NuklearGuiManager::renderFontMenu()
         {
             nk_widget_disable_begin(m_ctx);
         }
-        
+
         // Highlight Go button if focused
-        if (m_mainScreenFocusIndex == WIDGET_GO_BUTTON) {
+        if (m_mainScreenFocusIndex == WIDGET_GO_BUTTON)
+        {
             m_ctx->style.button.normal = nk_style_item_color(nk_rgb(0, 122, 255));
             m_ctx->style.button.hover = nk_style_item_color(nk_rgb(30, 142, 255));
             m_ctx->style.button.active = nk_style_item_color(nk_rgb(0, 102, 235));
         }
-        
+
         if (nk_button_label(m_ctx, "Go"))
         {
             if (validPageInput && m_pageJumpCallback)
@@ -575,23 +584,24 @@ void NuklearGuiManager::renderFontMenu()
         {
             nk_widget_disable_end(m_ctx);
         }
-        
+
         // Restore Go button style
         m_ctx->style.button = originalButtonStyle;
 
         // Highlight Number Pad button if focused
-        if (m_mainScreenFocusIndex == WIDGET_NUMPAD_BUTTON) {
+        if (m_mainScreenFocusIndex == WIDGET_NUMPAD_BUTTON)
+        {
             m_ctx->style.button.normal = nk_style_item_color(nk_rgb(0, 122, 255));
             m_ctx->style.button.hover = nk_style_item_color(nk_rgb(30, 142, 255));
             m_ctx->style.button.active = nk_style_item_color(nk_rgb(0, 102, 235));
         }
-        
+
         // Number pad button
         if (nk_button_label(m_ctx, "Number Pad"))
         {
             showNumberPad();
         }
-        
+
         // Restore Number Pad button style
         m_ctx->style.button = originalButtonStyle;
 
@@ -634,14 +644,15 @@ void NuklearGuiManager::renderFontMenu()
         {
             nk_widget_disable_begin(m_ctx);
         }
-        
+
         // Highlight Apply button if focused
-        if (m_mainScreenFocusIndex == WIDGET_APPLY_BUTTON) {
+        if (m_mainScreenFocusIndex == WIDGET_APPLY_BUTTON)
+        {
             m_ctx->style.button.normal = nk_style_item_color(nk_rgb(0, 122, 255));
             m_ctx->style.button.hover = nk_style_item_color(nk_rgb(30, 142, 255));
             m_ctx->style.button.active = nk_style_item_color(nk_rgb(0, 102, 235));
         }
-        
+
         if (nk_button_label(m_ctx, "Apply"))
         {
             if (hasValidFont && m_fontApplyCallback)
@@ -656,7 +667,7 @@ void NuklearGuiManager::renderFontMenu()
                 m_fontApplyCallback(m_currentConfig);
             }
         }
-        
+
         // Restore Apply button style
         m_ctx->style.button = originalButtonStyle;
         if (!hasValidFont)
