@@ -27,7 +27,7 @@ BIN_DIR = ../../bin
 TARGET_NAME = sdl_reader_cli
 TARGET = $(BIN_DIR)/$(TARGET_NAME)
 
-# Source files: Combine all .cpp files from src/ and cli/, excluding Linux-specific files and old ImGui gui_manager
+# Source files: Combine all .cpp files from src/ and cli/, excluding Linux-specific files and old gui_manager
 SRC_FILES = $(filter-out $(SRC_DIR)/power_handler.cpp $(SRC_DIR)/gui_manager.cpp, $(wildcard $(SRC_DIR)/*.cpp))
 SRCS = $(SRC_FILES) $(wildcard $(CLI_DIR)/*.cpp)
 

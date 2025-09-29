@@ -22,7 +22,6 @@ CXXFLAGS := -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTG5040_PLATFORM\
 # Source directories
 SRC_DIR = $(WORKSPACE_PATH)/src
 CLI_DIR = $(WORKSPACE_PATH)/cli
-IMGUI_DIR = $(BASE_PATH)/imgui
 
 # Output locations
 BIN_DIR  := $(WORKSPACE_PATH)/bin
@@ -160,7 +159,6 @@ $(BUILD_DIR)/%.o: $(CLI_DIR)/%.cpp | $(BUILD_DIR)
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Compile ImGui source files
 # Nuklear is header-only, no compilation rules needed
 
 # Compile TG5040-specific power handler

@@ -32,17 +32,17 @@ This implementation adds a comprehensive font selection GUI to the SDLReader app
 
 - `include/font_manager.h` - Font discovery and management
 - `src/font_manager.cpp` - Font scanning and CSS generation
-- `include/gui_manager.h` - Dear ImGui integration
-- `src/gui_manager.cpp` - Font selection GUI
+- `include/nuklear_gui_manager.h` - Nuklear GUI integration
+- `src/nuklear_gui_manager.cpp` - Font selection GUI
 - `include/mupdf_document.h` - Added CSS support
 - `src/mupdf_document.cpp` - CSS application via `fz_set_user_css`
 - `include/app.h` - Font menu integration
 - `src/app.cpp` - Event handling and font application
-- `ports/mac/Makefile` - Dear ImGui build integration
+- `ports/mac/Makefile` - Nuklear build integration
 
 ### Dependencies
 
-- **Dear ImGui**: Provides the GUI framework
+- **Nuklear**: Provides the immediate mode GUI framework
 - **MuPDF**: CSS support via `fz_set_user_css` function
 - **SDL2**: Existing dependency for windowing
 
@@ -53,7 +53,7 @@ Settings are stored in `config.json` in the executable directory:
 ```json
 {
   "fontPath": "/path/to/font.ttf",
-  "fontName": "Font Display Name", 
+  "fontName": "Font Display Name",
   "fontSize": 14
 }
 ```
@@ -92,7 +92,7 @@ body, *, p, div, span, h1, h2, h3, h4, h5, h6 {
 
 ## Building
 
-The build system automatically downloads and compiles Dear ImGui v1.90.9. No additional setup required beyond existing SDL2 dependencies.
+The build system automatically downloads Nuklear v4.12.2 (header-only library). No additional setup required beyond existing SDL2 dependencies.
 
 ```bash
 make mac  # for macOS
@@ -103,4 +103,4 @@ make mac  # for macOS
 - **No fonts showing**: Check that `.ttf` or `.otf` files are in the `fonts/` directory
 - **CSS not applying**: Ensure document is EPUB/MOBI format (PDF not supported)
 - **Font not loading**: Verify font file is not corrupted and has correct permissions
-- **Menu not appearing**: Check that ImGui initialized correctly (see console output)
+- **Menu not appearing**: Check that Nuklear GUI initialized correctly (see console output)
