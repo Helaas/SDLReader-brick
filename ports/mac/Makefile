@@ -43,8 +43,8 @@ MUPDF_BUILD_PATH = mupdf/build/release
 # -g: Include debugging information
 # -Imupdf/include: Include path for our custom MuPDF headers with libarchive support
 # -I$(SRC_DIR): Include path for project's own header files (e.g., app.h, document.h)
-# -Inuklear: Include path for Nuklear headers
-CXXFLAGS = -std=c++17 -Wall -Wextra -g -Imupdf/include -I$(SRC_DIR) -I../../include -Inuklear
+# -I../../thirdparty/nuklear: Include path for Nuklear headers
+CXXFLAGS = -std=c++17 -Wall -Wextra -g -Imupdf/include -I$(SRC_DIR) -I../../include -I../../thirdparty/nuklear
 
 # Include paths for SDL2, SDL2_ttf, and SDL2_image
 # pkg-config --cflags SDL2_ttf SDL2_image added for explicit header paths
@@ -97,11 +97,12 @@ install-deps:
 
 # Setup Nuklear if it doesn't exist or is incomplete
 setup-nuklear:
-	@if [ ! -d "nuklear" ] || [ ! -f "nuklear/nuklear.h" ]; then \
+	@if [ ! -d "../../thirdparty/nuklear" ] || [ ! -f "../../thirdparty/nuklear/nuklear.h" ]; then \
 		echo "Setting up Nuklear repository..."; \
-		rm -rf nuklear; \
-		git clone --depth 1 --branch 4.12.2 https://github.com/Immediate-Mode-UI/Nuklear.git nuklear; \
-		if [ ! -f "nuklear/nuklear.h" ]; then \
+		rm -rf ../../thirdparty/nuklear; \
+		mkdir -p ../../thirdparty; \
+		cd ../../thirdparty && git clone --depth 1 --branch 4.12.2 https://github.com/Immediate-Mode-UI/Nuklear.git nuklear; \
+		if [ ! -f "../../thirdparty/nuklear/nuklear.h" ]; then \
 			echo "Error: Nuklear setup failed - nuklear.h not found"; \
 			exit 1; \
 		fi; \
@@ -184,7 +185,7 @@ clean:
 # Clean Nuklear (use with caution - will require re-download)
 clean-nuklear:
 	@echo "Removing Nuklear directory (will be re-downloaded on next build)..."
-	rm -rf nuklear
+	rm -rf ../../thirdparty/nuklear
 
 # Clean MuPDF (use with caution - will require re-download and rebuild)
 clean-mupdf:

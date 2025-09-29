@@ -16,7 +16,7 @@ endif
 CXX      := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTG5040_PLATFORM\
             -I$(WORKSPACE_PATH)/src -I$(WORKSPACE_PATH)/include -I$(BASE_PATH)/include -I$(BASE_PATH)/mupdf/include \
-            -I$(BASE_PATH)/nuklear \
+            -I$(WORKSPACE_PATH)/thirdparty/nuklear \
             -I/usr/local/libarchive-minimal/include -D_REENTRANT -I/usr/include/SDL2
 
 # Source directories

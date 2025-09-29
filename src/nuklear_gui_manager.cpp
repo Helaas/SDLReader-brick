@@ -11,19 +11,11 @@
 #define NK_INCLUDE_DEFAULT_FONT
 #define NK_INCLUDE_FONT_BAKING
 #define NK_IMPLEMENTATION
-#ifdef TG5040_PLATFORM
-#include "../ports/tg5040/nuklear/nuklear.h"
-#else
-#include "nuklear.h"
-#endif
+#include "../thirdparty/nuklear/nuklear.h"
 
 #define NK_SDL_RENDERER_IMPLEMENTATION
-// Include the proper SDL renderer implementation
-#ifdef TG5040_PLATFORM
-#include "../ports/tg5040/nuklear/demo/sdl_renderer/nuklear_sdl_renderer.h"
-#else
-#include "../ports/mac/nuklear/demo/sdl_renderer/nuklear_sdl_renderer.h"
-#endif
+// Include the SDL renderer implementation
+#include "../thirdparty/nuklear/demo/sdl_renderer/nuklear_sdl_renderer.h"
 
 // NuklearGuiManager implementation
 NuklearGuiManager::NuklearGuiManager()
