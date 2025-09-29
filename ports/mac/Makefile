@@ -1,5 +1,5 @@
 # Makefile for SDL Reader on macOS (Top-Level - No Explicit Library Build)
-# 
+#
 # This Makefile automatically handles dependencies:
 # - Checks for required system libraries (SDL2, libarchive, webp, etc.)
 # - Downloads and sets up Nuklear and MuPDF if needed

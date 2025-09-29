@@ -163,10 +163,10 @@ private:
     bool m_showFontMenu = false;
     SDL_Window* m_window = nullptr;
     SDL_Renderer* m_renderer = nullptr;
-    
+
     // Nuklear context (managed by SDL renderer backend)
     struct nk_context* m_ctx = nullptr;
-    
+
     OptionsManager m_optionsManager;
     FontConfig m_currentConfig;
     FontConfig m_tempConfig; // Temporary config for UI editing
