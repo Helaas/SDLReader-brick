@@ -197,6 +197,24 @@ private:
     int m_numberPadSelectedRow = 0;
     int m_numberPadSelectedCol = 0;
 
+    // Main screen focus management (like numpad)
+    int m_mainScreenFocusIndex = 0; // Which widget has focus
+    enum MainScreenWidget
+    {
+        WIDGET_FONT_DROPDOWN = 0,
+        WIDGET_FONT_SIZE_INPUT,
+        WIDGET_FONT_SIZE_SLIDER,
+        WIDGET_ZOOM_STEP_INPUT,
+        WIDGET_ZOOM_STEP_SLIDER,
+        WIDGET_PAGE_JUMP_INPUT,
+        WIDGET_GO_BUTTON,
+        WIDGET_NUMPAD_BUTTON,
+        WIDGET_APPLY_BUTTON,
+        WIDGET_RESET_BUTTON,
+        WIDGET_CLOSE_BUTTON,
+        WIDGET_COUNT // Total number of widgets
+    };
+
     // Debouncing for number pad input
     Uint32 m_lastButtonPressTime = 0;
     const Uint32 BUTTON_DEBOUNCE_MS = 100;
@@ -244,11 +262,29 @@ private:
     void setupColorScheme();
 
     /**
+     * @brief Handle keyboard input for general GUI navigation
+     * @param event SDL event to process
+     * @return true if event was handled
+     */
+    bool handleKeyboardNavigation(const SDL_Event& event);
+
+    /**
      * @brief Handle controller input for general GUI navigation
      * @param event SDL event to process
      * @return true if event was handled
      */
     bool handleControllerInput(const SDL_Event& event);
+
+    /**
+     * @brief Adjust the value of the currently focused widget
+     * @param direction -1 for decrease, +1 for increase
+     */
+    void adjustFocusedWidget(int direction);
+
+    /**
+     * @brief Activate the currently focused widget (like pressing Enter/Space)
+     */
+    void activateFocusedWidget();
 };
 
 #endif // NUKLEAR_GUI_MANAGER_H

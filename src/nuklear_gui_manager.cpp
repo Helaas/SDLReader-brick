@@ -95,88 +95,58 @@ bool NuklearGuiManager::handleEvent(const SDL_Event& event)
         return false;
     }
 
+    // Debug: Print event information when GUI is visible
+    if (m_showFontMenu || m_showNumberPad)
+    {
+        if (event.type == SDL_KEYDOWN)
+        {
+            std::cout << "[DEBUG] Key DOWN: " << SDL_GetKeyName(event.key.keysym.sym)
+                      << " (scancode: " << event.key.keysym.scancode << ")" << std::endl;
+        }
+        else if (event.type == SDL_KEYUP)
+        {
+            std::cout << "[DEBUG] Key UP: " << SDL_GetKeyName(event.key.keysym.sym) << std::endl;
+        }
+        else if (event.type == SDL_MOUSEBUTTONDOWN)
+        {
+            std::cout << "[DEBUG] Mouse DOWN at (" << event.button.x << ", " << event.button.y << ")" << std::endl;
+        }
+        else if (event.type == SDL_CONTROLLERBUTTONDOWN)
+        {
+            std::cout << "[DEBUG] Controller button DOWN: " << event.cbutton.button << std::endl;
+        }
+    }
+
     // Handle number pad input if visible
     if (m_showNumberPad && handleNumberPadInput(event))
     {
+        std::cout << "[DEBUG] Number pad handled event" << std::endl;
+        return true;
+    }
+
+    // Handle keyboard navigation for GUI (before nuklear gets the events)
+    if (handleKeyboardNavigation(event))
+    {
+        std::cout << "[DEBUG] Keyboard navigation handled event" << std::endl;
         return true;
     }
 
     // Handle controller input for general GUI navigation
     if (handleControllerInput(event))
     {
+        std::cout << "[DEBUG] Controller input handled event" << std::endl;
         return true;
     }
 
-    // Handle keyboard navigation specifically for GUI elements
-    if ((m_showFontMenu || m_showNumberPad) && event.type == SDL_KEYDOWN)
+    // Use the proper SDL event handler for remaining events
+    bool nuklearHandled = nk_sdl_handle_event(const_cast<SDL_Event*>(&event));
+
+    if (m_showFontMenu || m_showNumberPad)
     {
-        switch (event.key.keysym.sym)
-        {
-        case SDLK_TAB:
-            if (event.key.keysym.mod & KMOD_SHIFT)
-            {
-                // Shift+Tab for previous control
-                nk_input_key(m_ctx, NK_KEY_SHIFT, 1);
-                nk_input_key(m_ctx, NK_KEY_TAB, 1);
-                nk_input_key(m_ctx, NK_KEY_TAB, 0);
-                nk_input_key(m_ctx, NK_KEY_SHIFT, 0);
-            }
-            else
-            {
-                // Tab for next control
-                nk_input_key(m_ctx, NK_KEY_TAB, 1);
-                nk_input_key(m_ctx, NK_KEY_TAB, 0);
-            }
-            return true;
-        case SDLK_UP:
-            // Navigate up - use Shift+Tab for previous control
-            nk_input_key(m_ctx, NK_KEY_SHIFT, 1);
-            nk_input_key(m_ctx, NK_KEY_TAB, 1);
-            nk_input_key(m_ctx, NK_KEY_TAB, 0);
-            nk_input_key(m_ctx, NK_KEY_SHIFT, 0);
-            return true;
-        case SDLK_DOWN:
-            // Navigate down - use Tab for next control
-            nk_input_key(m_ctx, NK_KEY_TAB, 1);
-            nk_input_key(m_ctx, NK_KEY_TAB, 0);
-            return true;
-        case SDLK_LEFT:
-            // Navigate left
-            nk_input_key(m_ctx, NK_KEY_LEFT, 1);
-            return true;
-        case SDLK_RIGHT:
-            // Navigate right
-            nk_input_key(m_ctx, NK_KEY_RIGHT, 1);
-            return true;
-        default:
-            break;
-        }
+        std::cout << "[DEBUG] nuklear handled event: " << (nuklearHandled ? "YES" : "NO") << std::endl;
     }
 
-    // Handle keyboard key up events to clear key states
-    if ((m_showFontMenu || m_showNumberPad) && event.type == SDL_KEYUP)
-    {
-        switch (event.key.keysym.sym)
-        {
-        case SDLK_UP:
-            nk_input_key(m_ctx, NK_KEY_UP, 0);
-            return true;
-        case SDLK_DOWN:
-            nk_input_key(m_ctx, NK_KEY_DOWN, 0);
-            return true;
-        case SDLK_LEFT:
-            nk_input_key(m_ctx, NK_KEY_LEFT, 0);
-            return true;
-        case SDLK_RIGHT:
-            nk_input_key(m_ctx, NK_KEY_RIGHT, 0);
-            return true;
-        default:
-            break;
-        }
-    }
-
-    // Use the proper SDL event handler
-    return nk_sdl_handle_event(const_cast<SDL_Event*>(&event));
+    return nuklearHandled;
 }
 
 void NuklearGuiManager::newFrame()
@@ -273,6 +243,16 @@ void NuklearGuiManager::renderFontMenu()
     if (!m_ctx)
         return;
 
+    // Debug: Print nuklear input state periodically
+    static int debugCounter = 0;
+    if (debugCounter++ % 60 == 0) // Print every 60 frames (about once per second at 60fps)
+    {
+        std::cout << "[DEBUG] Nuklear state - mouse: ("
+                  << m_ctx->input.mouse.pos.x << ", " << m_ctx->input.mouse.pos.y << ")"
+                  << ", mouse down: " << (m_ctx->input.mouse.buttons[0].down ? "YES" : "NO")
+                  << ", keys pressed: " << m_ctx->input.keyboard.text_len << std::endl;
+    }
+
     int windowWidth, windowHeight;
     SDL_GetWindowSize(m_window, &windowWidth, &windowHeight);
 
@@ -293,6 +273,24 @@ void NuklearGuiManager::renderFontMenu()
             // This helps with initial focus for keyboard/controller navigation
             initialFocusSet = true;
         }
+
+        // Store original styles for highlighting focused widgets
+        struct nk_style_button originalButtonStyle = m_ctx->style.button;
+        struct nk_style_combo originalComboStyle = m_ctx->style.combo;
+        struct nk_style_property originalPropertyStyle = m_ctx->style.property;
+        struct nk_style_edit originalEditStyle = m_ctx->style.edit;
+
+        // === KEYBOARD NAVIGATION DEBUG ===
+        nk_layout_row_dynamic(m_ctx, 20, 1);
+        char focusDebug[64];
+        const char* widgetNames[] = {
+            "Font Dropdown", "Font Size Input", "Font Size Slider", "Zoom Step Input",
+            "Zoom Step Slider", "Page Jump Input", "Go Button", "Numpad Button",
+            "Apply Button", "Reset Button", "Close Button"};
+        snprintf(focusDebug, sizeof(focusDebug), "Focus: %s (%d)",
+                 widgetNames[m_mainScreenFocusIndex % WIDGET_COUNT], m_mainScreenFocusIndex);
+        nk_label_colored(m_ctx, focusDebug, NK_TEXT_LEFT, nk_rgb(255, 255, 0));
+
         // === FONT SETTINGS SECTION ===
         nk_layout_row_dynamic(m_ctx, 25, 1);
         nk_label(m_ctx, "Font Settings", NK_TEXT_LEFT);
@@ -324,14 +322,26 @@ void NuklearGuiManager::renderFontMenu()
 
             // Create dropdown
             nk_layout_row_dynamic(m_ctx, 25, 1);
-            const char* currentFont = fonts[m_selectedFontIndex].displayName.c_str();
-            if (nk_combo_begin_label(m_ctx, currentFont, nk_vec2(nk_widget_width(m_ctx), 200)))
+
+            // Highlight font dropdown if focused
+            if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
             {
+                m_ctx->style.combo.button.normal = nk_style_item_color(nk_rgb(0, 122, 255));
+                m_ctx->style.combo.button.hover = nk_style_item_color(nk_rgb(30, 142, 255));
+                m_ctx->style.combo.button.active = nk_style_item_color(nk_rgb(0, 102, 235));
+            }
+
+            const char* currentFont = fonts[m_selectedFontIndex].displayName.c_str();
+            bool comboClicked = nk_combo_begin_label(m_ctx, currentFont, nk_vec2(nk_widget_width(m_ctx), 200));
+            if (comboClicked)
+            {
+                std::cout << "[DEBUG] Font combo dropdown opened" << std::endl;
                 nk_layout_row_dynamic(m_ctx, 20, 1);
                 for (size_t i = 0; i < fonts.size(); ++i)
                 {
                     if (nk_combo_item_label(m_ctx, fonts[i].displayName.c_str(), NK_TEXT_LEFT))
                     {
+                        std::cout << "[DEBUG] Font selected: " << fonts[i].displayName << std::endl;
                         m_selectedFontIndex = static_cast<int>(i);
                         m_tempConfig.fontPath = fonts[i].filePath;
                         m_tempConfig.fontName = fonts[i].displayName;
@@ -340,6 +350,8 @@ void NuklearGuiManager::renderFontMenu()
                 nk_combo_end(m_ctx);
             }
 
+            // Restore combo style
+            m_ctx->style.combo = originalComboStyle;
             nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
             // Font Size Section
@@ -350,8 +362,17 @@ void NuklearGuiManager::renderFontMenu()
             nk_layout_row_dynamic(m_ctx, 25, 1);
             int editFlags = nk_edit_string_zero_terminated(m_ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_SELECTABLE,
                                                            m_fontSizeInput, sizeof(m_fontSizeInput), nk_filter_decimal);
+            if (editFlags & NK_EDIT_ACTIVATED)
+            {
+                std::cout << "[DEBUG] Font size edit field ACTIVATED" << std::endl;
+            }
+            if (editFlags & NK_EDIT_DEACTIVATED)
+            {
+                std::cout << "[DEBUG] Font size edit field DEACTIVATED" << std::endl;
+            }
             if (editFlags & NK_EDIT_COMMITED)
             {
+                std::cout << "[DEBUG] Font size edit field COMMITTED: " << m_fontSizeInput << std::endl;
                 int newSize = std::atoi(m_fontSizeInput);
                 if (newSize >= 8 && newSize <= 72)
                 {
@@ -990,6 +1011,175 @@ void NuklearGuiManager::setupColorScheme()
     m_ctx->style.combo.border_color = nk_rgb(80, 80, 85);
 }
 
+bool NuklearGuiManager::handleKeyboardNavigation(const SDL_Event& event)
+{
+    if (!m_showFontMenu && !m_showNumberPad)
+    {
+        return false; // Only handle keyboard input when GUI is visible
+    }
+
+    if (event.type == SDL_KEYDOWN)
+    {
+        // Simple time-based debouncing (same as controller)
+        Uint32 currentTime = SDL_GetTicks();
+        if (currentTime - m_lastButtonPressTime < BUTTON_DEBOUNCE_MS)
+        {
+            return true; // Ignore rapid repeated presses
+        }
+        m_lastButtonPressTime = currentTime;
+
+        switch (event.key.keysym.sym)
+        {
+        case SDLK_UP:
+            // Navigate up - move to previous widget (same as numpad logic)
+            m_mainScreenFocusIndex = (m_mainScreenFocusIndex - 1 + WIDGET_COUNT) % WIDGET_COUNT;
+            return true;
+        case SDLK_DOWN:
+            // Navigate down - move to next widget (same as numpad logic)
+            m_mainScreenFocusIndex = (m_mainScreenFocusIndex + 1) % WIDGET_COUNT;
+            return true;
+        case SDLK_LEFT:
+            // Navigate left - adjust widget value if applicable
+            adjustFocusedWidget(-1);
+            return true;
+        case SDLK_RIGHT:
+            // Navigate right - adjust widget value if applicable
+            adjustFocusedWidget(1);
+            return true;
+        case SDLK_TAB:
+            if (event.key.keysym.mod & KMOD_SHIFT)
+            {
+                // Shift+Tab for previous widget
+                m_mainScreenFocusIndex = (m_mainScreenFocusIndex - 1 + WIDGET_COUNT) % WIDGET_COUNT;
+            }
+            else
+            {
+                // Tab for next widget
+                m_mainScreenFocusIndex = (m_mainScreenFocusIndex + 1) % WIDGET_COUNT;
+            }
+            return true;
+        case SDLK_RETURN:
+        case SDLK_SPACE:
+            // Activate the focused widget (same as numpad A button logic)
+            activateFocusedWidget();
+            return true;
+        case SDLK_ESCAPE:
+            // Handle escape to close menu (same as controller B button behavior)
+            nk_input_key(m_ctx, NK_KEY_TEXT_END, 1);
+            nk_input_key(m_ctx, NK_KEY_TEXT_END, 0);
+
+            if (m_showFontMenu)
+            {
+                m_showFontMenu = false;
+                // Reset temp config to current config
+                m_tempConfig = m_currentConfig;
+                m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
+
+                // Reset input fields
+                snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
+                snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_currentConfig.zoomStep);
+
+                if (m_closeCallback)
+                {
+                    m_closeCallback();
+                }
+            }
+            else if (m_showNumberPad)
+            {
+                hideNumberPad();
+            }
+            return true;
+        default:
+            break;
+        }
+    }
+
+    return false; // Event not handled
+}
+
+void NuklearGuiManager::adjustFocusedWidget(int direction)
+{
+    switch (m_mainScreenFocusIndex)
+    {
+    case WIDGET_FONT_SIZE_SLIDER:
+        // Adjust font size
+        m_tempConfig.fontSize = std::clamp(m_tempConfig.fontSize + direction, 8, 72);
+        snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_tempConfig.fontSize);
+        break;
+    case WIDGET_ZOOM_STEP_SLIDER:
+        // Adjust zoom step
+        m_tempConfig.zoomStep = std::clamp(m_tempConfig.zoomStep + direction, 1, 50);
+        snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_tempConfig.zoomStep);
+        break;
+    default:
+        // Other widgets don't respond to left/right adjustment
+        break;
+    }
+}
+
+void NuklearGuiManager::activateFocusedWidget()
+{
+    switch (m_mainScreenFocusIndex)
+    {
+    case WIDGET_FONT_DROPDOWN:
+        // Cycle through fonts for now (dropdown opening is complex)
+        {
+            const auto& fonts = m_optionsManager.getAvailableFonts();
+            if (!fonts.empty())
+            {
+                m_selectedFontIndex = (m_selectedFontIndex + 1) % fonts.size();
+                std::cout << "[DEBUG] Font cycled to: " << fonts[m_selectedFontIndex].displayName << std::endl;
+            }
+        }
+        break;
+    case WIDGET_GO_BUTTON:
+        // Activate Go button
+        if (strlen(m_pageJumpInput) > 0)
+        {
+            int targetPage = std::atoi(m_pageJumpInput);
+            if (targetPage >= 1 && targetPage <= m_pageCount && m_pageJumpCallback)
+            {
+                m_pageJumpCallback(targetPage - 1);
+            }
+        }
+        break;
+    case WIDGET_NUMPAD_BUTTON:
+        // Show number pad
+        showNumberPad();
+        break;
+    case WIDGET_APPLY_BUTTON:
+        // Apply settings
+        if (m_fontApplyCallback)
+        {
+            m_fontApplyCallback(m_tempConfig);
+            m_currentConfig = m_tempConfig;
+        }
+        break;
+    case WIDGET_RESET_BUTTON:
+        // Reset to defaults
+        m_tempConfig = FontConfig();
+        m_selectedFontIndex = 0;
+        snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_tempConfig.fontSize);
+        snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_tempConfig.zoomStep);
+        break;
+    case WIDGET_CLOSE_BUTTON:
+        // Close menu
+        m_showFontMenu = false;
+        m_tempConfig = m_currentConfig;
+        m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
+        snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
+        snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_currentConfig.zoomStep);
+        if (m_closeCallback)
+        {
+            m_closeCallback();
+        }
+        break;
+    default:
+        // Other widgets don't have simple activation
+        break;
+    }
+}
+
 bool NuklearGuiManager::handleControllerInput(const SDL_Event& event)
 {
     if (!m_showFontMenu && !m_showNumberPad)
@@ -1007,32 +1197,35 @@ bool NuklearGuiManager::handleControllerInput(const SDL_Event& event)
         }
         m_lastButtonPressTime = currentTime;
 
+        // Handle main screen navigation using our custom system
+        if (m_showFontMenu)
+        {
+            std::cout << "[DEBUG] Controller dpad input for font menu: " << event.cbutton.button << std::endl;
+            switch (event.cbutton.button)
+            {
+            case SDL_CONTROLLER_BUTTON_DPAD_UP:
+                adjustFocusedWidget(-1);
+                std::cout << "[DEBUG] Controller UP - new focus: " << m_mainScreenFocusIndex << std::endl;
+                return true;
+            case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+                adjustFocusedWidget(1);
+                std::cout << "[DEBUG] Controller DOWN - new focus: " << m_mainScreenFocusIndex << std::endl;
+                return true;
+            case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+                std::cout << "[DEBUG] Controller LEFT" << std::endl;
+                return true;
+            case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+                std::cout << "[DEBUG] Controller RIGHT" << std::endl;
+                return true;
+            case SDL_CONTROLLER_BUTTON_A:
+                std::cout << "[DEBUG] Controller A - activating widget " << m_mainScreenFocusIndex << std::endl;
+                activateFocusedWidget();
+                return true;
+            }
+        }
+
         switch (event.cbutton.button)
         {
-        case SDL_CONTROLLER_BUTTON_DPAD_UP:
-            // Navigate up - use Shift+Tab for previous control
-            nk_input_key(m_ctx, NK_KEY_SHIFT, 1);
-            nk_input_key(m_ctx, NK_KEY_TAB, 1);
-            nk_input_key(m_ctx, NK_KEY_TAB, 0);
-            nk_input_key(m_ctx, NK_KEY_SHIFT, 0);
-            return true;
-        case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-            // Navigate down - use Tab for next control
-            nk_input_key(m_ctx, NK_KEY_TAB, 1);
-            nk_input_key(m_ctx, NK_KEY_TAB, 0);
-            return true;
-        case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-            // Navigate left
-            nk_input_key(m_ctx, NK_KEY_LEFT, 1);
-            return true;
-        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-            // Navigate right
-            nk_input_key(m_ctx, NK_KEY_RIGHT, 1);
-            return true;
-        case SDL_CONTROLLER_BUTTON_A:
-            // Simulate enter key for selection
-            nk_input_key(m_ctx, NK_KEY_ENTER, 1);
-            return true;
         case SDL_CONTROLLER_BUTTON_B:
             // Send escape key first to exit any text input, then close menu
             nk_input_key(m_ctx, NK_KEY_TEXT_END, 1);

@@ -355,10 +355,17 @@ void App::handleEvent(const SDL_Event& event)
     // Block ALL input events if the settings menu is visible, except ESC to close it
     if (m_guiManager && (m_guiManager->isFontMenuVisible() || m_guiManager->isNumberPadVisible()))
     {
+        if (event.type == SDL_KEYDOWN || event.type == SDL_CONTROLLERBUTTONDOWN)
+        {
+            std::cout << "[APP DEBUG] GUI visible, event type: " << event.type
+                      << ", GUI handled: " << (guiHandledEvent ? "YES" : "NO") << std::endl;
+        }
+
         // Always allow ESC and Q to close the menu
         if (event.type == SDL_KEYDOWN &&
             (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q))
         {
+            std::cout << "[APP DEBUG] Processing ESC/Q to close menu" << std::endl;
             if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q)
             {
                 m_guiManager->toggleFontMenu();
@@ -373,12 +380,17 @@ void App::handleEvent(const SDL_Event& event)
         // For GUI events, only process input if GUI didn't handle the event
         else if (!guiHandledEvent)
         {
+            std::cout << "[APP DEBUG] GUI didn't handle event, processing normally" << std::endl;
             InputActionData actionData = m_inputManager->processEvent(event);
             processInputAction(actionData);
 
             // Update App's input state variables for held button tracking
             // This is needed for updateHeldPanning() and edge-turn logic
             updateInputState(event);
+        }
+        else
+        {
+            std::cout << "[APP DEBUG] GUI handled event, blocking from app processing" << std::endl;
         }
         return;
     }
