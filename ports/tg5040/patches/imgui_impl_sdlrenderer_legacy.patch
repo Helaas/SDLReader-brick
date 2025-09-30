@@ -1,13 +1,14 @@
 diff --git a/backends/imgui_impl_sdlrenderer.cpp b/backends/imgui_impl_sdlrenderer.cpp
-index 87381f2..d8f193b 100644
+index 87381f2..7a5183a 100644
 --- a/backends/imgui_impl_sdlrenderer.cpp
 +++ b/backends/imgui_impl_sdlrenderer.cpp
-@@ -32,11 +32,13 @@
+@@ -32,11 +32,14 @@
  #include <stdint.h>     // intptr_t
  #endif
 
 +#include <algorithm>
 +#include <cmath>
++#include <cstring>
 +#include <vector>
 +
  // SDL
@@ -19,7 +20,7 @@ index 87381f2..d8f193b 100644
 
  // SDL_Renderer data
  struct ImGui_ImplSDLRenderer_Data
-@@ -249,3 +251,476 @@ void ImGui_ImplSDLRenderer_DestroyDeviceObjects()
+@@ -249,3 +252,483 @@ void ImGui_ImplSDLRenderer_DestroyDeviceObjects()
  {
      ImGui_ImplSDLRenderer_DestroyFontsTexture();
  }
@@ -30,8 +31,7 @@ index 87381f2..d8f193b 100644
 +    SDL_Renderer* SDLRenderer;
 +    SDL_Texture* FontTexture;
 +    SDL_Texture* FrameTexture;
-+    SDL_PixelFormat* PixelFormat;
-+    std::vector<unsigned char> FontPixels;
++    std::vector<ImU32> FontPixels;
 +    int FontWidth;
 +    int FontHeight;
 +    std::vector<Uint32> Framebuffer;
@@ -42,7 +42,6 @@ index 87381f2..d8f193b 100644
 +        : SDLRenderer(nullptr)
 +        , FontTexture(nullptr)
 +        , FrameTexture(nullptr)
-+        , PixelFormat(nullptr)
 +        , FontWidth(0)
 +        , FontHeight(0)
 +        , FrameWidth(0)
@@ -123,12 +122,13 @@ index 87381f2..d8f193b 100644
 +        x = std::clamp(x, 0, bd->FontWidth - 1);
 +        y = std::clamp(y, 0, bd->FontHeight - 1);
 +
-+        size_t index = ((size_t)y * (size_t)bd->FontWidth + (size_t)x) * 4;
++        const size_t index = (size_t)y * (size_t)bd->FontWidth + (size_t)x;
++        ImU32 texel = bd->FontPixels[index];
 +        const float inv255 = 1.0f / 255.0f;
-+        out_r = bd->FontPixels[index + 0] * inv255;
-+        out_g = bd->FontPixels[index + 1] * inv255;
-+        out_b = bd->FontPixels[index + 2] * inv255;
-+        out_a = bd->FontPixels[index + 3] * inv255;
++        out_r = ((texel >> IM_COL32_R_SHIFT) & 0xFF) * inv255;
++        out_g = ((texel >> IM_COL32_G_SHIFT) & 0xFF) * inv255;
++        out_b = ((texel >> IM_COL32_B_SHIFT) & 0xFF) * inv255;
++        out_a = ((texel >> IM_COL32_A_SHIFT) & 0xFF) * inv255;
 +        return;
 +    }
 +
@@ -143,35 +143,43 @@ index 87381f2..d8f193b 100644
 +        return;
 +
 +    const size_t index = (size_t)y * (size_t)bd->FrameWidth + (size_t)x;
++    Uint32 dst = bd->Framebuffer[index];
 +
-+    Uint8 dst_r = 0, dst_g = 0, dst_b = 0, dst_a = 0;
-+    if (!bd->Framebuffer.empty() && bd->PixelFormat)
-+    {
-+        SDL_GetRGBA(bd->Framebuffer[index], bd->PixelFormat, &dst_r, &dst_g, &dst_b, &dst_a);
-+    }
++    int dst_r = (int)(dst & 0xFF);
++    int dst_g = (int)((dst >> 8) & 0xFF);
++    int dst_b = (int)((dst >> 16) & 0xFF);
++    int dst_a = (int)((dst >> 24) & 0xFF);
 +
-+    const float inv255 = 1.0f / 255.0f;
-+    float dst_rf = dst_r * inv255;
-+    float dst_gf = dst_g * inv255;
-+    float dst_bf = dst_b * inv255;
-+    float dst_af = dst_a * inv255;
++    int src_a_i = (int)(src_a * 255.0f + 0.5f);
++    if (src_a_i <= 0)
++        return;
++    if (src_a_i > 255)
++        src_a_i = 255;
 +
-+    float out_a = src_a + dst_af * (1.0f - src_a);
-+    float out_r = src_r + dst_rf * (1.0f - src_a);
-+    float out_g = src_g + dst_gf * (1.0f - src_a);
-+    float out_b = src_b + dst_bf * (1.0f - src_a);
++    int src_r_i = (int)(src_r * 255.0f + 0.5f);
++    int src_g_i = (int)(src_g * 255.0f + 0.5f);
++    int src_b_i = (int)(src_b * 255.0f + 0.5f);
 +
-+    out_a = std::clamp(out_a, 0.0f, 1.0f);
-+    out_r = std::clamp(out_r, 0.0f, 1.0f);
-+    out_g = std::clamp(out_g, 0.0f, 1.0f);
-+    out_b = std::clamp(out_b, 0.0f, 1.0f);
++    src_r_i = std::clamp(src_r_i, 0, 255);
++    src_g_i = std::clamp(src_g_i, 0, 255);
++    src_b_i = std::clamp(src_b_i, 0, 255);
 +
-+    bd->Framebuffer[index] = SDL_MapRGBA(
-+        bd->PixelFormat,
-+        (Uint8)std::round(out_r * 255.0f),
-+        (Uint8)std::round(out_g * 255.0f),
-+        (Uint8)std::round(out_b * 255.0f),
-+        (Uint8)std::round(out_a * 255.0f));
++    int inv_a = 255 - src_a_i;
++
++    int out_r = (src_r_i * src_a_i + dst_r * inv_a + 127) / 255;
++    int out_g = (src_g_i * src_a_i + dst_g * inv_a + 127) / 255;
++    int out_b = (src_b_i * src_a_i + dst_b * inv_a + 127) / 255;
++    int out_a = src_a_i + (dst_a * inv_a + 127) / 255;
++
++    if (out_r > 255) out_r = 255;
++    if (out_g > 255) out_g = 255;
++    if (out_b > 255) out_b = 255;
++    if (out_a > 255) out_a = 255;
++
++    bd->Framebuffer[index] = (Uint32)(out_r & 0xFF)
++        | ((Uint32)(out_g & 0xFF) << 8)
++        | ((Uint32)(out_b & 0xFF) << 16)
++        | ((Uint32)(out_a & 0xFF) << 24);
 +}
 +
 +static void ImGui_ImplSDLRenderer_RasterizeTriangle(
@@ -194,10 +202,11 @@ index 87381f2..d8f193b 100644
 +    if (x0 > x1 || y0 > y1)
 +        return;
 +
-+    float area = (p1.x - p0.x) * (p2.y - p0.y) - (p2.x - p0.x) * (p1.y - p0.y);
++    float area = (p1.y - p2.y) * (p0.x - p2.x) + (p2.x - p1.x) * (p0.y - p2.y);
 +    if (fabsf(area) < 1e-6f)
 +        return;
 +    float inv_area = 1.0f / area;
++    bool area_positive = area > 0.0f;
 +
 +    for (int y = y0; y <= y1; ++y)
 +    {
@@ -206,12 +215,24 @@ index 87381f2..d8f193b 100644
 +            float px = x + 0.5f;
 +            float py = y + 0.5f;
 +
-+            float w0 = ((p1.x - p0.x) * (py - p0.y) - (p1.y - p0.y) * (px - p0.x)) * inv_area;
-+            float w1 = ((p2.x - p1.x) * (py - p1.y) - (p2.y - p1.y) * (px - p1.x)) * inv_area;
-+            float w2 = 1.0f - w0 - w1;
++            float w0 = (p1.y - p2.y) * (px - p2.x) + (p2.x - p1.x) * (py - p2.y);
++            float w1 = (p2.y - p0.y) * (px - p2.x) + (p0.x - p2.x) * (py - p2.y);
++            float w2 = area - w0 - w1;
 +
-+            if (w0 < -1e-4f || w1 < -1e-4f || w2 < -1e-4f)
-+                continue;
++            if (area_positive)
++            {
++                if (w0 < 0.0f || w1 < 0.0f || w2 < 0.0f)
++                    continue;
++            }
++            else
++            {
++                if (w0 > 0.0f || w1 > 0.0f || w2 > 0.0f)
++                    continue;
++            }
++
++            w0 *= inv_area;
++            w1 *= inv_area;
++            w2 *= inv_area;
 +
 +            ImVec4 color;
 +            color.x = c0.x * w0 + c1.x * w1 + c2.x * w2;
@@ -254,14 +275,6 @@ index 87381f2..d8f193b 100644
 +    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
 +
 +    bd->SDLRenderer = renderer;
-+    bd->PixelFormat = SDL_AllocFormat(SDL_PIXELFORMAT_ABGR8888);
-+    if (bd->PixelFormat == nullptr)
-+    {
-+        IM_DELETE(bd);
-+        io.BackendRendererUserData = nullptr;
-+        io.BackendRendererName = nullptr;
-+        return false;
-+    }
 +
 +    return true;
 +}
@@ -273,12 +286,6 @@ index 87381f2..d8f193b 100644
 +        return;
 +
 +    ImGui_ImplSDLRenderer_DestroyDeviceObjects();
-+
-+    if (bd->PixelFormat)
-+    {
-+        SDL_FreeFormat(bd->PixelFormat);
-+        bd->PixelFormat = nullptr;
-+    }
 +
 +    ImGuiIO& io = ImGui::GetIO();
 +    io.BackendRendererName = nullptr;
@@ -425,7 +432,8 @@ index 87381f2..d8f193b 100644
 +    if (width <= 0 || height <= 0 || pixels == nullptr)
 +        return false;
 +
-+    bd->FontPixels.assign(pixels, pixels + (size_t)width * (size_t)height * 4);
++    bd->FontPixels.resize((size_t)width * (size_t)height);
++    memcpy(bd->FontPixels.data(), pixels, (size_t)width * (size_t)height * sizeof(ImU32));
 +    bd->FontWidth = width;
 +    bd->FontHeight = height;
 +
