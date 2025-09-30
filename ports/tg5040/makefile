@@ -23,6 +23,7 @@ CXXFLAGS := -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTG5040_PLATFORM\
 SRC_DIR = $(WORKSPACE_PATH)/src
 CLI_DIR = $(WORKSPACE_PATH)/cli
 IMGUI_DIR = $(BASE_PATH)/imgui
+TG_SRC_DIR = $(BASE_PATH)/src
 
 # Output locations
 BIN_DIR  := $(WORKSPACE_PATH)/bin
@@ -81,6 +82,14 @@ setup-imgui:
 		echo "Dear ImGui setup completed successfully"; \
 	else \
 		echo "Dear ImGui repository already exists and is complete"; \
+	fi
+	@if [ -d "$(BASE_PATH)/imgui" ]; then \
+		if ! grep -q "imgui_impl_sdlrenderer_legacy" $(BASE_PATH)/imgui/backends/imgui_impl_sdlrenderer.cpp; then \
+			echo "Applying SDL 2.0.9 fallback patch to ImGui SDL renderer backend..."; \
+			cd $(BASE_PATH)/imgui && patch -p1 < ../patches/imgui_impl_sdlrenderer_legacy.patch; \
+		else \
+			echo "ImGui SDL renderer backend already patched"; \
+		fi; \
 	fi
 
 # Setup MuPDF repository if it doesn't exist
@@ -185,3 +194,39 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
 
 $(BUILD_DIR)/%.o: $(CLI_DIR)/%.cpp | $(BUILD_DIR)
 	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Compile Dear ImGui core sources
+$(BUILD_DIR)/imgui.o: $(IMGUI_DIR)/imgui.cpp | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/imgui_demo.o: $(IMGUI_DIR)/imgui_demo.cpp | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/imgui_draw.o: $(IMGUI_DIR)/imgui_draw.cpp | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/imgui_tables.o: $(IMGUI_DIR)/imgui_tables.cpp | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/imgui_widgets.o: $(IMGUI_DIR)/imgui_widgets.cpp | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Compile Dear ImGui SDL backend sources
+$(BUILD_DIR)/imgui_impl_sdl.o: $(IMGUI_DIR)/backends/imgui_impl_sdl.cpp | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/imgui_impl_sdlrenderer.o: $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer.cpp | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Compile TG5040-specific sources
+$(BUILD_DIR)/tg5040_power_handler.o: $(TG_SRC_DIR)/power_handler.cpp | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
