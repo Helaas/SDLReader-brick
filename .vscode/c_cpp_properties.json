@@ -18,6 +18,45 @@
             "cStandard": "c17",
             "cppStandard": "c++17",
             "intelliSenseMode": "macos-clang-arm64"
+        },
+        {
+            "name": "tg5040",
+            "includePath": [
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/ports/tg5040/include",
+                "${workspaceFolder}/ports/tg5040/mupdf/include",
+                "${workspaceFolder}/thirdparty/nuklear",
+                "/usr/local/libarchive-minimal/include",
+                "/usr/include/SDL2",
+                "/usr/include"
+            ],
+            "defines": [
+                "_THREAD_SAFE",
+                "_REENTRANT",
+                "TG5040_PLATFORM"
+            ],
+            "compilerPath": "/usr/bin/g++",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x64"
+        },
+        {
+            "name": "linux",
+            "includePath": [
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/ports/linux/mupdf/include",
+                "/usr/include/SDL2",
+                "/usr/include"
+            ],
+            "defines": [
+                "_THREAD_SAFE"
+            ],
+            "compilerPath": "/usr/bin/g++",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x64"
         }
     ],
     "version": 4
