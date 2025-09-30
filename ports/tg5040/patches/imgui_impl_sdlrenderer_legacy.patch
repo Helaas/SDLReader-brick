@@ -1,11 +1,11 @@
 diff --git a/backends/imgui_impl_sdlrenderer.cpp b/backends/imgui_impl_sdlrenderer.cpp
-index 87381f2..7a5183a 100644
+index 87381f2..75c661e 100644
 --- a/backends/imgui_impl_sdlrenderer.cpp
 +++ b/backends/imgui_impl_sdlrenderer.cpp
 @@ -32,11 +32,14 @@
  #include <stdint.h>     // intptr_t
  #endif
-
+ 
 +#include <algorithm>
 +#include <cmath>
 +#include <cstring>
@@ -17,10 +17,10 @@ index 87381f2..7a5183a 100644
 -#error This backend requires SDL 2.0.17+ because of SDL_RenderGeometry() function
 -#endif
 +#if SDL_VERSION_ATLEAST(2,0,17)
-
+ 
  // SDL_Renderer data
  struct ImGui_ImplSDLRenderer_Data
-@@ -249,3 +252,483 @@ void ImGui_ImplSDLRenderer_DestroyDeviceObjects()
+@@ -249,3 +252,560 @@ void ImGui_ImplSDLRenderer_DestroyDeviceObjects()
  {
      ImGui_ImplSDLRenderer_DestroyFontsTexture();
  }
@@ -37,6 +37,8 @@ index 87381f2..7a5183a 100644
 +    std::vector<Uint32> Framebuffer;
 +    int FrameWidth;
 +    int FrameHeight;
++    int MinDirtyX, MinDirtyY, MaxDirtyX, MaxDirtyY;
++    bool HasDirtyRegion;
 +
 +    ImGui_ImplSDLRenderer_Data()
 +        : SDLRenderer(nullptr)
@@ -46,6 +48,8 @@ index 87381f2..7a5183a 100644
 +        , FontHeight(0)
 +        , FrameWidth(0)
 +        , FrameHeight(0)
++        , MinDirtyX(0), MinDirtyY(0), MaxDirtyX(0), MaxDirtyY(0)
++        , HasDirtyRegion(false)
 +    {
 +    }
 +};
@@ -60,6 +64,23 @@ index 87381f2..7a5183a 100644
 +    ImGui_ImplSDLRenderer_Data* bd = ImGui_ImplSDLRenderer_GetBackendData();
 +    SDL_RenderSetViewport(bd->SDLRenderer, nullptr);
 +    SDL_RenderSetClipRect(bd->SDLRenderer, nullptr);
++}
++
++static inline void ImGui_ImplSDLRenderer_UpdateDirtyRegion(ImGui_ImplSDLRenderer_Data* bd, int x, int y)
++{
++    if (!bd->HasDirtyRegion)
++    {
++        bd->MinDirtyX = bd->MaxDirtyX = x;
++        bd->MinDirtyY = bd->MaxDirtyY = y;
++        bd->HasDirtyRegion = true;
++    }
++    else
++    {
++        if (x < bd->MinDirtyX) bd->MinDirtyX = x;
++        if (x > bd->MaxDirtyX) bd->MaxDirtyX = x;
++        if (y < bd->MinDirtyY) bd->MinDirtyY = y;
++        if (y > bd->MaxDirtyY) bd->MaxDirtyY = y;
++    }
 +}
 +
 +static bool ImGui_ImplSDLRenderer_EnsureFramebuffer(ImGui_ImplSDLRenderer_Data* bd, int width, int height)
@@ -90,9 +111,33 @@ index 87381f2..7a5183a 100644
 +        }
 +
 +        SDL_SetTextureBlendMode(bd->FrameTexture, SDL_BLENDMODE_BLEND);
++        // Clear entire buffer on resize
++        std::fill(bd->Framebuffer.begin(), bd->Framebuffer.end(), 0u);
++    }
++    else if (bd->HasDirtyRegion)
++    {
++        // Only clear the dirty region from previous frame
++        int dirty_w = bd->MaxDirtyX - bd->MinDirtyX + 1;
++        int dirty_h = bd->MaxDirtyY - bd->MinDirtyY + 1;
++        
++        if (dirty_w > 0 && dirty_h > 0)
++        {
++            for (int y = bd->MinDirtyY; y <= bd->MaxDirtyY && y < bd->FrameHeight; ++y)
++            {
++                size_t start_idx = (size_t)y * bd->FrameWidth + bd->MinDirtyX;
++                size_t count = std::min(dirty_w, bd->FrameWidth - bd->MinDirtyX);
++                std::fill(bd->Framebuffer.begin() + start_idx, bd->Framebuffer.begin() + start_idx + count, 0u);
++            }
++        }
 +    }
 +
-+    std::fill(bd->Framebuffer.begin(), bd->Framebuffer.end(), 0u);
++    // Reset dirty region tracking
++    bd->HasDirtyRegion = false;
++    bd->MinDirtyX = bd->FrameWidth;
++    bd->MinDirtyY = bd->FrameHeight;
++    bd->MaxDirtyX = -1;
++    bd->MaxDirtyY = -1;
++
 +    return true;
 +}
 +
@@ -142,44 +187,62 @@ index 87381f2..7a5183a 100644
 +    if (x < 0 || y < 0 || x >= bd->FrameWidth || y >= bd->FrameHeight)
 +        return;
 +
-+    const size_t index = (size_t)y * (size_t)bd->FrameWidth + (size_t)x;
-+    Uint32 dst = bd->Framebuffer[index];
++    // Early exit for fully transparent pixels
++    if (src_a <= 0.0f)
++        return;
 +
++    const size_t index = (size_t)y * bd->FrameWidth + x;
++    
++    // Track dirty region
++    ImGui_ImplSDLRenderer_UpdateDirtyRegion(bd, x, y);
++
++    // Fast path for fully opaque pixels
++    if (src_a >= 1.0f)
++    {
++        int r = (int)(src_r * 255.0f + 0.5f);
++        int g = (int)(src_g * 255.0f + 0.5f);
++        int b = (int)(src_b * 255.0f + 0.5f);
++        r = (r > 255) ? 255 : r;
++        g = (g > 255) ? 255 : g;
++        b = (b > 255) ? 255 : b;
++        
++        bd->Framebuffer[index] = (Uint32)r | ((Uint32)g << 8) | ((Uint32)b << 16) | 0xFF000000;
++        return;
++    }
++
++    // Alpha blending with optimized integer math
++    Uint32 dst = bd->Framebuffer[index];
 +    int dst_r = (int)(dst & 0xFF);
 +    int dst_g = (int)((dst >> 8) & 0xFF);
 +    int dst_b = (int)((dst >> 16) & 0xFF);
 +    int dst_a = (int)((dst >> 24) & 0xFF);
 +
 +    int src_a_i = (int)(src_a * 255.0f + 0.5f);
-+    if (src_a_i <= 0)
-+        return;
-+    if (src_a_i > 255)
-+        src_a_i = 255;
-+
 +    int src_r_i = (int)(src_r * 255.0f + 0.5f);
 +    int src_g_i = (int)(src_g * 255.0f + 0.5f);
 +    int src_b_i = (int)(src_b * 255.0f + 0.5f);
 +
-+    src_r_i = std::clamp(src_r_i, 0, 255);
-+    src_g_i = std::clamp(src_g_i, 0, 255);
-+    src_b_i = std::clamp(src_b_i, 0, 255);
++    // Clamp source values
++    src_r_i = (src_r_i > 255) ? 255 : src_r_i;
++    src_g_i = (src_g_i > 255) ? 255 : src_g_i;
++    src_b_i = (src_b_i > 255) ? 255 : src_b_i;
++    src_a_i = (src_a_i > 255) ? 255 : src_a_i;
 +
 +    int inv_a = 255 - src_a_i;
 +
-+    int out_r = (src_r_i * src_a_i + dst_r * inv_a + 127) / 255;
-+    int out_g = (src_g_i * src_a_i + dst_g * inv_a + 127) / 255;
-+    int out_b = (src_b_i * src_a_i + dst_b * inv_a + 127) / 255;
-+    int out_a = src_a_i + (dst_a * inv_a + 127) / 255;
++    // Use bit shifts instead of division for better performance
++    int out_r = (src_r_i * src_a_i + dst_r * inv_a + 128) >> 8;
++    int out_g = (src_g_i * src_a_i + dst_g * inv_a + 128) >> 8;
++    int out_b = (src_b_i * src_a_i + dst_b * inv_a + 128) >> 8;
++    int out_a = src_a_i + ((dst_a * inv_a + 128) >> 8);
 +
-+    if (out_r > 255) out_r = 255;
-+    if (out_g > 255) out_g = 255;
-+    if (out_b > 255) out_b = 255;
-+    if (out_a > 255) out_a = 255;
++    // Clamp output values
++    out_r = (out_r > 255) ? 255 : out_r;
++    out_g = (out_g > 255) ? 255 : out_g;
++    out_b = (out_b > 255) ? 255 : out_b;
++    out_a = (out_a > 255) ? 255 : out_a;
 +
-+    bd->Framebuffer[index] = (Uint32)(out_r & 0xFF)
-+        | ((Uint32)(out_g & 0xFF) << 8)
-+        | ((Uint32)(out_b & 0xFF) << 16)
-+        | ((Uint32)(out_a & 0xFF) << 24);
++    bd->Framebuffer[index] = (Uint32)out_r | ((Uint32)out_g << 8) | ((Uint32)out_b << 16) | ((Uint32)out_a << 24);
 +}
 +
 +static void ImGui_ImplSDLRenderer_RasterizeTriangle(
@@ -271,7 +334,7 @@ index 87381f2..7a5183a 100644
 +
 +    ImGui_ImplSDLRenderer_Data* bd = IM_NEW(ImGui_ImplSDLRenderer_Data)();
 +    io.BackendRendererUserData = (void*)bd;
-+    io.BackendRendererName = "imgui_impl_sdlrenderer_legacy";
++    io.BackendRendererName = "imgui_impl_sdlrenderer_legacy_optimized";
 +    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
 +
 +    bd->SDLRenderer = renderer;
@@ -413,9 +476,22 @@ index 87381f2..7a5183a 100644
 +    SDL_RenderSetViewport(bd->SDLRenderer, &old.Viewport);
 +    SDL_RenderSetClipRect(bd->SDLRenderer, old.ClipEnabled ? &old.ClipRect : nullptr);
 +
-+    if (bd->FrameTexture)
++    // Only update the dirty region of the texture
++    if (bd->FrameTexture && bd->HasDirtyRegion)
 +    {
-+        SDL_UpdateTexture(bd->FrameTexture, nullptr, bd->Framebuffer.data(), bd->FrameWidth * (int)sizeof(Uint32));
++        SDL_Rect update_rect;
++        update_rect.x = std::max(0, bd->MinDirtyX);
++        update_rect.y = std::max(0, bd->MinDirtyY);
++        update_rect.w = std::min(bd->MaxDirtyX - bd->MinDirtyX + 1, bd->FrameWidth - update_rect.x);
++        update_rect.h = std::min(bd->MaxDirtyY - bd->MinDirtyY + 1, bd->FrameHeight - update_rect.y);
++        
++        if (update_rect.w > 0 && update_rect.h > 0)
++        {
++            // Update only the dirty region
++            void* src_pixels = bd->Framebuffer.data() + update_rect.y * bd->FrameWidth + update_rect.x;
++            SDL_UpdateTexture(bd->FrameTexture, &update_rect, src_pixels, bd->FrameWidth * (int)sizeof(Uint32));
++        }
++        
 +        SDL_RenderCopy(bd->SDLRenderer, bd->FrameTexture, nullptr, nullptr);
 +    }
 +}
@@ -501,6 +577,7 @@ index 87381f2..7a5183a 100644
 +    bd->Framebuffer.clear();
 +    bd->FrameWidth = 0;
 +    bd->FrameHeight = 0;
++    bd->HasDirtyRegion = false;
 +}
 +
 +#endif // SDL_VERSION_ATLEAST(2,0,17)
