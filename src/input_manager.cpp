@@ -118,8 +118,7 @@ InputActionData InputManager::processEvent(const SDL_Event& event)
             actionData.action = InputAction::ResetPageView;
             break;
         case 10:
-            actionData.action = InputAction::ZoomTo;
-            actionData.intValue = 200;
+            actionData.action = InputAction::ToggleFontMenu;
             break;
         }
 #endif

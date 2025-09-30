@@ -1,5 +1,6 @@
 #include "nuklear_gui_manager.h"
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 // Define Nuklear implementation

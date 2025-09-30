@@ -86,6 +86,13 @@ setup-nuklear:
 		echo "Cloning Nuklear GUI library (shallow clone for faster setup)..."; \
 		git clone --depth 1 --branch 4.12.2 https://github.com/Immediate-Mode-UI/Nuklear.git $(BASE_PATH)/nuklear; \
 	fi
+	@if [ -d "$(BASE_PATH)/nuklear" ]; then \
+		if [ ! -f "$(BASE_PATH)/nuklear/.nuklear_patch_applied" ]; then \
+			echo "Applying Nuklear SDL renderer compatibility patch..."; \
+			cd $(BASE_PATH)/nuklear && (patch -s -N -p0 < ../patches/nuklear_sdl_renderer_compat.patch || true); \
+			touch $(BASE_PATH)/nuklear/.nuklear_patch_applied; \
+		fi; \
+	fi
 
 # Build minimal libarchive without ICU/XML dependencies
 # This creates a custom static libarchive build that excludes:
