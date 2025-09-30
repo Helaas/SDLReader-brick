@@ -72,16 +72,12 @@ LIBS := -lSDL2_ttf -lSDL2 \
 all: setup-imgui setup-mupdf build-libarchive build-mupdf $(TARGET)
 
 # Setup Dear ImGui if it doesn't exist or is incomplete
-# Using v1.85 for TG5040 compatibility with older SDL2 (2.0.9)
+# Using v1.89 for TG5040 compatibility with older SDL2 (2.0.9)
 setup-imgui:
-	@if [ ! -d "$(BASE_PATH)/imgui" ] || [ ! -f "$(BASE_PATH)/imgui/imgui.h" ]; then \
-		echo "Setting up Dear ImGui repository (v1.85 for SDL2 2.0.9 compatibility)..."; \
+	@if [ ! -d "$(BASE_PATH)/imgui" ]; then \
+		echo "Setting up Dear ImGui repository (v1.89 for SDL2 2.0.9 compatibility)..."; \
 		rm -rf $(BASE_PATH)/imgui; \
-		cd $(BASE_PATH) && git clone --depth 1 --branch v1.85 https://github.com/ocornut/imgui.git; \
-		if [ ! -f "$(BASE_PATH)/imgui/imgui.h" ]; then \
-			echo "Error: ImGui setup failed - imgui.h not found"; \
-			exit 1; \
-		fi; \
+		cd $(BASE_PATH) && git clone --depth 1 --branch v1.89 https://github.com/ocornut/imgui.git; \
 		echo "Dear ImGui setup completed successfully"; \
 	else \
 		echo "Dear ImGui repository already exists and is complete"; \
@@ -189,63 +185,3 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
 
 $(BUILD_DIR)/%.o: $(CLI_DIR)/%.cpp | $(BUILD_DIR)
 	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-# Compile ImGui source files
-$(BUILD_DIR)/imgui.o: $(IMGUI_DIR)/imgui.cpp | $(BUILD_DIR)
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_demo.o: $(IMGUI_DIR)/imgui_demo.cpp | $(BUILD_DIR)
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_draw.o: $(IMGUI_DIR)/imgui_draw.cpp | $(BUILD_DIR)
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_tables.o: $(IMGUI_DIR)/imgui_tables.cpp | $(BUILD_DIR)
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_widgets.o: $(IMGUI_DIR)/imgui_widgets.cpp | $(BUILD_DIR)
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_impl_sdl.o: $(IMGUI_DIR)/backends/imgui_impl_sdl.cpp | $(BUILD_DIR)
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_impl_sdlrenderer.o: $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer.cpp | $(BUILD_DIR)
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-# Compile TG5040-specific power handler
-$(BUILD_DIR)/tg5040_power_handler.o: $(BASE_PATH)/src/power_handler.cpp | $(BUILD_DIR)
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-# Clean build artifacts
-clean:
-	@echo "Cleaning build artifacts..."
-	rm -rf $(BUILD_DIR)/*.o $(BIN_DIR)/*
-	rm -rf pak/lib/*
-	rm -f pak/bin/sdl_reader_cli
-	rm -f pak/README.md pak/pak.json
-	rm -rf lib/
-	rm -f webp-upstream-697749.patch
-
-# Clean custom libarchive build
-clean-libarchive:
-	@echo "Removing custom libarchive build..."
-	rm -rf $(BASE_PATH)/libarchive-3.3.3 /usr/local/libarchive-minimal
-
-# Clean ImGui (use with caution - will require re-download)
-clean-imgui:
-	@echo "Removing ImGui directory (will be re-downloaded on next build)..."
-	rm -rf $(BASE_PATH)/imgui
-
-# Clean MuPDF (use with caution - will require re-download and rebuild)
-clean-mupdf:
-	@echo "Removing MuPDF directory (will be re-downloaded on next build)..."
-	rm -rf $(BASE_PATH)/mupdf
