@@ -26,3 +26,4 @@ ports/tg5040/pak/pak.json
 ports/mac/webp-upstream-697749.patch
 config.json
 ports/tg5040/webp-upstream-697749.patch
+webp-upstream-697749.patch
