@@ -61,7 +61,7 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
 
     // Setup Platform/Renderer backends
 #ifdef TG5040_PLATFORM
-    // TG5040 uses v1.85 SDL Renderer backend for framebuffer compatibility (no X11/OpenGL)
+    // TG5040 uses patched v1.85 SDL Renderer backend for framebuffer compatibility
     if (!ImGui_ImplSDL2_InitForSDLRenderer(window, renderer))
     {
         std::cerr << "Failed to initialize ImGui SDL backend" << std::endl;
@@ -222,7 +222,7 @@ void GuiManager::render()
 #ifdef TG5040_PLATFORM
     ImGui_ImplSDLRenderer_RenderDrawData(draw_data);
 #else
-    ImGui_ImplSDLRenderer2_RenderDrawData(draw_data);
+    ImGui_ImplSDLRenderer2_RenderDrawData(draw_data, m_renderer);
 #endif
 }
 
