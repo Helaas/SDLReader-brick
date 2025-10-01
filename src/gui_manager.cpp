@@ -60,6 +60,13 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
 
+#ifdef TG5040_PLATFORM
+    // Make windows fully opaque on TG5040 for better performance
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.Colors[ImGuiCol_WindowBg].w = 1.0f; // Set alpha to 1.0 (fully opaque)
+    style.Colors[ImGuiCol_PopupBg].w = 1.0f;  // Also make popups opaque
+#endif
+
     // Setup Platform/Renderer backends
 #ifdef TG5040_PLATFORM
     // TG5040 uses patched v1.85 SDL Renderer backend for framebuffer compatibility
@@ -547,7 +554,7 @@ void GuiManager::renderFontMenu()
                 }
             }
 
-            std::cout << "DEBUG: Applying config - fontName: '" << m_tempConfig.fontName 
+            std::cout << "DEBUG: Applying config - fontName: '" << m_tempConfig.fontName
                       << "', fontPath: '" << m_tempConfig.fontPath << "'" << std::endl;
 
             // Update current config

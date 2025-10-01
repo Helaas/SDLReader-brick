@@ -217,19 +217,22 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int& width,
     // Pre-calculate if we need downsampling to avoid fz_scale_pixmap
     fz_page* tempPage = nullptr;
     fz_var(tempPage);
+    bool boundsError = false;
+    std::string boundsErrorMsg;
+
     fz_try(ctx)
     {
         // Check if page number is valid before attempting to load
         int totalPages = fz_count_pages(ctx, doc);
         if (pageNumber >= totalPages)
         {
-            throw std::runtime_error("Page number out of range: " + std::to_string(pageNumber) + " >= " + std::to_string(totalPages));
+            fz_throw(ctx, FZ_ERROR_GENERIC, "Page number out of range: %d >= %d", pageNumber, totalPages);
         }
 
         tempPage = fz_load_page(ctx, doc, pageNumber);
         if (!tempPage)
         {
-            throw std::runtime_error("Failed to load page " + std::to_string(pageNumber));
+            fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to load page %d", pageNumber);
         }
 
         fz_rect bounds = fz_bound_page(ctx, (fz_page*) tempPage);
@@ -255,14 +258,20 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int& width,
             }
         }
         fz_drop_page(ctx, (fz_page*) tempPage);
+        tempPage = nullptr;
     }
     fz_catch(ctx)
     {
         if (tempPage)
             fz_drop_page(ctx, (fz_page*) tempPage);
-        std::string errorMsg = "Error calculating page bounds for page " + std::to_string(pageNumber);
-        std::cerr << "MuPdfDocument: " << errorMsg << std::endl;
-        throw std::runtime_error(errorMsg);
+        boundsError = true;
+        boundsErrorMsg = "Error calculating page bounds for page " + std::to_string(pageNumber);
+    }
+
+    if (boundsError)
+    {
+        std::cerr << "MuPdfDocument: " << boundsErrorMsg << std::endl;
+        throw std::runtime_error(boundsErrorMsg);
     }
 
     // Check cache using exact zoom level for cache key
@@ -305,20 +314,26 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int& width,
     fz_var(pix);
     std::vector<unsigned char> buffer;
 
+    bool renderError = false;
+    std::string renderErrorMsg;
+    const char* renderMuPdfMsg = nullptr;
+    fz_var(renderError);
+    fz_var(renderMuPdfMsg);
+
     fz_try(ctx)
     {
         fz_page* page = fz_load_page(ctx, doc, pageNumber);
         fz_var(page);
         if (!page)
         {
-            throw std::runtime_error("Failed to load page " + std::to_string(pageNumber) + " for rendering");
+            fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to load page %d for rendering", pageNumber);
         }
 
         pix = fz_new_pixmap_from_page(ctx, (fz_page*) page, transform, fz_device_rgb(ctx), 0);
         if (!pix)
         {
             fz_drop_page(ctx, (fz_page*) page);
-            throw std::runtime_error("Failed to create pixmap for page " + std::to_string(pageNumber));
+            fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to create pixmap for page %d", pageNumber);
         }
 
         fz_drop_page(ctx, (fz_page*) page);
@@ -339,27 +354,29 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int& width,
     {
         if (pix)
             fz_drop_pixmap(ctx, (fz_pixmap*) pix);
+        renderError = true;
+        renderErrorMsg = "Error rendering page " + std::to_string(pageNumber);
+        renderMuPdfMsg = fz_caught_message(ctx);
+    }
 
-        // More detailed error reporting for different types of PDF corruption
-        std::string errorMsg = "Error rendering page " + std::to_string(pageNumber);
-        const char* fzError = fz_caught_message(ctx);
-        if (fzError && strlen(fzError) > 0)
+    if (renderError)
+    {
+        if (renderMuPdfMsg && strlen(renderMuPdfMsg) > 0)
         {
-            errorMsg += ": " + std::string(fzError);
+            renderErrorMsg += ": " + std::string(renderMuPdfMsg);
 
-            // Handle specific known PDF corruption issues
-            if (strstr(fzError, "cycle in page tree"))
+            if (strstr(renderMuPdfMsg, "cycle in page tree"))
             {
-                errorMsg += " (PDF has circular page tree references - document may be corrupted)";
+                renderErrorMsg += " (PDF has circular page tree references - document may be corrupted)";
             }
-            else if (strstr(fzError, "cannot load object"))
+            else if (strstr(renderMuPdfMsg, "cannot load object"))
             {
-                errorMsg += " (PDF object corruption detected)";
+                renderErrorMsg += " (PDF object corruption detected)";
             }
         }
 
-        std::cerr << "MuPdfDocument: " << errorMsg << std::endl;
-        throw std::runtime_error(errorMsg);
+        std::cerr << "MuPdfDocument: " << renderErrorMsg << std::endl;
+        throw std::runtime_error(renderErrorMsg);
     }
 
     // Cache the result
@@ -395,17 +412,15 @@ std::vector<uint32_t> MuPdfDocument::renderPageARGB(int pageNumber, int& width, 
         throw std::runtime_error("Document not open");
     }
 
-    // Validate page number
     if (pageNumber < 0 || pageNumber >= m_pageCount)
     {
         throw std::runtime_error("Invalid page number: " + std::to_string(pageNumber));
     }
 
-    // Check ARGB cache using exact zoom level for cache key
     auto key = std::make_pair(pageNumber, zoom);
 
     {
-        std::lock_guard<std::mutex> lock(m_cacheMutex);
+        std::lock_guard<std::mutex> cacheLock(m_cacheMutex);
         auto it = m_argbCache.find(key);
         if (it != m_argbCache.end())
         {
@@ -416,32 +431,26 @@ std::vector<uint32_t> MuPdfDocument::renderPageARGB(int pageNumber, int& width, 
         }
     }
 
-    // Get RGB data WITHOUT holding the render mutex to avoid deadlock
     std::vector<unsigned char> rgbData = renderPage(pageNumber, width, height, zoom);
 
-    // Convert RGB to ARGB once and cache it
     std::vector<uint32_t> argbBuffer(width * height);
     const uint8_t* src = rgbData.data();
     uint32_t* dst = argbBuffer.data();
-
     for (int i = 0; i < width * height; ++i)
     {
         dst[i] = rgb24_to_argb32(src[i * 3], src[i * 3 + 1], src[i * 3 + 2]);
     }
 
-    // Cache ARGB result with size management
     {
-        std::lock_guard<std::mutex> lock(m_cacheMutex);
+        std::lock_guard<std::mutex> cacheLock(m_cacheMutex);
 
-        // Aggressive cache management for ARGB data (larger memory footprint)
 #ifdef TG5040_PLATFORM
         if (m_argbCache.size() >= 2)
-        { // Keep only 2 ARGB pages for TG5040
+        {
 #else
         if (m_argbCache.size() >= 5)
-        { // Keep 5 ARGB pages for other platforms
+        {
 #endif
-          // Remove oldest entry
             m_argbCache.erase(m_argbCache.begin());
         }
 
@@ -686,6 +695,9 @@ void MuPdfDocument::prerenderPage(int pageNumber, int scale)
         // Apply downsampling logic matching renderPage
         fz_page* tempPage = nullptr;
         fz_var(tempPage);
+        bool prerenderBoundsError = false;
+        fz_var(prerenderBoundsError);
+
         fz_try(ctx)
         {
             tempPage = fz_load_page(ctx, doc, pageNumber);
@@ -717,11 +729,17 @@ void MuPdfDocument::prerenderPage(int pageNumber, int scale)
                 }
             }
             fz_drop_page(ctx, tempPage);
+            tempPage = nullptr;
         }
         fz_catch(ctx)
         {
             if (tempPage)
                 fz_drop_page(ctx, tempPage);
+            prerenderBoundsError = true;
+        }
+
+        if (prerenderBoundsError)
+        {
             std::cerr << "Error calculating page bounds for prerender page " << pageNumber << std::endl;
             return;
         }
@@ -731,20 +749,26 @@ void MuPdfDocument::prerenderPage(int pageNumber, int scale)
         fz_var(pix);
         std::vector<unsigned char> buffer;
 
+        bool prerenderError = false;
+        std::string prerenderErrorMsg;
+        const char* prerenderMuPdfMsg = nullptr;
+        fz_var(prerenderError);
+        fz_var(prerenderMuPdfMsg);
+
         fz_try(ctx)
         {
             fz_page* page = fz_load_page(ctx, doc, pageNumber);
             fz_var(page);
             if (!page)
             {
-                throw std::runtime_error("Failed to load page " + std::to_string(pageNumber) + " for prerendering");
+                fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to load page %d for prerendering", pageNumber);
             }
 
             pix = fz_new_pixmap_from_page(ctx, page, transform, fz_device_rgb(ctx), 0);
             if (!pix)
             {
                 fz_drop_page(ctx, page);
-                throw std::runtime_error("Failed to create pixmap for prerender page " + std::to_string(pageNumber));
+                fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to create pixmap for prerender page %d", pageNumber);
             }
 
             fz_drop_page(ctx, page);
@@ -771,14 +795,18 @@ void MuPdfDocument::prerenderPage(int pageNumber, int scale)
         {
             if (pix)
                 fz_drop_pixmap(ctx, pix);
+            prerenderError = true;
+            prerenderErrorMsg = "Error prerendering page " + std::to_string(pageNumber);
+            prerenderMuPdfMsg = fz_caught_message(ctx);
+        }
 
-            std::string errorMsg = "Error prerendering page " + std::to_string(pageNumber);
-            const char* fzError = fz_caught_message(ctx);
-            if (fzError && strlen(fzError) > 0)
+        if (prerenderError)
+        {
+            if (prerenderMuPdfMsg && strlen(prerenderMuPdfMsg) > 0)
             {
-                errorMsg += ": " + std::string(fzError);
+                prerenderErrorMsg += ": " + std::string(prerenderMuPdfMsg);
             }
-            std::cerr << "MuPdfDocument: " << errorMsg << std::endl;
+            std::cerr << "MuPdfDocument: " << prerenderErrorMsg << std::endl;
         }
     }
     catch (const std::exception& e)
