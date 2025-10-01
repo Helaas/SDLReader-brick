@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cstring> // for strcpy
 #include <imgui.h>
+#include <imgui_internal.h> // For navigation wrapping functions
 
 // Platform-specific ImGui backends
 #ifdef TG5040_PLATFORM
@@ -113,6 +114,26 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
         if (m_selectedFontIndex < 0 || m_selectedFontIndex >= (int) fonts.size())
         {
             m_selectedFontIndex = 0;
+            // If the saved font wasn't found, update tempConfig with first available font
+            if (!fonts.empty())
+            {
+                m_tempConfig.fontPath = fonts[0].filePath;
+                m_tempConfig.fontName = fonts[0].displayName;
+            }
+        }
+        else
+        {
+            // Font was found, make sure tempConfig has the font path if it's missing
+            if (!fonts.empty() && m_selectedFontIndex >= 0 && m_selectedFontIndex < (int) fonts.size())
+            {
+                const FontInfo& selectedFont = fonts[m_selectedFontIndex];
+                // Update tempConfig if fontPath is empty (important for saved configs)
+                if (m_tempConfig.fontPath.empty())
+                {
+                    m_tempConfig.fontPath = selectedFont.filePath;
+                    m_tempConfig.fontName = selectedFont.displayName;
+                }
+            }
         }
         int result = snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
         if (result < 0 || result >= (int) sizeof(m_fontSizeInput))
@@ -281,12 +302,37 @@ void GuiManager::renderFontMenu()
     ImVec2 center = ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
 
     ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(400, 0), ImGuiCond_Always); // Fixed width, auto height
+#ifdef TG5040_PLATFORM
+    // TG5040: Use almost full screen size (640x480 display)
+    ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x * 0.97f, io.DisplaySize.y * 0.92f), ImGuiCond_Always);
+#else
+    // Other platforms: Fixed width, auto height
+    ImGui::SetNextWindowSize(ImVec2(400, 0), ImGuiCond_Always);
+#endif
 
     if (!ImGui::Begin("Settings", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove))
     {
         ImGui::End();
         return;
+    }
+
+    // Enable navigation wrapping - pressing up on first item goes to last item, and vice versa
+    ImGuiWindow* window = ImGui::GetCurrentWindow();
+    ImGui::NavMoveRequestTryWrapping(window, ImGuiNavMoveFlags_LoopY);
+
+    // Get available fonts for validation
+    const auto& fonts = m_optionsManager.getAvailableFonts();
+
+    // Ensure m_tempConfig has valid font data based on current selection
+    // This handles cases where menu is opened and Apply is clicked without changing selection
+    if (m_tempConfig.fontPath.empty() || m_tempConfig.fontName.empty())
+    {
+        if (!fonts.empty() && m_selectedFontIndex >= 0 && m_selectedFontIndex < (int) fonts.size())
+        {
+            const FontInfo& selectedFont = fonts[m_selectedFontIndex];
+            m_tempConfig.fontPath = selectedFont.filePath;
+            m_tempConfig.fontName = selectedFont.displayName;
+        }
     }
 
     // === FONT SETTINGS SECTION ===
@@ -296,7 +342,6 @@ void GuiManager::renderFontMenu()
     // Font selection dropdown
     ImGui::Text("Font Family:");
 
-    const auto& fonts = m_optionsManager.getAvailableFonts();
     if (fonts.empty())
     {
         ImGui::TextColored(ImVec4(1, 1, 0, 1), "No fonts found in /fonts directory");
@@ -489,6 +534,22 @@ void GuiManager::renderFontMenu()
         std::cout << "Apply button clicked!" << std::endl;
         if (hasValidFont && m_fontApplyCallback)
         {
+            // Ensure m_tempConfig has valid font data based on current selection
+            // This is critical if the user opens the menu and clicks Apply without changing the font
+            if (m_tempConfig.fontPath.empty() || m_tempConfig.fontName.empty())
+            {
+                if (m_selectedFontIndex >= 0 && m_selectedFontIndex < (int) fonts.size())
+                {
+                    const FontInfo& selectedFont = fonts[m_selectedFontIndex];
+                    m_tempConfig.fontPath = selectedFont.filePath;
+                    m_tempConfig.fontName = selectedFont.displayName;
+                    std::cout << "DEBUG: Fixed empty font config - set to: " << m_tempConfig.fontName << std::endl;
+                }
+            }
+
+            std::cout << "DEBUG: Applying config - fontName: '" << m_tempConfig.fontName 
+                      << "', fontPath: '" << m_tempConfig.fontPath << "'" << std::endl;
+
             // Update current config
             m_currentConfig = m_tempConfig;
 
@@ -545,6 +606,13 @@ void GuiManager::renderFontMenu()
         // Reset to default config
         m_tempConfig = FontConfig();
         m_selectedFontIndex = 0;
+
+        // Set first available font as default
+        if (!fonts.empty())
+        {
+            m_tempConfig.fontPath = fonts[0].filePath;
+            m_tempConfig.fontName = fonts[0].displayName;
+        }
 
         // Reset input fields to defaults
         strcpy(m_fontSizeInput, "12");
