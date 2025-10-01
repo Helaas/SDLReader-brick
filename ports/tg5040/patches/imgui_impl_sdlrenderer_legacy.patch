@@ -5,7 +5,7 @@ index 87381f2..48150da 100644
 @@ -24,33 +24,39 @@
  //  2021-10-06: Backup and restore modified ClipRect/Viewport.
  //  2021-09-21: Initial version.
- 
+
 -#include "imgui.h"
  #include "imgui_impl_sdlrenderer.h"
 +#include "imgui.h"
@@ -16,7 +16,7 @@ index 87381f2..48150da 100644
 -#include <stdint.h>     // intptr_t
 +#include <stdint.h> // intptr_t
  #endif
- 
+
 +#include <algorithm>
 +#include <cmath>
 +#include <cstring>
@@ -28,7 +28,7 @@ index 87381f2..48150da 100644
 -#error This backend requires SDL 2.0.17+ because of SDL_RenderGeometry() function
 -#endif
 +#if SDL_VERSION_ATLEAST(2, 0, 17)
- 
+
  // SDL_Renderer data
  struct ImGui_ImplSDLRenderer_Data
  {
@@ -42,7 +42,7 @@ index 87381f2..48150da 100644
 +        memset((void*) this, 0, sizeof(*this));
 +    }
  };
- 
+
  // Backend data stored in io.BackendRendererUserData to allow support for multiple Dear ImGui contexts
  // It is STRONGLY preferred that you use docking branch with multi-viewports (== single Dear ImGui context + multiple windows) instead of multiple Dear ImGui contexts.
  static ImGui_ImplSDLRenderer_Data* ImGui_ImplSDLRenderer_GetBackendData()
@@ -50,10 +50,10 @@ index 87381f2..48150da 100644
 -    return ImGui::GetCurrentContext() ? (ImGui_ImplSDLRenderer_Data*)ImGui::GetIO().BackendRendererUserData : nullptr;
 +    return ImGui::GetCurrentContext() ? (ImGui_ImplSDLRenderer_Data*) ImGui::GetIO().BackendRendererUserData : nullptr;
  }
- 
+
  // Functions
 @@ -62,9 +68,9 @@ bool ImGui_ImplSDLRenderer_Init(SDL_Renderer* renderer)
- 
+
      // Setup backend capabilities flags
      ImGui_ImplSDLRenderer_Data* bd = IM_NEW(ImGui_ImplSDLRenderer_Data)();
 -    io.BackendRendererUserData = (void*)bd;
@@ -61,16 +61,16 @@ index 87381f2..48150da 100644
      io.BackendRendererName = "imgui_impl_sdlrenderer";
 -    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;  // We can honor the ImDrawCmd::VtxOffset field, allowing for large meshes.
 +    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset; // We can honor the ImDrawCmd::VtxOffset field, allowing for large meshes.
- 
+
      bd->SDLRenderer = renderer;
- 
+
 @@ -86,12 +92,12 @@ void ImGui_ImplSDLRenderer_Shutdown()
- 
+
  static void ImGui_ImplSDLRenderer_SetupRenderState()
  {
 -	ImGui_ImplSDLRenderer_Data* bd = ImGui_ImplSDLRenderer_GetBackendData();
 +    ImGui_ImplSDLRenderer_Data* bd = ImGui_ImplSDLRenderer_GetBackendData();
- 
+
 -	// Clear out any viewports and cliprect set by the user
 +    // Clear out any viewports and cliprect set by the user
      // FIXME: Technically speaking there are lots of other things we could backup/setup/restore during our render process.
@@ -79,15 +79,15 @@ index 87381f2..48150da 100644
 +    SDL_RenderSetViewport(bd->SDLRenderer, nullptr);
 +    SDL_RenderSetClipRect(bd->SDLRenderer, nullptr);
  }
- 
+
  void ImGui_ImplSDLRenderer_NewFrame()
 @@ -105,39 +111,39 @@ void ImGui_ImplSDLRenderer_NewFrame()
- 
+
  void ImGui_ImplSDLRenderer_RenderDrawData(ImDrawData* draw_data)
  {
 -	ImGui_ImplSDLRenderer_Data* bd = ImGui_ImplSDLRenderer_GetBackendData();
 +    ImGui_ImplSDLRenderer_Data* bd = ImGui_ImplSDLRenderer_GetBackendData();
- 
+
 -	// If there's a scale factor set by the user, use that instead
 +    // If there's a scale factor set by the user, use that instead
      // If the user has specified a scale factor to SDL_Renderer already via SDL_RenderSetScale(), SDL will scale whatever we pass
@@ -102,7 +102,7 @@ index 87381f2..48150da 100644
 -	render_scale.y = (rsy == 1.0f) ? draw_data->FramebufferScale.y : 1.0f;
 +    render_scale.x = (rsx == 1.0f) ? draw_data->FramebufferScale.x : 1.0f;
 +    render_scale.y = (rsy == 1.0f) ? draw_data->FramebufferScale.y : 1.0f;
- 
+
 -	// Avoid rendering when minimized, scale coordinates for retina displays (screen coordinates != framebuffer coordinates)
 -	int fb_width = (int)(draw_data->DisplaySize.x * render_scale.x);
 -	int fb_height = (int)(draw_data->DisplaySize.y * render_scale.y);
@@ -113,7 +113,7 @@ index 87381f2..48150da 100644
 +    int fb_height = (int) (draw_data->DisplaySize.y * render_scale.y);
 +    if (fb_width == 0 || fb_height == 0)
 +        return;
- 
+
      // Backup SDL_Renderer state that will be modified to restore it afterwards
      struct BackupSDLRendererState
      {
@@ -128,14 +128,14 @@ index 87381f2..48150da 100644
      old.ClipEnabled = SDL_RenderIsClipEnabled(bd->SDLRenderer) == SDL_TRUE;
      SDL_RenderGetViewport(bd->SDLRenderer, &old.Viewport);
      SDL_RenderGetClipRect(bd->SDLRenderer, &old.ClipRect);
- 
+
 -	// Will project scissor/clipping rectangles into framebuffer space
 -	ImVec2 clip_off = draw_data->DisplayPos;         // (0,0) unless using multi-viewports
 -	ImVec2 clip_scale = render_scale;
 +    // Will project scissor/clipping rectangles into framebuffer space
 +    ImVec2 clip_off = draw_data->DisplayPos; // (0,0) unless using multi-viewports
 +    ImVec2 clip_scale = render_scale;
- 
+
      // Render command lists
      ImGui_ImplSDLRenderer_SetupRenderState();
 @@ -164,32 +170,44 @@ void ImGui_ImplSDLRenderer_RenderDrawData(ImDrawData* draw_data)
@@ -164,11 +164,11 @@ index 87381f2..48150da 100644
 +                }
                  if (clip_max.x <= clip_min.x || clip_max.y <= clip_min.y)
                      continue;
- 
+
 -                SDL_Rect r = { (int)(clip_min.x), (int)(clip_min.y), (int)(clip_max.x - clip_min.x), (int)(clip_max.y - clip_min.y) };
 +                SDL_Rect r = {(int) (clip_min.x), (int) (clip_min.y), (int) (clip_max.x - clip_min.x), (int) (clip_max.y - clip_min.y)};
                  SDL_RenderSetClipRect(bd->SDLRenderer, &r);
- 
+
 -                const float* xy = (const float*)(const void*)((const char*)(vtx_buffer + pcmd->VtxOffset) + IM_OFFSETOF(ImDrawVert, pos));
 -                const float* uv = (const float*)(const void*)((const char*)(vtx_buffer + pcmd->VtxOffset) + IM_OFFSETOF(ImDrawVert, uv));
 -#if SDL_VERSION_ATLEAST(2,0,19)
@@ -183,7 +183,7 @@ index 87381f2..48150da 100644
 +                #else
 +                const int* color = (const int*) (const void*) ((const char*) (vtx_buffer + pcmd->VtxOffset) + IM_OFFSETOF(ImDrawVert, col)); // SDL 2.0.17 and 2.0.18
 +                #endif
- 
+
                  // Bind texture, Draw
 -				SDL_Texture* tex = (SDL_Texture*)pcmd->GetTexID();
 +                SDL_Texture* tex = (SDL_Texture*) pcmd->GetTexID();
@@ -207,16 +207,16 @@ index 87381f2..48150da 100644
      int width, height;
 -    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);   // Load as RGBA 32-bit (75% of the memory is wasted, but default font is so small) because it is more likely to be compatible with user's existing shaders. If your ImTextureId represent a higher-level concept than just a GL texture id, consider calling GetTexDataAsAlpha8() instead to save on GPU memory.
 +    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height); // Load as RGBA 32-bit (75% of the memory is wasted, but default font is so small) because it is more likely to be compatible with user's existing shaders. If your ImTextureId represent a higher-level concept than just a GL texture id, consider calling GetTexDataAsAlpha8() instead to save on GPU memory.
- 
+
      // Upload texture to graphics system
      // (Bilinear sampling is required by default. Set 'io.Fonts->Flags |= ImFontAtlasFlags_NoBakedLines' or 'style.AntiAliasedLinesUseTex = false' to allow point/nearest sampling)
 @@ -223,7 +241,7 @@ bool ImGui_ImplSDLRenderer_CreateFontsTexture()
      SDL_SetTextureScaleMode(bd->FontTexture, SDL_ScaleModeLinear);
- 
+
      // Store our identifier
 -    io.Fonts->SetTexID((ImTextureID)(intptr_t)bd->FontTexture);
 +    io.Fonts->SetTexID((ImTextureID) (intptr_t) bd->FontTexture);
- 
+
      return true;
  }
 @@ -249,3 +267,543 @@ void ImGui_ImplSDLRenderer_DestroyDeviceObjects()
