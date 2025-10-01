@@ -26,8 +26,8 @@
                 "${workspaceFolder}/src",
                 "${workspaceFolder}/ports/tg5040/include",
                 "${workspaceFolder}/ports/tg5040/mupdf/include",
-                "${workspaceFolder}/ports/mac/imgui/backends",
-                "/usr/local/libarchive-minimal/include",
+                "${workspaceFolder}/ports/tg5040/imgui",
+                "${workspaceFolder}/ports/tg5040/imgui/backends",
                 "/usr/include/SDL2",
                 "/usr/include"
             ],

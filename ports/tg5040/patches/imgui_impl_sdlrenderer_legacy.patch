@@ -1,9 +1,20 @@
 diff --git a/backends/imgui_impl_sdlrenderer.cpp b/backends/imgui_impl_sdlrenderer.cpp
-index 87381f2..75c661e 100644
+index 87381f2..48150da 100644
 --- a/backends/imgui_impl_sdlrenderer.cpp
 +++ b/backends/imgui_impl_sdlrenderer.cpp
-@@ -32,11 +32,14 @@
- #include <stdint.h>     // intptr_t
+@@ -24,33 +24,39 @@
+ //  2021-10-06: Backup and restore modified ClipRect/Viewport.
+ //  2021-09-21: Initial version.
+ 
+-#include "imgui.h"
+ #include "imgui_impl_sdlrenderer.h"
++#include "imgui.h"
+ #if defined(_MSC_VER) && _MSC_VER <= 1500 // MSVC 2008 or earlier
+-#include <stddef.h>     // intptr_t
++#include <stddef.h>                       // intptr_t
+ #else
+-#include <stdint.h>     // intptr_t
++#include <stdint.h> // intptr_t
  #endif
  
 +#include <algorithm>
@@ -16,11 +27,199 @@ index 87381f2..75c661e 100644
 -#if !SDL_VERSION_ATLEAST(2,0,17)
 -#error This backend requires SDL 2.0.17+ because of SDL_RenderGeometry() function
 -#endif
-+#if SDL_VERSION_ATLEAST(2,0,17)
++#if SDL_VERSION_ATLEAST(2, 0, 17)
  
  // SDL_Renderer data
  struct ImGui_ImplSDLRenderer_Data
-@@ -249,3 +252,560 @@ void ImGui_ImplSDLRenderer_DestroyDeviceObjects()
+ {
+-    SDL_Renderer*   SDLRenderer;
+-    SDL_Texture*    FontTexture;
+-    ImGui_ImplSDLRenderer_Data() { memset((void*)this, 0, sizeof(*this)); }
++    SDL_Renderer* SDLRenderer;
++    SDL_Texture* FontTexture;
++    ImGui_ImplSDLRenderer_Data()
++    {
++        memset((void*) this, 0, sizeof(*this));
++    }
+ };
+ 
+ // Backend data stored in io.BackendRendererUserData to allow support for multiple Dear ImGui contexts
+ // It is STRONGLY preferred that you use docking branch with multi-viewports (== single Dear ImGui context + multiple windows) instead of multiple Dear ImGui contexts.
+ static ImGui_ImplSDLRenderer_Data* ImGui_ImplSDLRenderer_GetBackendData()
+ {
+-    return ImGui::GetCurrentContext() ? (ImGui_ImplSDLRenderer_Data*)ImGui::GetIO().BackendRendererUserData : nullptr;
++    return ImGui::GetCurrentContext() ? (ImGui_ImplSDLRenderer_Data*) ImGui::GetIO().BackendRendererUserData : nullptr;
+ }
+ 
+ // Functions
+@@ -62,9 +68,9 @@ bool ImGui_ImplSDLRenderer_Init(SDL_Renderer* renderer)
+ 
+     // Setup backend capabilities flags
+     ImGui_ImplSDLRenderer_Data* bd = IM_NEW(ImGui_ImplSDLRenderer_Data)();
+-    io.BackendRendererUserData = (void*)bd;
++    io.BackendRendererUserData = (void*) bd;
+     io.BackendRendererName = "imgui_impl_sdlrenderer";
+-    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;  // We can honor the ImDrawCmd::VtxOffset field, allowing for large meshes.
++    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset; // We can honor the ImDrawCmd::VtxOffset field, allowing for large meshes.
+ 
+     bd->SDLRenderer = renderer;
+ 
+@@ -86,12 +92,12 @@ void ImGui_ImplSDLRenderer_Shutdown()
+ 
+ static void ImGui_ImplSDLRenderer_SetupRenderState()
+ {
+-	ImGui_ImplSDLRenderer_Data* bd = ImGui_ImplSDLRenderer_GetBackendData();
++    ImGui_ImplSDLRenderer_Data* bd = ImGui_ImplSDLRenderer_GetBackendData();
+ 
+-	// Clear out any viewports and cliprect set by the user
++    // Clear out any viewports and cliprect set by the user
+     // FIXME: Technically speaking there are lots of other things we could backup/setup/restore during our render process.
+-	SDL_RenderSetViewport(bd->SDLRenderer, nullptr);
+-	SDL_RenderSetClipRect(bd->SDLRenderer, nullptr);
++    SDL_RenderSetViewport(bd->SDLRenderer, nullptr);
++    SDL_RenderSetClipRect(bd->SDLRenderer, nullptr);
+ }
+ 
+ void ImGui_ImplSDLRenderer_NewFrame()
+@@ -105,39 +111,39 @@ void ImGui_ImplSDLRenderer_NewFrame()
+ 
+ void ImGui_ImplSDLRenderer_RenderDrawData(ImDrawData* draw_data)
+ {
+-	ImGui_ImplSDLRenderer_Data* bd = ImGui_ImplSDLRenderer_GetBackendData();
++    ImGui_ImplSDLRenderer_Data* bd = ImGui_ImplSDLRenderer_GetBackendData();
+ 
+-	// If there's a scale factor set by the user, use that instead
++    // If there's a scale factor set by the user, use that instead
+     // If the user has specified a scale factor to SDL_Renderer already via SDL_RenderSetScale(), SDL will scale whatever we pass
+     // to SDL_RenderGeometryRaw() by that scale factor. In that case we don't want to be also scaling it ourselves here.
+     float rsx = 1.0f;
+-	float rsy = 1.0f;
+-	SDL_RenderGetScale(bd->SDLRenderer, &rsx, &rsy);
++    float rsy = 1.0f;
++    SDL_RenderGetScale(bd->SDLRenderer, &rsx, &rsy);
+     ImVec2 render_scale;
+-	render_scale.x = (rsx == 1.0f) ? draw_data->FramebufferScale.x : 1.0f;
+-	render_scale.y = (rsy == 1.0f) ? draw_data->FramebufferScale.y : 1.0f;
++    render_scale.x = (rsx == 1.0f) ? draw_data->FramebufferScale.x : 1.0f;
++    render_scale.y = (rsy == 1.0f) ? draw_data->FramebufferScale.y : 1.0f;
+ 
+-	// Avoid rendering when minimized, scale coordinates for retina displays (screen coordinates != framebuffer coordinates)
+-	int fb_width = (int)(draw_data->DisplaySize.x * render_scale.x);
+-	int fb_height = (int)(draw_data->DisplaySize.y * render_scale.y);
+-	if (fb_width == 0 || fb_height == 0)
+-		return;
++    // Avoid rendering when minimized, scale coordinates for retina displays (screen coordinates != framebuffer coordinates)
++    int fb_width = (int) (draw_data->DisplaySize.x * render_scale.x);
++    int fb_height = (int) (draw_data->DisplaySize.y * render_scale.y);
++    if (fb_width == 0 || fb_height == 0)
++        return;
+ 
+     // Backup SDL_Renderer state that will be modified to restore it afterwards
+     struct BackupSDLRendererState
+     {
+-        SDL_Rect    Viewport;
+-        bool        ClipEnabled;
+-        SDL_Rect    ClipRect;
++        SDL_Rect Viewport;
++        bool ClipEnabled;
++        SDL_Rect ClipRect;
+     };
+     BackupSDLRendererState old = {};
+     old.ClipEnabled = SDL_RenderIsClipEnabled(bd->SDLRenderer) == SDL_TRUE;
+     SDL_RenderGetViewport(bd->SDLRenderer, &old.Viewport);
+     SDL_RenderGetClipRect(bd->SDLRenderer, &old.ClipRect);
+ 
+-	// Will project scissor/clipping rectangles into framebuffer space
+-	ImVec2 clip_off = draw_data->DisplayPos;         // (0,0) unless using multi-viewports
+-	ImVec2 clip_scale = render_scale;
++    // Will project scissor/clipping rectangles into framebuffer space
++    ImVec2 clip_off = draw_data->DisplayPos; // (0,0) unless using multi-viewports
++    ImVec2 clip_scale = render_scale;
+ 
+     // Render command lists
+     ImGui_ImplSDLRenderer_SetupRenderState();
+@@ -164,32 +170,44 @@ void ImGui_ImplSDLRenderer_RenderDrawData(ImDrawData* draw_data)
+                 // Project scissor/clipping rectangles into framebuffer space
+                 ImVec2 clip_min((pcmd->ClipRect.x - clip_off.x) * clip_scale.x, (pcmd->ClipRect.y - clip_off.y) * clip_scale.y);
+                 ImVec2 clip_max((pcmd->ClipRect.z - clip_off.x) * clip_scale.x, (pcmd->ClipRect.w - clip_off.y) * clip_scale.y);
+-                if (clip_min.x < 0.0f) { clip_min.x = 0.0f; }
+-                if (clip_min.y < 0.0f) { clip_min.y = 0.0f; }
+-                if (clip_max.x > (float)fb_width) { clip_max.x = (float)fb_width; }
+-                if (clip_max.y > (float)fb_height) { clip_max.y = (float)fb_height; }
++                if (clip_min.x < 0.0f)
++                {
++                    clip_min.x = 0.0f;
++                }
++                if (clip_min.y < 0.0f)
++                {
++                    clip_min.y = 0.0f;
++                }
++                if (clip_max.x > (float) fb_width)
++                {
++                    clip_max.x = (float) fb_width;
++                }
++                if (clip_max.y > (float) fb_height)
++                {
++                    clip_max.y = (float) fb_height;
++                }
+                 if (clip_max.x <= clip_min.x || clip_max.y <= clip_min.y)
+                     continue;
+ 
+-                SDL_Rect r = { (int)(clip_min.x), (int)(clip_min.y), (int)(clip_max.x - clip_min.x), (int)(clip_max.y - clip_min.y) };
++                SDL_Rect r = {(int) (clip_min.x), (int) (clip_min.y), (int) (clip_max.x - clip_min.x), (int) (clip_max.y - clip_min.y)};
+                 SDL_RenderSetClipRect(bd->SDLRenderer, &r);
+ 
+-                const float* xy = (const float*)(const void*)((const char*)(vtx_buffer + pcmd->VtxOffset) + IM_OFFSETOF(ImDrawVert, pos));
+-                const float* uv = (const float*)(const void*)((const char*)(vtx_buffer + pcmd->VtxOffset) + IM_OFFSETOF(ImDrawVert, uv));
+-#if SDL_VERSION_ATLEAST(2,0,19)
+-                const SDL_Color* color = (const SDL_Color*)(const void*)((const char*)(vtx_buffer + pcmd->VtxOffset) + IM_OFFSETOF(ImDrawVert, col)); // SDL 2.0.19+
+-#else
+-                const int* color = (const int*)(const void*)((const char*)(vtx_buffer + pcmd->VtxOffset) + IM_OFFSETOF(ImDrawVert, col)); // SDL 2.0.17 and 2.0.18
+-#endif
++                const float* xy = (const float*) (const void*) ((const char*) (vtx_buffer + pcmd->VtxOffset) + IM_OFFSETOF(ImDrawVert, pos));
++                const float* uv = (const float*) (const void*) ((const char*) (vtx_buffer + pcmd->VtxOffset) + IM_OFFSETOF(ImDrawVert, uv));
++                #if SDL_VERSION_ATLEAST(2, 0, 19)
++                const SDL_Color* color = (const SDL_Color*) (const void*) ((const char*) (vtx_buffer + pcmd->VtxOffset) + IM_OFFSETOF(ImDrawVert, col)); // SDL 2.0.19+
++                #else
++                const int* color = (const int*) (const void*) ((const char*) (vtx_buffer + pcmd->VtxOffset) + IM_OFFSETOF(ImDrawVert, col)); // SDL 2.0.17 and 2.0.18
++                #endif
+ 
+                 // Bind texture, Draw
+-				SDL_Texture* tex = (SDL_Texture*)pcmd->GetTexID();
++                SDL_Texture* tex = (SDL_Texture*) pcmd->GetTexID();
+                 SDL_RenderGeometryRaw(bd->SDLRenderer, tex,
+-                    xy, (int)sizeof(ImDrawVert),
+-                    color, (int)sizeof(ImDrawVert),
+-                    uv, (int)sizeof(ImDrawVert),
+-                    cmd_list->VtxBuffer.Size - pcmd->VtxOffset,
+-                    idx_buffer + pcmd->IdxOffset, pcmd->ElemCount, sizeof(ImDrawIdx));
++                                      xy, (int) sizeof(ImDrawVert),
++                                      color, (int) sizeof(ImDrawVert),
++                                      uv, (int) sizeof(ImDrawVert),
++                                      cmd_list->VtxBuffer.Size - pcmd->VtxOffset,
++                                      idx_buffer + pcmd->IdxOffset, pcmd->ElemCount, sizeof(ImDrawIdx));
+             }
+         }
+     }
+@@ -208,7 +226,7 @@ bool ImGui_ImplSDLRenderer_CreateFontsTexture()
+     // Build texture atlas
+     unsigned char* pixels;
+     int width, height;
+-    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);   // Load as RGBA 32-bit (75% of the memory is wasted, but default font is so small) because it is more likely to be compatible with user's existing shaders. If your ImTextureId represent a higher-level concept than just a GL texture id, consider calling GetTexDataAsAlpha8() instead to save on GPU memory.
++    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height); // Load as RGBA 32-bit (75% of the memory is wasted, but default font is so small) because it is more likely to be compatible with user's existing shaders. If your ImTextureId represent a higher-level concept than just a GL texture id, consider calling GetTexDataAsAlpha8() instead to save on GPU memory.
+ 
+     // Upload texture to graphics system
+     // (Bilinear sampling is required by default. Set 'io.Fonts->Flags |= ImFontAtlasFlags_NoBakedLines' or 'style.AntiAliasedLinesUseTex = false' to allow point/nearest sampling)
+@@ -223,7 +241,7 @@ bool ImGui_ImplSDLRenderer_CreateFontsTexture()
+     SDL_SetTextureScaleMode(bd->FontTexture, SDL_ScaleModeLinear);
+ 
+     // Store our identifier
+-    io.Fonts->SetTexID((ImTextureID)(intptr_t)bd->FontTexture);
++    io.Fonts->SetTexID((ImTextureID) (intptr_t) bd->FontTexture);
+ 
+     return true;
+ }
+@@ -249,3 +267,543 @@ void ImGui_ImplSDLRenderer_DestroyDeviceObjects()
  {
      ImGui_ImplSDLRenderer_DestroyFontsTexture();
  }
@@ -41,22 +240,14 @@ index 87381f2..75c661e 100644
 +    bool HasDirtyRegion;
 +
 +    ImGui_ImplSDLRenderer_Data()
-+        : SDLRenderer(nullptr)
-+        , FontTexture(nullptr)
-+        , FrameTexture(nullptr)
-+        , FontWidth(0)
-+        , FontHeight(0)
-+        , FrameWidth(0)
-+        , FrameHeight(0)
-+        , MinDirtyX(0), MinDirtyY(0), MaxDirtyX(0), MaxDirtyY(0)
-+        , HasDirtyRegion(false)
++    : SDLRenderer(nullptr), FontTexture(nullptr), FrameTexture(nullptr), FontWidth(0), FontHeight(0), FrameWidth(0), FrameHeight(0), MinDirtyX(0), MinDirtyY(0), MaxDirtyX(0), MaxDirtyY(0), HasDirtyRegion(false)
 +    {
 +    }
 +};
 +
 +static ImGui_ImplSDLRenderer_Data* ImGui_ImplSDLRenderer_GetBackendData()
 +{
-+    return ImGui::GetCurrentContext() ? (ImGui_ImplSDLRenderer_Data*)ImGui::GetIO().BackendRendererUserData : nullptr;
++    return ImGui::GetCurrentContext() ? (ImGui_ImplSDLRenderer_Data*) ImGui::GetIO().BackendRendererUserData : nullptr;
 +}
 +
 +static void ImGui_ImplSDLRenderer_SetupRenderState()
@@ -64,23 +255,6 @@ index 87381f2..75c661e 100644
 +    ImGui_ImplSDLRenderer_Data* bd = ImGui_ImplSDLRenderer_GetBackendData();
 +    SDL_RenderSetViewport(bd->SDLRenderer, nullptr);
 +    SDL_RenderSetClipRect(bd->SDLRenderer, nullptr);
-+}
-+
-+static inline void ImGui_ImplSDLRenderer_UpdateDirtyRegion(ImGui_ImplSDLRenderer_Data* bd, int x, int y)
-+{
-+    if (!bd->HasDirtyRegion)
-+    {
-+        bd->MinDirtyX = bd->MaxDirtyX = x;
-+        bd->MinDirtyY = bd->MaxDirtyY = y;
-+        bd->HasDirtyRegion = true;
-+    }
-+    else
-+    {
-+        if (x < bd->MinDirtyX) bd->MinDirtyX = x;
-+        if (x > bd->MaxDirtyX) bd->MaxDirtyX = x;
-+        if (y < bd->MinDirtyY) bd->MinDirtyY = y;
-+        if (y > bd->MaxDirtyY) bd->MaxDirtyY = y;
-+    }
 +}
 +
 +static bool ImGui_ImplSDLRenderer_EnsureFramebuffer(ImGui_ImplSDLRenderer_Data* bd, int width, int height)
@@ -96,7 +270,7 @@ index 87381f2..75c661e 100644
 +            bd->FrameTexture = nullptr;
 +        }
 +
-+        bd->Framebuffer.resize((size_t)width * (size_t)height);
++        bd->Framebuffer.resize((size_t) width * (size_t) height);
 +        bd->FrameWidth = width;
 +        bd->FrameHeight = height;
 +
@@ -119,12 +293,12 @@ index 87381f2..75c661e 100644
 +        // Only clear the dirty region from previous frame
 +        int dirty_w = bd->MaxDirtyX - bd->MinDirtyX + 1;
 +        int dirty_h = bd->MaxDirtyY - bd->MinDirtyY + 1;
-+        
++
 +        if (dirty_w > 0 && dirty_h > 0)
 +        {
 +            for (int y = bd->MinDirtyY; y <= bd->MaxDirtyY && y < bd->FrameHeight; ++y)
 +            {
-+                size_t start_idx = (size_t)y * bd->FrameWidth + bd->MinDirtyX;
++                size_t start_idx = (size_t) y * bd->FrameWidth + bd->MinDirtyX;
 +                size_t count = std::min(dirty_w, bd->FrameWidth - bd->MinDirtyX);
 +                std::fill(bd->Framebuffer.begin() + start_idx, bd->Framebuffer.begin() + start_idx + count, 0u);
 +            }
@@ -146,103 +320,9 @@ index 87381f2..75c661e 100644
 +    const float inv255 = 1.0f / 255.0f;
 +    return ImVec4(
 +        ((col >> IM_COL32_R_SHIFT) & 0xFF) * inv255,
-+        ((col >> IM_COL32_G_SHIFT) & 0xFF) * inv255,
-+        ((col >> IM_COL32_B_SHIFT) & 0xFF) * inv255,
-+        ((col >> IM_COL32_A_SHIFT) & 0xFF) * inv255);
-+}
-+
-+static void ImGui_ImplSDLRenderer_SampleTexture(const ImGui_ImplSDLRenderer_Data* bd, SDL_Texture* texture,
-+                                                float u, float v, float& out_r, float& out_g, float& out_b, float& out_a)
-+{
-+    if (texture == nullptr)
-+    {
-+        out_r = out_g = out_b = out_a = 1.0f;
-+        return;
-+    }
-+
-+    if (texture == bd->FontTexture && !bd->FontPixels.empty() && bd->FontWidth > 0 && bd->FontHeight > 0)
-+    {
-+        int x = (int)std::floor(u * bd->FontWidth);
-+        int y = (int)std::floor(v * bd->FontHeight);
-+        x = std::clamp(x, 0, bd->FontWidth - 1);
-+        y = std::clamp(y, 0, bd->FontHeight - 1);
-+
-+        const size_t index = (size_t)y * (size_t)bd->FontWidth + (size_t)x;
-+        ImU32 texel = bd->FontPixels[index];
-+        const float inv255 = 1.0f / 255.0f;
-+        out_r = ((texel >> IM_COL32_R_SHIFT) & 0xFF) * inv255;
-+        out_g = ((texel >> IM_COL32_G_SHIFT) & 0xFF) * inv255;
-+        out_b = ((texel >> IM_COL32_B_SHIFT) & 0xFF) * inv255;
-+        out_a = ((texel >> IM_COL32_A_SHIFT) & 0xFF) * inv255;
-+        return;
-+    }
-+
-+    // Fallback: treat unknown textures as opaque white
-+    out_r = out_g = out_b = out_a = 1.0f;
-+}
-+
-+static void ImGui_ImplSDLRenderer_BlendPixel(ImGui_ImplSDLRenderer_Data* bd, int x, int y,
-+                                             float src_r, float src_g, float src_b, float src_a)
-+{
-+    if (x < 0 || y < 0 || x >= bd->FrameWidth || y >= bd->FrameHeight)
-+        return;
-+
-+    // Early exit for fully transparent pixels
-+    if (src_a <= 0.0f)
-+        return;
-+
-+    const size_t index = (size_t)y * bd->FrameWidth + x;
-+    
-+    // Track dirty region
-+    ImGui_ImplSDLRenderer_UpdateDirtyRegion(bd, x, y);
-+
-+    // Fast path for fully opaque pixels
-+    if (src_a >= 1.0f)
-+    {
-+        int r = (int)(src_r * 255.0f + 0.5f);
-+        int g = (int)(src_g * 255.0f + 0.5f);
-+        int b = (int)(src_b * 255.0f + 0.5f);
-+        r = (r > 255) ? 255 : r;
-+        g = (g > 255) ? 255 : g;
-+        b = (b > 255) ? 255 : b;
-+        
-+        bd->Framebuffer[index] = (Uint32)r | ((Uint32)g << 8) | ((Uint32)b << 16) | 0xFF000000;
-+        return;
-+    }
-+
-+    // Alpha blending with optimized integer math
-+    Uint32 dst = bd->Framebuffer[index];
-+    int dst_r = (int)(dst & 0xFF);
-+    int dst_g = (int)((dst >> 8) & 0xFF);
-+    int dst_b = (int)((dst >> 16) & 0xFF);
-+    int dst_a = (int)((dst >> 24) & 0xFF);
-+
-+    int src_a_i = (int)(src_a * 255.0f + 0.5f);
-+    int src_r_i = (int)(src_r * 255.0f + 0.5f);
-+    int src_g_i = (int)(src_g * 255.0f + 0.5f);
-+    int src_b_i = (int)(src_b * 255.0f + 0.5f);
-+
-+    // Clamp source values
-+    src_r_i = (src_r_i > 255) ? 255 : src_r_i;
-+    src_g_i = (src_g_i > 255) ? 255 : src_g_i;
-+    src_b_i = (src_b_i > 255) ? 255 : src_b_i;
-+    src_a_i = (src_a_i > 255) ? 255 : src_a_i;
-+
-+    int inv_a = 255 - src_a_i;
-+
-+    // Use bit shifts instead of division for better performance
-+    int out_r = (src_r_i * src_a_i + dst_r * inv_a + 128) >> 8;
-+    int out_g = (src_g_i * src_a_i + dst_g * inv_a + 128) >> 8;
-+    int out_b = (src_b_i * src_a_i + dst_b * inv_a + 128) >> 8;
-+    int out_a = src_a_i + ((dst_a * inv_a + 128) >> 8);
-+
-+    // Clamp output values
-+    out_r = (out_r > 255) ? 255 : out_r;
-+    out_g = (out_g > 255) ? 255 : out_g;
-+    out_b = (out_b > 255) ? 255 : out_b;
-+    out_a = (out_a > 255) ? 255 : out_a;
-+
-+    bd->Framebuffer[index] = (Uint32)out_r | ((Uint32)out_g << 8) | ((Uint32)out_b << 16) | ((Uint32)out_a << 24);
++                  ((col >> IM_COL32_G_SHIFT) & 0xFF) * inv255,
++                  ((col >> IM_COL32_B_SHIFT) & 0xFF) * inv255,
++                  ((col >> IM_COL32_A_SHIFT) & 0xFF) * inv255);
 +}
 +
 +static void ImGui_ImplSDLRenderer_RasterizeTriangle(
@@ -253,14 +333,14 @@ index 87381f2..75c661e 100644
 +    SDL_Texture* texture, const SDL_Rect& clip_rect)
 +{
 +    float min_x = std::floor(std::min({p0.x, p1.x, p2.x}));
-+    float max_x = std::ceil (std::max({p0.x, p1.x, p2.x}));
++    float max_x = std::ceil(std::max({p0.x, p1.x, p2.x}));
 +    float min_y = std::floor(std::min({p0.y, p1.y, p2.y}));
-+    float max_y = std::ceil (std::max({p0.y, p1.y, p2.y}));
++    float max_y = std::ceil(std::max({p0.y, p1.y, p2.y}));
 +
-+    int x0 = std::max((int)min_x, clip_rect.x);
-+    int x1 = std::min((int)max_x, clip_rect.x + clip_rect.w - 1);
-+    int y0 = std::max((int)min_y, clip_rect.y);
-+    int y1 = std::min((int)max_y, clip_rect.y + clip_rect.h - 1);
++    int x0 = std::max((int) min_x, clip_rect.x);
++    int x1 = std::min((int) max_x, clip_rect.x + clip_rect.w - 1);
++    int y0 = std::max((int) min_y, clip_rect.y);
++    int y1 = std::min((int) max_y, clip_rect.y + clip_rect.h - 1);
 +
 +    if (x0 > x1 || y0 > y1)
 +        return;
@@ -271,57 +351,171 @@ index 87381f2..75c661e 100644
 +    float inv_area = 1.0f / area;
 +    bool area_positive = area > 0.0f;
 +
++    // Precompute edge equation coefficients
++    float edge0_a = p1.y - p2.y;
++    float edge0_b = p2.x - p1.x;
++    float edge0_c = p1.x * p2.y - p2.x * p1.y;
++
++    float edge1_a = p2.y - p0.y;
++    float edge1_b = p0.x - p2.x;
++    float edge1_c = p2.x * p0.y - p0.x * p2.y;
++
++    // Cache font texture info for faster access
++    const bool is_font_texture = (texture == bd->FontTexture && !bd->FontPixels.empty() && bd->FontWidth > 0 && bd->FontHeight > 0);
++    const ImU32* font_data = is_font_texture ? bd->FontPixels.data() : nullptr;
++    const int font_w = bd->FontWidth;
++    const int font_h = bd->FontHeight;
++
++    // Scanline rasterization with incremental barycentric coordinates
 +    for (int y = y0; y <= y1; ++y)
 +    {
++        float py = y + 0.5f;
++
++        // Calculate barycentric coordinates at start of scanline
++        float px_start = x0 + 0.5f;
++        float w0_row = edge0_a * px_start + edge0_b * py + edge0_c;
++        float w1_row = edge1_a * px_start + edge1_b * py + edge1_c;
++
 +        for (int x = x0; x <= x1; ++x)
 +        {
-+            float px = x + 0.5f;
-+            float py = y + 0.5f;
-+
-+            float w0 = (p1.y - p2.y) * (px - p2.x) + (p2.x - p1.x) * (py - p2.y);
-+            float w1 = (p2.y - p0.y) * (px - p2.x) + (p0.x - p2.x) * (py - p2.y);
++            float w0 = w0_row;
++            float w1 = w1_row;
 +            float w2 = area - w0 - w1;
 +
++            // Inside test
 +            if (area_positive)
 +            {
 +                if (w0 < 0.0f || w1 < 0.0f || w2 < 0.0f)
++                {
++                    w0_row += edge0_a;
++                    w1_row += edge1_a;
 +                    continue;
++                }
 +            }
 +            else
 +            {
 +                if (w0 > 0.0f || w1 > 0.0f || w2 > 0.0f)
++                {
++                    w0_row += edge0_a;
++                    w1_row += edge1_a;
 +                    continue;
++                }
 +            }
 +
 +            w0 *= inv_area;
 +            w1 *= inv_area;
 +            w2 *= inv_area;
 +
-+            ImVec4 color;
-+            color.x = c0.x * w0 + c1.x * w1 + c2.x * w2;
-+            color.y = c0.y * w0 + c1.y * w1 + c2.y * w2;
-+            color.z = c0.z * w0 + c1.z * w1 + c2.z * w2;
-+            color.w = c0.w * w0 + c1.w * w1 + c2.w * w2;
++            // Interpolate color
++            float color_r = c0.x * w0 + c1.x * w1 + c2.x * w2;
++            float color_g = c0.y * w0 + c1.y * w1 + c2.y * w2;
++            float color_b = c0.z * w0 + c1.z * w1 + c2.z * w2;
++            float color_a = c0.w * w0 + c1.w * w1 + c2.w * w2;
 +
-+            ImVec2 uv;
-+            uv.x = uv0.x * w0 + uv1.x * w1 + uv2.x * w2;
-+            uv.y = uv0.y * w0 + uv1.y * w1 + uv2.y * w2;
++            // Interpolate UV (only if using texture)
++            float tex_r = 1.0f, tex_g = 1.0f, tex_b = 1.0f, tex_a = 1.0f;
 +
-+            float tex_r, tex_g, tex_b, tex_a;
-+            ImGui_ImplSDLRenderer_SampleTexture(bd, texture,
-+                                                std::clamp(uv.x, 0.0f, 1.0f),
-+                                                std::clamp(uv.y, 0.0f, 1.0f),
-+                                                tex_r, tex_g, tex_b, tex_a);
++            if (is_font_texture)
++            {
++                float u = uv0.x * w0 + uv1.x * w1 + uv2.x * w2;
++                float v = uv0.y * w0 + uv1.y * w1 + uv2.y * w2;
 +
-+            float src_a = color.w * tex_a;
++                int tx = (int) (u * font_w);
++                int ty = (int) (v * font_h);
++                tx = std::clamp(tx, 0, font_w - 1);
++                ty = std::clamp(ty, 0, font_h - 1);
++
++                const ImU32 texel = font_data[ty * font_w + tx];
++                const float inv255 = 1.0f / 255.0f;
++                tex_r = ((texel >> IM_COL32_R_SHIFT) & 0xFF) * inv255;
++                tex_g = ((texel >> IM_COL32_G_SHIFT) & 0xFF) * inv255;
++                tex_b = ((texel >> IM_COL32_B_SHIFT) & 0xFF) * inv255;
++                tex_a = ((texel >> IM_COL32_A_SHIFT) & 0xFF) * inv255;
++            }
++
++            float src_a = color_a * tex_a;
 +            if (src_a <= 0.0f)
++            {
++                w0_row += edge0_a;
++                w1_row += edge1_a;
 +                continue;
++            }
 +
-+            float src_r = color.x * tex_r;
-+            float src_g = color.y * tex_g;
-+            float src_b = color.z * tex_b;
++            float src_r = color_r * tex_r;
++            float src_g = color_g * tex_g;
++            float src_b = color_b * tex_b;
 +
-+            ImGui_ImplSDLRenderer_BlendPixel(bd, x, y, src_r, src_g, src_b, src_a);
++            // Inline blending for better performance
++            const size_t index = (size_t) y * bd->FrameWidth + x;
++
++            // Track dirty region
++            if (!bd->HasDirtyRegion)
++            {
++                bd->MinDirtyX = bd->MaxDirtyX = x;
++                bd->MinDirtyY = bd->MaxDirtyY = y;
++                bd->HasDirtyRegion = true;
++            }
++            else
++            {
++                if (x < bd->MinDirtyX)
++                    bd->MinDirtyX = x;
++                if (x > bd->MaxDirtyX)
++                    bd->MaxDirtyX = x;
++                if (y < bd->MinDirtyY)
++                    bd->MinDirtyY = y;
++                if (y > bd->MaxDirtyY)
++                    bd->MaxDirtyY = y;
++            }
++
++            // Fast path for fully opaque pixels
++            if (src_a >= 1.0f)
++            {
++                int r = (int) (src_r * 255.0f + 0.5f);
++                int g = (int) (src_g * 255.0f + 0.5f);
++                int b = (int) (src_b * 255.0f + 0.5f);
++                r = (r > 255) ? 255 : r;
++                g = (g > 255) ? 255 : g;
++                b = (b > 255) ? 255 : b;
++
++                bd->Framebuffer[index] = (Uint32) r | ((Uint32) g << 8) | ((Uint32) b << 16) | 0xFF000000;
++            }
++            else
++            {
++                // Alpha blending with optimized integer math
++                Uint32 dst = bd->Framebuffer[index];
++                int dst_r = (int) (dst & 0xFF);
++                int dst_g = (int) ((dst >> 8) & 0xFF);
++                int dst_b = (int) ((dst >> 16) & 0xFF);
++                int dst_a = (int) ((dst >> 24) & 0xFF);
++
++                int src_a_i = (int) (src_a * 255.0f + 0.5f);
++                int src_r_i = (int) (src_r * 255.0f + 0.5f);
++                int src_g_i = (int) (src_g * 255.0f + 0.5f);
++                int src_b_i = (int) (src_b * 255.0f + 0.5f);
++
++                src_r_i = (src_r_i > 255) ? 255 : src_r_i;
++                src_g_i = (src_g_i > 255) ? 255 : src_g_i;
++                src_b_i = (src_b_i > 255) ? 255 : src_b_i;
++                src_a_i = (src_a_i > 255) ? 255 : src_a_i;
++
++                int inv_a = 255 - src_a_i;
++
++                int out_r = (src_r_i * src_a_i + dst_r * inv_a + 128) >> 8;
++                int out_g = (src_g_i * src_a_i + dst_g * inv_a + 128) >> 8;
++                int out_b = (src_b_i * src_a_i + dst_b * inv_a + 128) >> 8;
++                int out_a = src_a_i + ((dst_a * inv_a + 128) >> 8);
++
++                out_r = (out_r > 255) ? 255 : out_r;
++                out_g = (out_g > 255) ? 255 : out_g;
++                out_b = (out_b > 255) ? 255 : out_b;
++                out_a = (out_a > 255) ? 255 : out_a;
++
++                bd->Framebuffer[index] = (Uint32) out_r | ((Uint32) out_g << 8) | ((Uint32) out_b << 16) | ((Uint32) out_a << 24);
++            }
++
++            // Increment barycentric coordinates for next pixel
++            w0_row += edge0_a;
++            w1_row += edge1_a;
 +        }
 +    }
 +}
@@ -333,7 +527,7 @@ index 87381f2..75c661e 100644
 +    IM_ASSERT(renderer != nullptr && "SDL_Renderer not initialized!");
 +
 +    ImGui_ImplSDLRenderer_Data* bd = IM_NEW(ImGui_ImplSDLRenderer_Data)();
-+    io.BackendRendererUserData = (void*)bd;
++    io.BackendRendererUserData = (void*) bd;
 +    io.BackendRendererName = "imgui_impl_sdlrenderer_legacy_optimized";
 +    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
 +
@@ -379,8 +573,8 @@ index 87381f2..75c661e 100644
 +    render_scale.x = (renderer_scale_x == 1.0f) ? draw_data->FramebufferScale.x : 1.0f;
 +    render_scale.y = (renderer_scale_y == 1.0f) ? draw_data->FramebufferScale.y : 1.0f;
 +
-+    int fb_width = (int)(draw_data->DisplaySize.x * render_scale.x);
-+    int fb_height = (int)(draw_data->DisplaySize.y * render_scale.y);
++    int fb_width = (int) (draw_data->DisplaySize.x * render_scale.x);
++    int fb_height = (int) (draw_data->DisplaySize.y * render_scale.y);
 +    if (fb_width <= 0 || fb_height <= 0)
 +        return;
 +
@@ -431,10 +625,10 @@ index 87381f2..75c661e 100644
 +                continue;
 +
 +            SDL_Rect clip_rect;
-+            clip_rect.x = (int)std::floor(clip_min.x);
-+            clip_rect.y = (int)std::floor(clip_min.y);
-+            clip_rect.w = (int)std::ceil(clip_max.x - clip_min.x);
-+            clip_rect.h = (int)std::ceil(clip_max.y - clip_min.y);
++            clip_rect.x = (int) std::floor(clip_min.x);
++            clip_rect.y = (int) std::floor(clip_min.y);
++            clip_rect.w = (int) std::ceil(clip_max.x - clip_min.x);
++            clip_rect.h = (int) std::ceil(clip_max.y - clip_min.y);
 +
 +            clip_rect.x = std::max(clip_rect.x, 0);
 +            clip_rect.y = std::max(clip_rect.y, 0);
@@ -448,13 +642,13 @@ index 87381f2..75c661e 100644
 +
 +            SDL_RenderSetClipRect(bd->SDLRenderer, &clip_rect);
 +
-+            SDL_Texture* texture = (SDL_Texture*)pcmd->GetTexID();
++            SDL_Texture* texture = (SDL_Texture*) pcmd->GetTexID();
 +
 +            for (unsigned int idx = 0; idx < pcmd->ElemCount; idx += 3)
 +            {
-+                const unsigned int index0 = pcmd->VtxOffset + (unsigned int)idx_buffer[pcmd->IdxOffset + idx + 0];
-+                const unsigned int index1 = pcmd->VtxOffset + (unsigned int)idx_buffer[pcmd->IdxOffset + idx + 1];
-+                const unsigned int index2 = pcmd->VtxOffset + (unsigned int)idx_buffer[pcmd->IdxOffset + idx + 2];
++                const unsigned int index0 = pcmd->VtxOffset + (unsigned int) idx_buffer[pcmd->IdxOffset + idx + 0];
++                const unsigned int index1 = pcmd->VtxOffset + (unsigned int) idx_buffer[pcmd->IdxOffset + idx + 1];
++                const unsigned int index2 = pcmd->VtxOffset + (unsigned int) idx_buffer[pcmd->IdxOffset + idx + 2];
 +
 +                const ImDrawVert& v0 = vtx_buffer[index0];
 +                const ImDrawVert& v1 = vtx_buffer[index1];
@@ -476,22 +670,10 @@ index 87381f2..75c661e 100644
 +    SDL_RenderSetViewport(bd->SDLRenderer, &old.Viewport);
 +    SDL_RenderSetClipRect(bd->SDLRenderer, old.ClipEnabled ? &old.ClipRect : nullptr);
 +
-+    // Only update the dirty region of the texture
-+    if (bd->FrameTexture && bd->HasDirtyRegion)
++    // Update entire texture (partial updates are tricky with stride)
++    if (bd->FrameTexture)
 +    {
-+        SDL_Rect update_rect;
-+        update_rect.x = std::max(0, bd->MinDirtyX);
-+        update_rect.y = std::max(0, bd->MinDirtyY);
-+        update_rect.w = std::min(bd->MaxDirtyX - bd->MinDirtyX + 1, bd->FrameWidth - update_rect.x);
-+        update_rect.h = std::min(bd->MaxDirtyY - bd->MinDirtyY + 1, bd->FrameHeight - update_rect.y);
-+        
-+        if (update_rect.w > 0 && update_rect.h > 0)
-+        {
-+            // Update only the dirty region
-+            void* src_pixels = bd->Framebuffer.data() + update_rect.y * bd->FrameWidth + update_rect.x;
-+            SDL_UpdateTexture(bd->FrameTexture, &update_rect, src_pixels, bd->FrameWidth * (int)sizeof(Uint32));
-+        }
-+        
++        SDL_UpdateTexture(bd->FrameTexture, nullptr, bd->Framebuffer.data(), bd->FrameWidth * (int) sizeof(Uint32));
 +        SDL_RenderCopy(bd->SDLRenderer, bd->FrameTexture, nullptr, nullptr);
 +    }
 +}
@@ -508,8 +690,8 @@ index 87381f2..75c661e 100644
 +    if (width <= 0 || height <= 0 || pixels == nullptr)
 +        return false;
 +
-+    bd->FontPixels.resize((size_t)width * (size_t)height);
-+    memcpy(bd->FontPixels.data(), pixels, (size_t)width * (size_t)height * sizeof(ImU32));
++    bd->FontPixels.resize((size_t) width * (size_t) height);
++    memcpy(bd->FontPixels.data(), pixels, (size_t) width * (size_t) height * sizeof(ImU32));
 +    bd->FontWidth = width;
 +    bd->FontHeight = height;
 +
@@ -532,7 +714,7 @@ index 87381f2..75c661e 100644
 +    SDL_UpdateTexture(bd->FontTexture, nullptr, pixels, width * 4);
 +    SDL_SetTextureBlendMode(bd->FontTexture, SDL_BLENDMODE_BLEND);
 +
-+    io.Fonts->SetTexID((ImTextureID)(intptr_t)bd->FontTexture);
++    io.Fonts->SetTexID((ImTextureID) (intptr_t) bd->FontTexture);
 +    return true;
 +}
 +
