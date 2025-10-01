@@ -61,10 +61,11 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
     ImGui::StyleColorsDark();
 
 #ifdef TG5040_PLATFORM
-    // Make windows fully opaque on TG5040 for better performance
+    // Double UI scale for TG5040 platform (640x480 display)
     ImGuiStyle& style = ImGui::GetStyle();
-    style.Colors[ImGuiCol_WindowBg].w = 1.0f; // Set alpha to 1.0 (fully opaque)
-    style.Colors[ImGuiCol_PopupBg].w = 1.0f;  // Also make popups opaque
+    style.ScaleAllSizes(1.8f);
+    // Also scale the font globally to match the UI scaling
+    io.FontGlobalScale = 1.8f;
 #endif
 
     // Setup Platform/Renderer backends
