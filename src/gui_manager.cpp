@@ -194,6 +194,14 @@ bool GuiManager::handleEvent(const SDL_Event& event)
     // Handle number pad input first if it's visible - don't let ImGui process controller events
     if (m_showNumberPad)
     {
+        // Handle GUIDE button to quit app (don't intercept, let it pass through)
+        if (event.type == SDL_CONTROLLERBUTTONDOWN && 
+            event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE)
+        {
+            // Don't handle it here - let it pass through to App for quit
+            return false;
+        }
+        
         if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP)
         {
             return handleNumberPadInput(event);
@@ -721,62 +729,15 @@ void GuiManager::renderNumberPad()
                 ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.4f, 0.8f, 1.0f));
             }
 
-            // Create button but disable functionality to prevent double input
-            // Controller input is handled separately in handleNumberPadInput
-            bool buttonPressed = ImGui::Button(buttons[row][col], ImVec2(buttonSize, buttonSize));
-
-            // Only process ImGui button clicks if no controller input happened recently
-            // This prevents double-input when controller and mouse/ImGui conflict
-            Uint32 currentTime = SDL_GetTicks();
-            if (buttonPressed && (currentTime - m_lastButtonPressTime > BUTTON_DEBOUNCE_MS))
-            {
-
-                // Handle button press (mouse click only, not controller)
-                const char* buttonText = buttons[row][col];
-
-                if (strcmp(buttonText, "Clear") == 0)
-                {
-                    // Clear all input
-                    strcpy(m_pageJumpInput, "");
-                }
-                else if (strcmp(buttonText, "Back") == 0)
-                {
-                    // Backspace - remove last character
-                    int len = strlen(m_pageJumpInput);
-                    if (len > 0)
-                    {
-                        m_pageJumpInput[len - 1] = '\0';
-                    }
-                }
-                else if (strcmp(buttonText, "Go") == 0)
-                {
-                    // Go to page if valid
-                    int targetPage = strlen(m_pageJumpInput) > 0 ? std::atoi(m_pageJumpInput) : 0;
-                    if (targetPage >= 1 && targetPage <= m_pageCount && m_pageJumpCallback)
-                    {
-                        m_pageJumpCallback(targetPage - 1);
-                        hideNumberPad();
-                    }
-                }
-                else if (strcmp(buttonText, "Cancel") == 0)
-                {
-                    // Cancel - close number pad without action
-                    hideNumberPad();
-                }
-                else
-                {
-                    // Add digit if there's space
-                    int len = strlen(m_pageJumpInput);
-                    if (len < (int) sizeof(m_pageJumpInput) - 1)
-                    {
-                        m_pageJumpInput[len] = buttonText[0];
-                        m_pageJumpInput[len + 1] = '\0';
-                    }
-                }
-
-                // Update debounce timer for mouse clicks too
-                m_lastButtonPressTime = currentTime;
-            }
+            // Disable button to prevent ImGui from handling input
+            // All input is handled by controller in handleNumberPadInput
+            ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 1.0f); // Keep full opacity even when disabled
+            
+            ImGui::Button(buttons[row][col], ImVec2(buttonSize, buttonSize));
+            
+            ImGui::PopStyleVar();
+            ImGui::PopItemFlag();
 
             if (isSelected)
             {
