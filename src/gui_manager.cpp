@@ -195,13 +195,13 @@ bool GuiManager::handleEvent(const SDL_Event& event)
     if (m_showNumberPad)
     {
         // Handle GUIDE button to quit app (don't intercept, let it pass through)
-        if (event.type == SDL_CONTROLLERBUTTONDOWN && 
+        if (event.type == SDL_CONTROLLERBUTTONDOWN &&
             event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE)
         {
             // Don't handle it here - let it pass through to App for quit
             return false;
         }
-        
+
         if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP)
         {
             return handleNumberPadInput(event);
@@ -733,9 +733,9 @@ void GuiManager::renderNumberPad()
             // All input is handled by controller in handleNumberPadInput
             ImGui::PushItemFlag(ImGuiItemFlags_Disabled, true);
             ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 1.0f); // Keep full opacity even when disabled
-            
+
             ImGui::Button(buttons[row][col], ImVec2(buttonSize, buttonSize));
-            
+
             ImGui::PopStyleVar();
             ImGui::PopItemFlag();
 
