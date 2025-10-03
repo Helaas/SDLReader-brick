@@ -184,7 +184,7 @@ bool MuPdfDocument::reopenWithCSS(const std::string& css)
 
     // Update CSS on existing contexts
     m_userCSS = css;
-    
+
     if (m_ctx)
     {
         fz_try(m_ctx.get())
@@ -196,7 +196,7 @@ bool MuPdfDocument::reopenWithCSS(const std::string& css)
             std::cerr << "Failed to update CSS on main context: " << fz_caught_message(m_ctx.get()) << std::endl;
         }
     }
-    
+
     if (m_prerenderCtx)
     {
         fz_try(m_prerenderCtx.get())
