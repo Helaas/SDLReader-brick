@@ -28,3 +28,4 @@ config.json
 ports/tg5040/webp-upstream-697749.patch
 webp-upstream-697749.patch
 ports/tg5040/imgui
+imgui.ini
