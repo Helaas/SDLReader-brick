@@ -71,6 +71,9 @@ public:
     }
 
 private:
+    // Internal open method with context reuse option to avoid TG5040 crash
+    bool open(const std::string& filePath, bool reuseContexts);
+
     // Use smart pointers to manage MuPDF types safely
     struct ContextDeleter
     {

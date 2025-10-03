@@ -30,22 +30,42 @@ MuPdfDocument::~MuPdfDocument()
 
 bool MuPdfDocument::open(const std::string& filePath)
 {
-    close();
+    return open(filePath, false);
+}
+
+// Internal version with context reuse option
+bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
+{
+    if (!reuseContexts)
+    {
+        close();
+    }
+    else
+    {
+        // Only close documents, keep contexts
+        m_doc.reset();
+        m_prerenderDoc.reset();
+    }
 
     // Store file path for potential reopening
     m_filePath = filePath;
 
-    fz_context* ctx = fz_new_context(nullptr, nullptr, 256 << 20); // 256MB
-    if (!ctx)
+    fz_context* ctx = nullptr;
+    if (!reuseContexts || !m_ctx)
     {
-        std::cerr << "Cannot create MuPDF context\n";
-        return false;
+        ctx = fz_new_context(nullptr, nullptr, 256 << 20); // 256MB
+        if (!ctx)
+        {
+            std::cerr << "Cannot create MuPDF context\n";
+            return false;
+        }
+        m_ctx.reset(ctx);
+        fz_register_document_handlers(ctx);
     }
-
-    m_ctx.reset(ctx);
-
-    // Register document handlers
-    fz_register_document_handlers(ctx);
+    else
+    {
+        ctx = m_ctx.get();
+    }
 
     // Apply user CSS before opening document if it was set
     if (!m_userCSS.empty())
@@ -62,14 +82,22 @@ bool MuPdfDocument::open(const std::string& filePath)
     }
 
     // Create separate context for prerendering to avoid race conditions
-    fz_context* prerenderCtx = fz_new_context(nullptr, nullptr, 256 << 20); // 256MB
-    if (!prerenderCtx)
+    fz_context* prerenderCtx = nullptr;
+    if (!reuseContexts || !m_prerenderCtx)
     {
-        std::cerr << "Cannot create prerender MuPDF context\n";
-        return false;
+        prerenderCtx = fz_new_context(nullptr, nullptr, 256 << 20); // 256MB
+        if (!prerenderCtx)
+        {
+            std::cerr << "Cannot create prerender MuPDF context\n";
+            return false;
+        }
+        m_prerenderCtx.reset(prerenderCtx);
+        fz_register_document_handlers(prerenderCtx);
     }
-    m_prerenderCtx.reset(prerenderCtx);
-    fz_register_document_handlers(prerenderCtx);
+    else
+    {
+        prerenderCtx = m_prerenderCtx.get();
+    }
 
     // Apply user CSS to prerender context as well
     if (!m_userCSS.empty())
@@ -150,17 +178,39 @@ bool MuPdfDocument::reopenWithCSS(const std::string& css)
         m_argbCache.clear();
     }
 
-    // Tear down existing MuPDF objects while the locks are held
+    // Close existing documents but keep contexts alive to avoid TG5040 crash
     m_doc.reset();
     m_prerenderDoc.reset();
-    m_ctx.reset();
-    m_prerenderCtx.reset();
 
-    // Remember CSS so the upcoming open() call applies it to both contexts
+    // Update CSS on existing contexts
     m_userCSS = css;
+    
+    if (m_ctx)
+    {
+        fz_try(m_ctx.get())
+        {
+            fz_set_user_css(m_ctx.get(), css.c_str());
+        }
+        fz_catch(m_ctx.get())
+        {
+            std::cerr << "Failed to update CSS on main context: " << fz_caught_message(m_ctx.get()) << std::endl;
+        }
+    }
+    
+    if (m_prerenderCtx)
+    {
+        fz_try(m_prerenderCtx.get())
+        {
+            fz_set_user_css(m_prerenderCtx.get(), css.c_str());
+        }
+        fz_catch(m_prerenderCtx.get())
+        {
+            std::cerr << "Failed to update CSS on prerender context: " << fz_caught_message(m_prerenderCtx.get()) << std::endl;
+        }
+    }
 
-    // Reopen while render/prerender locks are held so no other thread can race us
-    bool result = open(savedPath);
+    // Reopen documents using existing contexts (reuseContexts=true)
+    bool result = open(savedPath, true);
 
     if (!result)
     {
