@@ -248,11 +248,17 @@ void GuiManager::render()
     // Render ImGui
     ImGui::Render();
     ImDrawData* draw_data = ImGui::GetDrawData();
+    
+    // Only render draw data if there's actually something to show
+    // This prevents stale menu rendering on TG5040
+    if (draw_data && (m_showFontMenu || m_showNumberPad))
+    {
 #ifdef TG5040_PLATFORM
-    ImGui_ImplSDLRenderer_RenderDrawData(draw_data);
+        ImGui_ImplSDLRenderer_RenderDrawData(draw_data);
 #else
-    ImGui_ImplSDLRenderer2_RenderDrawData(draw_data, m_renderer);
+        ImGui_ImplSDLRenderer2_RenderDrawData(draw_data, m_renderer);
 #endif
+    }
 }
 
 void GuiManager::setCurrentFontConfig(const FontConfig& config)
