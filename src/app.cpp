@@ -858,7 +858,7 @@ void App::applyPendingFontChange()
     FontConfig currentConfig = m_optionsManager->loadConfig();
     bool fontChanged = (m_pendingFontConfig.fontName != currentConfig.fontName);
     bool sizeChanged = (m_pendingFontConfig.fontSize != currentConfig.fontSize);
-    
+
     if (!fontChanged && !sizeChanged)
     {
         std::cout << "No font/size change detected - skipping document reopen" << std::endl;
@@ -889,7 +889,7 @@ void App::applyPendingFontChange()
                     std::cout << "Font or size changed - clearing cache" << std::endl;
                     muDoc->clearCache();
                 }
-                
+
                 // Store current state to restore after reopening
                 int currentPage = m_navigationManager->getCurrentPage();
                 int currentScale = m_viewportManager->getCurrentScale();
