@@ -200,6 +200,35 @@ bool GuiManager::handleEvent(const SDL_Event& event)
         }
     }
 
+    // Intercept special buttons when font menu is open
+    if (m_showFontMenu)
+    {
+        // Handle GUIDE button (close menu instead of quitting app)
+        if (event.type == SDL_CONTROLLERBUTTONDOWN &&
+            event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE)
+        {
+            toggleFontMenu();
+            if (m_closeCallback)
+            {
+                m_closeCallback();
+            }
+            return true; // Event handled, don't pass to ImGui or game
+        }
+
+#ifdef TG5040_PLATFORM
+        // Handle joystick button 10 (toggle menu on TG5040)
+        if (event.type == SDL_JOYBUTTONDOWN && event.jbutton.button == 10)
+        {
+            toggleFontMenu();
+            if (m_closeCallback)
+            {
+                m_closeCallback();
+            }
+            return true; // Event handled
+        }
+#endif
+    }
+
     bool handled = ImGui_ImplSDL2_ProcessEvent(&event);
     return handled;
 }
@@ -615,7 +644,7 @@ void GuiManager::renderFontMenu()
 
     ImGui::SameLine();
 
-    if (ImGui::Button("Reset to Default", ImVec2(110, 30)))
+    if (ImGui::Button("Reset to Default", ImVec2(210, 30)))
     {
         // Reset to default config
         m_tempConfig = FontConfig();

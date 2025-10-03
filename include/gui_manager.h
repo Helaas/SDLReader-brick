@@ -70,6 +70,14 @@ public:
     }
 
     /**
+     * @brief Check if the font menu is currently open
+     */
+    bool isFontMenuOpen() const
+    {
+        return m_showFontMenu;
+    }
+
+    /**
      * @brief Set callback for when font configuration changes
      * @param callback Function to call when Apply is pressed
      */

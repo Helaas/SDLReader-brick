@@ -387,13 +387,23 @@ void App::processInputAction(const InputActionData& actionData)
     switch (actionData.action)
     {
     case InputAction::Quit:
-        m_running = false;
+        // If font menu is open, close it instead of quitting
+        if (m_guiManager && m_guiManager->isFontMenuOpen())
+        {
+            toggleFontMenu();
+            markDirty();
+        }
+        else
+        {
+            m_running = false;
+        }
         break;
     case InputAction::Resize:
         m_viewportManager->fitPageToWindow(m_document.get(), m_navigationManager->getCurrentPage());
         markDirty();
         break;
     case InputAction::ToggleFontMenu:
+        // Always toggle the menu (close if open, open if closed)
         toggleFontMenu();
         break;
     case InputAction::GoToNextPage:
