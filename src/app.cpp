@@ -352,6 +352,13 @@ void App::handleEvent(const SDL_Event& event)
         guiHandled = m_guiManager->handleEvent(event);
     }
 
+    // If GUI handled the event (like button 10 to close menu), we're done
+    if (guiHandled)
+    {
+        markDirty(); // Redraw to show menu state change
+        return;
+    }
+
     // Block ALL input events if the settings menu is visible, except ESC to close it
     if (m_guiManager && (m_guiManager->isFontMenuVisible() || m_guiManager->isNumberPadVisible()))
     {
@@ -369,12 +376,6 @@ void App::handleEvent(const SDL_Event& event)
         else if (event.type == SDL_QUIT)
         {
             m_running = false;
-        }
-        // If GUI already handled the event (like button 10 or GUIDE), we're done
-        else if (guiHandled)
-        {
-            markDirty(); // Redraw to show menu state change
-            return;
         }
         // Block everything else when menu or number pad is visible to prevent bleeding through
         return;
@@ -394,16 +395,7 @@ void App::processInputAction(const InputActionData& actionData)
     switch (actionData.action)
     {
     case InputAction::Quit:
-        // If font menu is open, close it instead of quitting
-        if (m_guiManager && m_guiManager->isFontMenuOpen())
-        {
-            toggleFontMenu();
-            markDirty();
-        }
-        else
-        {
-            m_running = false;
-        }
+        m_running = false;
         break;
     case InputAction::Resize:
         m_viewportManager->fitPageToWindow(m_document.get(), m_navigationManager->getCurrentPage());

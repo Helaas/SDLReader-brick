@@ -644,7 +644,7 @@ void GuiManager::renderFontMenu()
 
     ImGui::SameLine();
 
-    if (ImGui::Button("Reset to Default", ImVec2(210, 30)))
+    if (ImGui::Button("Reset to Default", ImVec2(220, 30)))
     {
         // Reset to default config
         m_tempConfig = FontConfig();
