@@ -138,42 +138,28 @@ bool MuPdfDocument::reopenWithCSS(const std::string& css)
     // Store the file path before any operations
     std::string savedPath = m_filePath;
 
-    // Stop background operations first (outside of locks to avoid deadlock)
-    {
-        std::lock_guard<std::mutex> renderLock(m_renderMutex);
-        if (m_prerenderThread.joinable())
-        {
-            m_prerenderActive = false;
-        }
-    }
+    // Stop any background operations before we touch shared state
+    cancelPrerendering();
 
-    // Wait for prerender thread to finish (outside of locks)
-    if (m_prerenderThread.joinable())
-    {
-        m_prerenderThread.join();
-    }
+    std::unique_lock<std::mutex> renderLock(m_renderMutex);
+    std::unique_lock<std::mutex> prerenderLock(m_prerenderMutex);
 
-    // Now safely close everything and clear caches
     {
-        std::lock_guard<std::mutex> renderLock(m_renderMutex);
         std::lock_guard<std::mutex> cacheLock(m_cacheMutex);
-
-        // Clear all caches
         m_cache.clear();
         m_argbCache.clear();
-
-        // Close current document completely
-        m_doc.reset();
-        m_prerenderDoc.reset();
-        m_ctx.reset();
-        m_prerenderCtx.reset();
-
-        // Set the CSS to be applied
-        m_userCSS = css;
     }
-    // Release locks before calling open() to prevent deadlock
 
-    // Reopen with clean state (no locks held)
+    // Tear down existing MuPDF objects while the locks are held
+    m_doc.reset();
+    m_prerenderDoc.reset();
+    m_ctx.reset();
+    m_prerenderCtx.reset();
+
+    // Remember CSS so the upcoming open() call applies it to both contexts
+    m_userCSS = css;
+
+    // Reopen while render/prerender locks are held so no other thread can race us
     bool result = open(savedPath);
 
     if (!result)
