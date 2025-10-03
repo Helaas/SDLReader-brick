@@ -224,6 +224,13 @@ bool GuiManager::handleEvent(const SDL_Event& event)
     // Intercept special buttons when font menu is open
     if (m_showFontMenu)
     {
+        // Let GUIDE button pass through to app (for quit functionality)
+        if (event.type == SDL_CONTROLLERBUTTONDOWN &&
+            event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE)
+        {
+            return false; // Don't handle, let it pass through
+        }
+
 #ifdef TG5040_PLATFORM
         // Handle joystick button 10 (toggle menu on TG5040)
         if (event.type == SDL_JOYBUTTONDOWN && event.jbutton.button == 10)

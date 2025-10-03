@@ -377,6 +377,15 @@ void App::handleEvent(const SDL_Event& event)
         {
             m_running = false;
         }
+        // Always allow GUIDE button to pass through (for quit)
+        else if (event.type == SDL_CONTROLLERBUTTONDOWN &&
+                 event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE)
+        {
+            // Process GUIDE button through InputManager to trigger quit
+            InputActionData actionData = m_inputManager->processEvent(event);
+            processInputAction(actionData);
+            return;
+        }
         // Block everything else when menu or number pad is visible to prevent bleeding through
         return;
     }
