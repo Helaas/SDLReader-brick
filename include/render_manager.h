@@ -8,6 +8,7 @@
 #include <vector>
 
 // Forward declarations
+class App;
 class Renderer;
 class TextRenderer;
 class Document;
@@ -56,7 +57,7 @@ public:
     void renderCurrentPage(Document* document, NavigationManager* navigationManager,
                            ViewportManager* viewportManager, std::mutex& documentMutex,
                            bool isDragging);
-    void renderUI(NavigationManager* navigationManager, ViewportManager* viewportManager);
+    void renderUI(class App* app, NavigationManager* navigationManager, ViewportManager* viewportManager);
     void renderFakeSleepScreen();
 
     // Render state management
@@ -138,11 +139,8 @@ private:
     void renderZoomProcessingIndicator(ViewportManager* viewportManager, int windowWidth, int windowHeight);
     void renderErrorMessage(int windowWidth, int windowHeight);
     void renderPageJumpInput(NavigationManager* navigationManager, int windowWidth, int windowHeight);
-    void renderEdgeTurnProgressIndicator(NavigationManager* navigationManager, ViewportManager* viewportManager,
-                                         int windowWidth, int windowHeight, bool isDpadLeftHeld, bool isDpadRightHeld,
-                                         bool isDpadUpHeld, bool isDpadDownHeld, bool isKeyboardLeftHeld,
-                                         bool isKeyboardRightHeld, bool isKeyboardUpHeld, bool isKeyboardDownHeld,
-                                         float edgeTurnHoldRight, float edgeTurnHoldLeft, float edgeTurnHoldUp, float edgeTurnHoldDown);
+    void renderEdgeTurnProgressIndicator(class App* app, NavigationManager* navigationManager,
+                                         ViewportManager* viewportManager, int windowWidth, int windowHeight);
 
     // Helper methods
     uint32_t rgb24_to_argb32(uint8_t r, uint8_t g, uint8_t b);

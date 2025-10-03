@@ -248,7 +248,7 @@ void GuiManager::render()
     // Render ImGui
     ImGui::Render();
     ImDrawData* draw_data = ImGui::GetDrawData();
-    
+
     // Only render draw data if there's actually something to show
     // This prevents stale menu rendering on TG5040
     if (draw_data && (m_showFontMenu || m_showNumberPad))
@@ -567,8 +567,8 @@ void GuiManager::renderFontMenu()
             // Update current config
             m_currentConfig = m_tempConfig;
 
-            // Save config to file
-            m_optionsManager.saveConfig(m_currentConfig);
+            // Note: Config will be saved after successful application in app.cpp
+            // Don't save here to avoid double-saving and saving before changes are applied
 
             // Call callback to apply changes
             m_fontApplyCallback(m_currentConfig);

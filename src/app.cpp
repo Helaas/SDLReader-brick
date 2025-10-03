@@ -300,7 +300,7 @@ void App::run()
                 {
                     m_renderManager->renderCurrentPage(m_document.get(), m_navigationManager.get(),
                                                        m_viewportManager.get(), m_documentMutex, m_isDragging);
-                    m_renderManager->renderUI(m_navigationManager.get(), m_viewportManager.get());
+                    m_renderManager->renderUI(this, m_navigationManager.get(), m_viewportManager.get());
                 }
 
                 // Always render ImGui if we started a frame (which we always do when not in fake sleep)
@@ -854,6 +854,24 @@ void App::applyPendingFontChange()
     std::cout << "DEBUG: Applying pending font change - " << m_pendingFontConfig.fontName
               << " at " << m_pendingFontConfig.fontSize << "pt" << std::endl;
 
+    // Check if font or size actually changed
+    FontConfig currentConfig = m_optionsManager->loadConfig();
+    bool fontChanged = (m_pendingFontConfig.fontName != currentConfig.fontName);
+    bool sizeChanged = (m_pendingFontConfig.fontSize != currentConfig.fontSize);
+    
+    if (!fontChanged && !sizeChanged)
+    {
+        std::cout << "No font/size change detected - skipping document reopen" << std::endl;
+        // Just close the menu and mark for redraw
+        if (m_guiManager && m_guiManager->isFontMenuVisible())
+        {
+            m_guiManager->toggleFontMenu();
+        }
+        markDirty();
+        m_pendingFontChange = false;
+        return;
+    }
+
     // Generate CSS from the pending configuration
     if (m_optionsManager)
     {
@@ -865,6 +883,13 @@ void App::applyPendingFontChange()
             // Try to cast to MuPDF document and apply CSS with safer reopening
             if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
             {
+                // Clear cache only if font or size changed (forces re-render with new font)
+                if (fontChanged || sizeChanged)
+                {
+                    std::cout << "Font or size changed - clearing cache" << std::endl;
+                    muDoc->clearCache();
+                }
+                
                 // Store current state to restore after reopening
                 int currentPage = m_navigationManager->getCurrentPage();
                 int currentScale = m_viewportManager->getCurrentScale();
@@ -1556,6 +1581,12 @@ void App::applyFontConfiguration(const FontConfig& config)
 
     std::cout << "DEBUG: Scheduling deferred font change - " << config.fontName
               << " at " << config.fontSize << "pt" << std::endl;
+
+    // Cancel any ongoing prerendering to speed up font application
+    if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
+    {
+        muDoc->cancelPrerendering();
+    }
 
     // Store the configuration for deferred processing in the main loop
     m_pendingFontConfig = config;

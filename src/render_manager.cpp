@@ -1,3 +1,4 @@
+#include "app.h"
 #include "render_manager.h"
 #include "document.h"
 #include "mupdf_document.h"
@@ -147,7 +148,7 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
     navigationManager->setLastRenderDuration(m_state.lastRenderDuration);
 }
 
-void RenderManager::renderUI(NavigationManager* navigationManager, ViewportManager* viewportManager)
+void RenderManager::renderUI(App* app, NavigationManager* navigationManager, ViewportManager* viewportManager)
 {
     int windowWidth = m_renderer->getWindowWidth();
     int windowHeight = m_renderer->getWindowHeight();
@@ -158,6 +159,12 @@ void RenderManager::renderUI(NavigationManager* navigationManager, ViewportManag
     renderZoomProcessingIndicator(viewportManager, windowWidth, windowHeight);
     renderErrorMessage(windowWidth, windowHeight);
     renderPageJumpInput(navigationManager, windowWidth, windowHeight);
+    
+    // Render edge turn progress indicators
+    if (app)
+    {
+        renderEdgeTurnProgressIndicator(app, navigationManager, viewportManager, windowWidth, windowHeight);
+    }
 }
 
 void RenderManager::renderFakeSleepScreen()
@@ -376,6 +383,140 @@ void RenderManager::showErrorMessage(const std::string& message)
     m_state.errorMessage = message;
     m_state.errorMessageTime = SDL_GetTicks();
     markDirty();
+}
+
+void RenderManager::renderEdgeTurnProgressIndicator(App* app, NavigationManager* navigationManager,
+                                                     ViewportManager* viewportManager, int windowWidth, int windowHeight)
+{
+    // Get edge turn state from app
+    float edgeTurnHoldRight = app->getEdgeTurnHoldRight();
+    float edgeTurnHoldLeft = app->getEdgeTurnHoldLeft();
+    float edgeTurnHoldUp = app->getEdgeTurnHoldUp();
+    float edgeTurnHoldDown = app->getEdgeTurnHoldDown();
+    float edgeTurnThreshold = app->getEdgeTurnThreshold();
+    
+    bool dpadRightHeld = app->isDpadRightHeld();
+    bool dpadLeftHeld = app->isDpadLeftHeld();
+    bool dpadUpHeld = app->isDpadUpHeld();
+    bool dpadDownHeld = app->isDpadDownHeld();
+    
+    // Check if any d-pad button is held and there's active edge turn timing
+    bool dpadHeld = dpadLeftHeld || dpadRightHeld || dpadUpHeld || dpadDownHeld;
+    float maxEdgeHold = std::max({edgeTurnHoldRight, edgeTurnHoldLeft, edgeTurnHoldUp, edgeTurnHoldDown});
+    
+    // Get scroll limits to check if content is scrollable
+    int pageWidth = viewportManager->getPageWidth();
+    int pageHeight = viewportManager->getPageHeight();
+    int maxScrollX = std::max(0, (pageWidth - windowWidth) / 2);
+    int maxScrollY = std::max(0, (pageHeight - windowHeight) / 2);
+    
+    // Check if there are valid pages to navigate to in each direction
+    int currentPage = navigationManager->getCurrentPage();
+    int pageCount = navigationManager->getPageCount();
+    bool canGoLeft = currentPage > 0;
+    bool canGoRight = currentPage < pageCount - 1;
+    bool canGoUp = currentPage > 0;
+    bool canGoDown = currentPage < pageCount - 1;
+    
+    // Only show progress bar when content doesn't fit in the movement direction
+    // AND there's a valid page to navigate to
+    bool validDirection = false;
+    if (dpadRightHeld && edgeTurnHoldRight > 0.0f && canGoRight && maxScrollX > 0) {
+        validDirection = true;
+    }
+    if (dpadLeftHeld && edgeTurnHoldLeft > 0.0f && canGoLeft && maxScrollX > 0) {
+        validDirection = true;
+    }
+    if (dpadDownHeld && edgeTurnHoldDown > 0.0f && canGoDown && maxScrollY > 0) {
+        validDirection = true;
+    }
+    if (dpadUpHeld && edgeTurnHoldUp > 0.0f && canGoUp && maxScrollY > 0) {
+        validDirection = true;
+    }
+    
+    if (dpadHeld && maxEdgeHold > 0.0f && validDirection) {
+        float progress = maxEdgeHold / edgeTurnThreshold;
+        
+        // Only show indicator after 5% progress to avoid flicker
+        if (progress > 0.05f) {
+            // Enhance progress visualization for better completion feedback
+            float visualProgress = std::min(progress * 1.1f, 1.0f);
+            
+            // Determine which edge and direction
+            std::string direction;
+            int indicatorX = 0, indicatorY = 0;
+            int barWidth = 200, barHeight = 20;
+            
+            if (edgeTurnHoldRight > 0.0f && dpadRightHeld) {
+                direction = "Next Page";
+                indicatorX = windowWidth - barWidth - 20;
+                indicatorY = windowHeight / 2;
+            } else if (edgeTurnHoldLeft > 0.0f && dpadLeftHeld) {
+                direction = "Previous Page";
+                indicatorX = 20;
+                indicatorY = windowHeight / 2;
+            } else if (edgeTurnHoldDown > 0.0f && dpadDownHeld) {
+                direction = "Next Page";
+                indicatorX = (windowWidth - barWidth) / 2;
+                indicatorY = windowHeight - 60;
+            } else if (edgeTurnHoldUp > 0.0f && dpadUpHeld) {
+                direction = "Previous Page";
+                indicatorX = (windowWidth - barWidth) / 2;
+                indicatorY = 40;
+            }
+            
+            // Calculate text dimensions for better background sizing
+            int avgCharWidth = 10;
+            int textWidth = static_cast<int>(direction.length()) * avgCharWidth;
+            int textHeight = 20;
+            int textPadding = 12;
+            
+            // Position text above the progress bar
+            int textX = indicatorX + (barWidth - textWidth) / 2;
+            int textY = indicatorY - textHeight - textPadding - 5;
+            
+            // Draw text background container
+            SDL_Rect textBgRect = {
+                textX - textPadding,
+                textY - textPadding,
+                textWidth + 2 * textPadding,
+                textHeight + 2 * textPadding
+            };
+            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 0, 0, 0, 180);
+            SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
+            SDL_RenderFillRect(m_renderer->getSDLRenderer(), &textBgRect);
+            
+            // Draw text background border
+            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 255, 255, 255, 255);
+            SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &textBgRect);
+            
+            // Draw direction text
+            m_textRenderer->setFontSize(120);
+            SDL_Color textColor = {255, 255, 255, 255};
+            m_textRenderer->renderText(direction, textX, textY, textColor);
+            m_textRenderer->setFontSize(100); // Restore default
+            
+            // Draw progress bar
+            SDL_Color bgColor = {50, 50, 50, 200};
+            SDL_Color fillColor = {0, 200, 0, 255};
+            
+            // Draw background
+            SDL_Rect bgRect = {indicatorX, indicatorY, barWidth, barHeight};
+            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), bgColor.r, bgColor.g, bgColor.b, bgColor.a);
+            SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
+            SDL_RenderFillRect(m_renderer->getSDLRenderer(), &bgRect);
+            
+            // Draw fill
+            int fillWidth = static_cast<int>(barWidth * visualProgress);
+            SDL_Rect fillRect = {indicatorX, indicatorY, fillWidth, barHeight};
+            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), fillColor.r, fillColor.g, fillColor.b, fillColor.a);
+            SDL_RenderFillRect(m_renderer->getSDLRenderer(), &fillRect);
+            
+            // Draw border
+            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 255, 255, 255, 255);
+            SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &bgRect);
+        }
+    }
 }
 
 void RenderManager::present()

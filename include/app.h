@@ -56,6 +56,17 @@ public:
         return m_documentMutex;
     }
 
+    // Edge turn state getters for rendering
+    float getEdgeTurnHoldRight() const { return m_edgeTurnHoldRight; }
+    float getEdgeTurnHoldLeft() const { return m_edgeTurnHoldLeft; }
+    float getEdgeTurnHoldUp() const { return m_edgeTurnHoldUp; }
+    float getEdgeTurnHoldDown() const { return m_edgeTurnHoldDown; }
+    float getEdgeTurnThreshold() const { return m_edgeTurnThreshold; }
+    bool isDpadLeftHeld() const { return m_dpadLeftHeld; }
+    bool isDpadRightHeld() const { return m_dpadRightHeld; }
+    bool isDpadUpHeld() const { return m_dpadUpHeld; }
+    bool isDpadDownHeld() const { return m_dpadDownHeld; }
+
 private:
     // Document Management
     void loadDocument();
