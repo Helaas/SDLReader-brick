@@ -346,9 +346,10 @@ void App::run()
 void App::handleEvent(const SDL_Event& event)
 {
     // Let ImGui handle the event first
+    bool guiHandled = false;
     if (m_guiManager)
     {
-        m_guiManager->handleEvent(event);
+        guiHandled = m_guiManager->handleEvent(event);
     }
 
     // Block ALL input events if the settings menu is visible, except ESC to close it
@@ -368,6 +369,12 @@ void App::handleEvent(const SDL_Event& event)
         else if (event.type == SDL_QUIT)
         {
             m_running = false;
+        }
+        // If GUI already handled the event (like button 10 or GUIDE), we're done
+        else if (guiHandled)
+        {
+            markDirty(); // Redraw to show menu state change
+            return;
         }
         // Block everything else when menu or number pad is visible to prevent bleeding through
         return;
