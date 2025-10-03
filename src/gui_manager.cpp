@@ -194,18 +194,23 @@ bool GuiManager::handleEvent(const SDL_Event& event)
     // Handle number pad input first if it's visible - don't let ImGui process controller events
     if (m_showNumberPad)
     {
-        // Handle GUIDE button to quit app (don't intercept, let it pass through)
+        // Let GUIDE button pass through to app (for quit functionality)
         if (event.type == SDL_CONTROLLERBUTTONDOWN &&
             event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE)
         {
-            // Don't handle it here - let it pass through to App for quit
-            return false;
+            return false; // Don't handle, let it pass through
         }
 
+        // Handle controller buttons (except GUIDE)
         if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP)
         {
-            return handleNumberPadInput(event);
+            // Only handle if it's not GUIDE button
+            if (event.cbutton.button != SDL_CONTROLLER_BUTTON_GUIDE)
+            {
+                return handleNumberPadInput(event);
+            }
         }
+
 #ifdef TG5040_PLATFORM
         // Handle joystick button 10 to close number pad
         if (event.type == SDL_JOYBUTTONDOWN && event.jbutton.button == 10)
@@ -677,7 +682,7 @@ void GuiManager::renderNumberPad()
     ImVec2 center = ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
 
     ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(300, 400), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(310, 600), ImGuiCond_Always);
 
     if (!ImGui::Begin("Number Pad", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse))
     {
@@ -707,7 +712,7 @@ void GuiManager::renderNumberPad()
         {"Go", "Cancel", ""}    // Row 4: action buttons
     };
 
-    const float buttonSize = 60.0f;
+    const float buttonSize = 85.0f;
 
     for (int row = 0; row < 5; row++)
     {
