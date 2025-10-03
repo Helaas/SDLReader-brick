@@ -198,23 +198,19 @@ bool GuiManager::handleEvent(const SDL_Event& event)
         {
             return handleNumberPadInput(event);
         }
+#ifdef TG5040_PLATFORM
+        // Handle joystick button 10 to close number pad
+        if (event.type == SDL_JOYBUTTONDOWN && event.jbutton.button == 10)
+        {
+            hideNumberPad();
+            return true;
+        }
+#endif
     }
 
     // Intercept special buttons when font menu is open
     if (m_showFontMenu)
     {
-        // Handle GUIDE button (close menu instead of quitting app)
-        if (event.type == SDL_CONTROLLERBUTTONDOWN &&
-            event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE)
-        {
-            toggleFontMenu();
-            if (m_closeCallback)
-            {
-                m_closeCallback();
-            }
-            return true; // Event handled, don't pass to ImGui or game
-        }
-
 #ifdef TG5040_PLATFORM
         // Handle joystick button 10 (toggle menu on TG5040)
         if (event.type == SDL_JOYBUTTONDOWN && event.jbutton.button == 10)
@@ -848,13 +844,14 @@ bool GuiManager::handleNumberPadInput(const SDL_Event& event)
             return true;
         case SDL_CONTROLLER_BUTTON_A:
         {
-            // Handle selected button press - use same layout as display
+            // Handle selected button press - use EXACT same layout as renderNumberPad
             const char* buttons[5][3] = {
-                {"7", "8", "9"},
-                {"4", "5", "6"},
-                {"1", "2", "3"},
-                {"Clear", "0", "Back"},
-                {"Go", "Cancel", ""}};
+                {"7", "8", "9"},        // Row 0: numbers
+                {"4", "5", "6"},        // Row 1: numbers
+                {"1", "2", "3"},        // Row 2: numbers
+                {"Clear", "0", "Back"}, // Row 3: utility buttons
+                {"Go", "Cancel", ""}    // Row 4: action buttons
+            };
 
             const char* buttonText = buttons[m_numberPadSelectedRow][m_numberPadSelectedCol];
 

@@ -936,6 +936,12 @@ void App::applyPendingFontChange()
                     // Update page count after reopening
                     m_navigationManager->setPageCount(pageCount);
 
+                    // Update GUI manager's page count for the font menu display
+                    if (m_guiManager)
+                    {
+                        m_guiManager->setPageCount(pageCount);
+                    }
+
                     // Clamp scroll to ensure it's within bounds
                     m_viewportManager->clampScroll();
 
