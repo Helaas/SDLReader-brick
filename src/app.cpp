@@ -963,6 +963,9 @@ void App::applyPendingFontChange()
                     // Save the configuration
                     m_optionsManager->saveConfig(m_pendingFontConfig);
 
+                    // Update InputManager's zoom step with the new value
+                    m_inputManager->setZoomStep(m_pendingFontConfig.zoomStep);
+
                     // Force re-render of current page
                     markDirty();
 
