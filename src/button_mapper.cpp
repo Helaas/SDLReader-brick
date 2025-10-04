@@ -82,32 +82,6 @@ LogicalButton ButtonMapper::mapButton(SDL_GameControllerButton physicalButton) c
     return LogicalButton::Accept;
 }
 
-LogicalButton ButtonMapper::mapButtonForContext(SDL_GameControllerButton physicalButton, bool inFontMenu) const
-{
-#ifdef TG5040_PLATFORM
-    // On TG5040, swap A & B when in font menu for better ImGui navigation
-    if (inFontMenu)
-    {
-        if (physicalButton == SDL_CONTROLLER_BUTTON_A)
-        {
-            // A -> Cancel (like B normally does) for backing out of menu
-            return LogicalButton::Cancel;
-        }
-        else if (physicalButton == SDL_CONTROLLER_BUTTON_B)
-        {
-            // B -> Accept (like A normally does) for confirming selections
-            return LogicalButton::Accept;
-        }
-    }
-#else
-    // Silence unused parameter warning on non-TG5040 platforms
-    (void) inFontMenu;
-#endif
-
-    // For all other cases, use normal mapping
-    return mapButton(physicalButton);
-}
-
 bool ButtonMapper::isButton(SDL_GameControllerButton physicalButton, LogicalButton logicalButton) const
 {
     auto it = m_buttonMap.find(physicalButton);

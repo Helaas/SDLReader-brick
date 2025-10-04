@@ -867,167 +867,160 @@ bool GuiManager::handleNumberPadInput(const SDL_Event& event)
         }
         m_lastButtonPressTime = currentTime;
 
-        // Map physical button to logical button if mapper is available
+        // Map physical button to logical button
         SDL_GameControllerButton physicalButton = static_cast<SDL_GameControllerButton>(event.cbutton.button);
+        LogicalButton logicalButton = LogicalButton::Accept; // Default
 
+#ifdef TG5040_PLATFORM
+        // On TG5040, use direct SDL button mapping (not ButtonMapper) to avoid interference with ImGui patch
+        // SDL reports buttons swapped: Physical A = SDL BUTTON_B, Physical B = SDL BUTTON_A
+        // For number pad, we want:
+        //   - Physical A (SDL BUTTON_B) = Accept (activate selected number pad button)
+        //   - Physical B (SDL BUTTON_A) = Already handled above to close number pad
+        switch (physicalButton)
+        {
+        case SDL_CONTROLLER_BUTTON_B:
+            logicalButton = LogicalButton::Accept; // Physical A
+            break;
+        case SDL_CONTROLLER_BUTTON_DPAD_UP:
+            logicalButton = LogicalButton::DPadUp;
+            break;
+        case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+            logicalButton = LogicalButton::DPadDown;
+            break;
+        case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+            logicalButton = LogicalButton::DPadLeft;
+            break;
+        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+            logicalButton = LogicalButton::DPadRight;
+            break;
+        default:
+            return true; // Ignore other buttons
+        }
+#else
+        // On desktop platforms, use ButtonMapper
         if (m_buttonMapper)
         {
-            LogicalButton logicalButton = m_buttonMapper->mapButton(physicalButton);
+            logicalButton = m_buttonMapper->mapButton(physicalButton);
+        }
+#endif
 
-            switch (logicalButton)
+        switch (logicalButton)
+        {
+        case LogicalButton::DPadUp:
+            m_numberPadSelectedRow = (m_numberPadSelectedRow - 1 + 5) % 5;
+            return true;
+        case LogicalButton::DPadDown:
+            m_numberPadSelectedRow = (m_numberPadSelectedRow + 1) % 5;
+            return true;
+        case LogicalButton::DPadLeft:
+            // Handle navigation - row 4 has only 2 buttons (Go, Cancel)
+            if (m_numberPadSelectedRow == 4)
             {
-            case LogicalButton::DPadUp:
-                m_numberPadSelectedRow = (m_numberPadSelectedRow - 1 + 5) % 5;
-                return true;
-            case LogicalButton::DPadDown:
-                m_numberPadSelectedRow = (m_numberPadSelectedRow + 1) % 5;
-                return true;
-            case LogicalButton::DPadLeft:
-                // Handle navigation - row 4 has only 2 buttons (Go, Cancel)
-                if (m_numberPadSelectedRow == 4)
-                {
-                    m_numberPadSelectedCol = (m_numberPadSelectedCol - 1 + 2) % 2;
-                }
-                else
-                {
-                    m_numberPadSelectedCol = (m_numberPadSelectedCol - 1 + 3) % 3;
-                }
-                return true;
-            case LogicalButton::DPadRight:
-                // Handle navigation - row 4 has only 2 buttons (Go, Cancel)
-                if (m_numberPadSelectedRow == 4)
-                {
-                    m_numberPadSelectedCol = (m_numberPadSelectedCol + 1) % 2;
-                }
-                else
-                {
-                    m_numberPadSelectedCol = (m_numberPadSelectedCol + 1) % 3;
-                }
-                return true;
-            case LogicalButton::Accept:
+                m_numberPadSelectedCol = (m_numberPadSelectedCol - 1 + 2) % 2;
+            }
+            else
             {
-                // Handle selected button press - use EXACT same layout as renderNumberPad
-                const char* buttons[5][3] = {
-                    {"7", "8", "9"},        // Row 0: numbers
-                    {"4", "5", "6"},        // Row 1: numbers
-                    {"1", "2", "3"},        // Row 2: numbers
-                    {"Clear", "0", "Back"}, // Row 3: utility buttons
-                    {"Go", "Cancel", ""}    // Row 4: action buttons
-                };
+                m_numberPadSelectedCol = (m_numberPadSelectedCol - 1 + 3) % 3;
+            }
+            return true;
+        case LogicalButton::DPadRight:
+            // Handle navigation - row 4 has only 2 buttons (Go, Cancel)
+            if (m_numberPadSelectedRow == 4)
+            {
+                m_numberPadSelectedCol = (m_numberPadSelectedCol + 1) % 2;
+            }
+            else
+            {
+                m_numberPadSelectedCol = (m_numberPadSelectedCol + 1) % 3;
+            }
+            return true;
+        case LogicalButton::Accept:
+        {
+            // Handle selected button press - use EXACT same layout as renderNumberPad
+            const char* buttons[5][3] = {
+                {"7", "8", "9"},        // Row 0: numbers
+                {"4", "5", "6"},        // Row 1: numbers
+                {"1", "2", "3"},        // Row 2: numbers
+                {"Clear", "0", "Back"}, // Row 3: utility buttons
+                {"Go", "Cancel", ""}    // Row 4: action buttons
+            };
 
-                const char* buttonText = buttons[m_numberPadSelectedRow][m_numberPadSelectedCol];
+            const char* buttonText = buttons[m_numberPadSelectedRow][m_numberPadSelectedCol];
 
-                // Skip empty buttons
-                if (strlen(buttonText) == 0)
-                {
-                    return true;
-                }
+            // Skip empty buttons
+            if (strlen(buttonText) == 0)
+            {
+                return true;
+            }
 
-                if (strcmp(buttonText, "Clear") == 0)
+            if (strcmp(buttonText, "Clear") == 0)
+            {
+                strcpy(m_pageJumpInput, "");
+            }
+            else if (strcmp(buttonText, "Back") == 0)
+            {
+                // Backspace - remove last character
+                int len = strlen(m_pageJumpInput);
+                if (len > 0)
                 {
-                    strcpy(m_pageJumpInput, "");
+                    m_pageJumpInput[len - 1] = '\0';
                 }
-                else if (strcmp(buttonText, "Back") == 0)
+            }
+            else if (strcmp(buttonText, "Go") == 0)
+            {
+                // Go to page if valid
+                int targetPage = strlen(m_pageJumpInput) > 0 ? std::atoi(m_pageJumpInput) : 0;
+                if (targetPage >= 1 && targetPage <= m_pageCount && m_pageJumpCallback)
                 {
-                    // Backspace - remove last character
-                    int len = strlen(m_pageJumpInput);
-                    if (len > 0)
-                    {
-                        m_pageJumpInput[len - 1] = '\0';
-                    }
-                }
-                else if (strcmp(buttonText, "Go") == 0)
-                {
-                    // Go to page if valid
-                    int targetPage = strlen(m_pageJumpInput) > 0 ? std::atoi(m_pageJumpInput) : 0;
-                    if (targetPage >= 1 && targetPage <= m_pageCount && m_pageJumpCallback)
-                    {
-                        m_pageJumpCallback(targetPage - 1);
-                        hideNumberPad();
-                    }
-                }
-                else if (strcmp(buttonText, "Cancel") == 0)
-                {
-                    // Cancel - close number pad without action
+                    m_pageJumpCallback(targetPage - 1);
                     hideNumberPad();
                 }
-                else
-                {
-                    int len = strlen(m_pageJumpInput);
-                    if (len < (int) sizeof(m_pageJumpInput) - 1)
-                    {
-                        m_pageJumpInput[len] = buttonText[0];
-                        m_pageJumpInput[len + 1] = '\0';
-                    }
-                }
-                return true;
             }
-            case LogicalButton::Cancel:
-                // Backspace function - remove last character, or cancel if empty
-                {
-                    int len = strlen(m_pageJumpInput);
-                    if (len > 0)
-                    {
-                        m_pageJumpInput[len - 1] = '\0';
-                    }
-                    else
-                    {
-                        // If input is empty, close number pad
-                        hideNumberPad();
-                    }
-                    return true;
-                }
-            case LogicalButton::Menu:
-                // Go to page if valid (alternative method)
-                {
-                    int targetPage = strlen(m_pageJumpInput) > 0 ? std::atoi(m_pageJumpInput) : 0;
-                    if (targetPage >= 1 && targetPage <= m_pageCount && m_pageJumpCallback)
-                    {
-                        m_pageJumpCallback(targetPage - 1);
-                        hideNumberPad();
-                    }
-                    return true;
-                }
-            default:
-                break;
-            }
-        }
-        else
-        {
-            // Fallback to physical button mapping if no mapper available
-            switch (event.cbutton.button)
+            else if (strcmp(buttonText, "Cancel") == 0)
             {
-            case SDL_CONTROLLER_BUTTON_DPAD_UP:
-                m_numberPadSelectedRow = (m_numberPadSelectedRow - 1 + 5) % 5;
-                return true;
-            case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-                m_numberPadSelectedRow = (m_numberPadSelectedRow + 1) % 5;
-                return true;
-            case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-                // Handle navigation - row 4 has only 2 buttons (Go, Cancel)
-                if (m_numberPadSelectedRow == 4)
-                {
-                    m_numberPadSelectedCol = (m_numberPadSelectedCol - 1 + 2) % 2;
-                }
-                else
-                {
-                    m_numberPadSelectedCol = (m_numberPadSelectedCol - 1 + 3) % 3;
-                }
-                return true;
-            case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-                // Handle navigation - row 4 has only 2 buttons (Go, Cancel)
-                if (m_numberPadSelectedRow == 4)
-                {
-                    m_numberPadSelectedCol = (m_numberPadSelectedCol + 1) % 2;
-                }
-                else
-                {
-                    m_numberPadSelectedCol = (m_numberPadSelectedCol + 1) % 3;
-                }
-                return true;
-            default:
-                break;
+                // Cancel - close number pad without action
+                hideNumberPad();
             }
+            else
+            {
+                int len = strlen(m_pageJumpInput);
+                if (len < (int) sizeof(m_pageJumpInput) - 1)
+                {
+                    m_pageJumpInput[len] = buttonText[0];
+                    m_pageJumpInput[len + 1] = '\0';
+                }
+            }
+            return true;
+        }
+        case LogicalButton::Cancel:
+            // Backspace function - remove last character, or cancel if empty
+            {
+                int len = strlen(m_pageJumpInput);
+                if (len > 0)
+                {
+                    m_pageJumpInput[len - 1] = '\0';
+                }
+                else
+                {
+                    // If input is empty, close number pad
+                    hideNumberPad();
+                }
+                return true;
+            }
+        case LogicalButton::Menu:
+            // Go to page if valid (alternative method)
+            {
+                int targetPage = strlen(m_pageJumpInput) > 0 ? std::atoi(m_pageJumpInput) : 0;
+                if (targetPage >= 1 && targetPage <= m_pageCount && m_pageJumpCallback)
+                {
+                    m_pageJumpCallback(targetPage - 1);
+                    hideNumberPad();
+                }
+                return true;
+            }
+        default:
+            break;
         }
     }
 
