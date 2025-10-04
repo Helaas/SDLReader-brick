@@ -184,8 +184,6 @@ private:
 
     // UI state
     int m_selectedFontIndex = 0;
-    char m_fontSizeInput[16] = "12"; // Increased buffer size for safety
-    char m_zoomStepInput[16] = "10"; // Zoom step input
     char m_pageJumpInput[16] = "1";  // Page jump input
     bool m_fontSizeChanged = false;
     bool m_justOpenedFontMenu = false; // Flag to set focus on font dropdown when menu opens
@@ -198,9 +196,6 @@ private:
     // Debouncing for number pad input
     Uint32 m_lastButtonPressTime = 0;
     const Uint32 BUTTON_DEBOUNCE_MS = 100;
-
-    // Font names for dropdown (persistent to avoid lifetime issues)
-    std::vector<std::string> m_fontNames;
 
     /**
      * @brief Render the font selection menu
