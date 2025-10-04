@@ -10,6 +10,8 @@
 #endif
 
 #include <algorithm>
+#include <cerrno>
+#include <cstring>
 #include <dirent.h>
 #include <iostream>
 #include <sys/stat.h>
@@ -55,6 +57,13 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
+
+#ifdef TG5040_PLATFORM
+    // Increase font size 3x for TG5040 readability
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.ScaleAllSizes(3.0f);
+    io.FontGlobalScale = 3.0f;
+#endif
 
     // Setup Platform/Renderer backends
 #ifdef TG5040_PLATFORM
@@ -144,13 +153,17 @@ void FileBrowser::cleanup()
 
 bool FileBrowser::scanDirectory(const std::string& path)
 {
+    // Make a defensive copy to avoid reference corruption issues
+    const std::string safePath(path);
+    std::cout << "scanDirectory: Scanning '" << safePath << "'" << std::endl;
+
     m_entries.clear();
     m_selectedIndex = 0;
 
-    DIR* dir = opendir(path.c_str());
+    DIR* dir = opendir(safePath.c_str());
     if (!dir)
     {
-        std::cerr << "Failed to open directory: " << path << std::endl;
+        std::cerr << "Failed to open directory: " << safePath << " - " << strerror(errno) << std::endl;
         return false;
     }
 
@@ -162,17 +175,32 @@ bool FileBrowser::scanDirectory(const std::string& path)
     {
         std::string name = entry->d_name;
 
-        // Skip hidden files and current directory
-        if (name.empty() || name[0] == '.')
+        // Skip current directory
+        if (name == ".")
         {
-            // But allow ".." for parent directory navigation
-            if (name != ".." || path == "/mnt/SDCARD" || path == "/")
-            {
-                continue;
-            }
+            continue;
         }
 
-        std::string fullPath = path;
+        // Skip other hidden files (starting with .) except ..
+        if (name[0] == '.' && name != "..")
+        {
+            continue;
+        }
+
+        // Skip .. if we're at the base directory
+#ifdef TG5040_PLATFORM
+        if (name == ".." && (safePath == "/mnt/SDCARD" || safePath == "/"))
+        {
+            continue;
+        }
+#else
+        if (name == ".." && safePath == "/")
+        {
+            continue;
+        }
+#endif
+
+        std::string fullPath = safePath;
         if (fullPath.back() != '/')
         {
             fullPath += "/";
@@ -211,6 +239,9 @@ bool FileBrowser::scanDirectory(const std::string& path)
     // Combine: directories first, then files
     m_entries.insert(m_entries.end(), directories.begin(), directories.end());
     m_entries.insert(m_entries.end(), files.begin(), files.end());
+
+    std::cout << "scanDirectory: Found " << directories.size() << " directories and "
+              << files.size() << " files (" << m_entries.size() << " total)" << std::endl;
 
     return true;
 }
@@ -284,7 +315,11 @@ void FileBrowser::render()
     ImGui::Separator();
 
     // Instructions
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Use Arrow Keys or Mouse, Enter to Select, Escape to Quit");
+#ifdef TG5040_PLATFORM
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "D-Pad: Navigate | A: Select | B: Back | Menu: Quit");
+#else
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Arrow Keys/D-Pad: Navigate | Enter/A: Select | Backspace/B: Back | Escape: Quit");
+#endif
     ImGui::Separator();
 
     // File list
@@ -355,11 +390,29 @@ void FileBrowser::render()
 
 void FileBrowser::handleEvent(const SDL_Event& event)
 {
+    // Let ImGui process the event first
 #ifdef TG5040_PLATFORM
     ImGui_ImplSDL2_ProcessEvent(&event);
 #else
     ImGui_ImplSDL2_ProcessEvent(&event);
 #endif
+
+    // Check if ImGui wants to capture this event
+    ImGuiIO& io = ImGui::GetIO();
+    if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP)
+    {
+        if (io.WantCaptureKeyboard)
+        {
+            return; // ImGui is handling keyboard input
+        }
+    }
+    if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP || event.type == SDL_MOUSEMOTION)
+    {
+        if (io.WantCaptureMouse)
+        {
+            return; // ImGui is handling mouse input
+        }
+    }
 
     switch (event.type)
     {
@@ -374,6 +427,13 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDLK_q:
             m_running = false;
             break;
+
+#ifdef TG5040_PLATFORM
+        // Power button support (KEY code 116 maps to SDLK_POWER)
+        case SDLK_POWER:
+            m_running = false;
+            break;
+#endif
 
         case SDLK_UP:
             if (m_selectedIndex > 0)
@@ -420,6 +480,27 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             }
             break;
 
+#ifdef TG5040_PLATFORM
+        // On TG5040: Physical A button sends SDL_CONTROLLER_BUTTON_B
+        // Physical B button sends SDL_CONTROLLER_BUTTON_A
+        // (ImGui patch only affects ImGui's internal gamepad API, not raw SDL events we receive here)
+        case SDL_CONTROLLER_BUTTON_B: // Physical A button -> Select/Enter
+            std::cout << "Button B pressed (Physical A) - navigating into" << std::endl;
+            navigateInto();
+            break;
+
+        case SDL_CONTROLLER_BUTTON_A: // Physical B button -> Back/Cancel
+            std::cout << "Button A pressed (Physical B) - navigating up" << std::endl;
+            navigateUp();
+            break;
+
+        // Menu button (physical button 10)
+        case SDL_CONTROLLER_BUTTON_BACK:
+            std::cout << "Back button pressed - exiting" << std::endl;
+            m_running = false;
+            break;
+#else
+        // Standard platforms: Physical A = SDL_A, Physical B = SDL_B
         case SDL_CONTROLLER_BUTTON_A:
             navigateInto();
             break;
@@ -427,6 +508,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDL_CONTROLLER_BUTTON_B:
             navigateUp();
             break;
+#endif
 
         case SDL_CONTROLLER_BUTTON_START:
         case SDL_CONTROLLER_BUTTON_GUIDE:
@@ -449,12 +531,14 @@ void FileBrowser::navigateUp()
     // Don't allow navigation above /mnt/SDCARD on TG5040
     if (m_currentPath == "/mnt/SDCARD" || m_currentPath == "/")
     {
+        std::cout << "navigateUp: Already at base directory: " << m_currentPath << std::endl;
         return;
     }
 #else
     // Don't allow navigation above root on other platforms
     if (m_currentPath == "/")
     {
+        std::cout << "navigateUp: Already at root" << std::endl;
         return;
     }
 #endif
@@ -469,9 +553,16 @@ void FileBrowser::navigateUp()
             parentPath = "/";
         }
 
+        std::cout << "navigateUp: Moving from '" << m_currentPath << "' to '" << parentPath << "'" << std::endl;
+
         if (scanDirectory(parentPath))
         {
             m_currentPath = parentPath;
+            std::cout << "navigateUp: Successfully changed to: " << m_currentPath << std::endl;
+        }
+        else
+        {
+            std::cout << "Failed to scan parent directory: " << parentPath << std::endl;
         }
     }
 }
@@ -480,22 +571,36 @@ void FileBrowser::navigateInto()
 {
     if (m_entries.empty() || m_selectedIndex < 0 || m_selectedIndex >= static_cast<int>(m_entries.size()))
     {
+        std::cout << "navigateInto: Invalid state - entries=" << m_entries.size()
+                  << " selectedIndex=" << m_selectedIndex << std::endl;
         return;
     }
 
     const FileEntry& entry = m_entries[m_selectedIndex];
 
+    std::cout << "navigateInto: Selected '" << entry.name << "' (dir=" << entry.isDirectory
+              << ") path='" << entry.fullPath << "'" << std::endl;
+
     if (entry.isDirectory)
     {
-        // Navigate into directory
-        if (scanDirectory(entry.fullPath))
+        // Make a copy of the path before calling scanDirectory to avoid reference issues
+        std::string targetPath = entry.fullPath;
+        std::cout << "Attempting to scan directory: " << targetPath << std::endl;
+
+        if (scanDirectory(targetPath))
         {
-            m_currentPath = entry.fullPath;
+            m_currentPath = targetPath;
+            std::cout << "Successfully changed to: " << m_currentPath << std::endl;
+        }
+        else
+        {
+            std::cout << "Failed to scan directory: " << targetPath << std::endl;
         }
     }
     else
     {
         // Select file and exit
+        std::cout << "File selected: " << entry.fullPath << std::endl;
         m_selectedFile = entry.fullPath;
         m_running = false;
     }
