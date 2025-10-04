@@ -437,14 +437,17 @@ void App::processInputAction(const InputActionData& actionData)
         break;
     case InputAction::ZoomIn:
         m_viewportManager->zoom(m_optionsManager->loadConfig().zoomStep, m_document.get());
+        updateScaleDisplayTime();
         markDirty();
         break;
     case InputAction::ZoomOut:
         m_viewportManager->zoom(-m_optionsManager->loadConfig().zoomStep, m_document.get());
+        updateScaleDisplayTime();
         markDirty();
         break;
     case InputAction::ZoomTo:
         m_viewportManager->zoomTo(actionData.intValue > 0 ? actionData.intValue : 100, m_document.get());
+        updateScaleDisplayTime();
         markDirty();
         break;
     case InputAction::GoToFirstPage:
