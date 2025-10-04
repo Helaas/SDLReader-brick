@@ -2,6 +2,7 @@
 #define GUI_MANAGER_H
 
 #include "options_manager.h"
+#include "button_mapper.h"
 #include <SDL.h>
 #include <functional>
 #include <iostream>
@@ -154,6 +155,15 @@ public:
         return m_showNumberPad;
     }
 
+    /**
+     * @brief Set button mapper for platform-specific button handling
+     * @param buttonMapper Button mapper instance
+     */
+    void setButtonMapper(const ButtonMapper* buttonMapper)
+    {
+        m_buttonMapper = buttonMapper;
+    }
+
 private:
     bool m_initialized = false;
     bool m_showFontMenu = false;
@@ -161,6 +171,7 @@ private:
     OptionsManager m_optionsManager;
     FontConfig m_currentConfig;
     FontConfig m_tempConfig; // Temporary config for UI editing
+    const ButtonMapper* m_buttonMapper = nullptr; // Platform-specific button mapper
 
     // Page navigation
     int m_pageCount = 0;

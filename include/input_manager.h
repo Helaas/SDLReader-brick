@@ -4,6 +4,7 @@
 #include <SDL.h>
 #include <chrono>
 #include <functional>
+#include "button_mapper.h"
 
 /**
  * @brief Actions that can be triggered by input events
@@ -178,9 +179,20 @@ public:
         return m_inputState;
     }
 
+    /**
+     * @brief Get button mapper for platform-specific button mapping
+     */
+    const ButtonMapper& getButtonMapper() const
+    {
+        return m_buttonMapper;
+    }
+
 private:
     // Input state
     InputState m_inputState;
+
+    // Button mapper for platform-specific button mapping
+    ButtonMapper m_buttonMapper;
 
     // Page jump state
     bool m_pageJumpActive = false;

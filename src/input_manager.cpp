@@ -91,7 +91,13 @@ InputActionData InputManager::processEvent(const SDL_Event& event)
             if (m_gameController)
             {
                 m_gameControllerInstanceID = SDL_JoystickGetDeviceInstanceID(event.cdevice.which);
-                std::cout << "Opened game controller: " << SDL_GameControllerName(m_gameController) << std::endl;
+                const char* controllerName = SDL_GameControllerName(m_gameController);
+                SDL_Joystick* joystick = SDL_GameControllerGetJoystick(m_gameController);
+                int numButtons = SDL_JoystickNumButtons(joystick);
+                
+                std::cout << "Opened game controller: " << controllerName << std::endl;
+                std::cout << "Controller has " << numButtons << " joystick buttons" << std::endl;
+                std::cout << "Controller mapping: " << SDL_GameControllerMapping(m_gameController) << std::endl;
             }
             else
             {
@@ -111,18 +117,27 @@ InputActionData InputManager::processEvent(const SDL_Event& event)
         break;
 
     case SDL_JOYBUTTONDOWN:
-#ifdef TG5040_PLATFORM
-        switch (event.jbutton.button)
+    {
+        // Handle joystick buttons through mapper (for platform-specific extra buttons)
+        LogicalButton logicalButton = m_buttonMapper.mapJoystickButton(event.jbutton.button);
+        
+        switch (logicalButton)
         {
-        case 9:
+        case LogicalButton::Extra1:
             actionData.action = InputAction::ResetPageView;
             break;
-        case 10:
+        case LogicalButton::Extra2:
             actionData.action = InputAction::ToggleFontMenu;
             break;
+        case LogicalButton::Menu:
+            actionData.action = InputAction::ToggleFontMenu;
+            break;
+        default:
+            // No action for unmapped joystick buttons
+            break;
         }
-#endif
         break;
+    }
     }
 
     return actionData;
@@ -437,78 +452,84 @@ InputActionData InputManager::processControllerButton(const SDL_Event& event)
 
     if (event.type == SDL_CONTROLLERBUTTONDOWN)
     {
-        switch (event.cbutton.button)
+        SDL_GameControllerButton physicalButton = static_cast<SDL_GameControllerButton>(event.cbutton.button);
+        LogicalButton logicalButton = m_buttonMapper.mapButton(physicalButton);
+
+        switch (logicalButton)
         {
-        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+        case LogicalButton::DPadRight:
             m_inputState.dpadRightHeld = true;
             // Let App handle edge-turn and nudge logic
             break;
 
-        case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+        case LogicalButton::DPadLeft:
             m_inputState.dpadLeftHeld = true;
             // Let App handle edge-turn and nudge logic
             break;
 
-        case SDL_CONTROLLER_BUTTON_DPAD_UP:
+        case LogicalButton::DPadUp:
             m_inputState.dpadUpHeld = true;
             // Let App handle edge-turn and nudge logic
             break;
 
-        case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+        case LogicalButton::DPadDown:
             m_inputState.dpadDownHeld = true;
             // Let App handle edge-turn and nudge logic
             break;
 
-        case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
+        case LogicalButton::PagePrevious:
             if (!isInPageChangeCooldown())
             {
                 actionData.action = InputAction::GoToPreviousPage;
             }
             break;
 
-        case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
+        case LogicalButton::PageNext:
             if (!isInPageChangeCooldown())
             {
                 actionData.action = InputAction::GoToNextPage;
             }
             break;
 
-        case SDL_CONTROLLER_BUTTON_Y:
+        case LogicalButton::Special:
             actionData.action = InputAction::ZoomIn;
             actionData.intValue = m_zoomStep;
             break;
 
-        case SDL_CONTROLLER_BUTTON_B:
+        case LogicalButton::Cancel:
             actionData.action = InputAction::ZoomOut;
             actionData.intValue = m_zoomStep;
             break;
 
-        case SDL_CONTROLLER_BUTTON_X:
+        case LogicalButton::Alternate:
             actionData.action = InputAction::RotateClockwise;
             break;
 
-        case SDL_CONTROLLER_BUTTON_A:
+        case LogicalButton::Accept:
             actionData.action = InputAction::FitPageToWidth;
             break;
 
-        case SDL_CONTROLLER_BUTTON_GUIDE:
+        case LogicalButton::Quit:
             actionData.action = InputAction::Quit;
             break;
 
-        case SDL_CONTROLLER_BUTTON_START:
-            actionData.action = InputAction::ToggleMirrorHorizontal;
+        case LogicalButton::Menu:
+            actionData.action = InputAction::ToggleFontMenu;
             break;
 
-        case SDL_CONTROLLER_BUTTON_BACK:
+        case LogicalButton::Options:
             actionData.action = InputAction::ToggleMirrorVertical;
             break;
         }
     }
     else if (event.type == SDL_CONTROLLERBUTTONUP)
     {
-        switch (event.cbutton.button)
+        SDL_GameControllerButton physicalButton = static_cast<SDL_GameControllerButton>(event.cbutton.button);
+        LogicalButton logicalButton = m_buttonMapper.mapButton(physicalButton);
+
+        switch (logicalButton)
         {
-        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+        case LogicalButton::DPadRight:
             m_inputState.dpadRightHeld = false;
             if (m_inputState.edgeTurnHoldRight > 0.0f)
             {
@@ -517,7 +538,7 @@ InputActionData InputManager::processControllerButton(const SDL_Event& event)
             m_inputState.edgeTurnHoldRight = 0.0f;
             break;
 
-        case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+        case LogicalButton::DPadLeft:
             m_inputState.dpadLeftHeld = false;
             if (m_inputState.edgeTurnHoldLeft > 0.0f)
             {
@@ -526,7 +547,7 @@ InputActionData InputManager::processControllerButton(const SDL_Event& event)
             m_inputState.edgeTurnHoldLeft = 0.0f;
             break;
 
-        case SDL_CONTROLLER_BUTTON_DPAD_UP:
+        case LogicalButton::DPadUp:
             m_inputState.dpadUpHeld = false;
             if (m_inputState.edgeTurnHoldUp > 0.0f)
             {
@@ -535,13 +556,17 @@ InputActionData InputManager::processControllerButton(const SDL_Event& event)
             m_inputState.edgeTurnHoldUp = 0.0f;
             break;
 
-        case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+        case LogicalButton::DPadDown:
             m_inputState.dpadDownHeld = false;
             if (m_inputState.edgeTurnHoldDown > 0.0f)
             {
                 m_inputState.edgeTurnCooldownDown = SDL_GetTicks() / 1000.0f;
             }
             m_inputState.edgeTurnHoldDown = 0.0f;
+            break;
+
+        default:
+            // No action needed for button up on other buttons
             break;
         }
     }

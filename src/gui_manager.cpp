@@ -212,7 +212,7 @@ bool GuiManager::handleEvent(const SDL_Event& event)
         }
 
 #ifdef TG5040_PLATFORM
-        // Handle joystick button 10 to close number pad
+        // Handle joystick button 10 to close number pad on TG5040
         if (event.type == SDL_JOYBUTTONDOWN && event.jbutton.button == 10)
         {
             hideNumberPad();
@@ -232,34 +232,52 @@ bool GuiManager::handleEvent(const SDL_Event& event)
         }
 
 #ifdef TG5040_PLATFORM
-        // Handle joystick button 10 (toggle menu on TG5040)
+        // Handle joystick button 10 (toggle menu on TG5040) through mapper
         if (event.type == SDL_JOYBUTTONDOWN && event.jbutton.button == 10)
         {
-            toggleFontMenu();
-            if (m_closeCallback)
+            // Use mapper if available
+            if (m_buttonMapper)
             {
-                m_closeCallback();
+                LogicalButton logicalButton = m_buttonMapper->mapJoystickButton(event.jbutton.button);
+                if (logicalButton == LogicalButton::Extra2)
+                {
+                    toggleFontMenu();
+                    if (m_closeCallback)
+                    {
+                        m_closeCallback();
+                    }
+                    return true; // Event handled
+                }
             }
-            return true; // Event handled
+            else
+            {
+                // Fallback to direct handling if no mapper
+                toggleFontMenu();
+                if (m_closeCallback)
+                {
+                    m_closeCallback();
+                }
+                return true; // Event handled
+            }
         }
 #endif
     }
 
     // Let ImGui backend process the event
     ImGui_ImplSDL2_ProcessEvent(&event);
-    
+
     // Only report event as "handled" if ImGui actually wants to capture it
     // This prevents ImGui from consuming events when no menu is open
     ImGuiIO& io = ImGui::GetIO();
     bool handled = false;
-    
+
     // Check if ImGui wants to capture keyboard input
     if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP || event.type == SDL_TEXTINPUT)
     {
         handled = io.WantCaptureKeyboard;
     }
     // Check if ImGui wants to capture mouse input
-    else if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP || 
+    else if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP ||
              event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEWHEEL)
     {
         handled = io.WantCaptureMouse;
@@ -270,7 +288,7 @@ bool GuiManager::handleEvent(const SDL_Event& event)
     {
         handled = (m_showFontMenu || m_showNumberPad);
     }
-    
+
     return handled;
 }
 
@@ -810,122 +828,167 @@ bool GuiManager::handleNumberPadInput(const SDL_Event& event)
         }
         m_lastButtonPressTime = currentTime;
 
-        switch (event.cbutton.button)
-        {
-        case SDL_CONTROLLER_BUTTON_DPAD_UP:
-            m_numberPadSelectedRow = (m_numberPadSelectedRow - 1 + 5) % 5;
-            return true;
-        case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-            m_numberPadSelectedRow = (m_numberPadSelectedRow + 1) % 5;
-            return true;
-        case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-            // Handle navigation - row 4 has only 2 buttons (Go, Cancel)
-            if (m_numberPadSelectedRow == 4)
-            {
-                m_numberPadSelectedCol = (m_numberPadSelectedCol - 1 + 2) % 2;
-            }
-            else
-            {
-                m_numberPadSelectedCol = (m_numberPadSelectedCol - 1 + 3) % 3;
-            }
-            return true;
-        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-            // Handle navigation - row 4 has only 2 buttons (Go, Cancel)
-            if (m_numberPadSelectedRow == 4)
-            {
-                m_numberPadSelectedCol = (m_numberPadSelectedCol + 1) % 2;
-            }
-            else
-            {
-                m_numberPadSelectedCol = (m_numberPadSelectedCol + 1) % 3;
-            }
-            return true;
-        case SDL_CONTROLLER_BUTTON_A:
-        {
-            // Handle selected button press - use EXACT same layout as renderNumberPad
-            const char* buttons[5][3] = {
-                {"7", "8", "9"},        // Row 0: numbers
-                {"4", "5", "6"},        // Row 1: numbers
-                {"1", "2", "3"},        // Row 2: numbers
-                {"Clear", "0", "Back"}, // Row 3: utility buttons
-                {"Go", "Cancel", ""}    // Row 4: action buttons
-            };
+        // Map physical button to logical button if mapper is available
+        SDL_GameControllerButton physicalButton = static_cast<SDL_GameControllerButton>(event.cbutton.button);
 
-            const char* buttonText = buttons[m_numberPadSelectedRow][m_numberPadSelectedCol];
+        if (m_buttonMapper)
+        {
+            LogicalButton logicalButton = m_buttonMapper->mapButton(physicalButton);
 
-            // Skip empty buttons
-            if (strlen(buttonText) == 0)
+            switch (logicalButton)
             {
+            case LogicalButton::DPadUp:
+                m_numberPadSelectedRow = (m_numberPadSelectedRow - 1 + 5) % 5;
                 return true;
-            }
-
-            if (strcmp(buttonText, "Clear") == 0)
-            {
-                strcpy(m_pageJumpInput, "");
-            }
-            else if (strcmp(buttonText, "Back") == 0)
-            {
-                // Backspace - remove last character
-                int len = strlen(m_pageJumpInput);
-                if (len > 0)
+            case LogicalButton::DPadDown:
+                m_numberPadSelectedRow = (m_numberPadSelectedRow + 1) % 5;
+                return true;
+            case LogicalButton::DPadLeft:
+                // Handle navigation - row 4 has only 2 buttons (Go, Cancel)
+                if (m_numberPadSelectedRow == 4)
                 {
-                    m_pageJumpInput[len - 1] = '\0';
-                }
-            }
-            else if (strcmp(buttonText, "Go") == 0)
-            {
-                // Go to page if valid
-                int targetPage = strlen(m_pageJumpInput) > 0 ? std::atoi(m_pageJumpInput) : 0;
-                if (targetPage >= 1 && targetPage <= m_pageCount && m_pageJumpCallback)
-                {
-                    m_pageJumpCallback(targetPage - 1);
-                    hideNumberPad();
-                }
-            }
-            else if (strcmp(buttonText, "Cancel") == 0)
-            {
-                // Cancel - close number pad without action
-                hideNumberPad();
-            }
-            else
-            {
-                int len = strlen(m_pageJumpInput);
-                if (len < (int) sizeof(m_pageJumpInput) - 1)
-                {
-                    m_pageJumpInput[len] = buttonText[0];
-                    m_pageJumpInput[len + 1] = '\0';
-                }
-            }
-            return true;
-        }
-        case SDL_CONTROLLER_BUTTON_B:
-            // Backspace function - remove last character, or cancel if empty
-            {
-                int len = strlen(m_pageJumpInput);
-                if (len > 0)
-                {
-                    m_pageJumpInput[len - 1] = '\0';
+                    m_numberPadSelectedCol = (m_numberPadSelectedCol - 1 + 2) % 2;
                 }
                 else
                 {
-                    // If input is empty, close number pad
-                    hideNumberPad();
+                    m_numberPadSelectedCol = (m_numberPadSelectedCol - 1 + 3) % 3;
                 }
                 return true;
-            }
-        case SDL_CONTROLLER_BUTTON_START:
-            // Go to page if valid (alternative method)
-            {
-                int targetPage = strlen(m_pageJumpInput) > 0 ? std::atoi(m_pageJumpInput) : 0;
-                if (targetPage >= 1 && targetPage <= m_pageCount && m_pageJumpCallback)
+            case LogicalButton::DPadRight:
+                // Handle navigation - row 4 has only 2 buttons (Go, Cancel)
+                if (m_numberPadSelectedRow == 4)
                 {
-                    m_pageJumpCallback(targetPage - 1);
+                    m_numberPadSelectedCol = (m_numberPadSelectedCol + 1) % 2;
+                }
+                else
+                {
+                    m_numberPadSelectedCol = (m_numberPadSelectedCol + 1) % 3;
+                }
+                return true;
+            case LogicalButton::Accept:
+            {
+                // Handle selected button press - use EXACT same layout as renderNumberPad
+                const char* buttons[5][3] = {
+                    {"7", "8", "9"},        // Row 0: numbers
+                    {"4", "5", "6"},        // Row 1: numbers
+                    {"1", "2", "3"},        // Row 2: numbers
+                    {"Clear", "0", "Back"}, // Row 3: utility buttons
+                    {"Go", "Cancel", ""}    // Row 4: action buttons
+                };
+
+                const char* buttonText = buttons[m_numberPadSelectedRow][m_numberPadSelectedCol];
+
+                // Skip empty buttons
+                if (strlen(buttonText) == 0)
+                {
+                    return true;
+                }
+
+                if (strcmp(buttonText, "Clear") == 0)
+                {
+                    strcpy(m_pageJumpInput, "");
+                }
+                else if (strcmp(buttonText, "Back") == 0)
+                {
+                    // Backspace - remove last character
+                    int len = strlen(m_pageJumpInput);
+                    if (len > 0)
+                    {
+                        m_pageJumpInput[len - 1] = '\0';
+                    }
+                }
+                else if (strcmp(buttonText, "Go") == 0)
+                {
+                    // Go to page if valid
+                    int targetPage = strlen(m_pageJumpInput) > 0 ? std::atoi(m_pageJumpInput) : 0;
+                    if (targetPage >= 1 && targetPage <= m_pageCount && m_pageJumpCallback)
+                    {
+                        m_pageJumpCallback(targetPage - 1);
+                        hideNumberPad();
+                    }
+                }
+                else if (strcmp(buttonText, "Cancel") == 0)
+                {
+                    // Cancel - close number pad without action
                     hideNumberPad();
+                }
+                else
+                {
+                    int len = strlen(m_pageJumpInput);
+                    if (len < (int) sizeof(m_pageJumpInput) - 1)
+                    {
+                        m_pageJumpInput[len] = buttonText[0];
+                        m_pageJumpInput[len + 1] = '\0';
+                    }
                 }
                 return true;
             }
-        default:
-            break;
+            case LogicalButton::Cancel:
+                // Backspace function - remove last character, or cancel if empty
+                {
+                    int len = strlen(m_pageJumpInput);
+                    if (len > 0)
+                    {
+                        m_pageJumpInput[len - 1] = '\0';
+                    }
+                    else
+                    {
+                        // If input is empty, close number pad
+                        hideNumberPad();
+                    }
+                    return true;
+                }
+            case LogicalButton::Menu:
+                // Go to page if valid (alternative method)
+                {
+                    int targetPage = strlen(m_pageJumpInput) > 0 ? std::atoi(m_pageJumpInput) : 0;
+                    if (targetPage >= 1 && targetPage <= m_pageCount && m_pageJumpCallback)
+                    {
+                        m_pageJumpCallback(targetPage - 1);
+                        hideNumberPad();
+                    }
+                    return true;
+                }
+            default:
+                break;
+            }
+        }
+        else
+        {
+            // Fallback to physical button mapping if no mapper available
+            switch (event.cbutton.button)
+            {
+            case SDL_CONTROLLER_BUTTON_DPAD_UP:
+                m_numberPadSelectedRow = (m_numberPadSelectedRow - 1 + 5) % 5;
+                return true;
+            case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+                m_numberPadSelectedRow = (m_numberPadSelectedRow + 1) % 5;
+                return true;
+            case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+                // Handle navigation - row 4 has only 2 buttons (Go, Cancel)
+                if (m_numberPadSelectedRow == 4)
+                {
+                    m_numberPadSelectedCol = (m_numberPadSelectedCol - 1 + 2) % 2;
+                }
+                else
+                {
+                    m_numberPadSelectedCol = (m_numberPadSelectedCol - 1 + 3) % 3;
+                }
+                return true;
+            case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+                // Handle navigation - row 4 has only 2 buttons (Go, Cancel)
+                if (m_numberPadSelectedRow == 4)
+                {
+                    m_numberPadSelectedCol = (m_numberPadSelectedCol + 1) % 2;
+                }
+                else
+                {
+                    m_numberPadSelectedCol = (m_numberPadSelectedCol + 1) % 3;
+                }
+                return true;
+            default:
+                break;
+            }
         }
     }
 

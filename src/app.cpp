@@ -144,6 +144,9 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
         throw std::runtime_error("Failed to initialize GUI manager");
     }
 
+    // Connect button mapper to GUI manager for platform-specific button handling
+    m_guiManager->setButtonMapper(&m_inputManager->getButtonMapper());
+
     // Set up font apply callback AFTER all initialization is complete
     m_guiManager->setFontApplyCallback([this](const FontConfig& config)
                                        {
