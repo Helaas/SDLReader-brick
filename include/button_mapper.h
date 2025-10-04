@@ -48,6 +48,14 @@ public:
     LogicalButton mapButton(SDL_GameControllerButton physicalButton) const;
 
     /**
+     * @brief Map a physical SDL controller button with context awareness
+     * @param physicalButton SDL controller button
+     * @param inFontMenu true if the font menu is currently open (swaps A & B on TG5040)
+     * @return Logical button action with context-specific mapping
+     */
+    LogicalButton mapButtonForContext(SDL_GameControllerButton physicalButton, bool inFontMenu) const;
+
+    /**
      * @brief Map a joystick button (for extra buttons not in SDL GameController API)
      * @param joystickButton Raw joystick button number
      * @return Logical button action, or Accept as default

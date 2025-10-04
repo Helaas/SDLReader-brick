@@ -201,17 +201,17 @@ bool GuiManager::handleEvent(const SDL_Event& event)
             return false; // Don't handle, let it pass through
         }
 
-        // Handle controller buttons (except GUIDE)
-        if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP)
+#ifdef TG5040_PLATFORM
+        // Handle B button to close number pad on TG5040
+        // NOTE: On TG5040, SDL reports buttons swapped - SDL BUTTON_A = Physical B
+        if (event.type == SDL_CONTROLLERBUTTONDOWN &&
+            event.cbutton.button == SDL_CONTROLLER_BUTTON_A)
         {
-            // Only handle if it's not GUIDE button
-            if (event.cbutton.button != SDL_CONTROLLER_BUTTON_GUIDE)
-            {
-                return handleNumberPadInput(event);
-            }
+            std::cout << "[GuiManager/NumberPad] Physical B pressed (SDL reports BUTTON_A) - closing number pad" << std::endl;
+            hideNumberPad();
+            return true;
         }
 
-#ifdef TG5040_PLATFORM
         // Handle joystick button 10 to close number pad on TG5040
         if (event.type == SDL_JOYBUTTONDOWN && event.jbutton.button == 10)
         {
@@ -219,6 +219,23 @@ bool GuiManager::handleEvent(const SDL_Event& event)
             return true;
         }
 #endif
+
+        // Handle controller buttons (except GUIDE and B on TG5040)
+        if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP)
+        {
+            // Only handle if it's not GUIDE button
+            if (event.cbutton.button != SDL_CONTROLLER_BUTTON_GUIDE)
+            {
+#ifdef TG5040_PLATFORM
+                // Skip SDL BUTTON_A on TG5040 (physical B) as it's handled above for closing
+                if (event.cbutton.button == SDL_CONTROLLER_BUTTON_A)
+                {
+                    return true; // Already handled
+                }
+#endif
+                return handleNumberPadInput(event);
+            }
+        }
     }
 
     // Intercept special buttons when font menu is open
@@ -259,6 +276,28 @@ bool GuiManager::handleEvent(const SDL_Event& event)
                 }
                 return true; // Event handled
             }
+        }
+
+        // Handle B button on TG5040 in font menu to close it
+        // NOTE: On TG5040, SDL reports buttons swapped:
+        //   - Physical A button → SDL reports as BUTTON_B
+        //   - Physical B button → SDL reports as BUTTON_A
+        // The ImGui backend has been patched to swap A & B so ImGui sees correct mappings.
+        // Here we just need to intercept physical B (SDL BUTTON_A) to close the menu.
+        if (event.type == SDL_CONTROLLERBUTTONDOWN && event.cbutton.button == SDL_CONTROLLER_BUTTON_A)
+        {
+            std::cout << "[GuiManager/FontMenu] Physical B pressed (SDL BUTTON_A) - closing menu" << std::endl;
+            m_showFontMenu = false;
+            // Reset temp config to current config
+            m_tempConfig = m_currentConfig;
+            m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
+
+            // Trigger redraw to clear menu from screen
+            if (m_closeCallback)
+            {
+                m_closeCallback();
+            }
+            return true; // Event handled
         }
 #endif
     }

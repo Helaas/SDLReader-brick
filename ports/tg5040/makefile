@@ -83,12 +83,20 @@ setup-imgui:
 	else \
 		echo "Dear ImGui repository already exists and is complete"; \
 	fi
-	@if [ -d "$(BASE_PATH)/imgui" ]; then \
+	@if [ -d "$(BASE_PATH)/imgui" ] && [ -f "$(BASE_PATH)/imgui/backends/imgui_impl_sdlrenderer.cpp" ]; then \
 		if ! grep -q "imgui_impl_sdlrenderer_legacy" $(BASE_PATH)/imgui/backends/imgui_impl_sdlrenderer.cpp; then \
 			echo "Applying SDL 2.0.9 fallback patch to ImGui SDL renderer backend..."; \
 			cd $(BASE_PATH)/imgui && patch -p1 < ../patches/imgui_impl_sdlrenderer_legacy.patch; \
 		else \
 			echo "ImGui SDL renderer backend already patched"; \
+		fi; \
+	fi
+	@if [ -d "$(BASE_PATH)/imgui" ] && [ -f "$(BASE_PATH)/imgui/backends/imgui_impl_sdl.cpp" ]; then \
+		if ! grep -q "TG5040 PATCH: Swap A & B buttons" $(BASE_PATH)/imgui/backends/imgui_impl_sdl.cpp; then \
+			echo "Applying TG5040 A & B button swap patch to ImGui SDL backend..."; \
+			patch -d $(BASE_PATH)/imgui -p1 < $(BASE_PATH)/patches/imgui_swap_ab_buttons_tg5040.patch; \
+		else \
+			echo "ImGui SDL backend already patched for TG5040 button swap"; \
 		fi; \
 	fi
 
