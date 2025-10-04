@@ -25,10 +25,10 @@ void ButtonMapper::initializePlatformMappings()
     // - BUTTON_A (SDL) -> mapped to Accept (this is how the original code worked)
     // - BUTTON_B (SDL) -> mapped to Cancel (this is how the original code worked)
 
-    m_buttonMap[SDL_CONTROLLER_BUTTON_A] = LogicalButton::Accept;    // Keep original behavior
-    m_buttonMap[SDL_CONTROLLER_BUTTON_B] = LogicalButton::Cancel;    // Keep original behavior
-    m_buttonMap[SDL_CONTROLLER_BUTTON_X] = LogicalButton::Alternate; // X button
-    m_buttonMap[SDL_CONTROLLER_BUTTON_Y] = LogicalButton::Special;   // Y button
+    m_buttonMap[SDL_CONTROLLER_BUTTON_A] = LogicalButton::Accept;               // Keep original behavior
+    m_buttonMap[SDL_CONTROLLER_BUTTON_B] = LogicalButton::Cancel;               // Keep original behavior
+    m_buttonMap[SDL_CONTROLLER_BUTTON_X] = LogicalButton::Alternate;            // X button
+    m_buttonMap[SDL_CONTROLLER_BUTTON_Y] = LogicalButton::Special;              // Y button
     m_buttonMap[SDL_CONTROLLER_BUTTON_START] = LogicalButton::MirrorHorizontal; // TG5040: Start toggles mirror
 
     // TG5040-specific extra buttons (not part of standard SDL GameController API)
@@ -71,8 +71,8 @@ LogicalButton ButtonMapper::mapButton(SDL_GameControllerButton physicalButton) c
         if (physicalButton == SDL_CONTROLLER_BUTTON_START)
         {
             std::cout << "[ButtonMapper] START button mapped to LogicalButton::"
-                      << (it->second == LogicalButton::Menu ? "Menu" :
-                          it->second == LogicalButton::MirrorHorizontal ? "MirrorHorizontal" : "Unknown")
+                      << (it->second == LogicalButton::Menu ? "Menu" : it->second == LogicalButton::MirrorHorizontal ? "MirrorHorizontal"
+                                                                                                                     : "Unknown")
                       << " (enum value " << static_cast<int>(it->second) << ")" << std::endl;
         }
         return it->second;

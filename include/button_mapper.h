@@ -9,22 +9,22 @@
  */
 enum class LogicalButton
 {
-    Accept,       // Confirm/OK action (typically A button)
-    Cancel,       // Cancel/Back action (typically B button)
-    Alternate,    // Alternative action (typically X button)
-    Special,      // Special action (typically Y button)
-    PageNext,     // Next page (typically R shoulder)
-    PagePrevious, // Previous page (typically L shoulder)
-    Menu,              // Open menu (typically Start on desktop)
-    MirrorHorizontal,  // Toggle mirror horizontal (TG5040 Start button)
-    Options,           // Open options (typically Back/Select)
-    Quit,              // Quit application (typically Guide)
-    DPadUp,            // D-pad up
-    DPadDown,     // D-pad down
-    DPadLeft,     // D-pad left
-    DPadRight,    // D-pad right
-    Extra1,       // Extra button 1 (TG5040 button 9 - Reset View)
-    Extra2        // Extra button 2 (TG5040 button 10 - Toggle Menu)
+    Accept,           // Confirm/OK action (typically A button)
+    Cancel,           // Cancel/Back action (typically B button)
+    Alternate,        // Alternative action (typically X button)
+    Special,          // Special action (typically Y button)
+    PageNext,         // Next page (typically R shoulder)
+    PagePrevious,     // Previous page (typically L shoulder)
+    Menu,             // Open menu (typically Start on desktop)
+    MirrorHorizontal, // Toggle mirror horizontal (TG5040 Start button)
+    Options,          // Open options (typically Back/Select)
+    Quit,             // Quit application (typically Guide)
+    DPadUp,           // D-pad up
+    DPadDown,         // D-pad down
+    DPadLeft,         // D-pad left
+    DPadRight,        // D-pad right
+    Extra1,           // Extra button 1 (TG5040 button 9 - Reset View)
+    Extra2            // Extra button 2 (TG5040 button 10 - Toggle Menu)
 };
 
 /**
