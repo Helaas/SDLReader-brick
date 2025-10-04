@@ -229,6 +229,10 @@ void PowerHandler::enterFakeSleep()
     {
         m_sleepModeCallback(true); // Enable fake sleep (black screen, disable inputs)
         std::cout << "PowerHandler: Sleep mode callback executed successfully" << std::endl;
+
+        // Give the main thread time to render the black screen
+        // This helps ensure the screen actually goes black before we continue
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
     else
     {

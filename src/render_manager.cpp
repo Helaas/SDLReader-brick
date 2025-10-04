@@ -171,7 +171,7 @@ void RenderManager::renderFakeSleepScreen()
 {
     // Render black screen for fake sleep mode
     m_renderer->clear(0, 0, 0, 255);
-    clearDirtyFlag();
+    // Note: Don't clear dirty flag here - let the caller handle it after present()
 }
 
 void RenderManager::renderPageInfo(NavigationManager* navigationManager, int windowWidth, int windowHeight)

@@ -352,11 +352,13 @@ void App::run()
         }
         else
         {
-            // Fake sleep mode - render black screen
-            if (m_renderManager && m_renderManager->needsRedraw())
+            // Fake sleep mode - ALWAYS render black screen immediately
+            // We must render every frame in fake sleep to ensure the screen stays black
+            // even if we just transitioned from normal mode
+            if (m_renderManager)
             {
                 m_renderManager->renderFakeSleepScreen();
-                m_renderManager->clearDirtyFlag();
+                m_renderManager->present(); // Must present the black screen to display!
             }
         }
     }
