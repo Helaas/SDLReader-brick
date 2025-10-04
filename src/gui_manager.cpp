@@ -594,9 +594,9 @@ void GuiManager::renderFontMenu()
     bool hasValidFont = !fonts.empty() && m_selectedFontIndex >= 0 && m_selectedFontIndex < (int) fonts.size();
 
     // Check if font settings have changed
-    bool fontSettingsChanged = (m_tempConfig.fontName != m_currentConfig.fontName || 
+    bool fontSettingsChanged = (m_tempConfig.fontName != m_currentConfig.fontName ||
                                 m_tempConfig.fontSize != m_currentConfig.fontSize);
-    
+
     // Show warning if font settings changed
     if (fontSettingsChanged)
     {
