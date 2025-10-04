@@ -8,6 +8,16 @@ ButtonMapper::ButtonMapper()
 
 void ButtonMapper::initializePlatformMappings()
 {
+    // Common mappings (same across all platforms)
+    m_buttonMap[SDL_CONTROLLER_BUTTON_LEFTSHOULDER] = LogicalButton::PagePrevious;
+    m_buttonMap[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = LogicalButton::PageNext;
+    m_buttonMap[SDL_CONTROLLER_BUTTON_BACK] = LogicalButton::Options;
+    m_buttonMap[SDL_CONTROLLER_BUTTON_GUIDE] = LogicalButton::Quit;
+    m_buttonMap[SDL_CONTROLLER_BUTTON_DPAD_UP] = LogicalButton::DPadUp;
+    m_buttonMap[SDL_CONTROLLER_BUTTON_DPAD_DOWN] = LogicalButton::DPadDown;
+    m_buttonMap[SDL_CONTROLLER_BUTTON_DPAD_LEFT] = LogicalButton::DPadLeft;
+    m_buttonMap[SDL_CONTROLLER_BUTTON_DPAD_RIGHT] = LogicalButton::DPadRight;
+
 #ifdef TG5040_PLATFORM
     // TG5040 platform: Controller is detected as Xbox 360, but physical buttons are different
     // We keep the ORIGINAL behavior - SDL reports them "wrong" but the original code compensated
@@ -19,6 +29,7 @@ void ButtonMapper::initializePlatformMappings()
     m_buttonMap[SDL_CONTROLLER_BUTTON_B] = LogicalButton::Cancel;    // Keep original behavior
     m_buttonMap[SDL_CONTROLLER_BUTTON_X] = LogicalButton::Alternate; // X button
     m_buttonMap[SDL_CONTROLLER_BUTTON_Y] = LogicalButton::Special;   // Y button
+    m_buttonMap[SDL_CONTROLLER_BUTTON_START] = LogicalButton::MirrorHorizontal; // TG5040: Start toggles mirror
 
     // TG5040-specific extra buttons (not part of standard SDL GameController API)
     m_joystickButtonMap[9] = LogicalButton::Extra1;  // Button 9: Reset View
@@ -39,6 +50,7 @@ void ButtonMapper::initializePlatformMappings()
     m_buttonMap[SDL_CONTROLLER_BUTTON_B] = LogicalButton::Cancel;    // B (right) -> Cancel
     m_buttonMap[SDL_CONTROLLER_BUTTON_X] = LogicalButton::Alternate; // X (left)
     m_buttonMap[SDL_CONTROLLER_BUTTON_Y] = LogicalButton::Special;   // Y (top)
+    m_buttonMap[SDL_CONTROLLER_BUTTON_START] = LogicalButton::Menu;  // Desktop: Start opens menu
 
     // Desktop-specific: Share/Capture button opens menu (SDL 2.0.14+)
     // Note: On macOS, the Share button may be intercepted by the system
@@ -48,17 +60,6 @@ void ButtonMapper::initializePlatformMappings()
 
     std::cout << "ButtonMapper: Initialized desktop mappings" << std::endl;
 #endif
-
-    // Common mappings (same across all platforms)
-    m_buttonMap[SDL_CONTROLLER_BUTTON_LEFTSHOULDER] = LogicalButton::PagePrevious;
-    m_buttonMap[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = LogicalButton::PageNext;
-    m_buttonMap[SDL_CONTROLLER_BUTTON_START] = LogicalButton::Menu;
-    m_buttonMap[SDL_CONTROLLER_BUTTON_BACK] = LogicalButton::Options;
-    m_buttonMap[SDL_CONTROLLER_BUTTON_GUIDE] = LogicalButton::Quit;
-    m_buttonMap[SDL_CONTROLLER_BUTTON_DPAD_UP] = LogicalButton::DPadUp;
-    m_buttonMap[SDL_CONTROLLER_BUTTON_DPAD_DOWN] = LogicalButton::DPadDown;
-    m_buttonMap[SDL_CONTROLLER_BUTTON_DPAD_LEFT] = LogicalButton::DPadLeft;
-    m_buttonMap[SDL_CONTROLLER_BUTTON_DPAD_RIGHT] = LogicalButton::DPadRight;
 }
 
 LogicalButton ButtonMapper::mapButton(SDL_GameControllerButton physicalButton) const
@@ -66,6 +67,14 @@ LogicalButton ButtonMapper::mapButton(SDL_GameControllerButton physicalButton) c
     auto it = m_buttonMap.find(physicalButton);
     if (it != m_buttonMap.end())
     {
+        // DEBUG: Log START button mapping
+        if (physicalButton == SDL_CONTROLLER_BUTTON_START)
+        {
+            std::cout << "[ButtonMapper] START button mapped to LogicalButton::"
+                      << (it->second == LogicalButton::Menu ? "Menu" :
+                          it->second == LogicalButton::MirrorHorizontal ? "MirrorHorizontal" : "Unknown")
+                      << " (enum value " << static_cast<int>(it->second) << ")" << std::endl;
+        }
         return it->second;
     }
 

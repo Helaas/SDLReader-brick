@@ -517,6 +517,11 @@ InputActionData InputManager::processControllerButton(const SDL_Event& event)
             actionData.action = InputAction::ToggleFontMenu;
             break;
 
+        case LogicalButton::MirrorHorizontal:
+            std::cout << "[InputManager] MirrorHorizontal action triggered!" << std::endl;
+            actionData.action = InputAction::ToggleMirrorHorizontal;
+            break;
+
         case LogicalButton::Options:
             actionData.action = InputAction::ToggleMirrorVertical;
             break;

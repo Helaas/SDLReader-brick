@@ -15,10 +15,11 @@ enum class LogicalButton
     Special,      // Special action (typically Y button)
     PageNext,     // Next page (typically R shoulder)
     PagePrevious, // Previous page (typically L shoulder)
-    Menu,         // Open menu (typically Start)
-    Options,      // Open options (typically Back/Select)
-    Quit,         // Quit application (typically Guide)
-    DPadUp,       // D-pad up
+    Menu,              // Open menu (typically Start on desktop)
+    MirrorHorizontal,  // Toggle mirror horizontal (TG5040 Start button)
+    Options,           // Open options (typically Back/Select)
+    Quit,              // Quit application (typically Guide)
+    DPadUp,            // D-pad up
     DPadDown,     // D-pad down
     DPadLeft,     // D-pad left
     DPadRight,    // D-pad right
