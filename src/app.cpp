@@ -45,6 +45,22 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
             std::cout << "App: Exiting fake sleep mode - re-enabling inputs and screen" << std::endl;
             markDirty(); // Force screen redraw to restore normal display
         } });
+
+    // Register pre-sleep callback to close UI windows before sleep
+    m_powerHandler->setPreSleepCallback([this]() -> bool
+                                        {
+        if (m_guiManager) {
+            bool anyClosed = m_guiManager->closeAllUIWindows();
+            if (anyClosed) {
+                std::cout << "App: Closed UI windows before sleep" << std::endl;
+                // Don't show a brief flash - just close the UI
+                // The power handler will immediately enter fake sleep mode (black screen)
+                // and attempt real sleep, which is the proper behavior
+                markDirty(); // Mark dirty so fake sleep black screen gets rendered
+            }
+            return anyClosed;
+        }
+        return false; });
 #endif
 
     // Initialize font manager FIRST, before document creation

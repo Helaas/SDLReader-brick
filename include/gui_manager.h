@@ -156,6 +156,43 @@ public:
     }
 
     /**
+     * @brief Close the font menu if it's open
+     */
+    void closeFontMenu()
+    {
+        if (m_showFontMenu)
+        {
+            m_showFontMenu = false;
+            // Reset temp config to current config
+            m_tempConfig = m_currentConfig;
+            m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
+        }
+    }
+
+    /**
+     * @brief Close the number pad if it's open
+     */
+    void closeNumberPad()
+    {
+        if (m_showNumberPad)
+        {
+            m_showNumberPad = false;
+        }
+    }
+
+    /**
+     * @brief Close all UI windows (font menu and number pad)
+     * @return true if any window was closed, false if nothing was open
+     */
+    bool closeAllUIWindows()
+    {
+        bool anyClosed = m_showFontMenu || m_showNumberPad;
+        closeFontMenu();
+        closeNumberPad();
+        return anyClosed;
+    }
+
+    /**
      * @brief Set button mapper for platform-specific button handling
      * @param buttonMapper Button mapper instance
      */
@@ -184,7 +221,7 @@ private:
 
     // UI state
     int m_selectedFontIndex = 0;
-    char m_pageJumpInput[16] = "1";  // Page jump input
+    char m_pageJumpInput[16] = "1"; // Page jump input
     bool m_fontSizeChanged = false;
     bool m_justOpenedFontMenu = false; // Flag to set focus on font dropdown when menu opens
 
