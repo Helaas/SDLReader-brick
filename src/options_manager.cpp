@@ -1,5 +1,6 @@
 #include "options_manager.h"
 #include <algorithm>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -25,7 +26,8 @@ std::string configToJson(const FontConfig& config)
     oss << "  \"fontPath\": \"" << config.fontPath << "\",\n";
     oss << "  \"fontName\": \"" << config.fontName << "\",\n";
     oss << "  \"fontSize\": " << config.fontSize << ",\n";
-    oss << "  \"zoomStep\": " << config.zoomStep << "\n";
+    oss << "  \"zoomStep\": " << config.zoomStep << ",\n";
+    oss << "  \"lastBrowseDirectory\": \"" << config.lastBrowseDirectory << "\"\n";
     oss << "}";
     return oss.str();
 }
@@ -93,6 +95,16 @@ FontConfig jsonToConfig(const std::string& json)
     config.fontName = findStringValue("fontName");
     config.fontSize = findIntValue("fontSize");
     config.zoomStep = findIntValue("zoomStep");
+    config.lastBrowseDirectory = findStringValue("lastBrowseDirectory");
+    if (config.lastBrowseDirectory.empty())
+    {
+#ifdef TG5040_PLATFORM
+        config.lastBrowseDirectory = "/mnt/SDCARD";
+#else
+        const char* home = getenv("HOME");
+        config.lastBrowseDirectory = home ? home : "/";
+#endif
+    }
 
     return config;
 }

@@ -20,17 +20,18 @@ struct FontInfo
  */
 struct FontConfig
 {
-    std::string fontPath; // Path to selected font file
-    std::string fontName; // Display name of selected font
-    int fontSize = 12;    // Font size in points
-    int zoomStep = 10;    // Zoom increment/decrement step
+    std::string fontPath;                            // Path to selected font file
+    std::string fontName;                            // Display name of selected font
+    int fontSize = 12;                               // Font size in points
+    int zoomStep = 10;                               // Zoom increment/decrement step
+    std::string lastBrowseDirectory = "/mnt/SDCARD"; // Last browsed directory for file browser
 
     // Default constructor
     FontConfig() = default;
 
     // Constructor with parameters
-    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10)
-        : fontPath(path), fontName(name), fontSize(size), zoomStep(zoom)
+    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10, const std::string& browseDir = "/mnt/SDCARD")
+        : fontPath(path), fontName(name), fontSize(size), zoomStep(zoom), lastBrowseDirectory(browseDir)
     {
     }
 };

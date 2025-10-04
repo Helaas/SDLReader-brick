@@ -5,6 +5,11 @@
 # - Remembers last visited folder between runs
 # - Selecting a document exec's ./bin/sdl_reader_cli <file>
 # - DEBUG logs to /tmp/sdlreader_browser.log (set DEBUG=0 to disable)
+#
+# NOTE: An alternative built-in ImGui file browser is available via:
+#   ./bin/sdl_reader_cli --browse
+# The ImGui browser stores the last directory in config.json (lastBrowseDirectory field)
+# and defaults to /mnt/SDCARD. It provides a GUI-based file selection interface.
 
 ###############################################################################
 # Config & environment
@@ -260,7 +265,7 @@ browse() {
         fi
         # Optionally remember the current directory before launching
         save_lastdir "$dir"
-        
+
         # Set up logging with rotation (keep last 5 runs)
         READER_LOG="/tmp/sdl_reader.log"
         if [ -f "$READER_LOG" ] && [ $(wc -l < "$READER_LOG") -gt 1000 ]; then
@@ -271,13 +276,13 @@ browse() {
           [ -f "$READER_LOG.1" ] && mv "$READER_LOG.1" "$READER_LOG.2"
           mv "$READER_LOG" "$READER_LOG.1"
         fi
-        
+
         # Log with timestamp and file info
         echo "=== SDL Reader started at $(date) ===" >> "$READER_LOG"
         echo "File: $sel_path" >> "$READER_LOG"
         echo "Working directory: $(pwd)" >> "$READER_LOG"
         echo "--- Binary output follows ---" >> "$READER_LOG"
-        
+
         ./bin/sdl_reader_cli "$sel_path" 2>&1 | tee -a "$READER_LOG"
         ;;
       *)
