@@ -9,26 +9,26 @@
  */
 enum class LogicalButton
 {
-    Accept,           // Confirm/OK action (typically A button)
-    Cancel,           // Cancel/Back action (typically B button)
-    Alternate,        // Alternative action (typically X button)
-    Special,          // Special action (typically Y button)
-    PageNext,         // Next page (typically R shoulder)
-    PagePrevious,     // Previous page (typically L shoulder)
-    Menu,             // Open menu (typically Start)
-    Options,          // Open options (typically Back/Select)
-    Quit,             // Quit application (typically Guide)
-    DPadUp,           // D-pad up
-    DPadDown,         // D-pad down
-    DPadLeft,         // D-pad left
-    DPadRight,        // D-pad right
-    Extra1,           // Extra button 1 (TG5040 button 9 - Reset View)
-    Extra2            // Extra button 2 (TG5040 button 10 - Toggle Menu)
+    Accept,       // Confirm/OK action (typically A button)
+    Cancel,       // Cancel/Back action (typically B button)
+    Alternate,    // Alternative action (typically X button)
+    Special,      // Special action (typically Y button)
+    PageNext,     // Next page (typically R shoulder)
+    PagePrevious, // Previous page (typically L shoulder)
+    Menu,         // Open menu (typically Start)
+    Options,      // Open options (typically Back/Select)
+    Quit,         // Quit application (typically Guide)
+    DPadUp,       // D-pad up
+    DPadDown,     // D-pad down
+    DPadLeft,     // D-pad left
+    DPadRight,    // D-pad right
+    Extra1,       // Extra button 1 (TG5040 button 9 - Reset View)
+    Extra2        // Extra button 2 (TG5040 button 10 - Toggle Menu)
 };
 
 /**
  * @brief Manages platform-specific button mappings
- * 
+ *
  * This class provides a mapping layer between physical controller buttons
  * and logical button actions. Different platforms can have different mappings,
  * particularly for TG5040 where A and B buttons are swapped compared to Xbox 360.

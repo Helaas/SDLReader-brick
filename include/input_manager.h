@@ -1,10 +1,10 @@
 #ifndef INPUT_MANAGER_H
 #define INPUT_MANAGER_H
 
+#include "button_mapper.h"
 #include <SDL.h>
 #include <chrono>
 #include <functional>
-#include "button_mapper.h"
 
 /**
  * @brief Actions that can be triggered by input events

@@ -1,8 +1,8 @@
 #ifndef GUI_MANAGER_H
 #define GUI_MANAGER_H
 
-#include "options_manager.h"
 #include "button_mapper.h"
+#include "options_manager.h"
 #include <SDL.h>
 #include <functional>
 #include <iostream>
@@ -170,7 +170,7 @@ private:
     SDL_Renderer* m_renderer = nullptr; // Store renderer for ImGui
     OptionsManager m_optionsManager;
     FontConfig m_currentConfig;
-    FontConfig m_tempConfig; // Temporary config for UI editing
+    FontConfig m_tempConfig;                      // Temporary config for UI editing
     const ButtonMapper* m_buttonMapper = nullptr; // Platform-specific button mapper
 
     // Page navigation
