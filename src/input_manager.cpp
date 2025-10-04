@@ -94,7 +94,7 @@ InputActionData InputManager::processEvent(const SDL_Event& event)
                 const char* controllerName = SDL_GameControllerName(m_gameController);
                 SDL_Joystick* joystick = SDL_GameControllerGetJoystick(m_gameController);
                 int numButtons = SDL_JoystickNumButtons(joystick);
-                
+
                 std::cout << "Opened game controller: " << controllerName << std::endl;
                 std::cout << "Controller has " << numButtons << " joystick buttons" << std::endl;
                 std::cout << "Controller mapping: " << SDL_GameControllerMapping(m_gameController) << std::endl;
@@ -120,7 +120,7 @@ InputActionData InputManager::processEvent(const SDL_Event& event)
     {
         // Handle joystick buttons through mapper (for platform-specific extra buttons)
         LogicalButton logicalButton = m_buttonMapper.mapJoystickButton(event.jbutton.button);
-        
+
         switch (logicalButton)
         {
         case LogicalButton::Extra1:
