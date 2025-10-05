@@ -901,7 +901,7 @@ void App::applyPendingFontChange()
     if (!fontChanged && !sizeChanged)
     {
         std::cout << "No font/size change detected - skipping document reopen" << std::endl;
-        
+
         // Even if font/size didn't change, we still need to save zoom step changes
         if (zoomStepChanged)
         {
@@ -909,7 +909,7 @@ void App::applyPendingFontChange()
             m_optionsManager->saveConfig(m_pendingFontConfig);
             m_inputManager->setZoomStep(m_pendingFontConfig.zoomStep);
         }
-        
+
         // Just close the menu and mark for redraw
         if (m_guiManager && m_guiManager->isFontMenuVisible())
         {
