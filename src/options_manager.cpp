@@ -170,6 +170,14 @@ void OptionsManager::scanFonts(const std::string& fontsDir)
     m_availableFonts.clear();
     m_fontNameMap.clear();
 
+    // Add virtual "Document Default" font at the top
+    // This uses empty path/name to signal "no custom font"
+    FontInfo defaultFont;
+    defaultFont.displayName = "Document Default";
+    defaultFont.fileName = "";
+    defaultFont.filePath = "";
+    m_availableFonts.push_back(defaultFont);
+
     try
     {
         if (!std::filesystem::exists(fontsDir))
@@ -276,12 +284,32 @@ bool OptionsManager::installFontLoader(void* ctx)
 
 std::string OptionsManager::generateCSS(const FontConfig& config) const
 {
-    if (config.fontPath.empty() || config.fontName.empty())
+    std::ostringstream css;
+
+    // Check if this is "Document Default" (no custom font family)
+    bool isDocumentDefault = (config.fontPath.empty() || config.fontName.empty() || config.fontName == "Document Default");
+
+    if (isDocumentDefault)
     {
-        return "";
+        // For Document Default, only apply font size (no font-family override)
+        // This allows the document to use its embedded fonts while respecting size adjustments
+        css << "* {\n";
+        css << "  font-size: " << config.fontSize << "pt !important;\n";
+        css << "  line-height: 1.4 !important;\n";
+        css << "}\n\n";
+
+        css << "body, p, div, span, h1, h2, h3, h4, h5, h6 {\n";
+        css << "  font-size: " << config.fontSize << "pt !important;\n";
+        css << "}\n\n";
+
+        css << "[data-font], [style] {\n";
+        css << "  font-size: " << config.fontSize << "pt !important;\n";
+        css << "}\n";
+
+        return css.str();
     }
 
-    std::ostringstream css;
+    // Custom font selected - apply both font-family and font-size
 
     // Create a simplified font name for CSS (remove spaces, lowercase)
     std::string cssFontName = config.fontName;

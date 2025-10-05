@@ -467,7 +467,7 @@ void GuiManager::renderFontMenu()
 
     // Add informational notice about font settings
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.7f, 1.0f, 1.0f)); // Light blue info color
-    ImGui::TextWrapped("Note: Font settings only affect EPUB and MOBI ebooks. PDFs and comic books (CBZ/CBR) use embedded fonts.");
+    ImGui::TextWrapped("Note: Use Document Default for original fonts. Custom fonts apply to EPUB/MOBI only; PDFs and comics use embedded fonts.");
     ImGui::PopStyleColor();
     ImGui::Spacing();
 
