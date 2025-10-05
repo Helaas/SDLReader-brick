@@ -6,6 +6,11 @@
 #include <string>
 #include <vector>
 
+#ifdef TG5040_PLATFORM
+#include <memory>
+class PowerHandler;
+#endif
+
 // Forward declarations
 struct ImGuiContext;
 
@@ -69,6 +74,11 @@ private:
     std::string m_selectedFile;
     SDL_GameController* m_gameController;
     SDL_JoystickID m_gameControllerInstanceID;
+
+#ifdef TG5040_PLATFORM
+    std::unique_ptr<PowerHandler> m_powerHandler;
+    bool m_inFakeSleep{false};
+#endif
 
     /**
      * @brief Scan directory and populate entries

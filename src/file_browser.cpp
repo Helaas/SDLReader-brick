@@ -2,6 +2,7 @@
 #include <imgui.h>
 
 #ifdef TG5040_PLATFORM
+#include "power_handler.h"
 #include <imgui_impl_sdl.h>         // TG5040 uses v1.85 headers
 #include <imgui_impl_sdlrenderer.h> // Compatible with SDL 2.0.9
 #else
@@ -91,6 +92,28 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
     }
 #endif
 
+#ifdef TG5040_PLATFORM
+    // Initialize power handler
+    m_powerHandler = std::make_unique<PowerHandler>();
+
+    // Register sleep mode callback for fake sleep functionality
+    m_powerHandler->setSleepModeCallback([this](bool enterFakeSleep)
+                                         {
+        m_inFakeSleep = enterFakeSleep;
+        if (enterFakeSleep) {
+            std::cout << "FileBrowser: Entering fake sleep mode - disabling inputs, screen will go black" << std::endl;
+        } else {
+            std::cout << "FileBrowser: Exiting fake sleep mode - re-enabling inputs and screen" << std::endl;
+        } });
+
+    // Register pre-sleep callback - file browser has no UI windows to close
+    m_powerHandler->setPreSleepCallback([this]() -> bool
+                                        {
+                                            std::cout << "FileBrowser: Pre-sleep callback - no UI windows to close" << std::endl;
+                                            return false; // No UI windows were closed
+                                        });
+#endif
+
     // Initialize game controllers
     for (int i = 0; i < SDL_NumJoysticks(); ++i)
     {
@@ -155,6 +178,14 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
 
 void FileBrowser::cleanup()
 {
+#ifdef TG5040_PLATFORM
+    // Stop power handler first
+    if (m_powerHandler)
+    {
+        m_powerHandler->stop();
+    }
+#endif
+
     if (m_initialized)
     {
 #ifdef TG5040_PLATFORM
@@ -320,15 +351,53 @@ std::string FileBrowser::run()
     m_running = true;
     m_selectedFile.clear();
 
+#ifdef TG5040_PLATFORM
+    // Start power button monitoring
+    if (m_powerHandler && !m_powerHandler->start())
+    {
+        std::cerr << "FileBrowser: Warning: Failed to start power button monitoring" << std::endl;
+    }
+#endif
+
     while (m_running)
     {
         SDL_Event event;
         while (SDL_PollEvent(&event))
         {
+#ifdef TG5040_PLATFORM
+            // In fake sleep mode, ignore all SDL events (power button is handled by PowerHandler)
+            if (!m_inFakeSleep)
+            {
+                handleEvent(event);
+            }
+            else
+            {
+                // Only handle quit events to allow graceful shutdown
+                if (event.type == SDL_QUIT)
+                {
+                    handleEvent(event);
+                }
+            }
+#else
             handleEvent(event);
+#endif
         }
 
+#ifdef TG5040_PLATFORM
+        if (m_inFakeSleep)
+        {
+            // Fake sleep mode - render black screen
+            SDL_SetRenderDrawColor(m_renderer, 0, 0, 0, 255);
+            SDL_RenderClear(m_renderer);
+            SDL_RenderPresent(m_renderer);
+        }
+        else
+        {
+            render();
+        }
+#else
         render();
+#endif
 
         // Small delay to prevent CPU spinning
         SDL_Delay(10);
@@ -522,13 +591,6 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDLK_q:
             m_running = false;
             break;
-
-#ifdef TG5040_PLATFORM
-        // Power button support (KEY code 116 maps to SDLK_POWER)
-        case SDLK_POWER:
-            m_running = false;
-            break;
-#endif
 
         case SDLK_UP:
             if (!m_entries.empty())

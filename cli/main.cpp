@@ -90,67 +90,83 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    // If browse mode, run file browser first
-    if (browseMode)
+    // Main loop: If browse mode, keep returning to file browser after closing document
+    bool continueRunning = true;
+    while (continueRunning)
     {
-        std::cout << "Starting file browser..." << std::endl;
+        // If browse mode or no document path, run file browser
+        if (browseMode || documentPath.empty())
+        {
+            std::cout << "Starting file browser..." << std::endl;
 
-        // Load config to get last browse directory
-        OptionsManager optionsManager;
-        FontConfig config = optionsManager.loadConfig();
+            // Load config to get last browse directory
+            OptionsManager optionsManager;
+            FontConfig config = optionsManager.loadConfig();
 #ifdef TG5040_PLATFORM
-        std::string defaultPath = "/mnt/SDCARD";
+            std::string defaultPath = "/mnt/SDCARD";
 #else
-        const char* home = getenv("HOME");
-        std::string defaultPath = home ? home : "/";
+            const char* home = getenv("HOME");
+            std::string defaultPath = home ? home : "/";
 #endif
-        std::string startPath = config.lastBrowseDirectory.empty() ? defaultPath : config.lastBrowseDirectory;
+            std::string startPath = config.lastBrowseDirectory.empty() ? defaultPath : config.lastBrowseDirectory;
 
-        FileBrowser browser;
-        if (!browser.initialize(window, renderer, startPath))
-        {
-            std::cerr << "Failed to initialize file browser" << std::endl;
-            cleanupSDL(window, renderer);
-            return 1;
+            FileBrowser browser;
+            if (!browser.initialize(window, renderer, startPath))
+            {
+                std::cerr << "Failed to initialize file browser" << std::endl;
+                cleanupSDL(window, renderer);
+                return 1;
+            }
+
+            // Run browser and get selected file (cleanup happens automatically inside run())
+            documentPath = browser.run();
+
+            // Save last browsed directory back to config
+            std::string lastDir = browser.getLastDirectory();
+            if (!lastDir.empty())
+            {
+                config.lastBrowseDirectory = lastDir;
+                optionsManager.saveConfig(config);
+            }
+
+            // If user cancelled (empty path), exit
+            if (documentPath.empty())
+            {
+                std::cout << "No file selected, exiting." << std::endl;
+                continueRunning = false;
+                continue;
+            }
+
+            std::cout << "Selected file: " << documentPath << std::endl;
         }
 
-        // Run browser and get selected file (cleanup happens automatically inside run())
-        documentPath = browser.run();
-
-        // Save last browsed directory back to config
-        std::string lastDir = browser.getLastDirectory();
-        if (!lastDir.empty())
+        // Now open the document
+        try
         {
-            config.lastBrowseDirectory = lastDir;
-            optionsManager.saveConfig(config);
+            App app(documentPath, window, renderer);
+            app.run();
+        }
+        catch (const std::runtime_error& e)
+        {
+            std::cerr << "Application Error: " << e.what() << std::endl;
+            returnCode = 1;
+        }
+        catch (const std::exception& e)
+        {
+            std::cerr << "An unexpected error occurred: " << e.what() << std::endl;
+            returnCode = 1;
         }
 
-        // If user cancelled (empty path), exit
-        if (documentPath.empty())
+        // After app closes, if not in browse mode, exit the loop
+        if (!browseMode)
         {
-            std::cout << "No file selected, exiting." << std::endl;
-            cleanupSDL(window, renderer);
-            return 0;
+            continueRunning = false;
         }
-
-        std::cout << "Selected file: " << documentPath << std::endl;
-    }
-
-    // Now open the document
-    try
-    {
-        App app(documentPath, window, renderer);
-        app.run();
-    }
-    catch (const std::runtime_error& e)
-    {
-        std::cerr << "Application Error: " << e.what() << std::endl;
-        returnCode = 1;
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "An unexpected error occurred: " << e.what() << std::endl;
-        returnCode = 1;
+        else
+        {
+            // Clear document path to force browser to show on next iteration
+            documentPath.clear();
+        }
     }
 
     cleanupSDL(window, renderer);
