@@ -52,8 +52,7 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+    io.ConfigFlags &= ~(ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad); // rely on bespoke navigation to avoid ImGui's multi-highlight state
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
@@ -455,17 +454,6 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         {
             return; // ImGui is handling mouse input
         }
-    }
-
-    // Debounce controller button presses to prevent repeat-fire glitches
-    if (event.type == SDL_CONTROLLERBUTTONDOWN)
-    {
-        Uint32 currentTime = SDL_GetTicks();
-        if (currentTime - m_lastButtonPressTime < 200) // 200ms debounce
-        {
-            return; // Ignore rapid repeated presses
-        }
-        m_lastButtonPressTime = currentTime;
     }
 
     switch (event.type)
