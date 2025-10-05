@@ -295,12 +295,10 @@ bool GuiManager::handleEvent(const SDL_Event& event)
 #endif
     }
 
-    // Only let ImGui backend process the event if a menu is actually visible
-    // This prevents ImGui from capturing input when no UI is shown
-    if (m_showFontMenu || m_showNumberPad)
-    {
-        ImGui_ImplSDL2_ProcessEvent(&event);
-    }
+    // IMPORTANT: Always let ImGui backend process events to maintain proper internal state
+    // This is critical for gamepad navigation to work correctly when menus are opened
+    // ImGui needs to track controller state even when menus are not visible
+    ImGui_ImplSDL2_ProcessEvent(&event);
 
     // Only report event as "handled" if ImGui actually wants to capture it AND a menu is visible
     // This prevents ImGui from consuming events when no menu is open

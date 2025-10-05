@@ -42,10 +42,6 @@ void ButtonMapper::initializePlatformMappings()
     // - Physical "A" button (bottom) -> SDL reports as BUTTON_A
     // - Physical "B" button (right) -> SDL reports as BUTTON_B
 
-    // Map joystick buttons for Share button (various controllers report it differently)
-    m_joystickButtonMap[5] = LogicalButton::Menu;  // Common Share button mapping (misc1:b5)
-    m_joystickButtonMap[15] = LogicalButton::Menu; // Fallback for other controllers
-
     m_buttonMap[SDL_CONTROLLER_BUTTON_A] = LogicalButton::Accept;    // A (bottom) -> Accept
     m_buttonMap[SDL_CONTROLLER_BUTTON_B] = LogicalButton::Cancel;    // B (right) -> Cancel
     m_buttonMap[SDL_CONTROLLER_BUTTON_X] = LogicalButton::Alternate; // X (left)
