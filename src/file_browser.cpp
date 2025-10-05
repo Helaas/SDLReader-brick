@@ -393,7 +393,7 @@ void FileBrowser::render()
 #ifdef TG5040_PLATFORM
     // Reduce size to account for scaled borders/padding/margins (3x scale)
     // This prevents scrollbar from appearing
-    ImGui::SetNextWindowSize(ImVec2(static_cast<float>(windowWidth - 30), static_cast<float>(windowHeight - 30)));
+    ImGui::SetNextWindowSize(ImVec2(static_cast<float>(windowWidth - 1), static_cast<float>(windowHeight - 1)));
 #else
     ImGui::SetNextWindowSize(ImVec2(static_cast<float>(windowWidth), static_cast<float>(windowHeight)));
 #endif
@@ -411,7 +411,7 @@ void FileBrowser::render()
 
     // Instructions
 #ifdef TG5040_PLATFORM
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "D-Pad: Navigate | A: Select | B: Back | Menu: Quit");
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "D-Pad: Nav. | A: Select | B: Back | Menu: Quit");
 #else
     ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Arrow Keys/D-Pad: Navigate | Enter/A: Select | Backspace/B: Back | Escape: Quit");
 #endif
@@ -485,13 +485,6 @@ void FileBrowser::render()
 
 void FileBrowser::handleEvent(const SDL_Event& event)
 {
-    // Add debug logging for controller events
-    if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP)
-    {
-        std::cout << "FileBrowser: Controller event received - type=" << event.type
-                  << " button=" << (int)event.cbutton.button << std::endl;
-    }
-
     // Let ImGui process the event first
 #ifdef TG5040_PLATFORM
     ImGui_ImplSDL2_ProcessEvent(&event);
