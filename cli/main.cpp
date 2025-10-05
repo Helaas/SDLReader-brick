@@ -114,7 +114,7 @@ int main(int argc, char* argv[])
             return 1;
         }
 
-        // Run browser and get selected file
+        // Run browser and get selected file (cleanup happens automatically inside run())
         documentPath = browser.run();
 
         // Save last browsed directory back to config
@@ -124,8 +124,6 @@ int main(int argc, char* argv[])
             config.lastBrowseDirectory = lastDir;
             optionsManager.saveConfig(config);
         }
-
-        browser.cleanup();
 
         // If user cancelled (empty path), exit
         if (documentPath.empty())

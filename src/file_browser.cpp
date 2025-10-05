@@ -281,6 +281,30 @@ std::string FileBrowser::run()
         SDL_Delay(10);
     }
 
+    std::cout << "FileBrowser: Cleaning up ImGui..." << std::endl;
+
+    // Cleanup ImGui immediately so it doesn't interfere with main app
+    cleanup();
+
+    // Flush any remaining SDL events to prevent stale input
+    SDL_Event event;
+    int flushedEvents = 0;
+    while (SDL_PollEvent(&event))
+    {
+        flushedEvents++;
+        if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP)
+        {
+            std::cout << "Flushed controller event: type=" << event.type 
+                      << " button=" << (int)event.cbutton.button << std::endl;
+        }
+    }
+    std::cout << "Flushed " << flushedEvents << " events from queue" << std::endl;
+
+    // Small delay to ensure everything is processed
+    SDL_Delay(100);
+
+    std::cout << "FileBrowser: Cleanup complete, returning to app" << std::endl;
+
     return m_selectedFile;
 }
 
@@ -302,13 +326,21 @@ void FileBrowser::render()
 
     // Create a fullscreen window
     ImGui::SetNextWindowPos(ImVec2(0, 0));
+#ifdef TG5040_PLATFORM
+    // Reduce size to account for scaled borders/padding/margins (3x scale)
+    // This prevents scrollbar from appearing
+    ImGui::SetNextWindowSize(ImVec2(static_cast<float>(windowWidth - 30), static_cast<float>(windowHeight - 30)));
+#else
     ImGui::SetNextWindowSize(ImVec2(static_cast<float>(windowWidth), static_cast<float>(windowHeight)));
+#endif
 
     ImGui::Begin("File Browser", nullptr,
                  ImGuiWindowFlags_NoTitleBar |
                      ImGuiWindowFlags_NoResize |
                      ImGuiWindowFlags_NoMove |
-                     ImGuiWindowFlags_NoCollapse);
+                     ImGuiWindowFlags_NoCollapse |
+                     ImGuiWindowFlags_NoScrollbar |
+                     ImGuiWindowFlags_NoScrollWithMouse);
 
     // Display current path
     ImGui::TextWrapped("Current Directory: %s", m_currentPath.c_str());
