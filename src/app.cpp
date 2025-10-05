@@ -94,9 +94,14 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     {
         m_document = std::make_unique<MuPdfDocument>();
 
-        // Apply saved CSS configuration BEFORE opening document
+        // IMPORTANT: Install custom font loader BEFORE opening document
+        // This ensures fonts are available during initial document rendering
         if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
         {
+            m_optionsManager->installFontLoader(muDoc->getContext());
+            std::cout << "DEBUG: Custom font loader installed before opening document" << std::endl;
+
+            // Apply saved CSS configuration BEFORE opening document
             if (!savedConfig.fontPath.empty())
             {
                 std::string css = m_optionsManager->generateCSS(savedConfig);
@@ -146,12 +151,8 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     m_inputManager->setZoomStep(m_optionsManager->loadConfig().zoomStep);
     m_inputManager->setPageCount(pageCount);
 
-    // Install custom font loader for MuPDF if this is a MuPDF document
-    if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
-    {
-        m_optionsManager->installFontLoader(muDoc->getContext());
-        std::cout << "DEBUG: Custom font loader installed for MuPDF document" << std::endl;
-    }
+    // Note: Custom font loader is already installed before document opening
+    // (see earlier in constructor, before m_document->open() call)
 
     // Initialize GUI manager AFTER font manager
     m_guiManager = std::make_unique<GuiManager>();
@@ -219,25 +220,25 @@ App::~App()
     // Explicitly destroy managers in controlled order to debug which one hangs
     std::cout.flush();
     m_renderManager.reset();
-    
+
     std::cout.flush();
     m_navigationManager.reset();
-    
+
     std::cout.flush();
     m_viewportManager.reset();
-    
+
     std::cout.flush();
     m_inputManager.reset();
-    
+
     std::cout.flush();
     m_optionsManager.reset();
-    
+
     std::cout.flush();
     m_guiManager.reset();
-    
+
     std::cout.flush();
     m_document.reset();
-    
+
     std::cout.flush();
 }
 
