@@ -503,16 +503,18 @@ void FileBrowser::handleEvent(const SDL_Event& event)
 #endif
 
         case SDLK_UP:
-            if (m_selectedIndex > 0)
+            if (!m_entries.empty())
             {
-                m_selectedIndex--;
+                const int total = static_cast<int>(m_entries.size());
+                m_selectedIndex = (m_selectedIndex - 1 + total) % total;
             }
             break;
 
         case SDLK_DOWN:
-            if (m_selectedIndex < static_cast<int>(m_entries.size()) - 1)
+            if (!m_entries.empty())
             {
-                m_selectedIndex++;
+                const int total = static_cast<int>(m_entries.size());
+                m_selectedIndex = (m_selectedIndex + 1) % total;
             }
             break;
 
@@ -534,16 +536,18 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         switch (event.cbutton.button)
         {
         case SDL_CONTROLLER_BUTTON_DPAD_UP:
-            if (m_selectedIndex > 0)
+            if (!m_entries.empty())
             {
-                m_selectedIndex--;
+                const int total = static_cast<int>(m_entries.size());
+                m_selectedIndex = (m_selectedIndex - 1 + total) % total;
             }
             break;
 
         case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-            if (m_selectedIndex < static_cast<int>(m_entries.size()) - 1)
+            if (!m_entries.empty())
             {
-                m_selectedIndex++;
+                const int total = static_cast<int>(m_entries.size());
+                m_selectedIndex = (m_selectedIndex + 1) % total;
             }
             break;
 
