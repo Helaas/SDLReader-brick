@@ -4,21 +4,18 @@
 #include "renderer.h"
 #include <SDL.h>
 #include <SDL_ttf.h>
-#include <imgui.h>
 #include <cstring>
+#include <imgui.h>
 #include <iostream>
 
 void cleanupSDL(SDL_Window* window, SDL_Renderer* renderer)
 {
-    std::cout << "cleanupSDL(): Cleaning up ImGui context..." << std::endl;
     // Clean up ImGui context if it exists
     if (ImGui::GetCurrentContext() != nullptr)
     {
         ImGui::DestroyContext();
-        std::cout << "cleanupSDL(): ImGui context destroyed" << std::endl;
     }
-    
-    std::cout << "cleanupSDL(): Destroying SDL resources..." << std::endl;
+
     if (renderer)
     {
         SDL_DestroyRenderer(renderer);
@@ -29,7 +26,6 @@ void cleanupSDL(SDL_Window* window, SDL_Renderer* renderer)
     }
     TTF_Quit();
     SDL_Quit();
-    std::cout << "cleanupSDL(): SDL cleanup complete" << std::endl;
 }
 
 int main(int argc, char* argv[])
@@ -105,9 +101,9 @@ int main(int argc, char* argv[])
     bool continueRunning = true;
     while (continueRunning)
     {
-        std::cout << "Main: Loop iteration - browseMode=" << browseMode 
+        std::cout << "Main: Loop iteration - browseMode=" << browseMode
                   << ", documentPath=" << (documentPath.empty() ? "empty" : documentPath) << std::endl;
-        
+
         // If browse mode or no document path, run file browser
         if (browseMode || documentPath.empty())
         {
@@ -163,8 +159,6 @@ int main(int argc, char* argv[])
             std::cout << "Main: App instance created, calling run()" << std::endl;
             std::cout.flush();
             app.run();
-            std::cout << "Main: App.run() returned" << std::endl;
-            std::cout.flush();
         }
         catch (const std::runtime_error& e)
         {
@@ -184,16 +178,10 @@ int main(int argc, char* argv[])
             std::cerr.flush();
             returnCode = 1;
         }
-        
-        std::cout << "Main: After try-catch block" << std::endl;
-        std::cout.flush();
-        std::cout << "Main: App closed, checking browse mode" << std::endl;
-        std::cout.flush();
 
         // After app closes, if not in browse mode, exit the loop
         if (!browseMode)
         {
-            std::cout << "Main: Not in browse mode, exiting" << std::endl;
             continueRunning = false;
         }
         else

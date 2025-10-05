@@ -452,7 +452,6 @@ void App::processInputAction(const InputActionData& actionData)
     switch (actionData.action)
     {
     case InputAction::Quit:
-        std::cout << "App: Quit action triggered, closing document viewer" << std::endl;
         m_running = false;
         break;
     case InputAction::Resize:
