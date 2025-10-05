@@ -33,7 +33,7 @@ FileBrowser::FileBrowser()
       m_currentPath(getenv("HOME") ? getenv("HOME") : "/")
 #endif
       ,
-      m_selectedIndex(0)
+      m_selectedIndex(0), m_gameController(nullptr), m_gameControllerInstanceID(-1)
 {
 }
 
@@ -91,6 +91,25 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
     }
 #endif
 
+    // Initialize game controllers
+    for (int i = 0; i < SDL_NumJoysticks(); ++i)
+    {
+        if (SDL_IsGameController(i))
+        {
+            m_gameController = SDL_GameControllerOpen(i);
+            if (m_gameController)
+            {
+                m_gameControllerInstanceID = SDL_JoystickGetDeviceInstanceID(i);
+                std::cout << "FileBrowser: Opened game controller: " << SDL_GameControllerName(m_gameController) << std::endl;
+                break;
+            }
+            else
+            {
+                std::cerr << "FileBrowser: Could not open game controller: " << SDL_GetError() << std::endl;
+            }
+        }
+    }
+
     // Scan initial directory
     if (!scanDirectory(m_currentPath))
     {
@@ -147,6 +166,15 @@ void FileBrowser::cleanup()
 #endif
         ImGui::DestroyContext();
         m_initialized = false;
+    }
+
+    // Close game controller
+    if (m_gameController)
+    {
+        SDL_GameControllerClose(m_gameController);
+        m_gameController = nullptr;
+        m_gameControllerInstanceID = -1;
+        std::cout << "FileBrowser: Closed game controller" << std::endl;
     }
 }
 
@@ -457,6 +485,13 @@ void FileBrowser::render()
 
 void FileBrowser::handleEvent(const SDL_Event& event)
 {
+    // Add debug logging for controller events
+    if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP)
+    {
+        std::cout << "FileBrowser: Controller event received - type=" << event.type
+                  << " button=" << (int)event.cbutton.button << std::endl;
+    }
+
     // Let ImGui process the event first
 #ifdef TG5040_PLATFORM
     ImGui_ImplSDL2_ProcessEvent(&event);

@@ -67,6 +67,8 @@ private:
     std::vector<FileEntry> m_entries;
     int m_selectedIndex;
     std::string m_selectedFile;
+    SDL_GameController* m_gameController;
+    SDL_JoystickID m_gameControllerInstanceID;
 
     /**
      * @brief Scan directory and populate entries
