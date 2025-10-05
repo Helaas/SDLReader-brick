@@ -49,20 +49,39 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
     m_renderer = renderer;
     m_currentPath = startPath;
 
-    // Setup Dear ImGui context
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
+    // Setup Dear ImGui context (or reuse existing one in browse mode)
+    bool isNewContext = (ImGui::GetCurrentContext() == nullptr);
+    if (isNewContext)
+    {
+        std::cout << "FileBrowser: Creating new ImGui context" << std::endl;
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+    }
+    else
+    {
+        std::cout << "FileBrowser: Reusing existing ImGui context" << std::endl;
+    }
+    
     ImGuiIO& io = ImGui::GetIO();
+    // Reset config flags for file browser
+    io.ConfigFlags = 0; // Clear all flags first
     io.ConfigFlags &= ~(ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad); // rely on bespoke navigation to avoid ImGui's multi-highlight state
 
-    // Setup Dear ImGui style
+    // Reset the style colors
     ImGui::StyleColorsDark();
 
 #ifdef TG5040_PLATFORM
-    // Increase font size 3x for TG5040 readability
-    ImGuiStyle& style = ImGui::GetStyle();
-    style.ScaleAllSizes(3.0f);
+    if (isNewContext)
+    {
+        // Scale widget sizes to 3x for TG5040 (640x480 display)
+        // This must match GuiManager's scaling
+        ImGuiStyle& style = ImGui::GetStyle();
+        style.ScaleAllSizes(3.0f);
+        std::cout << "FileBrowser: Applied initial 3x widget scale for TG5040" << std::endl;
+    }
+    // Font scale is independent of widget scale - FileBrowser uses 3x for fonts
     io.FontGlobalScale = 3.0f;
+    std::cout << "FileBrowser: Set FontGlobalScale to 3.0" << std::endl;
 #endif
 
     // Setup Platform/Renderer backends
@@ -188,6 +207,7 @@ void FileBrowser::cleanup()
 
     if (m_initialized)
     {
+        std::cout << "FileBrowser::cleanup(): Shutting down ImGui backends..." << std::endl;
 #ifdef TG5040_PLATFORM
         ImGui_ImplSDLRenderer_Shutdown();
         ImGui_ImplSDL2_Shutdown();
@@ -195,7 +215,11 @@ void FileBrowser::cleanup()
         ImGui_ImplSDLRenderer2_Shutdown();
         ImGui_ImplSDL2_Shutdown();
 #endif
-        ImGui::DestroyContext();
+        // NOTE: We do NOT call ImGui::DestroyContext() here because:
+        // 1. In browse mode, the App (GuiManager) will need to create a new ImGui context after this
+        // 2. Destroying and recreating contexts can cause issues with SDL/ImGui state
+        // 3. The context will be cleaned up when the program actually exits
+        std::cout << "FileBrowser::cleanup(): Backends shutdown complete (context preserved)" << std::endl;
         m_initialized = false;
     }
 

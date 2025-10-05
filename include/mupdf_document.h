@@ -3,6 +3,7 @@
 
 #include "document.h"
 #include <atomic>
+#include <iostream>
 #include <map>
 #include <memory>
 #include <mupdf/fitz.h>
@@ -80,7 +81,18 @@ private:
         void operator()(fz_context* ctx) const
         {
             if (ctx)
-                fz_drop_context(ctx);
+            {
+                std::cout << "ContextDeleter: Dropping MuPDF context..." << std::endl;
+                std::cout.flush();
+                // NOTE: We do NOT call fz_drop_context() here because:
+                // 1. MuPDF's fz_drop_context() can call exit() if there are accumulated errors/warnings
+                // 2. This causes the entire process to terminate unexpectedly when returning to file browser
+                // 3. Contexts will be cleaned up when the process exits
+                // 4. This is safe because MuPDF contexts are designed to persist for the app lifetime
+                std::cout << "ContextDeleter: Skipping fz_drop_context() to prevent process termination" << std::endl;
+                std::cout.flush();
+                // fz_drop_context(ctx); // COMMENTED OUT - causes exit() in browse mode
+            }
         }
     };
     struct DocumentDeleter
@@ -93,7 +105,13 @@ private:
         void operator()(fz_document* doc) const
         {
             if (doc && ctx)
+            {
+                std::cout << "DocumentDeleter: Dropping MuPDF document..." << std::endl;
+                std::cout.flush();
                 fz_drop_document(ctx, doc);
+                std::cout << "DocumentDeleter: MuPDF document dropped" << std::endl;
+                std::cout.flush();
+            }
         }
     };
     struct PixmapDeleter
