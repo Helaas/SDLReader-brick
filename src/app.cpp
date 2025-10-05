@@ -366,25 +366,11 @@ void App::run()
 
 void App::handleEvent(const SDL_Event& event)
 {
-    // Debug: Log ALL controller button events as they arrive
-    if (event.type == SDL_CONTROLLERBUTTONDOWN)
-    {
-        std::cout << "[App::handleEvent] Controller button " << (int)event.cbutton.button 
-                  << " DOWN received" << std::endl;
-    }
-
     // Let ImGui handle the event first
     bool guiHandled = false;
     if (m_guiManager)
     {
         guiHandled = m_guiManager->handleEvent(event);
-    }
-
-    // Debug: Log if GUI is blocking d-pad input
-    if (event.type == SDL_CONTROLLERBUTTONDOWN)
-    {
-        std::cout << "[App::handleEvent] Button " << (int)event.cbutton.button 
-                  << " - guiHandled: " << guiHandled << std::endl;
     }
 
     // If GUI handled the event (like button 10 to close menu), we're done
@@ -427,14 +413,6 @@ void App::handleEvent(const SDL_Event& event)
 
     // Process input through InputManager
     InputActionData actionData = m_inputManager->processEvent(event);
-    
-    // Debug: Log what action InputManager returned for d-pad
-    if (event.type == SDL_CONTROLLERBUTTONDOWN)
-    {
-        std::cout << "[App::handleEvent] Button " << (int)event.cbutton.button 
-                  << " produced action: " << (int)actionData.action << std::endl;
-    }
-    
     processInputAction(actionData);
 
     // Update App's input state variables for held button tracking
