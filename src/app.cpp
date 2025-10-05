@@ -366,11 +366,25 @@ void App::run()
 
 void App::handleEvent(const SDL_Event& event)
 {
+    // Debug: Log ALL controller button events as they arrive
+    if (event.type == SDL_CONTROLLERBUTTONDOWN)
+    {
+        std::cout << "[App::handleEvent] Controller button " << (int)event.cbutton.button 
+                  << " DOWN received" << std::endl;
+    }
+
     // Let ImGui handle the event first
     bool guiHandled = false;
     if (m_guiManager)
     {
         guiHandled = m_guiManager->handleEvent(event);
+    }
+
+    // Debug: Log if GUI is blocking d-pad input
+    if (event.type == SDL_CONTROLLERBUTTONDOWN)
+    {
+        std::cout << "[App::handleEvent] Button " << (int)event.cbutton.button 
+                  << " - guiHandled: " << guiHandled << std::endl;
     }
 
     // If GUI handled the event (like button 10 to close menu), we're done
@@ -413,6 +427,14 @@ void App::handleEvent(const SDL_Event& event)
 
     // Process input through InputManager
     InputActionData actionData = m_inputManager->processEvent(event);
+    
+    // Debug: Log what action InputManager returned for d-pad
+    if (event.type == SDL_CONTROLLERBUTTONDOWN)
+    {
+        std::cout << "[App::handleEvent] Button " << (int)event.cbutton.button 
+                  << " produced action: " << (int)actionData.action << std::endl;
+    }
+    
     processInputAction(actionData);
 
     // Update App's input state variables for held button tracking
@@ -771,84 +793,80 @@ void App::updateInputState(const SDL_Event& event)
         break;
 
     case SDL_CONTROLLERBUTTONDOWN:
-        if (event.cbutton.which == m_gameControllerInstanceID)
+        // Process all controller button events - InputManager already validated the controller
+        switch (event.cbutton.button)
         {
-            switch (event.cbutton.button)
-            {
-            case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-                if (!m_dpadRightHeld)
-                { // Only on true initial press
-                    m_dpadRightHeld = true;
-                    handleDpadNudgeRight();
-                }
-                break;
-            case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-                if (!m_dpadLeftHeld)
-                { // Only on true initial press
-                    m_dpadLeftHeld = true;
-                    handleDpadNudgeLeft();
-                }
-                break;
-            case SDL_CONTROLLER_BUTTON_DPAD_UP:
-                if (!m_dpadUpHeld)
-                { // Only on true initial press
-                    m_dpadUpHeld = true;
-                    handleDpadNudgeUp();
-                }
-                break;
-            case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-                if (!m_dpadDownHeld)
-                { // Only on true initial press
-                    m_dpadDownHeld = true;
-                    handleDpadNudgeDown();
-                }
-                break;
+        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+            if (!m_dpadRightHeld)
+            { // Only on true initial press
+                m_dpadRightHeld = true;
+                handleDpadNudgeRight();
             }
+            break;
+        case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+            if (!m_dpadLeftHeld)
+            { // Only on true initial press
+                m_dpadLeftHeld = true;
+                handleDpadNudgeLeft();
+            }
+            break;
+        case SDL_CONTROLLER_BUTTON_DPAD_UP:
+            if (!m_dpadUpHeld)
+            { // Only on true initial press
+                m_dpadUpHeld = true;
+                handleDpadNudgeUp();
+            }
+            break;
+        case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+            if (!m_dpadDownHeld)
+            { // Only on true initial press
+                m_dpadDownHeld = true;
+                handleDpadNudgeDown();
+            }
+            break;
         }
         break;
 
     case SDL_CONTROLLERBUTTONUP:
-        if (event.cbutton.which == m_gameControllerInstanceID)
+        // Process all controller button events - InputManager already validated the controller
+        switch (event.cbutton.button)
         {
-            switch (event.cbutton.button)
+        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+            m_dpadRightHeld = false;
+            if (m_edgeTurnHoldRight > 0.0f)
             {
-            case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-                m_dpadRightHeld = false;
-                if (m_edgeTurnHoldRight > 0.0f)
-                {
-                    m_edgeTurnCooldownRight = SDL_GetTicks() / 1000.0f;
-                }
-                m_edgeTurnHoldRight = 0.0f;
-                markDirty();
-                break;
-            case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-                m_dpadLeftHeld = false;
-                if (m_edgeTurnHoldLeft > 0.0f)
-                {
-                    m_edgeTurnCooldownLeft = SDL_GetTicks() / 1000.0f;
-                }
-                m_edgeTurnHoldLeft = 0.0f;
-                markDirty();
-                break;
-            case SDL_CONTROLLER_BUTTON_DPAD_UP:
-                m_dpadUpHeld = false;
-                if (m_edgeTurnHoldUp > 0.0f)
-                {
-                    m_edgeTurnCooldownUp = SDL_GetTicks() / 1000.0f;
-                }
-                m_edgeTurnHoldUp = 0.0f;
-                markDirty();
-                break;
-            case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-                m_dpadDownHeld = false;
-                if (m_edgeTurnHoldDown > 0.0f)
-                {
-                    m_edgeTurnCooldownDown = SDL_GetTicks() / 1000.0f;
-                }
-                m_edgeTurnHoldDown = 0.0f;
-                markDirty();
-                break;
+                m_edgeTurnCooldownRight = SDL_GetTicks() / 1000.0f;
             }
+            m_edgeTurnHoldRight = 0.0f;
+            markDirty();
+            break;
+        case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+            m_dpadLeftHeld = false;
+            if (m_edgeTurnHoldLeft > 0.0f)
+            {
+                m_edgeTurnCooldownLeft = SDL_GetTicks() / 1000.0f;
+            }
+            m_edgeTurnHoldLeft = 0.0f;
+            markDirty();
+            break;
+        case SDL_CONTROLLER_BUTTON_DPAD_UP:
+            m_dpadUpHeld = false;
+            if (m_edgeTurnHoldUp > 0.0f)
+            {
+                m_edgeTurnCooldownUp = SDL_GetTicks() / 1000.0f;
+            }
+            m_edgeTurnHoldUp = 0.0f;
+            markDirty();
+            break;
+        case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+            m_dpadDownHeld = false;
+            if (m_edgeTurnHoldDown > 0.0f)
+            {
+                m_edgeTurnCooldownDown = SDL_GetTicks() / 1000.0f;
+            }
+            m_edgeTurnHoldDown = 0.0f;
+            markDirty();
+            break;
         }
         break;
 

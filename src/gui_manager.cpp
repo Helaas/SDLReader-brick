@@ -299,6 +299,15 @@ bool GuiManager::handleEvent(const SDL_Event& event)
     ImGuiIO& io = ImGui::GetIO();
     bool handled = false;
 
+    // Debug: Log controller button events
+    if (event.type == SDL_CONTROLLERBUTTONDOWN)
+    {
+        std::cout << "[GuiManager] Controller button " << (int)event.cbutton.button 
+                  << " pressed. Menu visible: " << (m_showFontMenu || m_showNumberPad)
+                  << ", WantCaptureKeyboard: " << io.WantCaptureKeyboard
+                  << ", NavActive: " << io.NavActive << std::endl;
+    }
+
     // Only capture input if a menu is visible
     if (m_showFontMenu || m_showNumberPad)
     {
