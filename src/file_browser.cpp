@@ -477,7 +477,7 @@ void FileBrowser::render()
                      ImGuiWindowFlags_NoScrollWithMouse);
 
     // Display current path
-    ImGui::TextWrapped("Current Directory: %s", m_currentPath.c_str());
+    ImGui::TextWrapped("Cur. Directory: %s", m_currentPath.c_str());
     ImGui::Separator();
 
     // Instructions

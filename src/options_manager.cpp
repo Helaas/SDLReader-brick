@@ -288,6 +288,14 @@ std::string OptionsManager::generateCSS(const FontConfig& config) const
     std::replace(cssFontName.begin(), cssFontName.end(), ' ', '-');
     std::transform(cssFontName.begin(), cssFontName.end(), cssFontName.begin(), ::tolower);
 
+    // IMPORTANT: Add @font-face declaration first - this is required for MuPDF to actually load the font
+    // Without this, MuPDF will fall back to built-in fonts like CharisSIL or NimbusSans
+    // See: https://github.com/pymupdf/PyMuPDF/issues/3083
+    css << "@font-face {\n";
+    css << "  font-family: '" << config.fontName << "';\n";
+    css << "  src: url('" << config.fontPath << "');\n";
+    css << "}\n\n";
+
     // Apply font to all text elements with very high specificity
     // Use the font name that our custom loader will recognize
     css << "* {\n";

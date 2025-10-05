@@ -432,7 +432,7 @@ void GuiManager::renderFontMenu()
     ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 #ifdef TG5040_PLATFORM
     // TG5040: Use almost full screen size (640x480 display)
-    ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x * 0.97f, io.DisplaySize.y * 0.92f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x * 0.97f, io.DisplaySize.y * 0.97f), ImGuiCond_Always);
 #else
     // Other platforms: Fixed width, auto height
     ImGui::SetNextWindowSize(ImVec2(400, 0), ImGuiCond_Always);
@@ -546,7 +546,7 @@ void GuiManager::renderFontMenu()
 
     ImGui::Text("Zoom Step: %d%%", m_tempConfig.zoomStep);
     ImGui::SameLine();
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1), "Amount to zoom in/out with +/- keys");
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1), "Adjust the amount of zoom per step");
 
     // Zoom step slider only
     int tempZoomStep = m_tempConfig.zoomStep;
@@ -641,7 +641,7 @@ void GuiManager::renderFontMenu()
         ImGui::BeginDisabled();
     }
 
-    if (ImGui::Button("Apply", ImVec2(90, 30)))
+    if (ImGui::Button("Apply", ImVec2(90, 40)))
     {
         std::cout << "Apply button clicked!" << std::endl;
         if (hasValidFont && m_fontApplyCallback)
@@ -684,7 +684,7 @@ void GuiManager::renderFontMenu()
 
     ImGui::SameLine();
 
-    if (ImGui::Button("Close", ImVec2(90, 30)))
+    if (ImGui::Button("Close", ImVec2(90, 40)))
     {
         std::cout << "Close button clicked!" << std::endl;
         m_showFontMenu = false;
@@ -701,7 +701,7 @@ void GuiManager::renderFontMenu()
 
     ImGui::SameLine();
 
-    if (ImGui::Button("Reset to Default", ImVec2(220, 30)))
+    if (ImGui::Button("Reset to Default", ImVec2(230, 40)))
     {
         // Reset to default config
         m_tempConfig = FontConfig();
