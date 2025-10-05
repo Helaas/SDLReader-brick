@@ -77,6 +77,21 @@ InputActionData InputManager::processEvent(const SDL_Event& event)
 
     case SDL_CONTROLLERBUTTONDOWN:
     case SDL_CONTROLLERBUTTONUP:
+        // On TG5040, joystick buttons 9 and 10 are extra buttons handled via SDL_JOYBUTTONDOWN
+        // SDL maps these to controller buttons 7 and 8 - filter them out to prevent double-processing
+#ifdef TG5040_PLATFORM
+    {
+        int buttonNum = event.cbutton.button;
+
+        // Based on logs: joystick button 10 -> controller button 8
+        // Likely: joystick button 9 -> controller button 7
+        // These are Extra1 and Extra2, handled via SDL_JOYBUTTONDOWN
+        if (buttonNum == 7 || buttonNum == 8)
+        {
+            break; // Don't process
+        }
+    }
+#endif
         actionData = processControllerButton(event);
         break;
 
@@ -524,6 +539,12 @@ InputActionData InputManager::processControllerButton(const SDL_Event& event)
 
         case LogicalButton::Options:
             actionData.action = InputAction::ToggleMirrorVertical;
+            break;
+
+        case LogicalButton::Extra1:
+        case LogicalButton::Extra2:
+            // These are handled via SDL_JOYBUTTONDOWN on TG5040
+            // Should be filtered out earlier in processEvent()
             break;
         }
     }
