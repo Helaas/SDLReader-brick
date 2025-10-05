@@ -53,35 +53,25 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
     bool isNewContext = (ImGui::GetCurrentContext() == nullptr);
     if (isNewContext)
     {
-        std::cout << "FileBrowser: Creating new ImGui context" << std::endl;
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
     }
-    else
-    {
-        std::cout << "FileBrowser: Reusing existing ImGui context" << std::endl;
-    }
-    
+
     ImGuiIO& io = ImGui::GetIO();
     // Reset config flags for file browser
-    io.ConfigFlags = 0; // Clear all flags first
+    io.ConfigFlags = 0;                                                                          // Clear all flags first
     io.ConfigFlags &= ~(ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad); // rely on bespoke navigation to avoid ImGui's multi-highlight state
 
-    // Reset the style colors
-    ImGui::StyleColorsDark();
-
 #ifdef TG5040_PLATFORM
-    if (isNewContext)
-    {
-        // Scale widget sizes to 3x for TG5040 (640x480 display)
-        // This must match GuiManager's scaling
-        ImGuiStyle& style = ImGui::GetStyle();
-        style.ScaleAllSizes(3.0f);
-        std::cout << "FileBrowser: Applied initial 3x widget scale for TG5040" << std::endl;
-    }
-    // Font scale is independent of widget scale - FileBrowser uses 3x for fonts
+    // FileBrowser uses 3x scaling for large, readable text on 640x480 display
+    // Always reset to default style first to avoid cumulative scaling
+    ImGui::GetStyle() = ImGuiStyle();      // Reset to default
+    ImGui::StyleColorsDark();              // Apply dark colors
+    ImGui::GetStyle().ScaleAllSizes(3.0f); // Scale to 3x from base
     io.FontGlobalScale = 3.0f;
-    std::cout << "FileBrowser: Set FontGlobalScale to 3.0" << std::endl;
+#else
+    // Reset the style colors for non-TG5040 platforms
+    ImGui::StyleColorsDark();
 #endif
 
     // Setup Platform/Renderer backends
@@ -120,15 +110,12 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
                                          {
         m_inFakeSleep = enterFakeSleep;
         if (enterFakeSleep) {
-            std::cout << "FileBrowser: Entering fake sleep mode - disabling inputs, screen will go black" << std::endl;
         } else {
-            std::cout << "FileBrowser: Exiting fake sleep mode - re-enabling inputs and screen" << std::endl;
         } });
 
     // Register pre-sleep callback - file browser has no UI windows to close
     m_powerHandler->setPreSleepCallback([this]() -> bool
                                         {
-                                            std::cout << "FileBrowser: Pre-sleep callback - no UI windows to close" << std::endl;
                                             return false; // No UI windows were closed
                                         });
 #endif
@@ -142,7 +129,6 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
             if (m_gameController)
             {
                 m_gameControllerInstanceID = SDL_JoystickGetDeviceInstanceID(i);
-                std::cout << "FileBrowser: Opened game controller: " << SDL_GameControllerName(m_gameController) << std::endl;
                 break;
             }
             else
@@ -207,7 +193,6 @@ void FileBrowser::cleanup()
 
     if (m_initialized)
     {
-        std::cout << "FileBrowser::cleanup(): Shutting down ImGui backends..." << std::endl;
 #ifdef TG5040_PLATFORM
         ImGui_ImplSDLRenderer_Shutdown();
         ImGui_ImplSDL2_Shutdown();
@@ -219,7 +204,6 @@ void FileBrowser::cleanup()
         // 1. In browse mode, the App (GuiManager) will need to create a new ImGui context after this
         // 2. Destroying and recreating contexts can cause issues with SDL/ImGui state
         // 3. The context will be cleaned up when the program actually exits
-        std::cout << "FileBrowser::cleanup(): Backends shutdown complete (context preserved)" << std::endl;
         m_initialized = false;
     }
 
@@ -229,7 +213,6 @@ void FileBrowser::cleanup()
         SDL_GameControllerClose(m_gameController);
         m_gameController = nullptr;
         m_gameControllerInstanceID = -1;
-        std::cout << "FileBrowser: Closed game controller" << std::endl;
     }
 }
 
@@ -427,8 +410,6 @@ std::string FileBrowser::run()
         SDL_Delay(10);
     }
 
-    std::cout << "FileBrowser: Cleaning up ImGui..." << std::endl;
-
     // Clear ImGui IO state before cleanup to prevent state bleeding
     if (m_initialized)
     {
@@ -437,7 +418,6 @@ std::string FileBrowser::run()
         io.WantCaptureMouse = false;
         io.NavActive = false;
         io.NavVisible = false;
-        std::cout << "FileBrowser: Cleared ImGui IO state" << std::endl;
     }
 
     // Cleanup ImGui immediately so it doesn't interfere with main app
@@ -459,8 +439,6 @@ std::string FileBrowser::run()
 
     // Small delay to ensure everything is processed
     SDL_Delay(100);
-
-    std::cout << "FileBrowser: Cleanup complete, returning to app" << std::endl;
 
     return m_selectedFile;
 }

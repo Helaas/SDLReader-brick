@@ -207,48 +207,37 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
 
 App::~App()
 {
-    std::cout << "App::~App(): Destructor called, cleaning up..." << std::endl;
     std::cout.flush();
 #ifdef TG5040_PLATFORM
     if (m_powerHandler)
     {
-        std::cout << "App::~App(): Stopping PowerHandler..." << std::endl;
         std::cout.flush();
         m_powerHandler->stop();
-        std::cout << "App::~App(): PowerHandler stopped" << std::endl;
         std::cout.flush();
     }
 #endif
     // Explicitly destroy managers in controlled order to debug which one hangs
-    std::cout << "App::~App(): Destroying RenderManager..." << std::endl;
     std::cout.flush();
     m_renderManager.reset();
     
-    std::cout << "App::~App(): Destroying NavigationManager..." << std::endl;
     std::cout.flush();
     m_navigationManager.reset();
     
-    std::cout << "App::~App(): Destroying ViewportManager..." << std::endl;
     std::cout.flush();
     m_viewportManager.reset();
     
-    std::cout << "App::~App(): Destroying InputManager..." << std::endl;
     std::cout.flush();
     m_inputManager.reset();
     
-    std::cout << "App::~App(): Destroying OptionsManager..." << std::endl;
     std::cout.flush();
     m_optionsManager.reset();
     
-    std::cout << "App::~App(): Destroying GuiManager..." << std::endl;
     std::cout.flush();
     m_guiManager.reset();
     
-    std::cout << "App::~App(): Destroying Document..." << std::endl;
     std::cout.flush();
     m_document.reset();
     
-    std::cout << "App::~App(): Destructor complete" << std::endl;
     std::cout.flush();
 }
 

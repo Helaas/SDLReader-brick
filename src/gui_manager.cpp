@@ -40,34 +40,24 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
     bool isNewContext = (ImGui::GetCurrentContext() == nullptr);
     if (isNewContext)
     {
-        std::cout << "GuiManager: Creating new ImGui context" << std::endl;
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
     }
-    else
-    {
-        std::cout << "GuiManager: Reusing existing ImGui context from FileBrowser" << std::endl;
-    }
-    
+
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
 
-    // Setup Dear ImGui style (colors only)
-    ImGui::StyleColorsDark();
-
 #ifdef TG5040_PLATFORM
-    if (isNewContext)
-    {
-        // Scale widget sizes to 3x for TG5040 (640x480 display)
-        // This must match FileBrowser's scaling
-        ImGuiStyle& style = ImGui::GetStyle();
-        style.ScaleAllSizes(3.0f);
-        std::cout << "GuiManager: Applied initial 3x widget scale for TG5040" << std::endl;
-    }
-    // Font scale is independent of widget scale - GuiManager uses 1.8x for fonts
-    io.FontGlobalScale = 1.8f;
-    std::cout << "GuiManager: Set FontGlobalScale to 1.8" << std::endl;
+    // GuiManager uses 1.98x scaling for better menu fit on 640x480 display (1.8x + 10%)
+    // Always reset to default style first to avoid cumulative scaling
+    ImGui::GetStyle() = ImGuiStyle();       // Reset to default
+    ImGui::StyleColorsDark();               // Apply dark colors
+    ImGui::GetStyle().ScaleAllSizes(1.98f); // Scale to 1.98x from base
+    io.FontGlobalScale = 1.98f;
+#else
+    // Setup Dear ImGui style for non-TG5040 platforms
+    ImGui::StyleColorsDark();
 #endif
 
     // Setup Platform/Renderer backends
@@ -102,7 +92,6 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
 #endif
 
     m_initialized = true;
-    std::cout << "Dear ImGui initialized successfully" << std::endl;
 
     // Reset ImGui IO state to ensure clean slate (important after file browser)
     {
@@ -111,7 +100,6 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
         ioReset.WantCaptureMouse = false;
         ioReset.NavActive = false;
         ioReset.NavVisible = false;
-        std::cout << "GuiManager: Reset ImGui IO state for clean initialization" << std::endl;
     }
 
     // Initialize font manager and load config
@@ -173,8 +161,6 @@ void GuiManager::cleanup()
         return;
     }
 
-    std::cout << "GuiManager::cleanup(): Shutting down ImGui backends..." << std::endl;
-
 #ifdef TG5040_PLATFORM
     ImGui_ImplSDLRenderer_Shutdown();
     ImGui_ImplSDL2_Shutdown();
@@ -187,7 +173,6 @@ void GuiManager::cleanup()
     // 1. In browse mode, the file browser will need to create a new ImGui context after this
     // 2. Destroying and recreating contexts can cause issues with SDL/ImGui state
     // 3. The context will be cleaned up when the program actually exits (at cleanupSDL)
-    std::cout << "GuiManager::cleanup(): Backends shutdown complete (context preserved)" << std::endl;
 
     m_initialized = false;
 }

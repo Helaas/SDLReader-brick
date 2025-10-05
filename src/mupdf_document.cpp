@@ -14,21 +14,17 @@ MuPdfDocument::MuPdfDocument()
 
 MuPdfDocument::~MuPdfDocument()
 {
-    std::cout << "MuPdfDocument::~MuPdfDocument(): Destructor called" << std::endl;
     std::cout.flush();
     
     // Stop background prerendering before destroying the object
     if (m_prerenderThread.joinable())
     {
-        std::cout << "MuPdfDocument::~MuPdfDocument(): Stopping prerender thread..." << std::endl;
         std::cout.flush();
         m_prerenderActive = false;
         m_prerenderThread.join();
-        std::cout << "MuPdfDocument::~MuPdfDocument(): Prerender thread stopped" << std::endl;
         std::cout.flush();
     }
 
-    std::cout << "MuPdfDocument::~MuPdfDocument(): Clearing caches..." << std::endl;
     std::cout.flush();
     
     // Cleanup is handled by unique_ptr deleters
@@ -37,7 +33,6 @@ MuPdfDocument::~MuPdfDocument()
     m_cache.clear();
     m_argbCache.clear();
     
-    std::cout << "MuPdfDocument::~MuPdfDocument(): Destructor complete" << std::endl;
     std::cout.flush();
 }
 
