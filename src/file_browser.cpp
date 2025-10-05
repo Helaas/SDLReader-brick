@@ -283,6 +283,17 @@ std::string FileBrowser::run()
 
     std::cout << "FileBrowser: Cleaning up ImGui..." << std::endl;
 
+    // Clear ImGui IO state before cleanup to prevent state bleeding
+    if (m_initialized)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        io.WantCaptureKeyboard = false;
+        io.WantCaptureMouse = false;
+        io.NavActive = false;
+        io.NavVisible = false;
+        std::cout << "FileBrowser: Cleared ImGui IO state" << std::endl;
+    }
+
     // Cleanup ImGui immediately so it doesn't interfere with main app
     cleanup();
 
@@ -294,8 +305,8 @@ std::string FileBrowser::run()
         flushedEvents++;
         if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP)
         {
-            std::cout << "Flushed controller event: type=" << event.type 
-                      << " button=" << (int)event.cbutton.button << std::endl;
+            std::cout << "Flushed controller event: type=" << event.type
+                      << " button=" << (int) event.cbutton.button << std::endl;
         }
     }
     std::cout << "Flushed " << flushedEvents << " events from queue" << std::endl;
@@ -444,6 +455,17 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         {
             return; // ImGui is handling mouse input
         }
+    }
+
+    // Debounce controller button presses to prevent repeat-fire glitches
+    if (event.type == SDL_CONTROLLERBUTTONDOWN)
+    {
+        Uint32 currentTime = SDL_GetTicks();
+        if (currentTime - m_lastButtonPressTime < 200) // 200ms debounce
+        {
+            return; // Ignore rapid repeated presses
+        }
+        m_lastButtonPressTime = currentTime;
     }
 
     switch (event.type)

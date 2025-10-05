@@ -67,6 +67,7 @@ private:
     std::vector<FileEntry> m_entries;
     int m_selectedIndex;
     std::string m_selectedFile;
+    Uint32 m_lastButtonPressTime = 0; // For debouncing controller input
 
     /**
      * @brief Scan directory and populate entries

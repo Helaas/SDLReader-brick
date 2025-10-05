@@ -88,6 +88,16 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
     m_initialized = true;
     std::cout << "Dear ImGui initialized successfully" << std::endl;
 
+    // Reset ImGui IO state to ensure clean slate (important after file browser)
+    {
+        ImGuiIO& ioReset = ImGui::GetIO();
+        ioReset.WantCaptureKeyboard = false;
+        ioReset.WantCaptureMouse = false;
+        ioReset.NavActive = false;
+        ioReset.NavVisible = false;
+        std::cout << "GuiManager: Reset ImGui IO state for clean initialization" << std::endl;
+    }
+
     // Initialize font manager and load config
     m_currentConfig = m_optionsManager.loadConfig();
     m_tempConfig = m_currentConfig;
@@ -277,30 +287,38 @@ bool GuiManager::handleEvent(const SDL_Event& event)
 #endif
     }
 
-    // Let ImGui backend process the event
-    ImGui_ImplSDL2_ProcessEvent(&event);
+    // Only let ImGui backend process the event if a menu is actually visible
+    // This prevents ImGui from capturing input when no UI is shown
+    if (m_showFontMenu || m_showNumberPad)
+    {
+        ImGui_ImplSDL2_ProcessEvent(&event);
+    }
 
-    // Only report event as "handled" if ImGui actually wants to capture it
+    // Only report event as "handled" if ImGui actually wants to capture it AND a menu is visible
     // This prevents ImGui from consuming events when no menu is open
     ImGuiIO& io = ImGui::GetIO();
     bool handled = false;
 
-    // Check if ImGui wants to capture keyboard input
-    if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP || event.type == SDL_TEXTINPUT)
+    // Only capture input if a menu is visible
+    if (m_showFontMenu || m_showNumberPad)
     {
-        handled = io.WantCaptureKeyboard;
-    }
-    // Check if ImGui wants to capture mouse input
-    else if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP ||
-             event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEWHEEL)
-    {
-        handled = io.WantCaptureMouse;
-    }
-    // For controller/gamepad, only capture if menu is visible
-    else if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP ||
-             event.type == SDL_CONTROLLERAXISMOTION)
-    {
-        handled = (m_showFontMenu || m_showNumberPad);
+        // Check if ImGui wants to capture keyboard input
+        if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP || event.type == SDL_TEXTINPUT)
+        {
+            handled = io.WantCaptureKeyboard;
+        }
+        // Check if ImGui wants to capture mouse input
+        else if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP ||
+                 event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEWHEEL)
+        {
+            handled = io.WantCaptureMouse;
+        }
+        // For controller/gamepad, always capture if menu is visible
+        else if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP ||
+                 event.type == SDL_CONTROLLERAXISMOTION)
+        {
+            handled = true;
+        }
     }
 
     return handled;
