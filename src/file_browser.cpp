@@ -200,11 +200,37 @@ bool FileBrowser::scanDirectory(const std::string& path)
 #endif
 
         std::string fullPath = safePath;
-        if (fullPath.back() != '/')
+        if (!fullPath.empty() && fullPath.back() != '/')
         {
             fullPath += "/";
         }
         fullPath += name;
+
+        if (name == "..")
+        {
+            std::string trimmed = safePath;
+            while (trimmed.size() > 1 && trimmed.back() == '/')
+            {
+                trimmed.pop_back();
+            }
+
+            if (trimmed.empty() || trimmed == "/")
+            {
+                fullPath = "/";
+            }
+            else
+            {
+                size_t lastSlash = trimmed.find_last_of('/');
+                if (lastSlash == std::string::npos || lastSlash == 0)
+                {
+                    fullPath = "/";
+                }
+                else
+                {
+                    fullPath = trimmed.substr(0, lastSlash);
+                }
+            }
+        }
 
         struct stat statbuf;
         if (stat(fullPath.c_str(), &statbuf) == 0)
@@ -344,9 +370,8 @@ void FileBrowser::render()
     ImGui::SetNextWindowSize(ImVec2(static_cast<float>(windowWidth), static_cast<float>(windowHeight)));
 #endif
 
-    ImGui::Begin("File Browser", nullptr,
-                 ImGuiWindowFlags_NoTitleBar |
-                     ImGuiWindowFlags_NoResize |
+    ImGui::Begin("SDLReader###File Browser", nullptr,
+                 ImGuiWindowFlags_NoResize |
                      ImGuiWindowFlags_NoMove |
                      ImGuiWindowFlags_NoCollapse |
                      ImGuiWindowFlags_NoScrollbar |
