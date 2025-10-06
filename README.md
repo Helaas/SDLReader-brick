@@ -219,6 +219,17 @@ All configuration values are saved automatically when you apply changes from the
 
 **Adding new fonts:** Drop any `.ttf` or `.otf` files into the top-level `fonts/` directory (either on desktop or inside a TG5040 bundle). The Options → Font & Reading Style menu will automatically discover them, let you preview the typography, and persist your selection for EPUB/MOBI documents.
 
+### Bundled Fonts & Licensing
+
+The packaged builds include curated open fonts:
+
+- Inter (Regular, Bold) — SIL Open Font License 1.1
+- JetBrains Mono (Regular, Bold) — SIL Open Font License 1.1
+- Noto Serif Condensed (Regular, Bold) — SIL Open Font License 1.1
+- Roboto (Regular, Bold) — Apache License 2.0
+
+Full license texts are provided in [`fonts/LICENSES.md`](fonts/LICENSES.md). Keep these notices with any redistributed bundle.
+
 ## Reading History
 
 SDL Reader keeps a lightweight `reading_history.json` file in the project root. Every time you change pages, the current document path and page number are persisted so the next launch resumes automatically. The history remembers the most recent 50 documents. Delete the file if you want to reset all progress.
