@@ -6,6 +6,7 @@
 #include "input_manager.h"
 #include "navigation_manager.h"
 #include "options_manager.h"
+#include "reading_history_manager.h"
 #include "render_manager.h"
 #include "renderer.h"
 #include "text_renderer.h"
@@ -135,6 +136,7 @@ private:
     std::unique_ptr<Document> m_document;
     std::unique_ptr<GuiManager> m_guiManager;
     std::unique_ptr<OptionsManager> m_optionsManager;
+    std::unique_ptr<ReadingHistoryManager> m_readingHistoryManager;
     std::unique_ptr<InputManager> m_inputManager;
     std::unique_ptr<ViewportManager> m_viewportManager;
     std::unique_ptr<NavigationManager> m_navigationManager;
@@ -184,6 +186,9 @@ private:
     // Deferred font configuration change to avoid thread safety issues
     bool m_pendingFontChange{false};
     FontConfig m_pendingFontConfig;
+
+    // Document path for reading history
+    std::string m_documentPath;
 
     // State variables still needed by App
     bool m_inFakeSleep{false};

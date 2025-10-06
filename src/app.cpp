@@ -66,6 +66,13 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     // Initialize font manager FIRST, before document creation
     m_optionsManager = std::make_unique<OptionsManager>();
 
+    // Initialize reading history manager
+    m_readingHistoryManager = std::make_unique<ReadingHistoryManager>();
+    m_readingHistoryManager->loadHistory();
+
+    // Store document path for reading history
+    m_documentPath = filename;
+
     // Initialize navigation manager
     m_navigationManager = std::make_unique<NavigationManager>();
 
@@ -143,7 +150,18 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
 
     // Set page count in navigation manager
     m_navigationManager->setPageCount(pageCount);
-    m_navigationManager->setCurrentPage(0);
+
+    // Check if we have a last read page for this document
+    int lastPage = m_readingHistoryManager->getLastPage(m_documentPath);
+    if (lastPage >= 0 && lastPage < pageCount)
+    {
+        m_navigationManager->setCurrentPage(lastPage);
+        std::cout << "Restored last read page: " << (lastPage + 1) << " of " << pageCount << std::endl;
+    }
+    else
+    {
+        m_navigationManager->setCurrentPage(0);
+    }
 
     // Initialize InputManager
     m_inputManager = std::make_unique<InputManager>();
@@ -472,7 +490,10 @@ void App::processInputAction(const InputActionData& actionData)
             m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
                                               { markDirty(); }, [this]()
                                               { updateScaleDisplayTime(); }, [this]()
-                                              { updatePageDisplayTime(); });
+                                              {
+                                                  updatePageDisplayTime();
+                                                  // Save current page to reading history
+                                                  m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
         }
         break;
     case InputAction::GoToPreviousPage:
@@ -481,7 +502,10 @@ void App::processInputAction(const InputActionData& actionData)
             m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
                                                   { markDirty(); }, [this]()
                                                   { updateScaleDisplayTime(); }, [this]()
-                                                  { updatePageDisplayTime(); });
+                                                  {
+                                                      updatePageDisplayTime();
+                                                      // Save current page to reading history
+                                                      m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
         }
         break;
     case InputAction::ZoomIn:
@@ -503,13 +527,17 @@ void App::processInputAction(const InputActionData& actionData)
         m_navigationManager->goToPage(0, m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
                                       { markDirty(); }, [this]()
                                       { updateScaleDisplayTime(); }, [this]()
-                                      { updatePageDisplayTime(); });
+                                      {
+                                          updatePageDisplayTime();
+                                          m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
         break;
     case InputAction::GoToLastPage:
         m_navigationManager->goToPage(m_navigationManager->getPageCount() - 1, m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
                                       { markDirty(); }, [this]()
                                       { updateScaleDisplayTime(); }, [this]()
-                                      { updatePageDisplayTime(); });
+                                      {
+                                          updatePageDisplayTime();
+                                          m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
         break;
     case InputAction::GoToPage:
         if (actionData.intValue >= 0 && actionData.intValue < m_navigationManager->getPageCount())
@@ -517,7 +545,9 @@ void App::processInputAction(const InputActionData& actionData)
             m_navigationManager->goToPage(actionData.intValue, m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
                                           { markDirty(); }, [this]()
                                           { updateScaleDisplayTime(); }, [this]()
-                                          { updatePageDisplayTime(); });
+                                          {
+                                              updatePageDisplayTime();
+                                              m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
         }
         break;
     case InputAction::JumpPages:
@@ -526,7 +556,9 @@ void App::processInputAction(const InputActionData& actionData)
             m_navigationManager->jumpPages(actionData.intValue, m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
                                            { markDirty(); }, [this]()
                                            { updateScaleDisplayTime(); }, [this]()
-                                           { updatePageDisplayTime(); });
+                                           {
+                                               updatePageDisplayTime();
+                                               m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
         }
         break;
     case InputAction::ToggleFullscreen:
@@ -1324,7 +1356,9 @@ bool App::updateHeldPanning(float dt)
             m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
                                               { markDirty(); }, [this]()
                                               { updateScaleDisplayTime(); }, [this]()
-                                              { updatePageDisplayTime(); });
+                                              {
+                                                  updatePageDisplayTime();
+                                                  m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
             m_viewportManager->setScrollX(m_viewportManager->getMaxScrollX()); // appear at left edge
             m_viewportManager->clampScroll();
             changed = true;
@@ -1349,7 +1383,9 @@ bool App::updateHeldPanning(float dt)
             m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
                                                   { markDirty(); }, [this]()
                                                   { updateScaleDisplayTime(); }, [this]()
-                                                  { updatePageDisplayTime(); });
+                                                  {
+                                                      updatePageDisplayTime();
+                                                      m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
             m_viewportManager->setScrollX(-m_viewportManager->getMaxScrollX()); // appear at right edge
             m_viewportManager->clampScroll();
             changed = true;
@@ -1458,7 +1494,9 @@ bool App::updateHeldPanning(float dt)
             m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
                                               { markDirty(); }, [this]()
                                               { updateScaleDisplayTime(); }, [this]()
-                                              { updatePageDisplayTime(); });
+                                              {
+                                                  updatePageDisplayTime();
+                                                  m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
             // Land at the top edge of the new page so motion feels continuous downward
             m_viewportManager->setScrollY(m_viewportManager->getMaxScrollY());
             m_viewportManager->clampScroll();
@@ -1484,7 +1522,9 @@ bool App::updateHeldPanning(float dt)
             m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
                                                   { markDirty(); }, [this]()
                                                   { updateScaleDisplayTime(); }, [this]()
-                                                  { updatePageDisplayTime(); });
+                                                  {
+                                                      updatePageDisplayTime();
+                                                      m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
             // Land at the bottom edge of the previous page
             m_viewportManager->setScrollY(-m_viewportManager->getMaxScrollY());
             m_viewportManager->clampScroll();
@@ -1533,7 +1573,9 @@ void App::handleDpadNudgeRight()
                     m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
                                                       { markDirty(); }, [this]()
                                                       { updateScaleDisplayTime(); }, [this]()
-                                                      { updatePageDisplayTime(); });
+                                                      {
+                                                          updatePageDisplayTime();
+                                                          m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
                     m_viewportManager->setScrollX(m_viewportManager->getMaxScrollX()); // appear at left edge of new page
                     m_viewportManager->clampScroll();
                 }
@@ -1572,7 +1614,9 @@ void App::handleDpadNudgeLeft()
                     m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
                                                           { markDirty(); }, [this]()
                                                           { updateScaleDisplayTime(); }, [this]()
-                                                          { updatePageDisplayTime(); });
+                                                          {
+                                                              updatePageDisplayTime();
+                                                              m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
                     m_viewportManager->setScrollX(-m_viewportManager->getMaxScrollX()); // appear at right edge of prev page
                     m_viewportManager->clampScroll();
                 }
@@ -1607,7 +1651,9 @@ void App::handleDpadNudgeDown()
                     m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
                                                       { markDirty(); }, [this]()
                                                       { updateScaleDisplayTime(); }, [this]()
-                                                      { updatePageDisplayTime(); });
+                                                      {
+                                                          updatePageDisplayTime();
+                                                          m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
                     m_viewportManager->setScrollY(m_viewportManager->getMaxScrollY()); // appear at top edge of new page
                     m_viewportManager->clampScroll();
                 }
@@ -1642,7 +1688,9 @@ void App::handleDpadNudgeUp()
                     m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
                                                           { markDirty(); }, [this]()
                                                           { updateScaleDisplayTime(); }, [this]()
-                                                          { updatePageDisplayTime(); });
+                                                          {
+                                                              updatePageDisplayTime();
+                                                              m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
                     m_viewportManager->setScrollY(-m_viewportManager->getMaxScrollY()); // appear at bottom edge of prev page
                     m_viewportManager->clampScroll();
                 }
