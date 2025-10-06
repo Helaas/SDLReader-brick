@@ -3,6 +3,7 @@
 #include "mupdf_document.h"
 #include "renderer.h"
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 
 ViewportManager::ViewportManager(Renderer* renderer)
@@ -172,7 +173,9 @@ void ViewportManager::fitPageToWidth(Document* document, int currentPage)
         return;
     }
 
-    int scaleToFitWidth = static_cast<int>((static_cast<double>(windowWidth) / nativeWidth) * 100.0);
+    // Round up to ensure the scaled width is at least as wide as the window
+    // This prevents 1-pixel white lines from appearing due to rounding errors
+    int scaleToFitWidth = static_cast<int>(std::ceil((static_cast<double>(windowWidth) / nativeWidth) * 100.0));
 
     m_state.currentScale = std::clamp(scaleToFitWidth, 10, 350);
 
