@@ -35,7 +35,8 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
 {
     Uint32 renderStart = SDL_GetTicks();
 
-    m_renderer->clear(255, 255, 255, 255);
+    // Use the configured background color for document margins
+    m_renderer->clear(m_bgColorR, m_bgColorG, m_bgColorB, 255);
 
     int winW = m_renderer->getWindowWidth();
     int winH = m_renderer->getWindowHeight();

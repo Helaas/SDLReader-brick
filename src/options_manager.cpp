@@ -27,6 +27,7 @@ std::string configToJson(const FontConfig& config)
     oss << "  \"fontName\": \"" << config.fontName << "\",\n";
     oss << "  \"fontSize\": " << config.fontSize << ",\n";
     oss << "  \"zoomStep\": " << config.zoomStep << ",\n";
+    oss << "  \"readingStyle\": " << static_cast<int>(config.readingStyle) << ",\n";
     oss << "  \"lastBrowseDirectory\": \"" << config.lastBrowseDirectory << "\"\n";
     oss << "}";
     return oss.str();
@@ -95,6 +96,7 @@ FontConfig jsonToConfig(const std::string& json)
     config.fontName = findStringValue("fontName");
     config.fontSize = findIntValue("fontSize");
     config.zoomStep = findIntValue("zoomStep");
+    config.readingStyle = static_cast<ReadingStyle>(findIntValue("readingStyle"));
     config.lastBrowseDirectory = findStringValue("lastBrowseDirectory");
     if (config.lastBrowseDirectory.empty())
     {
@@ -286,13 +288,78 @@ std::string OptionsManager::generateCSS(const FontConfig& config) const
 {
     std::ostringstream css;
 
+    // Get color scheme based on reading style
+    std::string bgColor, textColor, linkColor;
+    switch (config.readingStyle)
+    {
+    case ReadingStyle::Sepia:
+        bgColor = "#f4ecd8";   // Warm sepia background
+        textColor = "#5c4a3a"; // Dark brown text
+        linkColor = "#8b6914"; // Golden brown links
+        break;
+    case ReadingStyle::DarkMode:
+        bgColor = "#1e1e1e";   // Dark gray background
+        textColor = "#d4d4d4"; // Light gray text
+        linkColor = "#569cd6"; // Light blue links
+        break;
+    case ReadingStyle::HighContrast:
+        bgColor = "#ffffff";   // Pure white background
+        textColor = "#000000"; // Pure black text
+        linkColor = "#0000ee"; // Classic blue links
+        break;
+    case ReadingStyle::PaperTexture:
+        bgColor = "#faf8f3";   // Off-white paper color
+        textColor = "#2c2c2c"; // Very dark gray text
+        linkColor = "#4a90e2"; // Soft blue links
+        break;
+    case ReadingStyle::SoftGray:
+        bgColor = "#e8e8e8";   // Soft gray background
+        textColor = "#333333"; // Dark gray text
+        linkColor = "#0066cc"; // Medium blue links
+        break;
+    case ReadingStyle::NightMode:
+        bgColor = "#0d0d0d";   // Very dark background
+        textColor = "#c9c9c9"; // Light text
+        linkColor = "#4db8ff"; // Bright blue links
+        break;
+    case ReadingStyle::Default:
+    default:
+        bgColor = "";   // No background override
+        textColor = ""; // No text color override
+        linkColor = ""; // No link color override
+        break;
+    }
+
     // Check if this is "Document Default" (no custom font family)
     bool isDocumentDefault = (config.fontPath.empty() || config.fontName.empty() || config.fontName == "Document Default");
 
-    if (isDocumentDefault)
+    // Apply reading style colors if not Default
+    if (config.readingStyle != ReadingStyle::Default && !bgColor.empty())
     {
-        // For Document Default, only apply font size (no font-family override)
-        // This allows the document to use its embedded fonts while respecting size adjustments
+        css << "body {\n";
+        css << "  background-color: " << bgColor << " !important;\n";
+        css << "  color: " << textColor << " !important;\n";
+        css << "}\n\n";
+
+        css << "* {\n";
+        css << "  background-color: transparent !important;\n";
+        css << "  color: " << textColor << " !important;\n";
+        css << "  font-size: " << config.fontSize << "pt !important;\n";
+        css << "  line-height: 1.4 !important;\n";
+        css << "}\n\n";
+
+        css << "a, a:link, a:visited {\n";
+        css << "  color: " << linkColor << " !important;\n";
+        css << "}\n\n";
+
+        css << "p, div, span, h1, h2, h3, h4, h5, h6, li, td, th {\n";
+        css << "  color: " << textColor << " !important;\n";
+        css << "  font-size: " << config.fontSize << "pt !important;\n";
+        css << "}\n\n";
+    }
+    else if (isDocumentDefault)
+    {
+        // For Document Default with no reading style, only apply font size
         css << "* {\n";
         css << "  font-size: " << config.fontSize << "pt !important;\n";
         css << "  line-height: 1.4 !important;\n";
@@ -310,39 +377,50 @@ std::string OptionsManager::generateCSS(const FontConfig& config) const
     }
 
     // Custom font selected - apply both font-family and font-size
+    if (!isDocumentDefault)
+    {
+        // Create a simplified font name for CSS (remove spaces, lowercase)
+        std::string cssFontName = config.fontName;
+        std::replace(cssFontName.begin(), cssFontName.end(), ' ', '-');
+        std::transform(cssFontName.begin(), cssFontName.end(), cssFontName.begin(), ::tolower);
 
-    // Create a simplified font name for CSS (remove spaces, lowercase)
-    std::string cssFontName = config.fontName;
-    std::replace(cssFontName.begin(), cssFontName.end(), ' ', '-');
-    std::transform(cssFontName.begin(), cssFontName.end(), cssFontName.begin(), ::tolower);
+        // IMPORTANT: Add @font-face declaration first - this is required for MuPDF to actually load the font
+        // Without this, MuPDF will fall back to built-in fonts like CharisSIL or NimbusSans
+        // See: https://github.com/pymupdf/PyMuPDF/issues/3083
+        css << "@font-face {\n";
+        css << "  font-family: '" << config.fontName << "';\n";
+        css << "  src: url('" << config.fontPath << "');\n";
+        css << "}\n\n";
 
-    // IMPORTANT: Add @font-face declaration first - this is required for MuPDF to actually load the font
-    // Without this, MuPDF will fall back to built-in fonts like CharisSIL or NimbusSans
-    // See: https://github.com/pymupdf/PyMuPDF/issues/3083
-    css << "@font-face {\n";
-    css << "  font-family: '" << config.fontName << "';\n";
-    css << "  src: url('" << config.fontPath << "');\n";
-    css << "}\n\n";
+        // Apply font to all text elements with very high specificity
+        // Use the font name that our custom loader will recognize
+        if (config.readingStyle != ReadingStyle::Default)
+        {
+            // Reading style colors already applied above, just add font family
+            css << "*, p, div, span, h1, h2, h3, h4, h5, h6 {\n";
+            css << "  font-family: '" << config.fontName << "', '" << cssFontName << "', serif !important;\n";
+            css << "}\n\n";
+        }
+        else
+        {
+            // No reading style, apply font with normal styling
+            css << "* {\n";
+            css << "  font-family: '" << config.fontName << "', '" << cssFontName << "', serif !important;\n";
+            css << "  font-size: " << config.fontSize << "pt !important;\n";
+            css << "  line-height: 1.4 !important;\n";
+            css << "}\n\n";
 
-    // Apply font to all text elements with very high specificity
-    // Use the font name that our custom loader will recognize
-    css << "* {\n";
-    css << "  font-family: '" << config.fontName << "', '" << cssFontName << "', serif !important;\n";
-    css << "  font-size: " << config.fontSize << "pt !important;\n";
-    css << "  line-height: 1.4 !important;\n";
-    css << "}\n\n";
+            css << "body, p, div, span, h1, h2, h3, h4, h5, h6 {\n";
+            css << "  font-family: '" << config.fontName << "', '" << cssFontName << "', serif !important;\n";
+            css << "  font-size: " << config.fontSize << "pt !important;\n";
+            css << "}\n\n";
 
-    // More specific selectors for common EPUB/MOBI elements
-    css << "body, p, div, span, h1, h2, h3, h4, h5, h6 {\n";
-    css << "  font-family: '" << config.fontName << "', '" << cssFontName << "', serif !important;\n";
-    css << "  font-size: " << config.fontSize << "pt !important;\n";
-    css << "}\n\n";
-
-    // Try to override any existing font-family declarations
-    css << "[data-font], [style] {\n";
-    css << "  font-family: '" << config.fontName << "', '" << cssFontName << "', serif !important;\n";
-    css << "  font-size: " << config.fontSize << "pt !important;\n";
-    css << "}\n";
+            css << "[data-font], [style] {\n";
+            css << "  font-family: '" << config.fontName << "', '" << cssFontName << "', serif !important;\n";
+            css << "  font-size: " << config.fontSize << "pt !important;\n";
+            css << "}\n";
+        }
+    }
 
     return css.str();
 }
@@ -478,4 +556,82 @@ std::string OptionsManager::filenameToDisplayName(const std::string& filename) c
     }
 
     return displayName;
+}
+
+const char* OptionsManager::getReadingStyleName(ReadingStyle style)
+{
+    switch (style)
+    {
+    case ReadingStyle::Default:
+        return "Default";
+    case ReadingStyle::Sepia:
+        return "Sepia Tone";
+    case ReadingStyle::DarkMode:
+        return "Dark Mode";
+    case ReadingStyle::HighContrast:
+        return "High Contrast";
+    case ReadingStyle::PaperTexture:
+        return "Paper Texture";
+    case ReadingStyle::SoftGray:
+        return "Soft Gray";
+    case ReadingStyle::NightMode:
+        return "Night Mode";
+    default:
+        return "Unknown";
+    }
+}
+
+std::vector<ReadingStyle> OptionsManager::getAllReadingStyles()
+{
+    return {
+        ReadingStyle::Default,
+        ReadingStyle::Sepia,
+        ReadingStyle::DarkMode,
+        ReadingStyle::HighContrast,
+        ReadingStyle::PaperTexture,
+        ReadingStyle::SoftGray,
+        ReadingStyle::NightMode};
+}
+
+void OptionsManager::getReadingStyleBackgroundColor(ReadingStyle style, uint8_t& r, uint8_t& g, uint8_t& b)
+{
+    switch (style)
+    {
+    case ReadingStyle::Sepia:
+        r = 0xf4;
+        g = 0xec;
+        b = 0xd8; // #f4ecd8
+        break;
+    case ReadingStyle::DarkMode:
+        r = 0x1e;
+        g = 0x1e;
+        b = 0x1e; // #1e1e1e
+        break;
+    case ReadingStyle::HighContrast:
+        r = 0xff;
+        g = 0xff;
+        b = 0xff; // #ffffff
+        break;
+    case ReadingStyle::PaperTexture:
+        r = 0xfa;
+        g = 0xf8;
+        b = 0xf3; // #faf8f3
+        break;
+    case ReadingStyle::SoftGray:
+        r = 0xe8;
+        g = 0xe8;
+        b = 0xe8; // #e8e8e8
+        break;
+    case ReadingStyle::NightMode:
+        r = 0x0d;
+        g = 0x0d;
+        b = 0x0d; // #0d0d0d
+        break;
+    case ReadingStyle::Default:
+    default:
+        r = 0xff;
+        g = 0xff;
+        b = 0xff; // #ffffff (default white)
+        break;
+    }
 }

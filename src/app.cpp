@@ -199,6 +199,11 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     // Initialize RenderManager LAST after all dependencies are ready
     m_renderManager = std::make_unique<RenderManager>(localWindow, localSDLRenderer);
 
+    // Set initial background color based on reading style
+    uint8_t bgR, bgG, bgB;
+    OptionsManager::getReadingStyleBackgroundColor(savedConfig.readingStyle, bgR, bgG, bgB);
+    m_renderManager->setBackgroundColor(bgR, bgG, bgB);
+
     // Update ViewportManager with the proper renderer from RenderManager
     m_viewportManager->setRenderer(m_renderManager->getRenderer());
 
@@ -917,19 +922,21 @@ void App::applyPendingFontChange()
     }
 
     std::cout << "DEBUG: Applying pending font change - " << m_pendingFontConfig.fontName
-              << " at " << m_pendingFontConfig.fontSize << "pt" << std::endl;
+              << " at " << m_pendingFontConfig.fontSize << "pt, style: "
+              << static_cast<int>(m_pendingFontConfig.readingStyle) << std::endl;
 
-    // Check if font or size actually changed
+    // Check if font, size, or style actually changed
     FontConfig currentConfig = m_optionsManager->loadConfig();
     bool fontChanged = (m_pendingFontConfig.fontName != currentConfig.fontName);
     bool sizeChanged = (m_pendingFontConfig.fontSize != currentConfig.fontSize);
+    bool styleChanged = (m_pendingFontConfig.readingStyle != currentConfig.readingStyle);
     bool zoomStepChanged = (m_pendingFontConfig.zoomStep != currentConfig.zoomStep);
 
-    if (!fontChanged && !sizeChanged)
+    if (!fontChanged && !sizeChanged && !styleChanged)
     {
-        std::cout << "No font/size change detected - skipping document reopen" << std::endl;
+        std::cout << "No font/size/style change detected - skipping document reopen" << std::endl;
 
-        // Even if font/size didn't change, we still need to save zoom step changes
+        // Even if font/size/style didn't change, we still need to save zoom step changes
         if (zoomStepChanged)
         {
             std::cout << "Zoom step changed: " << currentConfig.zoomStep << " -> " << m_pendingFontConfig.zoomStep << std::endl;
@@ -958,10 +965,10 @@ void App::applyPendingFontChange()
             // Try to cast to MuPDF document and apply CSS with safer reopening
             if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
             {
-                // Clear cache only if font or size changed (forces re-render with new font)
-                if (fontChanged || sizeChanged)
+                // Clear cache if font, size, or style changed (forces re-render with new styling)
+                if (fontChanged || sizeChanged || styleChanged)
                 {
-                    std::cout << "Font or size changed - clearing cache" << std::endl;
+                    std::cout << "Font, size, or style changed - clearing cache" << std::endl;
                     muDoc->clearCache();
                 }
 
@@ -1017,6 +1024,11 @@ void App::applyPendingFontChange()
                     // Update InputManager's zoom step with the new value
                     m_inputManager->setZoomStep(m_pendingFontConfig.zoomStep);
 
+                    // Update background color based on reading style
+                    uint8_t bgR, bgG, bgB;
+                    OptionsManager::getReadingStyleBackgroundColor(m_pendingFontConfig.readingStyle, bgR, bgG, bgB);
+                    m_renderManager->setBackgroundColor(bgR, bgG, bgB);
+
                     // Force re-render of current page
                     markDirty();
 
@@ -1027,7 +1039,8 @@ void App::applyPendingFontChange()
                     }
 
                     std::cout << "Applied font configuration: " << m_pendingFontConfig.fontName
-                              << " at " << m_pendingFontConfig.fontSize << "pt" << std::endl;
+                              << " at " << m_pendingFontConfig.fontSize << "pt, style: "
+                              << OptionsManager::getReadingStyleName(m_pendingFontConfig.readingStyle) << std::endl;
                 }
                 else
                 {

@@ -16,22 +16,37 @@ struct FontInfo
 };
 
 /**
+ * @brief Reading style/theme options for ebook display
+ */
+enum class ReadingStyle
+{
+    Default = 0,  // No custom styling (use document defaults)
+    Sepia,        // Warm sepia tone background
+    DarkMode,     // Dark background with light text
+    HighContrast, // Black text on white background
+    PaperTexture, // Subtle paper-like background
+    SoftGray,     // Soft gray background for reduced eye strain
+    NightMode     // Very dark mode optimized for night reading
+};
+
+/**
  * @brief Font configuration settings
  */
 struct FontConfig
 {
-    std::string fontPath;                            // Path to selected font file
-    std::string fontName;                            // Display name of selected font
-    int fontSize = 12;                               // Font size in points
-    int zoomStep = 10;                               // Zoom increment/decrement step
-    std::string lastBrowseDirectory = "/mnt/SDCARD"; // Last browsed directory for file browser
+    std::string fontPath;                              // Path to selected font file
+    std::string fontName;                              // Display name of selected font
+    int fontSize = 12;                                 // Font size in points
+    int zoomStep = 10;                                 // Zoom increment/decrement step
+    std::string lastBrowseDirectory = "/mnt/SDCARD";   // Last browsed directory for file browser
+    ReadingStyle readingStyle = ReadingStyle::Default; // Reading style/theme
 
     // Default constructor
     FontConfig() = default;
 
     // Constructor with parameters
-    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10, const std::string& browseDir = "/mnt/SDCARD")
-        : fontPath(path), fontName(name), fontSize(size), zoomStep(zoom), lastBrowseDirectory(browseDir)
+    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10, const std::string& browseDir = "/mnt/SDCARD", ReadingStyle style = ReadingStyle::Default)
+        : fontPath(path), fontName(name), fontSize(size), zoomStep(zoom), lastBrowseDirectory(browseDir), readingStyle(style)
     {
     }
 };
@@ -109,6 +124,28 @@ public:
      * @return Display name extracted from font, or filename if extraction fails
      */
     std::string extractFontName(const std::string& fontPath) const;
+
+    /**
+     * @brief Get display name for a reading style
+     * @param style The reading style enum value
+     * @return Human-readable name for the style
+     */
+    static const char* getReadingStyleName(ReadingStyle style);
+
+    /**
+     * @brief Get all available reading styles
+     * @return Vector of all reading style enum values
+     */
+    static std::vector<ReadingStyle> getAllReadingStyles();
+
+    /**
+     * @brief Get the background color for a reading style
+     * @param style The reading style enum value
+     * @param r Output red component (0-255)
+     * @param g Output green component (0-255)
+     * @param b Output blue component (0-255)
+     */
+    static void getReadingStyleBackgroundColor(ReadingStyle style, uint8_t& r, uint8_t& g, uint8_t& b);
 
 private:
     std::vector<FontInfo> m_availableFonts;

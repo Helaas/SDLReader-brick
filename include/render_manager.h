@@ -125,6 +125,14 @@ public:
     // Present the rendered frame
     void present();
 
+    // Set background color for margins
+    void setBackgroundColor(uint8_t r, uint8_t g, uint8_t b)
+    {
+        m_bgColorR = r;
+        m_bgColorG = g;
+        m_bgColorB = b;
+    }
+
 private:
     // Rendering resources
     std::unique_ptr<Renderer> m_renderer;
@@ -132,6 +140,11 @@ private:
 
     // Render state
     RenderState m_state;
+
+    // Background color for document margins
+    uint8_t m_bgColorR = 255;
+    uint8_t m_bgColorG = 255;
+    uint8_t m_bgColorB = 255;
 
     // UI rendering methods
     void renderPageInfo(NavigationManager* navigationManager, int windowWidth, int windowHeight);

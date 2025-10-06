@@ -397,6 +397,18 @@ void GuiManager::setCurrentFontConfig(const FontConfig& config)
     {
         m_selectedFontIndex = findFontIndex(config.fontName);
     }
+
+    // Update reading style index
+    auto allStyles = OptionsManager::getAllReadingStyles();
+    m_selectedStyleIndex = 0;
+    for (size_t i = 0; i < allStyles.size(); i++)
+    {
+        if (allStyles[i] == config.readingStyle)
+        {
+            m_selectedStyleIndex = static_cast<int>(i);
+            break;
+        }
+    }
 }
 
 bool GuiManager::wantsCaptureMouse() const
@@ -538,6 +550,41 @@ void GuiManager::renderFontMenu()
     ImGui::Spacing();
     ImGui::Spacing();
 
+    // === READING STYLE SECTION ===
+    ImGui::Text("Reading Style");
+    ImGui::Separator();
+
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.7f, 1.0f, 1.0f)); // Light blue info color
+    ImGui::TextWrapped("Choose a color theme for comfortable reading. Applies to EPUB/MOBI only.");
+    ImGui::PopStyleColor();
+    ImGui::Spacing();
+
+    ImGui::Text("Color Theme:");
+
+    // Get all available reading styles
+    auto allStyles = OptionsManager::getAllReadingStyles();
+    std::vector<const char*> styleNames;
+    styleNames.reserve(allStyles.size());
+    for (const auto& style : allStyles)
+    {
+        styleNames.push_back(OptionsManager::getReadingStyleName(style));
+    }
+
+    // Ensure selected index is valid
+    if (m_selectedStyleIndex < 0 || m_selectedStyleIndex >= (int) allStyles.size())
+    {
+        m_selectedStyleIndex = 0;
+    }
+
+    if (ImGui::Combo("##ReadingStyle", &m_selectedStyleIndex, styleNames.data(), styleNames.size()))
+    {
+        // Style selection changed
+        m_tempConfig.readingStyle = allStyles[m_selectedStyleIndex];
+    }
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
     // === ZOOM SETTINGS SECTION ===
     ImGui::Text("Zoom Settings");
     ImGui::Separator();
@@ -617,18 +664,19 @@ void GuiManager::renderFontMenu()
     // === BUTTONS SECTION ===
     bool hasValidFont = !fonts.empty() && m_selectedFontIndex >= 0 && m_selectedFontIndex < (int) fonts.size();
 
-    // Check if font settings have changed
+    // Check if font or style settings have changed
     bool fontSettingsChanged = (m_tempConfig.fontName != m_currentConfig.fontName ||
-                                m_tempConfig.fontSize != m_currentConfig.fontSize);
+                                m_tempConfig.fontSize != m_currentConfig.fontSize ||
+                                m_tempConfig.readingStyle != m_currentConfig.readingStyle);
 
     // Show warning if font settings changed
     if (fontSettingsChanged)
     {
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.0f, 1.0f)); // Yellow/orange warning color
 #ifdef TG5040_PLATFORM
-        ImGui::TextWrapped("Warning: Applying font changes will reload the document. This may take several seconds on TG5040.");
+        ImGui::TextWrapped("Warning: Applying font/style changes will reload the document. This may take several seconds on TG5040.");
 #else
-        ImGui::TextWrapped("Note: Applying font changes will reload the document.");
+        ImGui::TextWrapped("Note: Applying font/style changes will reload the document.");
 #endif
         ImGui::PopStyleColor();
         ImGui::Spacing();
@@ -658,7 +706,9 @@ void GuiManager::renderFontMenu()
             }
 
             std::cout << "DEBUG: Applying config - fontName: '" << m_tempConfig.fontName
-                      << "', fontPath: '" << m_tempConfig.fontPath << "'" << std::endl;
+                      << "', fontPath: '" << m_tempConfig.fontPath
+                      << "', fontSize: " << m_tempConfig.fontSize
+                      << ", readingStyle: " << static_cast<int>(m_tempConfig.readingStyle) << std::endl;
 
             // Update current config
             m_currentConfig = m_tempConfig;
@@ -690,6 +740,18 @@ void GuiManager::renderFontMenu()
         m_tempConfig = m_currentConfig;
         m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
 
+        // Reset reading style index
+        auto allStyles = OptionsManager::getAllReadingStyles();
+        m_selectedStyleIndex = 0;
+        for (size_t i = 0; i < allStyles.size(); i++)
+        {
+            if (allStyles[i] == m_currentConfig.readingStyle)
+            {
+                m_selectedStyleIndex = static_cast<int>(i);
+                break;
+            }
+        }
+
         // Trigger redraw to clear menu from screen
         if (m_closeCallback)
         {
@@ -704,6 +766,7 @@ void GuiManager::renderFontMenu()
         // Reset to default config
         m_tempConfig = FontConfig();
         m_selectedFontIndex = 0;
+        m_selectedStyleIndex = 0; // Reset to Default style
 
         // Set first available font as default
         if (!fonts.empty())

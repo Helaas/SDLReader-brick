@@ -221,6 +221,7 @@ private:
 
     // UI state
     int m_selectedFontIndex = 0;
+    int m_selectedStyleIndex = 0;   // Selected reading style
     char m_pageJumpInput[16] = "1"; // Page jump input
     bool m_fontSizeChanged = false;
     bool m_justOpenedFontMenu = false; // Flag to set focus on font dropdown when menu opens
