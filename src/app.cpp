@@ -941,7 +941,8 @@ void App::updateInputState(const SDL_Event& event)
 
 void App::loadDocument()
 {
-    m_navigationManager->setCurrentPage(0);
+    // Don't reset page to 0 if it's already been set (e.g., from reading history)
+    // Just fit the current page to window
     m_viewportManager->fitPageToWindow(m_document.get(), m_navigationManager->getCurrentPage());
 }
 
