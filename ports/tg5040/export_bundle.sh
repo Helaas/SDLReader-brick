@@ -59,14 +59,21 @@ else
     echo "Warning: make_bundle.sh not found in $SCRIPT_DIR"
 fi
 
-# Copy resources
+# Copy fonts and resources
+if [ -d "$PROJECT_ROOT/fonts" ]; then
+    echo "Copying fonts..."
+    mkdir -p "$BUNDLE_DIR/fonts"
+    cp -a "$PROJECT_ROOT/fonts/." "$BUNDLE_DIR/fonts/"
+else
+    echo "Warning: fonts/ directory not found"
+fi
+
+# Copy other resources if they exist
 if [ -d "$PROJECT_ROOT/res" ]; then
     echo "Copying resources..."
     cp -a "$PROJECT_ROOT/res/." "$BUNDLE_DIR/res/"
     # If docs.pdf was preserved, restore it after copying
     [ -f "$TEMP_DIR/docs.pdf" ] && cp "$TEMP_DIR/docs.pdf" "$BUNDLE_DIR/res/docs.pdf"
-else
-    echo "Warning: res/ directory not found"
 fi
 
 # Copy documentation files

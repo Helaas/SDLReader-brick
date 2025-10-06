@@ -15,17 +15,18 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 
 ## Features
 * View PDF documents, comic book archives (CBZ/ZIP & CBR/RAR), EPUB books, and MOBI e-books.
-* Page navigation (next/previous page).
-* **Smart Edge Navigation**: When at zoomed ≥ 100% & at a page edge, hold D-pad for 300ms to turn pages with visual progress indicator.
-* Quick page jumping (±10 pages).
-* Zoom in/out and fit page to width.
-* Page rotation (90° increments).
-* Page mirroring (horizontal/vertical).
-* Scroll within pages (if zoomed in or page is larger than window).
-* Toggle fullscreen mode (on Desktop).
-* Jump to specific page (on Desktop, Press `G`, enter page number and press Enter).
-* Basic UI overlay showing current page and zoom level.
-* Power button support on embedded devices (TG5040).
+* Built-in heads-up display with page, zoom, edge-turn, and error indicators.
+* Integrated file browser (`--browse`) with controller support, persistent last directory, and TG5040-friendly layout, powered by Dear ImGui.
+* Custom font picker with live preview, reading style themes, and MuPDF-backed CSS injection.
+* On-screen number pad for page jumps when navigating with a controller.
+* Automatic reading history tracking with resume-on-open for the last 50 documents.
+* Page navigation (next/previous page) with **Smart Edge Navigation**: When zoomed ≥ 100% & at a page edge, hold D-pad for 300ms to flip pages with a progress indicator.
+* Quick page jumping (±10 pages) and arbitrary page entry.
+* Zoom in/out, fit-to-width, and full reset controls.
+* Page rotation (90° increments) and mirroring (horizontal/vertical).
+* Smooth scrolling within pages (if zoomed in or page is larger than the viewport).
+* Toggle fullscreen mode (desktop platforms).
+* TG5040-specific power button integration with fake sleep fallback.
 
 ## Supported Document Types
 * **PDF** (`.pdf`)
@@ -87,7 +88,7 @@ make help
 
 **Install dependencies using Homebrew:**
 ```bash
-brew install sdl2 sdl2_ttf libarchive libwebp git pkg-config
+brew install sdl2 sdl2_ttf libarchive webp libarchive git pkg-config
 ```
 
 **Note**: MuPDF is now built automatically from source with CBR and WebP support - no system MuPDF packages needed.
@@ -118,6 +119,10 @@ cd ports/linux && make install-deps
 * devkitPro toolchain with WUT (Wii U Toolchain)
 * See `ports/wiiu/` for Wii U-specific build instructions
 * **Note**: WebP support may be limited due to devkitPro library availability
+
+### Build-time Patches
+
+All `make` targets download MuPDF 1.26.7 and apply `webp-upstream-697749.patch` (sourced from KOReader) to enable modern WebP decoding and fix upstream regressions. Platform exports that embed Dear ImGui may apply additional patches—see each port README for details. In particular, the TG5040 build also patches the ImGui SDL renderer backend for legacy SDL compatibility and swaps the physical A/B buttons to match the TrimUI Brick layout.
 
 ## Platform-Specific Features
 
@@ -153,17 +158,81 @@ cd ports/linux && make install-deps
 - **Custom Input Handling**: Gamepad and touch screen support
 
 ## Usage
-After building, run the executable from your project root, providing the path to a PDF, CBZ, EPUB, or MOBI file as an argument:
+After building, you can either launch straight into a document or drop into the integrated browser:
 
 ```bash
+# Open a specific file directly
 ./bin/sdl_reader_cli path/to/your_document.pdf
-# or
 ./bin/sdl_reader_cli path/to/your_comic.cbz
-# or
 ./bin/sdl_reader_cli path/to/your_book.epub
-# or
 ./bin/sdl_reader_cli path/to/your_ebook.mobi
+
+# Launch the controller-friendly file browser (saves last directory)
+./bin/sdl_reader_cli --browse
 ```
+
+When using `--browse`, SDL Reader will remember the last directory you visited (stored in `config.json`) and automatically resume the last page you read for each document (stored in `reading_history.json`).
+
+## Configuration
+
+SDL Reader uses a `config.json` file for customizing font settings and display options.
+
+### Setting up Configuration
+1. Copy the example configuration file:
+   ```bash
+   cp config.json.example config.json
+   ```
+
+2. Edit `config.json` to customize settings:
+   ```json
+   {
+     "fontPath": "./fonts/JetBrainsMono-Bold.ttf",
+     "fontName": "JetBrains Mono Bold",
+     "fontSize": 16,
+     "zoomStep": 10,
+     "readingStyle": 0,
+     "lastBrowseDirectory": "/mnt/SDCARD/Books"
+   }
+   ```
+
+### Configuration Options
+- **fontPath**: Path to the TTF/OTF font file to use for documents that support CSS (EPUB/MOBI)
+- **fontName**: Display name for the font (shown in the font menu)
+- **fontSize**: Default font size in points applied by the CSS generator
+- **zoomStep**: Percentage increment for zoom operations and controller zoom buttons
+- **readingStyle**: Numeric identifier for the active reading theme (see table below)
+- **lastBrowseDirectory**: Directory the file browser should open by default when launched with `--browse`
+
+| `readingStyle` | Theme          | Background | Text Color |
+| :------------- | :------------- | :--------- | :--------- |
+| 0              | Document Default | Unchanged  | Unchanged  |
+| 1              | Sepia          | #f4ecd8    | #5c4a3a    |
+| 2              | Dark Mode      | #1e1e1e    | #d4d4d4    |
+| 3              | High Contrast  | #ffffff    | #000000    |
+| 4              | Paper Texture  | #faf8f3    | #2c2c2c    |
+| 5              | Soft Gray      | #e8e8e8    | #333333    |
+| 6              | Night Mode     | #0d0d0d    | #c9c9c9    |
+
+All configuration values are saved automatically when you apply changes from the in-app font menu.
+
+**Note**: The `config.json` file is ignored by Git to allow personal customization without affecting the repository.
+
+**Adding new fonts:** Drop any `.ttf` or `.otf` files into the top-level `fonts/` directory (either on desktop or inside a TG5040 bundle). The Options → Font & Reading Style menu will automatically discover them, let you preview the typography, and persist your selection for EPUB/MOBI documents.
+
+### Bundled Fonts & Licensing
+
+The packaged builds include curated open fonts:
+
+- Inter (Regular, Bold) — SIL Open Font License 1.1
+- JetBrains Mono (Regular, Bold) — SIL Open Font License 1.1
+- Noto Serif Condensed (Regular, Bold) — SIL Open Font License 1.1
+- Roboto (Regular, Bold) — Apache License 2.0
+
+Full license texts are provided in [`fonts/LICENSES.md`](fonts/LICENSES.md). Keep these notices with any redistributed bundle.
+
+## Reading History
+
+SDL Reader keeps a lightweight `reading_history.json` file in the project root. Every time you change pages, the current document path and page number are persisted so the next launch resumes automatically. The history remembers the most recent 50 documents. Delete the file if you want to reset all progress.
 
 ## TG5040 Deployment
 
@@ -181,10 +250,12 @@ make export-tg5040
 
 ### Bundle Contents
 The exported bundle at `ports/tg5040/pak/` contains:
-- **bin/**: Main executable and utilities (sdl_reader_cli, jq, minui-list)
+- **bin/**: `sdl_reader_cli` (legacy utilities such as `jq` and `minui-list` are preserved if you copy them in before exporting)
 - **lib/**: All shared library dependencies with proper RPATH setup
-- **res/**: Font and resource files
-- **launch.sh**: Main launcher script for the device
+- **fonts/**: All bundled font files ready for the runtime picker
+- **res/**: Optional resources (e.g., documentation PDFs)
+- **launch.sh**: Main launcher script that boots straight into the ImGui file browser
+- **README.md / pak.json**: Copied for reference inside the bundle
 
 ### Deployment to Device
 1. Copy the entire `ports/tg5040/pak/` directory to your TG5040 device
@@ -218,7 +289,8 @@ The SDL Reader supports the following keyboard, mouse, and game controller input
 | **System Buttons**                         |                                                      |
 | `Start`                                    | Toggle horizontal mirror                             |
 | `Select`                                   | Toggle vertical mirror                               |
-| `Menu`                                     | Quit application                                     |
+| `Menu (button 10)`                         | Toggle font & reading style menu                     |
+| `Home (Guide)`                             | Quit application                                     |
 
 ### Keyboard Controls
 | Input                                     | Action                                                |
@@ -235,6 +307,7 @@ The SDL Reader supports the following keyboard, mouse, and game controller input
 | `Numpad +` / `Numpad -`                   | Zoom in/out (numpad support)                          |
 | `F`                                       | Toggle Fullscreen                                     |
 | `G`                                       | Jump to Page                                          |
+| `M`                                       | Toggle font & reading style menu                      |
 | `W`                                       | Fit page to width                                     |
 | `R`                                       | Reset page view                                       |
 | `Shift + R`                               | Rotate page clockwise (90°)                           |
@@ -269,13 +342,13 @@ The SDL Reader supports the following keyboard, mouse, and game controller input
 | `X`                                       | Rotate page clockwise (90°)                           |
 | `Y`                                       | Zoom in                                               |
 | **System Buttons**                        |                                                       |
-| `Start`                                   | Toggle horizontal mirror                              |
+| `Start`                                   | Toggle font & reading style menu                      |
 | `Back/Select`                             | Toggle vertical mirror                                |
 | `Guide/Menu`                              | Quit application                                      |
 | **Analog Sticks**                         |                                                       |
 | `Left/Right Stick X-Axis`                 | Scroll horizontally                                   |
 | `Left/Right Stick Y-Axis`                 | Scroll vertically                                     |
-                 
+
 *Note: Controller button names may vary depending on your controller type (Xbox, PlayStation, etc.). The mappings above use SDL2's standardized button names.*
 
 *Note 2: When using an Xbox controller, D-Pad Left & Right appear to trigger the Brick F1 & F2 functionality in addition to nudging.*
@@ -288,7 +361,7 @@ SDL Reader includes an intelligent edge navigation system for smooth page turnin
 - **Edge Detection**: When zoomed in ≥ 100%, using D-pad controls and reaching a page edge (left, right, top, or bottom), the system detects you're at the boundary
 - **Hold to Turn**: Continue holding the D-pad direction for 300ms to initiate page turning
 - **Visual Feedback**: A progress bar appears showing:
-  - Direction of pending page change (e.g., "Next Page", "Previous Page") 
+  - Direction of pending page change (e.g., "Next Page", "Previous Page")
   - Progress indicator that fills as you approach the 300ms threshold
   - Color transitions from yellow to green as the timer progresses
 - **Immediate Cancellation**: Release the D-pad before 300ms to stay on the current page
@@ -311,7 +384,9 @@ SDLReader-brick/
 ├── src/                          # Shared source code
 ├── include/                      # Shared header files
 ├── cli/                          # Command-line interface
-├── res/                          # Resources (fonts, etc.)
+├── fonts/                        # Font files (available to the font picker)
+├── config.json.example           # Sample runtime configuration
+├── reading_history.json          # Auto-generated reading history cache
 └── ports/                        # Platform-specific builds
     ├── tg5040/                   # TG5040 embedded device
     │   ├── Makefile              # TG5040 build configuration
@@ -320,10 +395,11 @@ SDLReader-brick/
     │   ├── Dockerfile            # TG5040 toolchain image
     │   ├── export_bundle.sh      # Bundle export script
     │   ├── make_bundle2.sh       # Library dependency bundler
-    │   ├── pak/                  # Distribution bundle (created by export)
-    │   │   ├── bin/              # Executables (jq, minui-list, sdl_reader_cli)
+  │   ├── pak/                  # Distribution bundle (created by export)
+  │   │   ├── bin/              # Executables (sdl_reader_cli + optional utilities)
     │   │   ├── lib/              # Shared libraries and dependencies
-    │   │   ├── res/              # Resources (fonts, etc.)
+    │   │   ├── fonts/            # Font files
+    │   │   ├── res/              # Other resources (if any)
     │   │   └── launch.sh         # Main launcher script
     │   ├── include/              # TG5040-specific headers
     │   │   └── power_handler.h   # Power management for TG5040
@@ -336,7 +412,7 @@ SDLReader-brick/
     │   └── README.md             # Linux-specific instructions
     └── wiiu/                     # Nintendo Wii U homebrew
         └── Makefile              # Wii U build configuration
-```  
+```
 
 ### Development Workflow
 - **Cross-platform code**: Modify files in `src/`, `include/`, `cli/`
@@ -363,6 +439,7 @@ Key architectural highlights:
 - [LoveRetro/NextUI](https://github.com/LoveRetro/NextUI), for creating an excellent OS for the TrimUI Brick.
 - <a href="https://github.com/josegonzalez" target="_blank" rel="noopener noreferrer"><img src="https://github.com/josegonzalez.png" alt="@josegonzalez" width="18" height="18" style="border-radius:50%"> josegonzalez</a>, for minui-list and countless other tools.
 - [UncleJunVIP/nextui-pak-store](https://github.com/UncleJunVIP/nextui-pak-store) for the Pak Store
+- [ocornut/imgui](https://github.com/ocornut/imgui), for the Dear ImGui UI framework powering the overlay, browser, and font menus.
 - [koreader/koreader](https://github.com/koreader/koreader), for the MuPDF WebP Patch.
 - [Claude.ai](https://claude.ai), for creating Sonnet 4. I’m not a C++ programmer, but Sonnet gave me a fighting chance at getting this done in a reasonable timeframe.
 

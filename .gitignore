@@ -14,6 +14,7 @@
 
 # TG5040 bundle artifacts
 /ports/tg5040/pak/lib/*
+/ports/tg5040/pak/fonts/*
 /ports/tg5040/pak/res/*
 !/ports/tg5040/pak/res/docs.pdf
 /ports/tg5040/pak/bin/sdl_reader_cli
@@ -23,3 +24,9 @@ SDLReader.pak.zip
 ports/tg5040/pak/README.md
 ports/tg5040/pak/pak.json
 ports/mac/webp-upstream-697749.patch
+config.json
+ports/tg5040/webp-upstream-697749.patch
+webp-upstream-697749.patch
+ports/tg5040/imgui
+imgui.ini
+reading_history.json

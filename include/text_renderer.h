@@ -1,26 +1,29 @@
 #pragma once
 
-#include <SDL.h>     
+#include <SDL.h>
 #include <SDL_ttf.h>
-#include <string>    
-#include <memory>    
+#include <memory>
+#include <string>
 
-#include "renderer.h" 
+#include "renderer.h"
 
 struct SDL_Renderer;
 
-struct TTF_Font_Deleter {
+struct TTF_Font_Deleter
+{
 
-    inline void operator()(TTF_Font* font) const {
-        if (font) TTF_CloseFont(font);
+    inline void operator()(TTF_Font* font) const
+    {
+        if (font)
+            TTF_CloseFont(font);
     }
 };
 
 // --- TextRenderer Class ---
 
-class TextRenderer {
+class TextRenderer
+{
 public:
-
     TextRenderer(SDL_Renderer* renderer, const std::string& fontPath, int fontSize);
 
     // Destructor: No explicit TTF_Quit() here; it's handled in main.cpp for proper shutdown order.
@@ -31,9 +34,9 @@ public:
     void renderText(const std::string& text, int x, int y, SDL_Color color);
 
 private:
-    SDL_Renderer* m_sdlRenderer; 
-    std::unique_ptr<TTF_Font, TTF_Font_Deleter> m_font; 
-    std::string m_fontPath;      
-    int m_baseFontSize;         
-    int m_currentFontSize;       
+    SDL_Renderer* m_sdlRenderer;
+    std::unique_ptr<TTF_Font, TTF_Font_Deleter> m_font;
+    std::string m_fontPath;
+    int m_baseFontSize;
+    int m_currentFontSize;
 };

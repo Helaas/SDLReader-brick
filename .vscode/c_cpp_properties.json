@@ -1,0 +1,63 @@
+{
+    "configurations": [
+        {
+            "name": "Mac",
+            "includePath": [
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/ports/mac/imgui",
+                "${workspaceFolder}/ports/mac/imgui/backends",
+                "${workspaceFolder}/ports/mac/mupdf/include/mupdf",
+                "/opt/homebrew/include/SDL2",
+                "/opt/homebrew/include"
+            ],
+            "defines": [
+                "_THREAD_SAFE"
+            ],
+            "compilerPath": "/usr/bin/clang++",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "macos-clang-arm64"
+        },
+        {
+            "name": "tg5040",
+            "includePath": [
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/ports/tg5040/include",
+                "${workspaceFolder}/ports/tg5040/mupdf/include",
+                "${workspaceFolder}/ports/tg5040/imgui",
+                "${workspaceFolder}/ports/tg5040/imgui/backends",
+                "/usr/include/SDL2",
+                "/usr/include"
+            ],
+            "defines": [
+                "_THREAD_SAFE",
+                "_REENTRANT",
+                "TG5040_PLATFORM"
+            ],
+            "compilerPath": "/usr/bin/g++",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x64"
+        },
+        {
+            "name": "linux",
+            "includePath": [
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/ports/linux/mupdf/include",
+                "/usr/include/SDL2",
+                "/usr/include"
+            ],
+            "defines": [
+                "_THREAD_SAFE"
+            ],
+            "compilerPath": "/usr/bin/g++",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}

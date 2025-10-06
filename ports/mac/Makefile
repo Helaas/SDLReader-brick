@@ -1,4 +1,14 @@
 # Makefile for SDL Reader on macOS (Top-Level - No Explicit Library Build)
+# 
+# This Makefile automatically handles dependencies:
+# - Checks for required system libraries (SDL2, libarchive, webp, etc.)
+# - Downloads and sets up ImGui and MuPDF if needed
+# - Provides targets for dependency management
+#
+# Usage:
+#   make install-deps  # Install system dependencies via Homebrew
+#   make              # Build the project
+#   make help         # Show available targets
 
 # Compiler
 CXX = g++
@@ -21,6 +31,19 @@ TARGET = $(BIN_DIR)/$(TARGET_NAME)
 SRC_FILES = $(filter-out src/power_handler.cpp, $(wildcard $(SRC_DIR)/*.cpp))
 SRCS = $(SRC_FILES) $(wildcard $(CLI_DIR)/*.cpp)
 
+# Dear ImGui source files
+IMGUI_DIR = imgui
+IMGUI_SRCS = $(IMGUI_DIR)/imgui.cpp \
+             $(IMGUI_DIR)/imgui_demo.cpp \
+             $(IMGUI_DIR)/imgui_draw.cpp \
+             $(IMGUI_DIR)/imgui_tables.cpp \
+             $(IMGUI_DIR)/imgui_widgets.cpp \
+             $(IMGUI_DIR)/backends/imgui_impl_sdl2.cpp \
+             $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer2.cpp
+
+# Add ImGui sources to compilation
+SRCS += $(IMGUI_SRCS)
+
 # Local MuPDF Build Paths (using our custom build with libarchive support)
 MUPDF_BUILD_PATH = mupdf/build/release
 
@@ -30,7 +53,9 @@ MUPDF_BUILD_PATH = mupdf/build/release
 # -g: Include debugging information
 # -Imupdf/include: Include path for our custom MuPDF headers with libarchive support
 # -I$(SRC_DIR): Include path for project's own header files (e.g., app.h, document.h)
-CXXFLAGS = -std=c++17 -Wall -Wextra -g -Imupdf/include -I$(SRC_DIR) -I../../include
+# -I$(IMGUI_DIR): Include path for Dear ImGui headers
+# -I$(IMGUI_DIR)/backends: Include path for Dear ImGui backend headers
+CXXFLAGS = -std=c++17 -Wall -Wextra -g -Imupdf/include -I$(SRC_DIR) -I../../include -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends
 
 # Include paths for SDL2, SDL2_ttf, and SDL2_image
 # pkg-config --cflags SDL2_ttf SDL2_image added for explicit header paths
@@ -52,12 +77,53 @@ LIBS = -L$(MUPDF_BUILD_PATH) -lmupdf -lmupdf-third \
 # All object files (will be placed in the build directory)
 # Transforms src/file.cpp into build/file.o and cli/file.cpp into build/file.o
 OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS))) \
-       $(patsubst $(CLI_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(CLI_DIR)/%,$(SRCS)))
+       $(patsubst $(CLI_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(CLI_DIR)/%,$(SRCS))) \
+       $(BUILD_DIR)/imgui.o \
+       $(BUILD_DIR)/imgui_demo.o \
+       $(BUILD_DIR)/imgui_draw.o \
+       $(BUILD_DIR)/imgui_tables.o \
+       $(BUILD_DIR)/imgui_widgets.o \
+       $(BUILD_DIR)/imgui_impl_sdl2.o \
+       $(BUILD_DIR)/imgui_impl_sdlrenderer2.o
 
-.PHONY: all clean build-mupdf setup-mupdf clean-mupdf
+.PHONY: all clean build-mupdf setup-mupdf clean-mupdf setup-imgui check-deps install-deps clean-imgui clean-all help
 
 # Default target
-all: $(BIN_DIR) $(BUILD_DIR) setup-mupdf build-mupdf $(TARGET)
+all: check-deps $(BIN_DIR) $(BUILD_DIR) setup-imgui setup-mupdf build-mupdf $(TARGET)
+
+# Check if required system dependencies are installed
+check-deps:
+	@echo "Checking system dependencies..."
+	@command -v pkg-config >/dev/null 2>&1 || { echo "pkg-config not found. Run 'make install-deps' to install dependencies."; exit 1; }
+	@export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$$(find /opt/homebrew/Cellar -name pkgconfig -type d 2>/dev/null | tr '\n' ':')$$PKG_CONFIG_PATH"; \
+	pkg-config --exists sdl2 || { echo "SDL2 not found. Run 'make install-deps' to install dependencies."; exit 1; }; \
+	pkg-config --exists SDL2_ttf || { echo "SDL2_ttf not found. Run 'make install-deps' to install dependencies."; exit 1; }; \
+	pkg-config --exists SDL2_image || { echo "SDL2_image not found. Run 'make install-deps' to install dependencies."; exit 1; }; \
+	pkg-config --exists libarchive || { echo "libarchive not found. Run 'make install-deps' to install dependencies."; exit 1; }; \
+	pkg-config --exists libwebp || { echo "libwebp not found. Run 'make install-deps' to install dependencies."; exit 1; }
+	@echo "All system dependencies found!"
+
+# Install required system dependencies using Homebrew
+install-deps:
+	@echo "Installing system dependencies via Homebrew..."
+	@command -v brew >/dev/null 2>&1 || { echo "Homebrew not found. Please install Homebrew first: https://brew.sh"; exit 1; }
+	brew install pkg-config sdl2 sdl2_ttf sdl2_image libarchive webp
+	@echo "System dependencies installed successfully!"
+
+# Setup Dear ImGui if it doesn't exist or is incomplete
+setup-imgui:
+	@if [ ! -d "imgui" ] || [ ! -f "imgui/imgui.h" ]; then \
+		echo "Setting up Dear ImGui repository..."; \
+		rm -rf imgui; \
+		git clone --depth 1 --branch v1.90.9 https://github.com/ocornut/imgui.git; \
+		if [ ! -f "imgui/imgui.h" ]; then \
+			echo "Error: ImGui setup failed - imgui.h not found"; \
+			exit 1; \
+		fi; \
+		echo "Dear ImGui setup completed successfully"; \
+	else \
+		echo "Dear ImGui repository already exists and is complete"; \
+	fi
 
 # Setup MuPDF repository if it doesn't exist
 setup-mupdf:
@@ -122,13 +188,65 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
 $(BUILD_DIR)/%.o: $(CLI_DIR)/%.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
 
+# Compile ImGui source files
+$(BUILD_DIR)/imgui.o: $(IMGUI_DIR)/imgui.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+
+$(BUILD_DIR)/imgui_demo.o: $(IMGUI_DIR)/imgui_demo.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+
+$(BUILD_DIR)/imgui_draw.o: $(IMGUI_DIR)/imgui_draw.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+
+$(BUILD_DIR)/imgui_tables.o: $(IMGUI_DIR)/imgui_tables.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+
+$(BUILD_DIR)/imgui_widgets.o: $(IMGUI_DIR)/imgui_widgets.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+
+$(BUILD_DIR)/imgui_impl_sdl2.o: $(IMGUI_DIR)/backends/imgui_impl_sdl2.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+
+$(BUILD_DIR)/imgui_impl_sdlrenderer2.o: $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer2.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+
 # Clean up compiled files and directories
 clean:
 	rm -rf $(BUILD_DIR)
 	rm -f $(TARGET)
 	rm -f webp-upstream-697749.patch
 
+# Clean ImGui (use with caution - will require re-download)
+clean-imgui:
+	@echo "Removing ImGui directory (will be re-downloaded on next build)..."
+	rm -rf imgui
+
 # Clean MuPDF (use with caution - will require re-download and rebuild)
 clean-mupdf:
 	@echo "Removing MuPDF directory (will be re-downloaded on next build)..."
 	rm -rf mupdf
+
+# Clean everything including downloaded dependencies
+clean-all: clean clean-imgui clean-mupdf
+	@echo "All build artifacts and dependencies cleaned"
+
+# Show help information
+help:
+	@echo "SDL Reader - macOS Build System"
+	@echo ""
+	@echo "Available targets:"
+	@echo "  all          - Build the complete project (default)"
+	@echo "  check-deps   - Check if system dependencies are installed"
+	@echo "  install-deps - Install system dependencies via Homebrew"
+	@echo "  setup-imgui  - Setup Dear ImGui library"
+	@echo "  setup-mupdf  - Setup MuPDF library"
+	@echo "  build-mupdf  - Build MuPDF with libarchive and WebP support"
+	@echo "  clean        - Remove build artifacts"
+	@echo "  clean-imgui  - Remove ImGui directory"
+	@echo "  clean-mupdf  - Remove MuPDF directory"
+	@echo "  clean-all    - Remove all build artifacts and dependencies"
+	@echo "  help         - Show this help message"
+	@echo ""
+	@echo "Quick start:"
+	@echo "  1. make install-deps    # Install system dependencies"
+	@echo "  2. make                 # Build the project"

@@ -1,17 +1,19 @@
 #ifndef DOCUMENT_H
 #define DOCUMENT_H
 
-#include <vector>
-#include <string>
 #include <cstdint>
+#include <string>
+#include <vector>
 
 // Helper function: Converts 24-bit RGB (R, G, B) to 32-bit ARGB (A, R, G, B)
 // Assumes input is R G B byte order and output should be 0xAARRGGBB
-inline unsigned int rgb24_to_argb32(uint8_t r, uint8_t g, uint8_t b) {
+inline unsigned int rgb24_to_argb32(uint8_t r, uint8_t g, uint8_t b)
+{
     return (0xFF000000 | (static_cast<unsigned int>(r) << 16) | (static_cast<unsigned int>(g) << 8) | static_cast<unsigned int>(b));
 }
 
-class Document {
+class Document
+{
 public:
     // Lifecycle
     virtual bool open(const std::string& filename) = 0;

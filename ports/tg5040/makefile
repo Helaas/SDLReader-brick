@@ -16,28 +16,89 @@ endif
 CXX      := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTG5040_PLATFORM\
             -I$(WORKSPACE_PATH)/src -I$(WORKSPACE_PATH)/include -I$(BASE_PATH)/include -I$(BASE_PATH)/mupdf/include \
+            -I$(BASE_PATH)/imgui -I$(BASE_PATH)/imgui/backends \
             -I/usr/local/libarchive-minimal/include -D_REENTRANT -I/usr/include/SDL2
+
+# Source directories
+SRC_DIR = $(WORKSPACE_PATH)/src
+CLI_DIR = $(WORKSPACE_PATH)/cli
+IMGUI_DIR = $(BASE_PATH)/imgui
+TG_SRC_DIR = $(BASE_PATH)/src
 
 # Output locations
 BIN_DIR  := $(WORKSPACE_PATH)/bin
 BUILD_DIR  := $(WORKSPACE_PATH)/build
 TARGET   := $(BIN_DIR)/sdl_reader_cli
 
-# Object files
-OBJS := $(BUILD_DIR)/mupdf_document.o $(BUILD_DIR)/renderer.o $(BUILD_DIR)/text_renderer.o $(BUILD_DIR)/tg5040_power_handler.o $(BUILD_DIR)/app.o $(BUILD_DIR)/main.o
+# Source files: Combine all .cpp files from src/ and cli/, excluding Linux-specific files
+SRC_FILES = $(filter-out $(SRC_DIR)/power_handler.cpp, $(wildcard $(SRC_DIR)/*.cpp))
+SRCS = $(SRC_FILES) $(wildcard $(CLI_DIR)/*.cpp)
 
-# Libraries (link order matters)
+# Dear ImGui source files (using SDL Renderer backend for TG5040 framebuffer compatibility)
+IMGUI_SRCS = $(IMGUI_DIR)/imgui.cpp \
+             $(IMGUI_DIR)/imgui_demo.cpp \
+             $(IMGUI_DIR)/imgui_draw.cpp \
+             $(IMGUI_DIR)/imgui_tables.cpp \
+             $(IMGUI_DIR)/imgui_widgets.cpp \
+             $(IMGUI_DIR)/backends/imgui_impl_sdl.cpp \
+             $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer.cpp
+
+# Add ImGui sources to compilation
+SRCS += $(IMGUI_SRCS)
+
+# All object files (will be placed in the build directory)
+# Transforms src/file.cpp into build/file.o and cli/file.cpp into build/file.o
+OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS))) \
+       $(patsubst $(CLI_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(CLI_DIR)/%,$(SRCS))) \
+       $(BUILD_DIR)/imgui.o \
+       $(BUILD_DIR)/imgui_demo.o \
+       $(BUILD_DIR)/imgui_draw.o \
+       $(BUILD_DIR)/imgui_tables.o \
+       $(BUILD_DIR)/imgui_widgets.o \
+       $(BUILD_DIR)/imgui_impl_sdl.o \
+       $(BUILD_DIR)/imgui_impl_sdlrenderer.o \
+       $(BUILD_DIR)/tg5040_power_handler.o
+
+# Libraries (link order matters) - No OpenGL needed for SDL Renderer backend
 LIBS := -lSDL2_ttf -lSDL2 \
   -L$(BASE_PATH)/mupdf/build/release \
   -lmupdf -lmupdf-third \
   -L/usr/local/libarchive-minimal/lib -larchive \
   -ljpeg -lopenjp2 -lharfbuzz -ljbig2dec \
-  -lfreetype -lgumbo -lz -llzma -lm -lpthread -ldl -lwebp -lwebpdemux
+  -lfreetype -lz -llzma -lm -lpthread -ldl -lwebp -lwebpdemux -lgumbo -lstdc++fs
 
-.PHONY: all clean export-bundle build-mupdf setup-mupdf clean-mupdf build-libarchive clean-libarchive
+.PHONY: all clean export-bundle build-mupdf setup-mupdf clean-mupdf build-libarchive clean-libarchive setup-imgui clean-imgui
 
 # Default goal
-all: setup-mupdf build-libarchive build-mupdf $(TARGET)
+all: setup-imgui setup-mupdf build-libarchive build-mupdf $(TARGET)
+
+# Setup Dear ImGui if it doesn't exist or is incomplete
+# Using v1.89 for TG5040 compatibility with older SDL2 (2.0.9)
+setup-imgui:
+	@if [ ! -d "$(BASE_PATH)/imgui" ]; then \
+		echo "Setting up Dear ImGui repository (v1.89 for SDL2 2.0.9 compatibility)..."; \
+		rm -rf $(BASE_PATH)/imgui; \
+		cd $(BASE_PATH) && git clone --depth 1 --branch v1.89 https://github.com/ocornut/imgui.git; \
+		echo "Dear ImGui setup completed successfully"; \
+	else \
+		echo "Dear ImGui repository already exists and is complete"; \
+	fi
+	@if [ -d "$(BASE_PATH)/imgui" ] && [ -f "$(BASE_PATH)/imgui/backends/imgui_impl_sdlrenderer.cpp" ]; then \
+		if ! grep -q "imgui_impl_sdlrenderer_legacy" $(BASE_PATH)/imgui/backends/imgui_impl_sdlrenderer.cpp; then \
+			echo "Applying SDL 2.0.9 fallback patch to ImGui SDL renderer backend..."; \
+			cd $(BASE_PATH)/imgui && patch -p1 < ../patches/imgui_impl_sdlrenderer_legacy.patch; \
+		else \
+			echo "ImGui SDL renderer backend already patched"; \
+		fi; \
+	fi
+	@if [ -d "$(BASE_PATH)/imgui" ] && [ -f "$(BASE_PATH)/imgui/backends/imgui_impl_sdl.cpp" ]; then \
+		if ! grep -q "TG5040 PATCH: Swap A & B buttons" $(BASE_PATH)/imgui/backends/imgui_impl_sdl.cpp; then \
+			echo "Applying TG5040 A & B button swap patch to ImGui SDL backend..."; \
+			patch -d $(BASE_PATH)/imgui -p1 < $(BASE_PATH)/patches/imgui_swap_ab_buttons_tg5040.patch; \
+		else \
+			echo "ImGui SDL backend already patched for TG5040 button swap"; \
+		fi; \
+	fi
 
 # Setup MuPDF repository if it doesn't exist
 setup-mupdf:
@@ -66,7 +127,7 @@ setup-mupdf:
 
 # Build minimal libarchive without ICU/XML dependencies
 # This creates a custom static libarchive build that excludes:
-# - ICU libraries (libicudata, libicui18n, libicuuc) 
+# - ICU libraries (libicudata, libicui18n, libicuuc)
 # - XML2 library support
 # - Internationalization features
 # This results in a much smaller bundle while maintaining CBR/CBZ functionality
@@ -90,7 +151,7 @@ build-libarchive:
 
 # Build MuPDF with custom libarchive support for CBR/CBZ files and WebP support
 build-mupdf: build-libarchive
-	@echo "Building minimal MuPDF with custom libarchive support for CBR/CBZ files and WebP support..."
+	@echo "Building MuPDF with custom libarchive support for CBR/CBZ files, WebP support, and HTML engine..."
 	@cd $(BASE_PATH)/mupdf && $(MAKE) libs \
 		CFLAGS="-std=c17 -D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0 -DHAVE_LIBARCHIVE -DHAVE_WEBP -Iinclude" \
 		CXXFLAGS="-std=c++17 -D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0 -DHAVE_LIBARCHIVE -DHAVE_WEBP -Iinclude" \
@@ -123,43 +184,57 @@ export-bundle: $(TARGET)
 $(BIN_DIR):
 	@mkdir -p $(BIN_DIR)
 
+# Rule to create the build directory
+$(BUILD_DIR):
+	@mkdir -p $(BUILD_DIR)
+
 # Link final binary
 $(TARGET): $(OBJS) | $(BIN_DIR)
 	$(CXX) $(OBJS) $(LIBS) -o $@
 	@patchelf --remove-rpath "$@" 2>/dev/null || true
 	@patchelf --set-rpath '$$ORIGIN/../lib' "$@"
 
-# Compile source to object files
-$(BUILD_DIR)/%.o: $(WORKSPACE_PATH)/src/%.cpp
-	 @mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-# Compile sources from cli/
-$(BUILD_DIR)/%.o: $(WORKSPACE_PATH)/cli/%.cpp
+# Compile source files into object files in the build directory
+# This rule handles both src/ and cli/ cpp files
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Compile TG5040-specific power handler
-$(BUILD_DIR)/tg5040_power_handler.o: $(BASE_PATH)/src/power_handler.cpp
+$(BUILD_DIR)/%.o: $(CLI_DIR)/%.cpp | $(BUILD_DIR)
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Clean build artifacts
-clean:
-	@echo "Cleaning build artifacts..."
-	rm -rf $(BUILD_DIR)/*.o $(BIN_DIR)/*
-	rm -rf pak/lib/*
-	rm -f pak/bin/sdl_reader_cli
-	rm -f pak/README.md pak/pak.json
-	rm -rf lib/
-	rm -f webp-upstream-697749.patch
+# Compile Dear ImGui core sources
+$(BUILD_DIR)/imgui.o: $(IMGUI_DIR)/imgui.cpp | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Clean custom libarchive build
-clean-libarchive:
-	@echo "Removing custom libarchive build..."
-	rm -rf $(BASE_PATH)/libarchive-3.3.3 /usr/local/libarchive-minimal
+$(BUILD_DIR)/imgui_demo.o: $(IMGUI_DIR)/imgui_demo.cpp | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Clean MuPDF (use with caution - will require re-download and rebuild)
-clean-mupdf:
-	@echo "Removing MuPDF directory (will be re-downloaded on next build)..."
-	rm -rf $(BASE_PATH)/mupdf
+$(BUILD_DIR)/imgui_draw.o: $(IMGUI_DIR)/imgui_draw.cpp | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/imgui_tables.o: $(IMGUI_DIR)/imgui_tables.cpp | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/imgui_widgets.o: $(IMGUI_DIR)/imgui_widgets.cpp | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Compile Dear ImGui SDL backend sources
+$(BUILD_DIR)/imgui_impl_sdl.o: $(IMGUI_DIR)/backends/imgui_impl_sdl.cpp | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/imgui_impl_sdlrenderer.o: $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer.cpp | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Compile TG5040-specific sources
+$(BUILD_DIR)/tg5040_power_handler.o: $(TG_SRC_DIR)/power_handler.cpp | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
