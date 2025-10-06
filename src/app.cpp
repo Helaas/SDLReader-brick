@@ -102,14 +102,13 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
             std::cout << "DEBUG: Custom font loader installed before opening document" << std::endl;
 
             // Apply saved CSS configuration BEFORE opening document
-            if (!savedConfig.fontPath.empty())
+            // Generate CSS even for "Document Default" to apply reading style colors
+            std::string css = m_optionsManager->generateCSS(savedConfig);
+            if (!css.empty())
             {
-                std::string css = m_optionsManager->generateCSS(savedConfig);
-                if (!css.empty())
-                {
-                    muDoc->setUserCSSBeforeOpen(css);
-                    std::cout << "Applied saved font CSS before opening document: " << savedConfig.fontName << std::endl;
-                }
+                muDoc->setUserCSSBeforeOpen(css);
+                std::cout << "Applied saved CSS before opening document - Font: " << savedConfig.fontName
+                          << ", Style: " << static_cast<int>(savedConfig.readingStyle) << std::endl;
             }
         }
     }
@@ -189,12 +188,12 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     m_guiManager->setPageCount(m_navigationManager->getPageCount());
     m_guiManager->setCurrentPage(m_navigationManager->getCurrentPage());
 
-    // Now set the saved configuration in GUI if it exists
-    if (!savedConfig.fontPath.empty())
-    {
-        m_guiManager->setCurrentFontConfig(savedConfig);
-        std::cout << "Applied saved font configuration: " << savedConfig.fontName << " at " << savedConfig.fontSize << "pt" << std::endl;
-    }
+    // Always set the saved configuration in GUI (even for Document Default)
+    // This ensures reading style and font size are properly loaded
+    m_guiManager->setCurrentFontConfig(savedConfig);
+    std::cout << "Applied saved configuration: Font=" << savedConfig.fontName
+              << ", Size=" << savedConfig.fontSize << "pt"
+              << ", Style=" << static_cast<int>(savedConfig.readingStyle) << std::endl;
 
     // Initialize RenderManager LAST after all dependencies are ready
     m_renderManager = std::make_unique<RenderManager>(localWindow, localSDLRenderer);

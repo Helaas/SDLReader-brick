@@ -333,7 +333,7 @@ std::string OptionsManager::generateCSS(const FontConfig& config) const
     // Check if this is "Document Default" (no custom font family)
     bool isDocumentDefault = (config.fontPath.empty() || config.fontName.empty() || config.fontName == "Document Default");
 
-    // Apply reading style colors if not Default
+    // Apply reading style colors if not Default (applies to both Document Default and custom fonts)
     if (config.readingStyle != ReadingStyle::Default && !bgColor.empty())
     {
         css << "body {\n";
@@ -357,22 +357,27 @@ std::string OptionsManager::generateCSS(const FontConfig& config) const
         css << "  font-size: " << config.fontSize << "pt !important;\n";
         css << "}\n\n";
     }
-    else if (isDocumentDefault)
+
+    // For Document Default font, only apply font size (reading style colors already applied above if needed)
+    if (isDocumentDefault)
     {
-        // For Document Default with no reading style, only apply font size
-        css << "* {\n";
-        css << "  font-size: " << config.fontSize << "pt !important;\n";
-        css << "  line-height: 1.4 !important;\n";
-        css << "}\n\n";
+        if (config.readingStyle == ReadingStyle::Default)
+        {
+            // No reading style, only apply font size
+            css << "* {\n";
+            css << "  font-size: " << config.fontSize << "pt !important;\n";
+            css << "  line-height: 1.4 !important;\n";
+            css << "}\n\n";
 
-        css << "body, p, div, span, h1, h2, h3, h4, h5, h6 {\n";
-        css << "  font-size: " << config.fontSize << "pt !important;\n";
-        css << "}\n\n";
+            css << "body, p, div, span, h1, h2, h3, h4, h5, h6 {\n";
+            css << "  font-size: " << config.fontSize << "pt !important;\n";
+            css << "}\n\n";
 
-        css << "[data-font], [style] {\n";
-        css << "  font-size: " << config.fontSize << "pt !important;\n";
-        css << "}\n";
-
+            css << "[data-font], [style] {\n";
+            css << "  font-size: " << config.fontSize << "pt !important;\n";
+            css << "}\n";
+        }
+        // If reading style is applied, colors are already set above, nothing more to do
         return css.str();
     }
 
