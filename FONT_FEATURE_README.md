@@ -1,25 +1,28 @@
-# Font Management Feature
+# Font & Reading Style Menu
 
-This implementation adds a comprehensive font selection GUI to the SDLReader application that allows users to choose fonts and sizes for EPUB/MOBI documents at runtime.
+This implementation adds a comprehensive font and reading-style menu to SDL Reader, allowing runtime customization of EPUB/MOBI typography, colors, and navigation aids across desktop and TG5040 builds.
 
 ## Features
 
-- **Font Menu**: Press `M` key to toggle the font selection menu
-- **Font Discovery**: Automatically scans the `/fonts` directory for `.ttf` and `.otf` files
-- **Live Preview**: Shows "The quick brown fox..." preview text
+- **Font Menu**: Press `M` (keyboard), `Start` (desktop controllers), or Menu button 10 (TG5040) to toggle the settings overlay
+- **Font Discovery**: Automatically scans the `/fonts` directory for `.ttf` and `.otf` files (ships with Inter, JetBrains Mono, Noto Serif Condensed, Roboto) and exposes them in the Options → Font & Reading Style menu
+- **Reading Styles**: Built-in color themes (Default, Sepia, Dark, High Contrast, Paper Texture, Soft Gray, Night) applied via CSS
 - **Font Size Control**: Numeric input and slider for font size (8-72pt)
-- **Persistent Settings**: Saves configuration to `config.json` and auto-applies on startup
-- **CSS Generation**: Automatically generates and applies user CSS via MuPDF's `fz_set_user_css`
+- **On-screen Number Pad**: Controller-friendly page jump widget triggered from the menu's "Number Pad" button
+- **Persistent Settings**: Saves configuration to `config.json` (font, size, style, zoom step, last browse directory) and auto-applies on startup
+- **CSS Generation**: Automatically generates and applies user CSS via MuPDF's `fz_set_user_css`, including `@font-face` declarations
 
 ## How to Use
 
-1. **Add Fonts**: Place your `.ttf` or `.otf` font files in the `fonts/` directory
-2. **Open Font Menu**: Press the `M` key while reading a document
-3. **Select Font**: Choose from the dropdown list of available fonts
-4. **Adjust Size**: Use the input field or slider to set font size (8-72 points)
-5. **Preview**: See a live preview of your selection
-6. **Apply**: Click "Apply" to use the font in your document
-7. **Save**: Settings are automatically saved and will be restored next time
+1. **Add Fonts**: Place your `.ttf` or `.otf` font files in the `fonts/` directory (optional—curated fonts ship in-tree) and they’ll appear in the Options → Font & Reading Style picker
+2. **Launch a Document**: Open a file directly or start the built-in browser with `./bin/sdl_reader_cli --browse`
+3. **Open the Menu**: Press `M` on keyboard, `Start` on desktop controllers, or the TG5040 Menu button (joystick button 10)
+4. **Select Font**: Choose from the dropdown list of discovered fonts; the preview updates instantly
+5. **Pick a Reading Style**: Choose a theme for background/text colors; defaults to "Document Default"
+6. **Adjust Size & Zoom Step**: Use the numeric input or slider to set font size (8–72 pt) and tweak the zoom step
+7. **Jump with Number Pad**: Click "Number Pad" for a controller-friendly page jump pad; confirm with `Go`
+8. **Apply Changes**: Click "Apply" to reload the document with the new CSS and persist the configuration
+9. **Close or Reset**: Use "Close" to exit without saving or "Reset to Default" to revert to document defaults
 
 ## Keyboard Controls
 
@@ -30,15 +33,13 @@ This implementation adds a comprehensive font selection GUI to the SDLReader app
 
 ### Files Added/Modified
 
-- `include/font_manager.h` - Font discovery and management
-- `src/font_manager.cpp` - Font scanning and CSS generation
-- `include/gui_manager.h` - Dear ImGui integration
-- `src/gui_manager.cpp` - Font selection GUI
-- `include/mupdf_document.h` - Added CSS support
-- `src/mupdf_document.cpp` - CSS application via `fz_set_user_css`
-- `include/app.h` - Font menu integration
-- `src/app.cpp` - Event handling and font application
-- `ports/mac/Makefile` - Dear ImGui build integration
+- `include/options_manager.h` / `src/options_manager.cpp` - Font discovery, CSS generation, reading-style metadata, config persistence
+- `include/gui_manager.h` / `src/gui_manager.cpp` - Dear ImGui UI (font picker, reading style combo, number pad)
+- `include/input_manager.h` / `src/input_manager.cpp` - New logical actions (`ToggleFontMenu`, number pad navigation)
+- `include/mupdf_document.h` / `src/mupdf_document.cpp` - CSS application via `fz_set_user_css` and pre-open injection
+- `include/app.h` / `src/app.cpp` - Event wiring, callbacks, document reload sequencing
+- `src/render_manager.cpp` - Overlay updates for page/scale indicators after reloads
+- `ports/*/Makefile` - Dear ImGui build integration per platform
 
 ### Dependencies
 
@@ -52,9 +53,12 @@ Settings are stored in `config.json` in the executable directory:
 
 ```json
 {
-  "fontPath": "/path/to/font.ttf",
-  "fontName": "Font Display Name", 
-  "fontSize": 14
+  "fontPath": "./fonts/Inter-Regular.ttf",
+  "fontName": "Inter Regular",
+  "fontSize": 16,
+  "zoomStep": 10,
+  "readingStyle": 0,
+  "lastBrowseDirectory": "/mnt/SDCARD/Books"
 }
 ```
 
@@ -68,13 +72,20 @@ The system generates CSS that:
 Example generated CSS:
 ```css
 @font-face {
-  font-family: 'UserSelectedFont';
-  src: url('file:///path/to/font.ttf');
+  font-family: 'Inter Regular';
+  src: url('./fonts/Inter-Regular.ttf');
 }
 
-body, *, p, div, span, h1, h2, h3, h4, h5, h6 {
-  font-family: 'UserSelectedFont' !important;
-  font-size: 14pt !important;
+body {
+  background-color: #f4ecd8 !important; /* Sepia */
+  color: #5c4a3a !important;
+}
+
+*, p, div, span, h1, h2, h3, h4, h5, h6 {
+  font-family: 'Inter Regular' !important;
+  font-size: 16pt !important;
+  line-height: 1.4 !important;
+  color: #5c4a3a !important;
 }
 ```
 

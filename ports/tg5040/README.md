@@ -12,6 +12,8 @@ Based on the [Trimui toolchain Docker image](https://git.crowdedwood.com/trimui-
 - **Custom libarchive**: Builds minimal libarchive without ICU/XML dependencies for optimal bundle size
 - **Hardware Power Management**: NextUI-compatible power button handling
 - **Complete Bundle Export**: Creates self-contained distribution packages
+- **Integrated ImGui UI**: Controller-first file browser, font picker, reading-style themes, and on-screen number pad
+- **Persistent Preferences**: Ships with curated fonts, `config.json` (user-managed), and automatic `reading_history.json` resume support
 
 ## Files in this directory
 - `Makefile` - TG5040 application build configuration
@@ -73,11 +75,20 @@ make export-tg5040
 ```
 
 The exported bundle (`ports/tg5040/pak/`) contains:
-- **bin/**: Main binary and utilities (jq, minui-list)
-- **lib/**: All required shared library dependencies
-- **fonts/**: Font files
-- **res/**: Other resource files (if any)
-- **launch.sh**: Main launcher script
+- **bin/**: `sdl_reader_cli` (legacy utilities such as `jq`/`minui-list` are preserved if present before export)
+- **lib/**: All required shared library dependencies with patched RPATHs
+- **fonts/**: Bundled fonts for the runtime picker (Inter, JetBrains Mono, Noto Serif Condensed, Roboto)
+- **res/**: Optional resource files (bundled docs, etc.)
+- **launch.sh**: Launcher script that invokes `./bin/sdl_reader_cli --browse`
+- **README.md / pak.json**: Copied for convenience inside the bundle
+
+## Applied Patches
+
+When you run `make tg5040` or `make export-tg5040`, the build system applies several patches automatically:
+
+- `webp-upstream-697749.patch` (MuPDF) — shared with other platforms to backport WebP decoding fixes from KOReader.
+- `patches/imgui_impl_sdlrenderer_legacy.patch` — replaces the Dear ImGui SDL renderer backend with a legacy-friendly version that works on the TG5040's SDL 2.0.10 stack and adds caching optimizations for the low-power GPU.
+- `patches/imgui_swap_ab_buttons_tg5040.patch` — swaps the reported A/B buttons so Dear ImGui's activation/cancel affordances match the TrimUI Brick's physical layout.
 
 ### Bundle Features
 - **Self-contained**: Includes all dependencies and resources
@@ -98,6 +109,12 @@ After building the first time, unless a dependency of the image has changed, `ma
 - **Volume mapping**: The project root is mounted at `/root/workspace` inside the container
 - **Toolchain**: Located at `/opt/` inside the container
 
+Runtime settings (`config.json`) and reading progress (`reading_history.json`) are generated next to the executable. They are ignored by Git so you can modify them freely on the device or within the container.
+
+### Fonts & Reading Styles
+
+Drop additional `.ttf` or `.otf` files into `ports/tg5040/pak/fonts/` (or the project-root `fonts/` folder before exporting). When you launch the bundle, the Options → Font & Reading Style menu automatically discovers those fonts so you can preview and select them on-device.
+
 ### Container Details
 - The container's `/root/workspace` is mapped to the project root directory
 - Source code changes on the host are immediately available in the container
@@ -105,6 +122,7 @@ After building the first time, unless a dependency of the image has changed, `ma
 
 ## Platform-Specific Features
 The TG5040 build includes:
+- **ImGui UI Stack**: Built-in browser launched via `--browse`, font & reading-style menu, controller number pad, and persisted `reading_history.json`
 - **Advanced Hardware Power Management**: NextUI-compatible power button handling
   - Power button monitoring via `/dev/input/event1`
   - Short press: Intelligent sleep with fake sleep fallback

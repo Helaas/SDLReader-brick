@@ -9,6 +9,7 @@ This directory contains the macOS-specific build configuration for SDL Reader.
 - **Built-in CBR Support**: Now includes support for CBR (Comic Book RAR) files alongside CBZ/ZIP comic books
 - **Self-Contained MuPDF**: Automatically downloads and builds MuPDF 1.26.7 with libarchive support
 - **Homebrew Integration**: Uses Homebrew libraries for SDL2 and libarchive dependencies
+- **ImGui Interface**: Desktop build includes the ImGui file browser, font & reading-style menu, and on-screen number pad
 
 ## Dependencies
 
@@ -61,16 +62,28 @@ Run it from the project root with:
 ```bash
 ./bin/sdl_reader_cli path/to/your/document.pdf
 # or
-./bin/sdl_reader_cli path/to/your/comic.cbz  
+./bin/sdl_reader_cli path/to/your/comic.cbz
 # or (NEW!)
 ./bin/sdl_reader_cli path/to/your/comic.cbr
+# or launch the integrated browser (remembers last directory)
+./bin/sdl_reader_cli --browse
 ```
+
+Using `--browse` opens the ImGui file picker, restores your last-read page via `reading_history.json`, and lets you tweak fonts/themes from a controller-friendly UI. Settings live in `config.json` next to the binary.
+
+### Fonts & Reading Styles
+
+Place custom `.ttf` or `.otf` fonts in the root `fonts/` directory (or alongside the packaged app). The Options → Font & Reading Style menu will automatically discover them so you can preview and apply new typography without rebuilding.
+
+## Applied Patches
+
+`make mac` (or `make` from this directory) applies the shared `webp-upstream-697749.patch` to the MuPDF source tree before compilation. This KOReader-sourced patch enables reliable WebP decoding inside PDFs and comic archives on macOS builds.
 
 ## Supported Formats
 
 - **PDF**: Portable Document Format files
-- **CBZ**: Comic Book ZIP archives  
-- **CBR**: Comic Book RAR archives (NEW!)
+- **CBZ**: Comic Book ZIP archives
+- **CBR**: Comic Book RAR archives
 - **ZIP**: ZIP archives containing images
 - **EPUB**: Electronic book format
 - **MOBI**: Kindle book format
@@ -110,7 +123,7 @@ If you get "command not found" errors, ensure Homebrew's paths are in your shell
 # For Apple Silicon Macs (M1/M2/M3)
 echo 'export PATH="/opt/homebrew/bin:$PATH"' >> ~/.zshrc
 
-# For Intel Macs  
+# For Intel Macs
 echo 'export PATH="/usr/local/bin:$PATH"' >> ~/.zshrc
 
 # Reload your shell

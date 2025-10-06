@@ -1,5 +1,7 @@
 # Wii U Port - SDLReader for Nintendo Wii U
 
+> ⚠️ **Warning:** This port has not been re-tested since the project transitioned from SDLReader to SDLReader-Brick; expect breakage until verification completes.
+
 This directory contains the Wii U-specific build configuration for the SDLReader project.
 
 SDLReader is a document reader that compiles and runs on macOS, TG5040, and Wii U. It uses MuPDF for loading PDF and comic book files.
@@ -8,8 +10,9 @@ SDLReader is a document reader that compiles and runs on macOS, TG5040, and Wii 
 
 - **Built-in CBR Support**: Now includes support for CBR (Comic Book RAR) files alongside CBZ/ZIP comic books
 - **WebP Patch Applied**: WebP support patch applied to MuPDF (requires WebP libraries for full functionality)
-- **Self-Contained MuPDF**: Uses port-specific MuPDF build with libarchive support  
+- **Self-Contained MuPDF**: Uses port-specific MuPDF build with libarchive support
 - **Wii U Optimized**: Static linking and console-specific optimizations
+- **ImGui UX (Desktop Parity)**: Shares the ImGui file browser, font picker, and reading-style menu introduced on desktop/TG5040 (rendering still under active debugging)
 - **Multiple Document Formats**: PDF, CBZ, CBR, ZIP, EPUB support
 
 ## Quick Start
@@ -20,7 +23,7 @@ SDLReader is a document reader that compiles and runs on macOS, TG5040, and Wii 
 make wiiu
 ```
 
-### From This Directory  
+### From This Directory
 ```bash
 cd ports/wiiu
 make
@@ -32,10 +35,18 @@ make
 - libarchive support (for CBR files)
 - **WebP support**: Limited by devkitPro library availability (patch applied but WebP libraries may not be available)
 
+## Applied Patches
+
+The Wii U make target applies the shared `webp-upstream-697749.patch` before compiling MuPDF. This keeps WebP image decoding aligned with the desktop builds even though devkitPro’s packaged libraries lag behind upstream.
+
+## Fonts & Reading Styles
+
+Copy custom `.ttf` or `.otf` fonts into the `fonts/` directory (either in the source tree or the deployed SD card layout). The Options → Font & Reading Style menu in the ImGui overlay will surface those fonts automatically so you can switch typography at runtime once rendering is stabilized.
+
 ## Platform-Specific Features
 The Wii U build:
 - Excludes hardware power button monitoring (uses console's own power management)
-- Static linking only (Wii U homebrew requirement)  
+- Static linking only (Wii U homebrew requirement)
 - Uses devkitPro's harfbuzz and freetype libraries
 - Includes Wii U-specific main wrapper (`main_wiiu.cpp`)
 - **CBR Support**: Comic Book RAR files via libarchive integration
@@ -48,7 +59,7 @@ The Wii U build:
 Current status of the Wii U port:
 * ✅ [mupdf-devkitppc](https://github.com/hito16/mupdf-devkitppc) builds successfully
 * ✅ Resolved multiple and undefined references
-* ✅ Created main wrapper so Wii U code can call SDLReader code  
+* ✅ Created main wrapper so Wii U code can call SDLReader code
 * ⚠️  Boots to blank screen - logging needed for debugging
 
 ## Detailed Build Instructions
@@ -92,14 +103,14 @@ cd SDLReader/ports/wiiu
 
 ```
 cd SDLReader/ports/wiiu
-make 
+make
 ```
 
 ## Build Notes
 
 see make_wiiu.sh
 
-WiiU homebrew only supports static builds.  
+WiiU homebrew only supports static builds.
 Mupdf and the WiiU both have versions of harfbuzz and freetype which generate multiple reference linker errors.
 
 Here, we build against the devkitpro harfbuzz and freetype, supressing the mupdf versions.
@@ -111,5 +122,3 @@ XCFLAGS="$($DEVKITPRO/portlibs/wiiu/bin/powerpc-eabi-pkg-config --cflags harfbuz
 XLIBS="$($DEVKITPRO/portlibs/wiiu/bin/powerpc-eabi-pkg-config --libs harfbuzz freetype2)" \
 
 ```
-
-

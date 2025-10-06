@@ -10,6 +10,7 @@ This directory contains the Linux-specific build configuration for SDL Reader.
 - **WebP Image Support**: Supports WebP images in PDF documents and comic book archives
 - **Self-Contained MuPDF**: Automatically downloads and builds MuPDF 1.26.7 with libarchive and WebP support
 - **No System MuPDF Required**: No longer depends on system MuPDF packages
+- **ImGui Interface**: Desktop builds gain an ImGui-powered file browser, font & reading-style menu, and on-screen number pad
 
 ## Dependencies
 
@@ -93,17 +94,29 @@ Run it from the project root with:
 ./bin/sdl_reader_cli path/to/your/comic.cbz
 # or (NEW!)
 ./bin/sdl_reader_cli path/to/your/comic.cbr
+# or launch the integrated browser (remembers last directory)
+./bin/sdl_reader_cli --browse
 ```
+
+Launching with `--browse` opens the ImGui-driven file picker, auto-resumes your position using `reading_history.json`, and lets you tweak fonts/themes from a controller. Preferences are saved in `config.json` next to the executable.
+
+### Fonts & Reading Styles
+
+Add any `.ttf` or `.otf` files to the project's `fonts/` directory (or the one bundled alongside your build). The in-app Options → Font & Reading Style menu will pick them up automatically so you can preview and select custom typography at runtime.
+
+## Applied Patches
+
+Every Linux build invocations (`make linux` from the root or `make` in this directory) apply the shared `webp-upstream-697749.patch` to MuPDF. This KOReader-derived patch backports upstream fixes so MuPDF can decode WebP images consistently inside comic archives and EPUB resources.
 
 ## Supported Formats
 
 - **PDF**: Portable Document Format files
-- **CBZ**: Comic Book ZIP archives  
-- **CBR**: Comic Book RAR archives (NEW!)
+- **CBZ**: Comic Book ZIP archives
+- **CBR**: Comic Book RAR archives
 - **ZIP**: ZIP archives containing images
 - **EPUB**: Electronic book format
 - **MOBI**: Kindle book format
-- **WebP Images**: WebP format images within documents and archives (NEW!)
+- **WebP Images**: WebP format images within documents and archives
 
 ## Troubleshooting
 
@@ -119,7 +132,7 @@ The build system now automatically handles MuPDF compilation with WebP support. 
 This build configuration has only been tested on **Ubuntu 24.04**. If you're using other Linux distributions:
 
 1. Package names may be different
-2. Some dependencies may not be available in default repositories  
+2. Some dependencies may not be available in default repositories
 3. Additional system configuration may be required
 
 The self-built MuPDF approach with WebP support reduces dependency issues compared to using system packages.
