@@ -5,6 +5,7 @@
 #include <SDL.h>
 #include <chrono>
 #include <functional>
+#include <string>
 
 /**
  * @brief Actions that can be triggered by input events
