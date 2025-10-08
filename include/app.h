@@ -94,6 +94,10 @@ public:
     {
         return m_dpadDownHeld;
     }
+    bool isEdgeProgressBarDisabled() const
+    {
+        return m_cachedConfig.disableEdgeProgressBar;
+    }
 
 private:
     // Document Management
@@ -186,6 +190,13 @@ private:
     // Deferred font configuration change to avoid thread safety issues
     bool m_pendingFontChange{false};
     FontConfig m_pendingFontConfig;
+
+    // Cached configuration to avoid repeated file reads
+    FontConfig m_cachedConfig;
+    void refreshCachedConfig()
+    {
+        m_cachedConfig = m_optionsManager->loadConfig();
+    }
 
     // Document path for reading history
     std::string m_documentPath;

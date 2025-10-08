@@ -13,5 +13,8 @@
     "C_Cpp.intelliSenseEngine": "default",
     "C_Cpp.errorSquiggles": "enabled",
     "C_Cpp.autocomplete": "default",
-    "C_Cpp.suggestSnippets": true
+    "C_Cpp.suggestSnippets": true,
+    "files.associations": {
+        "string": "cpp"
+    }
 }

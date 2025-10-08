@@ -79,8 +79,9 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     // Initialize viewport manager (will be updated with proper renderer after RenderManager creation)
     m_viewportManager = std::make_unique<ViewportManager>(nullptr);
 
-    // Load saved font configuration early
+    // Load saved font configuration early and cache it
     FontConfig savedConfig = m_optionsManager->loadConfig();
+    m_cachedConfig = savedConfig;
 
     // Determine document type based on file extension
     // MuPDF supports PDF, CBZ, ZIP (with images), XPS, EPUB, and other formats
@@ -165,7 +166,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
 
     // Initialize InputManager
     m_inputManager = std::make_unique<InputManager>();
-    m_inputManager->setZoomStep(m_optionsManager->loadConfig().zoomStep);
+    m_inputManager->setZoomStep(m_cachedConfig.zoomStep);
     m_inputManager->setPageCount(pageCount);
 
     // Note: Custom font loader is already installed before document opening
@@ -509,12 +510,12 @@ void App::processInputAction(const InputActionData& actionData)
         }
         break;
     case InputAction::ZoomIn:
-        m_viewportManager->zoom(m_optionsManager->loadConfig().zoomStep, m_document.get());
+        m_viewportManager->zoom(m_cachedConfig.zoomStep, m_document.get());
         updateScaleDisplayTime();
         markDirty();
         break;
     case InputAction::ZoomOut:
-        m_viewportManager->zoom(-m_optionsManager->loadConfig().zoomStep, m_document.get());
+        m_viewportManager->zoom(-m_cachedConfig.zoomStep, m_document.get());
         updateScaleDisplayTime();
         markDirty();
         break;
@@ -958,22 +959,27 @@ void App::applyPendingFontChange()
               << static_cast<int>(m_pendingFontConfig.readingStyle) << std::endl;
 
     // Check if font, size, or style actually changed
-    FontConfig currentConfig = m_optionsManager->loadConfig();
-    bool fontChanged = (m_pendingFontConfig.fontName != currentConfig.fontName);
-    bool sizeChanged = (m_pendingFontConfig.fontSize != currentConfig.fontSize);
-    bool styleChanged = (m_pendingFontConfig.readingStyle != currentConfig.readingStyle);
-    bool zoomStepChanged = (m_pendingFontConfig.zoomStep != currentConfig.zoomStep);
+    bool fontChanged = (m_pendingFontConfig.fontName != m_cachedConfig.fontName);
+    bool sizeChanged = (m_pendingFontConfig.fontSize != m_cachedConfig.fontSize);
+    bool styleChanged = (m_pendingFontConfig.readingStyle != m_cachedConfig.readingStyle);
+    bool zoomStepChanged = (m_pendingFontConfig.zoomStep != m_cachedConfig.zoomStep);
+    bool edgeProgressBarChanged = (m_pendingFontConfig.disableEdgeProgressBar != m_cachedConfig.disableEdgeProgressBar);
 
     if (!fontChanged && !sizeChanged && !styleChanged)
     {
         std::cout << "No font/size/style change detected - skipping document reopen" << std::endl;
 
-        // Even if font/size/style didn't change, we still need to save zoom step changes
-        if (zoomStepChanged)
+        // Even if font/size/style didn't change, we still need to save other setting changes
+        if (zoomStepChanged || edgeProgressBarChanged)
         {
-            std::cout << "Zoom step changed: " << currentConfig.zoomStep << " -> " << m_pendingFontConfig.zoomStep << std::endl;
+            std::cout << "Zoom step or edge progress bar changed - saving config" << std::endl;
             m_optionsManager->saveConfig(m_pendingFontConfig);
-            m_inputManager->setZoomStep(m_pendingFontConfig.zoomStep);
+            refreshCachedConfig(); // Update cache after save
+            
+            if (zoomStepChanged)
+            {
+                m_inputManager->setZoomStep(m_pendingFontConfig.zoomStep);
+            }
         }
 
         // Just close the menu and mark for redraw
@@ -1052,6 +1058,9 @@ void App::applyPendingFontChange()
 
                     // Save the configuration
                     m_optionsManager->saveConfig(m_pendingFontConfig);
+                    
+                    // Refresh cached config after saving
+                    refreshCachedConfig();
 
                     // Update InputManager's zoom step with the new value
                     m_inputManager->setZoomStep(m_pendingFontConfig.zoomStep);
@@ -1155,6 +1164,15 @@ void App::closeGameControllers()
 bool App::updateHeldPanning(float dt)
 {
     bool changed = false;
+
+    // Get the effective edge turn threshold based on cached configuration
+    // If edge progress bar is disabled, use a very small threshold (0.001f) for instant page turns
+    // We use 0.001f instead of 0.0f to avoid the condition timer >= threshold being always true
+    // when both are 0.0f (since timer starts at 0.0f)
+    // Otherwise, use the default threshold (0.300f)
+    float effectiveEdgeTurnThreshold = m_cachedConfig.disableEdgeProgressBar ? 0.001f : m_edgeTurnThreshold;
+    bool instantPageTurns = m_cachedConfig.disableEdgeProgressBar;
+
     float dx = 0.0f, dy = 0.0f;
 
     if (m_dpadLeftHeld || m_keyboardLeftHeld)
@@ -1285,7 +1303,15 @@ bool App::updateHeldPanning(float dt)
         {
             if (m_dpadRightHeld || m_keyboardRightHeld)
             {
-                m_edgeTurnHoldRight += dt;
+                // In instant mode, set to threshold immediately, don't keep accumulating
+                if (instantPageTurns && m_edgeTurnHoldRight == 0.0f)
+                {
+                    m_edgeTurnHoldRight = effectiveEdgeTurnThreshold;
+                }
+                else if (!instantPageTurns)
+                {
+                    m_edgeTurnHoldRight += dt;
+                }
             }
             else
             {
@@ -1293,7 +1319,15 @@ bool App::updateHeldPanning(float dt)
             }
             if (m_dpadLeftHeld || m_keyboardLeftHeld)
             {
-                m_edgeTurnHoldLeft += dt;
+                // In instant mode, set to threshold immediately, don't keep accumulating
+                if (instantPageTurns && m_edgeTurnHoldLeft == 0.0f)
+                {
+                    m_edgeTurnHoldLeft = effectiveEdgeTurnThreshold;
+                }
+                else if (!instantPageTurns)
+                {
+                    m_edgeTurnHoldLeft += dt;
+                }
             }
             else
             {
@@ -1308,7 +1342,17 @@ bool App::updateHeldPanning(float dt)
             if (m_viewportManager->getScrollX() <= (-maxX + edgeTolerance) && (m_dpadRightHeld || m_keyboardRightHeld))
             {
                 float oldTime = m_edgeTurnHoldRight;
-                m_edgeTurnHoldRight += dt;
+                
+                // In instant mode, set to threshold immediately on first frame, don't keep accumulating
+                if (instantPageTurns && m_edgeTurnHoldRight == 0.0f)
+                {
+                    m_edgeTurnHoldRight = effectiveEdgeTurnThreshold;
+                }
+                else if (!instantPageTurns)
+                {
+                    m_edgeTurnHoldRight += dt;
+                }
+                
                 if (oldTime == 0.0f && m_edgeTurnHoldRight > 0.0f)
                 {
                     printf("DEBUG: Right edge-turn timer started (scroll-based, scrollX=%d, threshold=%d)\n", m_viewportManager->getScrollX(), -maxX + edgeTolerance);
@@ -1326,7 +1370,17 @@ bool App::updateHeldPanning(float dt)
             if (m_viewportManager->getScrollX() >= (maxX - edgeTolerance) && (m_dpadLeftHeld || m_keyboardLeftHeld))
             {
                 float oldTime = m_edgeTurnHoldLeft;
-                m_edgeTurnHoldLeft += dt;
+                
+                // In instant mode, set to threshold immediately on first frame, don't keep accumulating
+                if (instantPageTurns && m_edgeTurnHoldLeft == 0.0f)
+                {
+                    m_edgeTurnHoldLeft = effectiveEdgeTurnThreshold;
+                }
+                else if (!instantPageTurns)
+                {
+                    m_edgeTurnHoldLeft += dt;
+                }
+                
                 if (oldTime == 0.0f && m_edgeTurnHoldLeft > 0.0f)
                 {
                     printf("DEBUG: Left edge-turn timer started (scroll-based, scrollX=%d, threshold=%d)\n", m_viewportManager->getScrollX(), maxX - edgeTolerance);
@@ -1344,7 +1398,7 @@ bool App::updateHeldPanning(float dt)
         }
     }
 
-    if (m_edgeTurnHoldRight >= m_edgeTurnThreshold)
+    if (m_edgeTurnHoldRight >= effectiveEdgeTurnThreshold)
     {
         // Check cooldown before allowing page change
         float currentTime = SDL_GetTicks() / 1000.0f;
@@ -1371,7 +1425,7 @@ bool App::updateHeldPanning(float dt)
         }
         m_edgeTurnHoldRight = 0.0f;
     }
-    else if (m_edgeTurnHoldLeft >= m_edgeTurnThreshold)
+    else if (m_edgeTurnHoldLeft >= effectiveEdgeTurnThreshold)
     {
         // Check cooldown before allowing page change
         float currentTime = SDL_GetTicks() / 1000.0f;
@@ -1411,7 +1465,17 @@ bool App::updateHeldPanning(float dt)
             if (m_dpadDownHeld || m_keyboardDownHeld)
             {
                 float oldTime = m_edgeTurnHoldDown;
-                m_edgeTurnHoldDown += dt;
+                
+                // In instant mode, set to threshold immediately on first frame, don't keep accumulating
+                if (instantPageTurns && m_edgeTurnHoldDown == 0.0f)
+                {
+                    m_edgeTurnHoldDown = effectiveEdgeTurnThreshold;
+                }
+                else if (!instantPageTurns)
+                {
+                    m_edgeTurnHoldDown += dt;
+                }
+                
                 if (oldTime == 0.0f && m_edgeTurnHoldDown > 0.0f)
                 {
                     printf("DEBUG: Down edge-turn timer started (maxY=0)\n");
@@ -1424,7 +1488,17 @@ bool App::updateHeldPanning(float dt)
             if (m_dpadUpHeld || m_keyboardUpHeld)
             {
                 float oldTime = m_edgeTurnHoldUp;
-                m_edgeTurnHoldUp += dt;
+                
+                // In instant mode, set to threshold immediately on first frame, don't keep accumulating
+                if (instantPageTurns && m_edgeTurnHoldUp == 0.0f)
+                {
+                    m_edgeTurnHoldUp = effectiveEdgeTurnThreshold;
+                }
+                else if (!instantPageTurns)
+                {
+                    m_edgeTurnHoldUp += dt;
+                }
+                
                 if (oldTime == 0.0f && m_edgeTurnHoldUp > 0.0f)
                 {
                     printf("DEBUG: Up edge-turn timer started (maxY=0)\n");
@@ -1444,7 +1518,17 @@ bool App::updateHeldPanning(float dt)
             if (m_viewportManager->getScrollY() <= (-maxY + edgeTolerance) && (m_dpadDownHeld || m_keyboardDownHeld))
             {
                 float oldTime = m_edgeTurnHoldDown;
-                m_edgeTurnHoldDown += dt;
+                
+                // In instant mode, set to threshold immediately on first frame, don't keep accumulating
+                if (instantPageTurns && m_edgeTurnHoldDown == 0.0f)
+                {
+                    m_edgeTurnHoldDown = effectiveEdgeTurnThreshold;
+                }
+                else if (!instantPageTurns)
+                {
+                    m_edgeTurnHoldDown += dt;
+                }
+                
                 if (oldTime == 0.0f && m_edgeTurnHoldDown > 0.0f)
                 {
                     printf("DEBUG: Down edge-turn timer started (scroll-based)\n");
@@ -1459,7 +1543,17 @@ bool App::updateHeldPanning(float dt)
             if (m_viewportManager->getScrollY() >= (maxY - edgeTolerance) && (m_dpadUpHeld || m_keyboardUpHeld))
             {
                 float oldTime = m_edgeTurnHoldUp;
-                m_edgeTurnHoldUp += dt;
+                
+                // In instant mode, set to threshold immediately on first frame, don't keep accumulating
+                if (instantPageTurns && m_edgeTurnHoldUp == 0.0f)
+                {
+                    m_edgeTurnHoldUp = effectiveEdgeTurnThreshold;
+                }
+                else if (!instantPageTurns)
+                {
+                    m_edgeTurnHoldUp += dt;
+                }
+                
                 if (oldTime == 0.0f && m_edgeTurnHoldUp > 0.0f)
                 {
                     printf("DEBUG: Up edge-turn timer started (scroll-based)\n");
@@ -1482,7 +1576,7 @@ bool App::updateHeldPanning(float dt)
         m_edgeTurnHoldDown = 0.0f;
     }
 
-    if (m_edgeTurnHoldDown >= m_edgeTurnThreshold)
+    if (m_edgeTurnHoldDown >= effectiveEdgeTurnThreshold)
     {
         // Check cooldown before allowing page change
         float currentTime = SDL_GetTicks() / 1000.0f;
@@ -1510,7 +1604,7 @@ bool App::updateHeldPanning(float dt)
         }
         m_edgeTurnHoldDown = 0.0f;
     }
-    else if (m_edgeTurnHoldUp >= m_edgeTurnThreshold)
+    else if (m_edgeTurnHoldUp >= effectiveEdgeTurnThreshold)
     {
         // Check cooldown before allowing page change
         float currentTime = SDL_GetTicks() / 1000.0f;

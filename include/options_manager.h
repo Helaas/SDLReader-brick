@@ -41,13 +41,14 @@ struct FontConfig
     int zoomStep = 10;                                 // Zoom increment/decrement step
     std::string lastBrowseDirectory = "/mnt/SDCARD";   // Last browsed directory for file browser
     ReadingStyle readingStyle = ReadingStyle::Default; // Reading style/theme
+    bool disableEdgeProgressBar = false;               // Disable edge nudge progress bar for instant page turns
 
     // Default constructor
     FontConfig() = default;
 
     // Constructor with parameters
-    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10, const std::string& browseDir = "/mnt/SDCARD", ReadingStyle style = ReadingStyle::Default)
-        : fontPath(path), fontName(name), fontSize(size), zoomStep(zoom), lastBrowseDirectory(browseDir), readingStyle(style)
+    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10, const std::string& browseDir = "/mnt/SDCARD", ReadingStyle style = ReadingStyle::Default, bool disableEdgeBar = false)
+        : fontPath(path), fontName(name), fontSize(size), zoomStep(zoom), lastBrowseDirectory(browseDir), readingStyle(style), disableEdgeProgressBar(disableEdgeBar)
     {
     }
 };

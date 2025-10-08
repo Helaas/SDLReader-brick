@@ -2,5 +2,8 @@
   "fontPath": "./fonts/JetBrainsMono-Bold.ttf",
   "fontName": "Jetbrainsmono Bold",
   "fontSize": 16,
-  "zoomStep": 10
+  "zoomStep": 10,
+  "readingStyle": 0,
+  "disableEdgeProgressBar": false,
+  "lastBrowseDirectory": "/mnt/SDCARD"
 }

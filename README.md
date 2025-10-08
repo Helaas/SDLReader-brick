@@ -191,6 +191,7 @@ SDL Reader uses a `config.json` file for customizing font settings and display o
      "fontSize": 16,
      "zoomStep": 10,
      "readingStyle": 0,
+     "disableEdgeProgressBar": false,
      "lastBrowseDirectory": "/mnt/SDCARD/Books"
    }
    ```
@@ -202,6 +203,7 @@ SDL Reader uses a `config.json` file for customizing font settings and display o
 - **zoomStep**: Percentage increment for zoom operations and controller zoom buttons
 - **readingStyle**: Numeric identifier for the active reading theme (see table below)
 - **lastBrowseDirectory**: Directory the file browser should open by default when launched with `--browse`
+- **disableEdgeProgressBar**: When `true`, panning at page edges changes pages instantly without the 300ms delay and progress bar. When `false` (default), the edge nudge progress bar is shown.
 
 | `readingStyle` | Theme          | Background | Text Color |
 | :------------- | :------------- | :--------- | :--------- |
@@ -359,13 +361,19 @@ SDL Reader includes an intelligent edge navigation system for smooth page turnin
 
 ### How It Works
 - **Edge Detection**: When zoomed in ≥ 100%, using D-pad controls and reaching a page edge (left, right, top, or bottom), the system detects you're at the boundary
-- **Hold to Turn**: Continue holding the D-pad direction for 300ms to initiate page turning
+- **Hold to Turn**: Continue holding the D-pad direction for 300ms to initiate page turning (configurable - see below)
 - **Visual Feedback**: A progress bar appears showing:
   - Direction of pending page change (e.g., "Next Page", "Previous Page")
   - Progress indicator that fills as you approach the 300ms threshold
   - Color transitions from yellow to green as the timer progresses
 - **Immediate Cancellation**: Release the D-pad before 300ms to stay on the current page
 - **Seamless Transition**: After page change, you appear at the appropriate edge of the new page for continuous navigation
+
+### Instant Page Turns (No Delay)
+You can disable the 300ms delay and progress bar for instant page turns:
+- **Via Settings Menu**: Open Settings (Menu button on TG5040, `M` key on desktop) → Page Navigation section → Check "Disable Edge Progress Bar"
+- **Via config.json**: Set `"disableEdgeProgressBar": true` in your configuration file
+- When enabled, panning at page edges will change pages immediately without any delay or visual indicator
 
 ### When It Activates
 - **Fully Zoomed Out**: When the page fits entirely within the window

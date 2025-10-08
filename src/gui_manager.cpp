@@ -610,6 +610,24 @@ void GuiManager::renderFontMenu()
     // Current page display
     ImGui::Text("Current Page: %d / %d", m_currentPage + 1, m_pageCount);
 
+    ImGui::Spacing();
+
+    // Edge progress bar option
+    bool tempDisableEdgeBar = m_tempConfig.disableEdgeProgressBar;
+    if (ImGui::Checkbox("Disable Edge Progress Bar", &tempDisableEdgeBar))
+    {
+        m_tempConfig.disableEdgeProgressBar = tempDisableEdgeBar;
+    }
+    
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1), "(?)");
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::SetTooltip("When enabled, panning at page edges will change pages instantly\nwithout delay. When disabled (default), hold at edge for 300ms.");
+    }
+
+    ImGui::Spacing();
+
     ImGui::Text("Jump to Page:");
     ImGui::SetNextItemWidth(100);
     if (ImGui::InputText("##PageJump", m_pageJumpInput, sizeof(m_pageJumpInput), ImGuiInputTextFlags_CharsDecimal))
@@ -668,6 +686,10 @@ void GuiManager::renderFontMenu()
     bool fontSettingsChanged = (m_tempConfig.fontName != m_currentConfig.fontName ||
                                 m_tempConfig.fontSize != m_currentConfig.fontSize ||
                                 m_tempConfig.readingStyle != m_currentConfig.readingStyle);
+
+    // Check if other settings have changed (zoom, edge progress bar)
+    bool otherSettingsChanged = (m_tempConfig.zoomStep != m_currentConfig.zoomStep ||
+                                 m_tempConfig.disableEdgeProgressBar != m_currentConfig.disableEdgeProgressBar);
 
     // Show warning if font settings changed
     if (fontSettingsChanged)

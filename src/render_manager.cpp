@@ -389,6 +389,12 @@ void RenderManager::showErrorMessage(const std::string& message)
 void RenderManager::renderEdgeTurnProgressIndicator(App* app, NavigationManager* navigationManager,
                                                     ViewportManager* viewportManager, int windowWidth, int windowHeight)
 {
+    // Check if edge progress bar is disabled - if so, don't render it
+    if (app->isEdgeProgressBarDisabled())
+    {
+        return; // Progress bar disabled, don't render
+    }
+
     // Get edge turn state from app
     float edgeTurnHoldRight = app->getEdgeTurnHoldRight();
     float edgeTurnHoldLeft = app->getEdgeTurnHoldLeft();

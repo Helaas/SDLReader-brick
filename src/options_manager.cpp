@@ -28,6 +28,7 @@ std::string configToJson(const FontConfig& config)
     oss << "  \"fontSize\": " << config.fontSize << ",\n";
     oss << "  \"zoomStep\": " << config.zoomStep << ",\n";
     oss << "  \"readingStyle\": " << static_cast<int>(config.readingStyle) << ",\n";
+    oss << "  \"disableEdgeProgressBar\": " << (config.disableEdgeProgressBar ? "true" : "false") << ",\n";
     oss << "  \"lastBrowseDirectory\": \"" << config.lastBrowseDirectory << "\"\n";
     oss << "}";
     return oss.str();
@@ -92,11 +93,38 @@ FontConfig jsonToConfig(const std::string& json)
         }
     };
 
+    auto findBoolValue = [&json](const std::string& key) -> bool
+    {
+        std::string searchKey = "\"" + key + "\": ";
+        size_t start = json.find(searchKey);
+        if (start == std::string::npos)
+        {
+            return false; // Default to false
+        }
+        start += searchKey.length();
+        size_t end = json.find_first_of(",\n}", start);
+        if (end == std::string::npos)
+        {
+            return false;
+        }
+        std::string valueStr = json.substr(start, end - start);
+        // Trim whitespace safely
+        size_t first = valueStr.find_first_not_of(" \t\n\r");
+        if (first == std::string::npos)
+        {
+            return false; // Empty or whitespace-only string
+        }
+        size_t last = valueStr.find_last_not_of(" \t\n\r");
+        valueStr = valueStr.substr(first, (last - first + 1));
+        return (valueStr == "true");
+    };
+
     config.fontPath = findStringValue("fontPath");
     config.fontName = findStringValue("fontName");
     config.fontSize = findIntValue("fontSize");
     config.zoomStep = findIntValue("zoomStep");
     config.readingStyle = static_cast<ReadingStyle>(findIntValue("readingStyle"));
+    config.disableEdgeProgressBar = findBoolValue("disableEdgeProgressBar");
     config.lastBrowseDirectory = findStringValue("lastBrowseDirectory");
     if (config.lastBrowseDirectory.empty())
     {
