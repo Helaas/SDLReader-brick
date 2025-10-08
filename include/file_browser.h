@@ -75,6 +75,13 @@ private:
     SDL_GameController* m_gameController;
     SDL_JoystickID m_gameControllerInstanceID;
 
+    // D-pad hold state for continuous scrolling
+    bool m_dpadUpHeld;
+    bool m_dpadDownHeld;
+    Uint32 m_lastScrollTime;
+    static constexpr Uint32 SCROLL_INITIAL_DELAY_MS = 100; // Initial delay before repeat starts
+    static constexpr Uint32 SCROLL_REPEAT_DELAY_MS = 50;   // Delay between repeats
+
 #ifdef TG5040_PLATFORM
     std::unique_ptr<PowerHandler> m_powerHandler;
     bool m_inFakeSleep{false};

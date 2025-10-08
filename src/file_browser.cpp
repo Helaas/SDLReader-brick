@@ -34,7 +34,8 @@ FileBrowser::FileBrowser()
       m_currentPath(getenv("HOME") ? getenv("HOME") : "/")
 #endif
       ,
-      m_selectedIndex(0), m_gameController(nullptr), m_gameControllerInstanceID(-1)
+      m_selectedIndex(0), m_gameController(nullptr), m_gameControllerInstanceID(-1),
+      m_dpadUpHeld(false), m_dpadDownHeld(false), m_lastScrollTime(0)
 {
 }
 
@@ -390,6 +391,30 @@ std::string FileBrowser::run()
 #endif
         }
 
+        // Handle continuous scrolling when D-pad is held
+        Uint32 currentTime = SDL_GetTicks();
+        if ((m_dpadUpHeld || m_dpadDownHeld) && !m_entries.empty())
+        {
+            // Calculate delay based on whether we're in initial hold or repeat phase
+            Uint32 delay = (m_lastScrollTime == 0) ? 0 : ((currentTime - m_lastScrollTime < SCROLL_INITIAL_DELAY_MS) ? SCROLL_INITIAL_DELAY_MS : SCROLL_REPEAT_DELAY_MS);
+
+            if (m_lastScrollTime == 0 || (currentTime - m_lastScrollTime >= delay))
+            {
+                const int total = static_cast<int>(m_entries.size());
+
+                if (m_dpadUpHeld)
+                {
+                    m_selectedIndex = (m_selectedIndex - 1 + total) % total;
+                }
+                else if (m_dpadDownHeld)
+                {
+                    m_selectedIndex = (m_selectedIndex + 1) % total;
+                }
+
+                m_lastScrollTime = currentTime;
+            }
+        }
+
 #ifdef TG5040_PLATFORM
         if (m_inFakeSleep)
         {
@@ -628,18 +653,30 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         switch (event.cbutton.button)
         {
         case SDL_CONTROLLER_BUTTON_DPAD_UP:
-            if (!m_entries.empty())
+            if (!m_dpadUpHeld)
             {
-                const int total = static_cast<int>(m_entries.size());
-                m_selectedIndex = (m_selectedIndex - 1 + total) % total;
+                // First press - immediate response
+                if (!m_entries.empty())
+                {
+                    const int total = static_cast<int>(m_entries.size());
+                    m_selectedIndex = (m_selectedIndex - 1 + total) % total;
+                }
+                m_dpadUpHeld = true;
+                m_lastScrollTime = SDL_GetTicks();
             }
             break;
 
         case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-            if (!m_entries.empty())
+            if (!m_dpadDownHeld)
             {
-                const int total = static_cast<int>(m_entries.size());
-                m_selectedIndex = (m_selectedIndex + 1) % total;
+                // First press - immediate response
+                if (!m_entries.empty())
+                {
+                    const int total = static_cast<int>(m_entries.size());
+                    m_selectedIndex = (m_selectedIndex + 1) % total;
+                }
+                m_dpadDownHeld = true;
+                m_lastScrollTime = SDL_GetTicks();
             }
             break;
 
@@ -676,6 +713,22 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDL_CONTROLLER_BUTTON_START:
         case SDL_CONTROLLER_BUTTON_GUIDE:
             m_running = false;
+            break;
+
+        default:
+            break;
+        }
+        break;
+
+    case SDL_CONTROLLERBUTTONUP:
+        switch (event.cbutton.button)
+        {
+        case SDL_CONTROLLER_BUTTON_DPAD_UP:
+            m_dpadUpHeld = false;
+            break;
+
+        case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+            m_dpadDownHeld = false;
             break;
 
         default:

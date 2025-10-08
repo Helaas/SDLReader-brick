@@ -15,7 +15,7 @@ MuPdfDocument::MuPdfDocument()
 MuPdfDocument::~MuPdfDocument()
 {
     std::cout.flush();
-    
+
     // Stop background prerendering before destroying the object
     if (m_prerenderThread.joinable())
     {
@@ -26,13 +26,13 @@ MuPdfDocument::~MuPdfDocument()
     }
 
     std::cout.flush();
-    
+
     // Cleanup is handled by unique_ptr deleters
     // Clear cache
     std::lock_guard<std::mutex> lock(m_cacheMutex);
     m_cache.clear();
     m_argbCache.clear();
-    
+
     std::cout.flush();
 }
 
