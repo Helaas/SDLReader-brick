@@ -975,7 +975,7 @@ void App::applyPendingFontChange()
             std::cout << "Zoom step or edge progress bar changed - saving config" << std::endl;
             m_optionsManager->saveConfig(m_pendingFontConfig);
             refreshCachedConfig(); // Update cache after save
-            
+
             if (zoomStepChanged)
             {
                 m_inputManager->setZoomStep(m_pendingFontConfig.zoomStep);
@@ -1058,7 +1058,7 @@ void App::applyPendingFontChange()
 
                     // Save the configuration
                     m_optionsManager->saveConfig(m_pendingFontConfig);
-                    
+
                     // Refresh cached config after saving
                     refreshCachedConfig();
 
@@ -1341,8 +1341,6 @@ bool App::updateHeldPanning(float dt)
 
             if (m_viewportManager->getScrollX() <= (-maxX + edgeTolerance) && (m_dpadRightHeld || m_keyboardRightHeld))
             {
-                float oldTime = m_edgeTurnHoldRight;
-                
                 // In instant mode, set to threshold immediately on first frame, don't keep accumulating
                 if (instantPageTurns && m_edgeTurnHoldRight == 0.0f)
                 {
@@ -1352,25 +1350,13 @@ bool App::updateHeldPanning(float dt)
                 {
                     m_edgeTurnHoldRight += dt;
                 }
-                
-                if (oldTime == 0.0f && m_edgeTurnHoldRight > 0.0f)
-                {
-                    printf("DEBUG: Right edge-turn timer started (scroll-based, scrollX=%d, threshold=%d)\n", m_viewportManager->getScrollX(), -maxX + edgeTolerance);
-                }
             }
             else
             {
-                if ((m_dpadRightHeld || m_keyboardRightHeld) && m_edgeTurnHoldRight > 0.0f)
-                {
-                    printf("DEBUG: Right edge-turn timer stopped (scrollX=%d, threshold=%d, held=%s)\n",
-                           m_viewportManager->getScrollX(), -maxX + edgeTolerance, (m_dpadRightHeld || m_keyboardRightHeld) ? "YES" : "NO");
-                }
                 m_edgeTurnHoldRight = 0.0f;
             }
             if (m_viewportManager->getScrollX() >= (maxX - edgeTolerance) && (m_dpadLeftHeld || m_keyboardLeftHeld))
             {
-                float oldTime = m_edgeTurnHoldLeft;
-                
                 // In instant mode, set to threshold immediately on first frame, don't keep accumulating
                 if (instantPageTurns && m_edgeTurnHoldLeft == 0.0f)
                 {
@@ -1379,11 +1365,6 @@ bool App::updateHeldPanning(float dt)
                 else if (!instantPageTurns)
                 {
                     m_edgeTurnHoldLeft += dt;
-                }
-                
-                if (oldTime == 0.0f && m_edgeTurnHoldLeft > 0.0f)
-                {
-                    printf("DEBUG: Left edge-turn timer started (scroll-based, scrollX=%d, threshold=%d)\n", m_viewportManager->getScrollX(), maxX - edgeTolerance);
                 }
             }
             else
@@ -1464,8 +1445,6 @@ bool App::updateHeldPanning(float dt)
             // Page fits vertically: treat sustained up/down as page turns
             if (m_dpadDownHeld || m_keyboardDownHeld)
             {
-                float oldTime = m_edgeTurnHoldDown;
-                
                 // In instant mode, set to threshold immediately on first frame, don't keep accumulating
                 if (instantPageTurns && m_edgeTurnHoldDown == 0.0f)
                 {
@@ -1475,11 +1454,6 @@ bool App::updateHeldPanning(float dt)
                 {
                     m_edgeTurnHoldDown += dt;
                 }
-                
-                if (oldTime == 0.0f && m_edgeTurnHoldDown > 0.0f)
-                {
-                    printf("DEBUG: Down edge-turn timer started (maxY=0)\n");
-                }
             }
             else
             {
@@ -1487,8 +1461,6 @@ bool App::updateHeldPanning(float dt)
             }
             if (m_dpadUpHeld || m_keyboardUpHeld)
             {
-                float oldTime = m_edgeTurnHoldUp;
-                
                 // In instant mode, set to threshold immediately on first frame, don't keep accumulating
                 if (instantPageTurns && m_edgeTurnHoldUp == 0.0f)
                 {
@@ -1497,11 +1469,6 @@ bool App::updateHeldPanning(float dt)
                 else if (!instantPageTurns)
                 {
                     m_edgeTurnHoldUp += dt;
-                }
-                
-                if (oldTime == 0.0f && m_edgeTurnHoldUp > 0.0f)
-                {
-                    printf("DEBUG: Up edge-turn timer started (maxY=0)\n");
                 }
             }
             else
@@ -1517,8 +1484,6 @@ bool App::updateHeldPanning(float dt)
             // Bottom edge & still pushing down? (down moves view further down in your scheme: dy < 0)
             if (m_viewportManager->getScrollY() <= (-maxY + edgeTolerance) && (m_dpadDownHeld || m_keyboardDownHeld))
             {
-                float oldTime = m_edgeTurnHoldDown;
-                
                 // In instant mode, set to threshold immediately on first frame, don't keep accumulating
                 if (instantPageTurns && m_edgeTurnHoldDown == 0.0f)
                 {
@@ -1527,11 +1492,6 @@ bool App::updateHeldPanning(float dt)
                 else if (!instantPageTurns)
                 {
                     m_edgeTurnHoldDown += dt;
-                }
-                
-                if (oldTime == 0.0f && m_edgeTurnHoldDown > 0.0f)
-                {
-                    printf("DEBUG: Down edge-turn timer started (scroll-based)\n");
                 }
             }
             else
@@ -1542,8 +1502,6 @@ bool App::updateHeldPanning(float dt)
             // Top edge & still pushing up?
             if (m_viewportManager->getScrollY() >= (maxY - edgeTolerance) && (m_dpadUpHeld || m_keyboardUpHeld))
             {
-                float oldTime = m_edgeTurnHoldUp;
-                
                 // In instant mode, set to threshold immediately on first frame, don't keep accumulating
                 if (instantPageTurns && m_edgeTurnHoldUp == 0.0f)
                 {
@@ -1552,11 +1510,6 @@ bool App::updateHeldPanning(float dt)
                 else if (!instantPageTurns)
                 {
                     m_edgeTurnHoldUp += dt;
-                }
-                
-                if (oldTime == 0.0f && m_edgeTurnHoldUp > 0.0f)
-                {
-                    printf("DEBUG: Up edge-turn timer started (scroll-based)\n");
                 }
             }
             else

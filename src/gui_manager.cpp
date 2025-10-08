@@ -618,13 +618,18 @@ void GuiManager::renderFontMenu()
     {
         m_tempConfig.disableEdgeProgressBar = tempDisableEdgeBar;
     }
-    
+
     ImGui::SameLine();
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1), "(?)");
-    if (ImGui::IsItemHovered())
+    // Make the help icon a small button so it can be focused with D-pad
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));                    // Transparent background
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 0.2f, 0.2f, 0.5f)); // Slight highlight on hover
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.2f, 0.2f, 0.5f));  // Slight highlight when active
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 1));             // Gray text
+    if (ImGui::SmallButton("(?)##EdgeProgressBarHelp") || ImGui::IsItemFocused())
     {
         ImGui::SetTooltip("When enabled, panning at page edges will change pages instantly\nwithout delay. When disabled (default), hold at edge for 300ms.");
     }
+    ImGui::PopStyleColor(4);
 
     ImGui::Spacing();
 
