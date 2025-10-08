@@ -1388,7 +1388,6 @@ bool App::updateHeldPanning(float dt)
 
         if (!inCooldown && m_navigationManager->getCurrentPage() < m_navigationManager->getPageCount() - 1 && !m_navigationManager->isInPageChangeCooldown())
         {
-            printf("DEBUG: Right edge-turn completed - page change allowed\n");
             m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
                                               { markDirty(); }, [this]()
                                               { updateScaleDisplayTime(); }, [this]()
@@ -1397,12 +1396,9 @@ bool App::updateHeldPanning(float dt)
                                                   m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
             m_viewportManager->setScrollX(m_viewportManager->getMaxScrollX()); // appear at left edge
             m_viewportManager->clampScroll();
+            // Set cooldown timestamp to prevent immediate re-triggering while button is still held
+            m_edgeTurnCooldownRight = SDL_GetTicks() / 1000.0f;
             changed = true;
-        }
-        else if (inCooldown)
-        {
-            printf("DEBUG: Right edge-turn completed - blocked by cooldown (%.3fs remaining)\n",
-                   m_edgeTurnCooldownDuration - (currentTime - m_edgeTurnCooldownRight));
         }
         m_edgeTurnHoldRight = 0.0f;
     }
@@ -1415,7 +1411,6 @@ bool App::updateHeldPanning(float dt)
 
         if (!inCooldown && m_navigationManager->getCurrentPage() > 0 && !m_navigationManager->isInPageChangeCooldown())
         {
-            printf("DEBUG: Left edge-turn completed - page change allowed\n");
             m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
                                                   { markDirty(); }, [this]()
                                                   { updateScaleDisplayTime(); }, [this]()
@@ -1424,12 +1419,9 @@ bool App::updateHeldPanning(float dt)
                                                       m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
             m_viewportManager->setScrollX(-m_viewportManager->getMaxScrollX()); // appear at right edge
             m_viewportManager->clampScroll();
+            // Set cooldown timestamp to prevent immediate re-triggering while button is still held
+            m_edgeTurnCooldownLeft = SDL_GetTicks() / 1000.0f;
             changed = true;
-        }
-        else if (inCooldown)
-        {
-            printf("DEBUG: Left edge-turn completed - blocked by cooldown (%.3fs remaining)\n",
-                   m_edgeTurnCooldownDuration - (currentTime - m_edgeTurnCooldownLeft));
         }
         m_edgeTurnHoldLeft = 0.0f;
     }
@@ -1538,7 +1530,6 @@ bool App::updateHeldPanning(float dt)
 
         if (!inCooldown && m_navigationManager->getCurrentPage() < m_navigationManager->getPageCount() - 1 && !m_navigationManager->isInPageChangeCooldown())
         {
-            printf("DEBUG: Down edge-turn completed - page change allowed\n");
             m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
                                               { markDirty(); }, [this]()
                                               { updateScaleDisplayTime(); }, [this]()
@@ -1548,12 +1539,9 @@ bool App::updateHeldPanning(float dt)
             // Land at the top edge of the new page so motion feels continuous downward
             m_viewportManager->setScrollY(m_viewportManager->getMaxScrollY());
             m_viewportManager->clampScroll();
+            // Set cooldown timestamp to prevent immediate re-triggering while button is still held
+            m_edgeTurnCooldownDown = SDL_GetTicks() / 1000.0f;
             changed = true;
-        }
-        else if (inCooldown)
-        {
-            printf("DEBUG: Down edge-turn completed - blocked by cooldown (%.3fs remaining)\n",
-                   m_edgeTurnCooldownDuration - (currentTime - m_edgeTurnCooldownDown));
         }
         m_edgeTurnHoldDown = 0.0f;
     }
@@ -1566,7 +1554,6 @@ bool App::updateHeldPanning(float dt)
 
         if (!inCooldown && m_navigationManager->getCurrentPage() > 0 && !m_navigationManager->isInPageChangeCooldown())
         {
-            printf("DEBUG: Up edge-turn completed - page change allowed\n");
             m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
                                                   { markDirty(); }, [this]()
                                                   { updateScaleDisplayTime(); }, [this]()
@@ -1576,12 +1563,9 @@ bool App::updateHeldPanning(float dt)
             // Land at the bottom edge of the previous page
             m_viewportManager->setScrollY(-m_viewportManager->getMaxScrollY());
             m_viewportManager->clampScroll();
+            // Set cooldown timestamp to prevent immediate re-triggering while button is still held
+            m_edgeTurnCooldownUp = SDL_GetTicks() / 1000.0f;
             changed = true;
-        }
-        else if (inCooldown)
-        {
-            printf("DEBUG: Up edge-turn completed - blocked by cooldown (%.3fs remaining)\n",
-                   m_edgeTurnCooldownDuration - (currentTime - m_edgeTurnCooldownUp));
         }
         m_edgeTurnHoldUp = 0.0f;
     }
