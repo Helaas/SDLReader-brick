@@ -158,6 +158,7 @@ private:
     // Helper methods
     uint32_t rgb24_to_argb32(uint8_t r, uint8_t g, uint8_t b);
     void renderProgressBar(int x, int y, int width, int height, float progress, SDL_Color bgColor, SDL_Color fillColor);
+    SDL_Color getContrastingTextColor() const;
 };
 
 #endif // RENDER_MANAGER_H
