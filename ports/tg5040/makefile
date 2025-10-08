@@ -59,18 +59,32 @@ OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS
        $(BUILD_DIR)/imgui_impl_sdlrenderer.o \
        $(BUILD_DIR)/tg5040_power_handler.o
 
+# Path to minimal libarchive static library
+LIBARCHIVE_MINIMAL := /usr/local/libarchive-minimal/lib/libarchive.a
+
 # Libraries (link order matters) - No OpenGL needed for SDL Renderer backend
+# Using static libarchive to avoid bundling extra dependencies
 LIBS := -lSDL2_ttf -lSDL2 \
   -L$(BASE_PATH)/mupdf/build/release \
   -lmupdf -lmupdf-third \
-  -L/usr/local/libarchive-minimal/lib -larchive \
+  $(LIBARCHIVE_MINIMAL) \
   -ljpeg -lopenjp2 -lharfbuzz -ljbig2dec \
   -lfreetype -lz -llzma -lm -lpthread -ldl -lwebp -lwebpdemux -lgumbo -lstdc++fs
 
-.PHONY: all clean export-bundle build-mupdf setup-mupdf clean-mupdf build-libarchive clean-libarchive setup-imgui clean-imgui
+.PHONY: all clean export-bundle build-mupdf setup-mupdf clean-mupdf build-libarchive clean-libarchive setup-imgui clean-imgui check-libarchive
 
-# Default goal
-all: setup-imgui setup-mupdf build-libarchive build-mupdf $(TARGET)
+# Default goal - ensures minimal libarchive is built before anything else
+all: setup-imgui build-libarchive setup-mupdf build-mupdf $(TARGET)
+
+# Helper target to verify minimal libarchive is built
+check-libarchive:
+	@if [ ! -f "$(LIBARCHIVE_MINIMAL)" ]; then \
+		echo "ERROR: Minimal libarchive not found at $(LIBARCHIVE_MINIMAL)"; \
+		echo "Run 'make build-libarchive' first or 'make all' to build everything"; \
+		exit 1; \
+	else \
+		echo "✓ Minimal libarchive found at $(LIBARCHIVE_MINIMAL)"; \
+	fi
 
 # Setup Dear ImGui if it doesn't exist or is incomplete
 # Using v1.89 for TG5040 compatibility with older SDL2 (2.0.9)
@@ -131,12 +145,19 @@ setup-mupdf:
 # - XML2 library support
 # - Internationalization features
 # This results in a much smaller bundle while maintaining CBR/CBZ functionality
-build-libarchive:
+build-libarchive: $(LIBARCHIVE_MINIMAL)
+
+$(LIBARCHIVE_MINIMAL):
 	@echo "Building minimal libarchive without ICU dependencies..."
-	@if [ ! -d "$(BASE_PATH)/libarchive-3.3.3" ]; then \
+	@if [ ! -f "$(LIBARCHIVE_MINIMAL)" ]; then \
+		echo "Minimal libarchive not found, building from source..."; \
 		cd $(BASE_PATH) && \
-		curl -s https://www.libarchive.org/downloads/libarchive-3.3.3.tar.gz | tar -xzf - && \
+		if [ ! -d "libarchive-3.3.3" ]; then \
+			echo "Downloading libarchive 3.3.3..."; \
+			curl -L https://www.libarchive.org/downloads/libarchive-3.3.3.tar.gz | tar -xzf -; \
+		fi && \
 		cd libarchive-3.3.3 && \
+		echo "Configuring minimal libarchive build..."; \
 		./configure --prefix=/usr/local/libarchive-minimal \
 			--disable-shared --enable-static \
 			--without-xml2 --without-expat \
@@ -145,8 +166,17 @@ build-libarchive:
 			--disable-bsdtar --disable-bsdcat --disable-bsdcpio \
 			--disable-xattr --disable-acl \
 			--with-zlib --with-bz2lib --with-lzma && \
+		echo "Compiling libarchive..." && \
 		make -j$(nproc) && \
-		make install; \
+		echo "Installing to /usr/local/libarchive-minimal..." && \
+		if command -v sudo >/dev/null 2>&1; then \
+			sudo make install; \
+		else \
+			make install; \
+		fi && \
+		echo "Minimal libarchive built successfully at $(LIBARCHIVE_MINIMAL)"; \
+	else \
+		echo "Minimal libarchive already exists at $(LIBARCHIVE_MINIMAL)"; \
 	fi
 
 # Build MuPDF with custom libarchive support for CBR/CBZ files and WebP support
@@ -188,11 +218,13 @@ $(BIN_DIR):
 $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
 
-# Link final binary
-$(TARGET): $(OBJS) | $(BIN_DIR)
+# Link final binary - depends on minimal libarchive being built
+$(TARGET): $(OBJS) $(LIBARCHIVE_MINIMAL) | $(BIN_DIR)
+	@echo "Linking sdl_reader_cli with minimal libarchive..."
 	$(CXX) $(OBJS) $(LIBS) -o $@
 	@patchelf --remove-rpath "$@" 2>/dev/null || true
 	@patchelf --set-rpath '$$ORIGIN/../lib' "$@"
+	@echo "Binary built successfully: $@"
 
 # Compile source files into object files in the build directory
 # This rule handles both src/ and cli/ cpp files
@@ -238,3 +270,45 @@ $(BUILD_DIR)/imgui_impl_sdlrenderer.o: $(IMGUI_DIR)/backends/imgui_impl_sdlrende
 $(BUILD_DIR)/tg5040_power_handler.o: $(TG_SRC_DIR)/power_handler.cpp | $(BUILD_DIR)
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Clean build artifacts
+clean:
+	@echo "Cleaning build artifacts..."
+	rm -rf $(BUILD_DIR)/*.o $(TARGET)
+	@echo "Build artifacts cleaned"
+
+# Clean MuPDF build
+clean-mupdf:
+	@echo "Cleaning MuPDF build..."
+	@if [ -d "$(BASE_PATH)/mupdf" ]; then \
+		cd $(BASE_PATH)/mupdf && $(MAKE) clean; \
+	fi
+
+# Clean libarchive build and installation
+clean-libarchive:
+	@echo "Cleaning minimal libarchive..."
+	@if [ -d "$(BASE_PATH)/libarchive-3.3.3" ]; then \
+		cd $(BASE_PATH)/libarchive-3.3.3 && make clean 2>/dev/null || true; \
+	fi
+	@echo "Removing libarchive installation..."
+	@if command -v sudo >/dev/null 2>&1; then \
+		sudo rm -rf /usr/local/libarchive-minimal; \
+	else \
+		rm -rf /usr/local/libarchive-minimal; \
+	fi
+	@echo "Minimal libarchive cleaned"
+
+# Clean ImGui (removes the entire directory)
+clean-imgui:
+	@echo "Cleaning Dear ImGui..."
+	rm -rf $(BASE_PATH)/imgui
+	@echo "Dear ImGui cleaned"
+
+# Deep clean - removes everything including downloaded dependencies
+clean-all: clean clean-mupdf clean-libarchive clean-imgui
+	@echo "Removing downloaded dependencies..."
+	rm -rf $(BASE_PATH)/libarchive-3.3.3
+	rm -rf $(BASE_PATH)/mupdf
+	rm -f $(BASE_PATH)/webp-upstream-697749.patch
+	rm -rf $(BASE_PATH)/pak
+	@echo "Deep clean completed"
