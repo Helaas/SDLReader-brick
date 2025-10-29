@@ -41,47 +41,76 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
     int winW = m_renderer->getWindowWidth();
     int winH = m_renderer->getWindowHeight();
 
-    int srcW, srcH;
+    int srcW = 0;
+    int srcH = 0;
     std::vector<uint32_t> argbData;
+    bool usedPreview = false;
+    bool highResReady = false;
+    MuPdfDocument* muPdfDocPtr = dynamic_cast<MuPdfDocument*>(document);
+    int currentPage = navigationManager->getCurrentPage();
+    int currentScale = viewportManager->getCurrentScale();
+
+    m_previewActive = false;
+
     {
-        // Lock the document mutex to ensure thread-safe access
         std::lock_guard<std::mutex> lock(documentMutex);
 
-        // Try to use ARGB rendering for better performance
-        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(document);
-        if (muPdfDoc)
+        if (muPdfDocPtr)
         {
             try
             {
-                argbData = muPdfDoc->renderPageARGB(navigationManager->getCurrentPage(), srcW, srcH, viewportManager->getCurrentScale());
+                if (muPdfDocPtr->tryGetCachedPageARGB(currentPage, currentScale, argbData, srcW, srcH))
+                {
+                    highResReady = true;
+                }
+                else if (m_lastArgbValid && m_lastArgbPage == currentPage && !m_lastArgbBuffer.empty())
+                {
+                    argbData = m_lastArgbBuffer;
+                    srcW = m_lastArgbWidth;
+                    srcH = m_lastArgbHeight;
+                    usedPreview = true;
+                }
+                else
+                {
+                    argbData = muPdfDocPtr->renderPageARGB(currentPage, srcW, srcH, currentScale);
+                    highResReady = true;
+                }
             }
-            catch (const std::exception& e)
+            catch (const std::exception&)
             {
-                // Fallback to RGB rendering
-                std::vector<uint8_t> rgbData = document->renderPage(navigationManager->getCurrentPage(), srcW, srcH, viewportManager->getCurrentScale());
-                // Convert to ARGB manually
-                argbData.resize(srcW * srcH);
+                std::vector<uint8_t> rgbData = document->renderPage(currentPage, srcW, srcH, currentScale);
+                argbData.resize(static_cast<size_t>(srcW) * static_cast<size_t>(srcH));
                 for (int i = 0; i < srcW * srcH; ++i)
                 {
                     argbData[i] = rgb24_to_argb32(rgbData[i * 3], rgbData[i * 3 + 1], rgbData[i * 3 + 2]);
                 }
+                highResReady = true;
             }
         }
         else
         {
-            // Fallback to RGB rendering for other document types
-            std::vector<uint8_t> rgbData = document->renderPage(navigationManager->getCurrentPage(), srcW, srcH, viewportManager->getCurrentScale());
-            // Convert to ARGB manually
-            argbData.resize(srcW * srcH);
+            std::vector<uint8_t> rgbData = document->renderPage(currentPage, srcW, srcH, currentScale);
+            argbData.resize(static_cast<size_t>(srcW) * static_cast<size_t>(srcH));
             for (int i = 0; i < srcW * srcH; ++i)
             {
                 argbData[i] = rgb24_to_argb32(rgbData[i * 3], rgbData[i * 3 + 1], rgbData[i * 3 + 2]);
             }
+            highResReady = true;
         }
     }
 
+    if (usedPreview && muPdfDocPtr)
+    {
+        m_previewActive = true;
+        muPdfDocPtr->requestPageRenderAsync(currentPage, currentScale);
+    }
+
+    if (highResReady)
+    {
+        storeLastRender(currentPage, currentScale, argbData, srcW, srcH);
+    }
+
     // Ensure page dimensions are updated BEFORE calculating positions
-    // This prevents warping when switching between pages with different aspect ratios
     int newPageWidth, newPageHeight;
 
     // displayed page size after rotation
@@ -578,4 +607,14 @@ SDL_Color RenderManager::getContrastingTextColor() const
     {
         return {255, 255, 255, 255}; // White text
     }
+}
+
+void RenderManager::storeLastRender(int page, int scale, const std::vector<uint32_t>& buffer, int width, int height)
+{
+    m_lastArgbBuffer = buffer;
+    m_lastArgbWidth = width;
+    m_lastArgbHeight = height;
+    m_lastArgbPage = page;
+    m_lastArgbScale = scale;
+    m_lastArgbValid = !buffer.empty();
 }

@@ -13,15 +13,10 @@ ViewportManager::ViewportManager(Renderer* renderer)
 
 void ViewportManager::zoom(int delta, Document* document)
 {
+    (void) document; // Document not used after removing prerender cancellation
+
     // Accumulate zoom changes and track input timing for debouncing
     auto now = std::chrono::steady_clock::now();
-
-    // Cancel any ongoing prerendering since zoom is changing
-    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(document);
-    if (muPdfDoc)
-    {
-        muPdfDoc->cancelPrerendering();
-    }
 
     // Add to pending zoom delta
     m_pendingZoomDelta += delta;
@@ -40,15 +35,10 @@ void ViewportManager::zoom(int delta, Document* document)
 
 void ViewportManager::zoomTo(int scale, Document* document)
 {
+    (void) document; // Document not used after removing prerender cancellation
+
     // Always use debouncing for consistent behavior
     int targetDelta = scale - m_state.currentScale;
-
-    // Cancel any ongoing prerendering since zoom is changing
-    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(document);
-    if (muPdfDoc)
-    {
-        muPdfDoc->cancelPrerendering();
-    }
 
     // Use the zoom method with delta for consistency
     m_pendingZoomDelta = targetDelta;
@@ -117,8 +107,8 @@ void ViewportManager::fitPageToWindow(Document* document, int currentPage)
     // Use 4x window size to enable proper zooming while TG5040 has no limit
     if (auto muDoc = dynamic_cast<MuPdfDocument*>(document))
     {
-        // Allow 4x zoom by setting max render size to 4x window size
-        muDoc->setMaxRenderSize(windowWidth * 4, windowHeight * 4);
+        // Allow 2x zoom by setting max render size to 2x window size for balanced performance
+        muDoc->setMaxRenderSize(windowWidth * 2, windowHeight * 2);
     }
 #endif
 
@@ -159,7 +149,7 @@ void ViewportManager::fitPageToWidth(Document* document, int currentPage)
     if (auto muDoc = dynamic_cast<MuPdfDocument*>(document))
     {
         int windowHeight = m_renderer->getWindowHeight();
-        muDoc->setMaxRenderSize(windowWidth * 4, windowHeight * 4);
+        muDoc->setMaxRenderSize(windowWidth * 2, windowHeight * 2);
     }
 #endif
 
@@ -353,8 +343,9 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
     auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(document);
     if (muPdfDoc)
     {
-        m_state.pageWidth = muPdfDoc->getPageWidthEffective(currentPage, m_state.currentScale);
-        m_state.pageHeight = muPdfDoc->getPageHeightEffective(currentPage, m_state.currentScale);
+        auto dims = muPdfDoc->getPageDimensionsEffective(currentPage, m_state.currentScale);
+        m_state.pageWidth = dims.first;
+        m_state.pageHeight = dims.second;
 
         // Apply rotation
         if (m_state.rotation % 180 != 0)
