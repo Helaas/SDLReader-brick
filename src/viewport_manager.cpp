@@ -69,24 +69,24 @@ void ViewportManager::applyPendingZoom(Document* document, int currentPage)
 
         int windowWidth = m_renderer ? m_renderer->getWindowWidth() : 0;
         int windowHeight = m_renderer ? m_renderer->getWindowHeight() : 0;
-        
+
         // Store old state
         int oldScrollX = m_state.scrollX;
         int oldScrollY = m_state.scrollY;
         int oldPageWidth = m_state.pageWidth;
         int oldPageHeight = m_state.pageHeight;
-        
+
         // Calculate focal point in NATIVE page coordinates (independent of downsampling)
         // This ensures the focal point is preserved even if downsampling ratios change
         int nativeWidth = effectiveNativeWidth(document, currentPage);
         int nativeHeight = effectiveNativeHeight(document, currentPage);
-        
+
         // Convert current scroll position to native coordinates
         // oldPageWidth = nativeWidth * oldScale / 100 (before downsampling)
         // So native focal point = (nativeWidth / 2) - (oldScrollX * nativeWidth / oldPageWidth)
         float nativeFocalX = 0.5f;
         float nativeFocalY = 0.5f;
-        
+
         if (oldPageWidth > 0 && nativeWidth > 0)
         {
             // Page pixel at viewport center in rendered coords
@@ -94,7 +94,7 @@ void ViewportManager::applyPendingZoom(Document* document, int currentPage)
             // Convert to native coords as a ratio
             nativeFocalX = pageCenterPoint / oldPageWidth;
         }
-        
+
         if (oldPageHeight > 0 && nativeHeight > 0)
         {
             float pageCenterPoint = (oldPageHeight / 2.0f) - oldScrollY;
@@ -104,12 +104,12 @@ void ViewportManager::applyPendingZoom(Document* document, int currentPage)
         // Apply new zoom and update dimensions (this will handle downsampling)
         m_state.currentScale = newScale;
         updatePageDimensions(document, currentPage);
-        
+
         // Calculate new scroll to keep the same focal point centered
         // The focal point is at nativeFocalX * newPageWidth in the new rendered coordinates
         int newPageWidth = m_state.pageWidth;
         int newPageHeight = m_state.pageHeight;
-        
+
         if (newPageWidth > windowWidth)
         {
             float focalPointInNewPage = nativeFocalX * newPageWidth;
@@ -119,7 +119,7 @@ void ViewportManager::applyPendingZoom(Document* document, int currentPage)
         {
             m_state.scrollX = 0;
         }
-        
+
         if (newPageHeight > windowHeight)
         {
             float focalPointInNewPage = nativeFocalY * newPageHeight;
@@ -129,7 +129,7 @@ void ViewportManager::applyPendingZoom(Document* document, int currentPage)
         {
             m_state.scrollY = 0;
         }
-        
+
         clampScroll();
     }
 
@@ -236,7 +236,7 @@ void ViewportManager::recenterScrollOnZoom(int oldScrollX, int oldScrollY, int o
 {
     // This function is kept for compatibility but the main zoom logic now uses
     // focal-point based zooming in applyPendingZoom for better user experience
-    
+
     int newMaxScrollX = getMaxScrollX();
     if (newMaxScrollX == 0)
     {
@@ -420,25 +420,25 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
         {
             int windowWidth = m_renderer->getWindowWidth();
             int windowHeight = m_renderer->getWindowHeight();
-            
+
             // Get native dimensions to calculate expected rendered size
             int nativeWidth = effectiveNativeWidth(document, currentPage);
             int nativeHeight = effectiveNativeHeight(document, currentPage);
-            
+
             // Calculate what the page size would be at current zoom (before downsampling)
             int targetWidth = static_cast<int>(nativeWidth * (m_state.currentScale / 100.0f));
             int targetHeight = static_cast<int>(nativeHeight * (m_state.currentScale / 100.0f));
-            
+
             // Dynamically adjust max render size to ensure:
             // 1. We can actually see zoom changes (don't downsample to same size)
             // 2. We don't use excessive memory
             // 3. We respect platform constraints
-            
+
             // For very low zoom levels (< 100%), we need to ensure the render buffer
             // is large enough to show the full page detail
             int requiredWidth = targetWidth;
             int requiredHeight = targetHeight;
-            
+
             // Add generous headroom based on zoom level to allow further zooming
             // WITHOUT changing render buffer size (which is expensive)
             if (m_state.currentScale < 100)
@@ -466,12 +466,12 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
                 requiredWidth = std::max(targetWidth, windowWidth * 6);
                 requiredHeight = std::max(targetHeight, windowHeight * 6);
             }
-            
+
             // Only update maxRenderSize if it would actually change significantly
             // This avoids cache invalidation on small zoom steps
             // setMaxRenderSize internally checks if the size changed and skips if not
             muPdfDoc->setMaxRenderSize(requiredWidth, requiredHeight);
-            
+
             // Use the target dimensions directly for viewport calculations
             // The actual render might be downsampled, but the viewport should track
             // the logical page size at the current scale

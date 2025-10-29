@@ -36,7 +36,7 @@ void RenderManager::clearLastRender(Document* document)
     m_lastArgbBuffer.clear();
     m_lastArgbPage = -1;
     m_lastArgbScale = -1;
-    
+
     // Clear MuPDF's render and dimension caches
     if (auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(document))
     {
@@ -132,7 +132,7 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
     // Don't update viewport dimensions based on render buffer size!
     // The viewport should use the logical page size at the current scale,
     // not the actual render buffer size (which may include headroom for zooming)
-    
+
     int posX = (winW - viewportManager->getPageWidth()) / 2 + viewportManager->getScrollX();
 
     int posY;

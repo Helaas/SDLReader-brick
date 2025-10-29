@@ -588,8 +588,8 @@ void App::processInputAction(const InputActionData& actionData)
         markDirty();
         break;
     case InputAction::ResetPageView:
-        m_navigationManager->setCurrentPage(0); // Reset to first page FIRST
-        m_renderManager->clearLastRender(m_document.get()); // Clear any cached renders
+        m_navigationManager->setCurrentPage(0);                // Reset to first page FIRST
+        m_renderManager->clearLastRender(m_document.get());    // Clear any cached renders
         m_viewportManager->resetPageView(m_document.get(), 0); // Now reset viewport for page 0
         markDirty();
         break;
@@ -947,24 +947,24 @@ void App::loadDocument()
 {
     int currentPage = m_navigationManager->getCurrentPage();
     int currentScale = m_viewportManager->getCurrentScale();
-    
-    std::cout << "DEBUG loadDocument: BEFORE clear - page=" << currentPage 
-              << " scale=" << currentScale 
+
+    std::cout << "DEBUG loadDocument: BEFORE clear - page=" << currentPage
+              << " scale=" << currentScale
               << " pageW=" << m_viewportManager->getPageWidth()
               << " pageH=" << m_viewportManager->getPageHeight() << std::endl;
-    
+
     // Clear any cached renders from previous session/document
     m_renderManager->clearLastRender(m_document.get());
-    
+
     std::cout << "DEBUG loadDocument: AFTER clear - page=" << m_navigationManager->getCurrentPage()
               << " scale=" << m_viewportManager->getCurrentScale()
               << " pageW=" << m_viewportManager->getPageWidth()
               << " pageH=" << m_viewportManager->getPageHeight() << std::endl;
-    
+
     // Don't reset page to 0 if it's already been set (e.g., from reading history)
     // Just fit the current page to window
     m_viewportManager->fitPageToWindow(m_document.get(), m_navigationManager->getCurrentPage());
-    
+
     std::cout << "DEBUG loadDocument: AFTER fitPageToWindow - page=" << m_navigationManager->getCurrentPage()
               << " scale=" << m_viewportManager->getCurrentScale()
               << " pageW=" << m_viewportManager->getPageWidth()
