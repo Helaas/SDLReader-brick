@@ -164,8 +164,8 @@ private:
     std::mutex m_cacheMutex;
     std::mutex m_renderMutex; // Protects MuPDF context operations
     std::mutex m_pageDataMutex;
-    int m_maxWidth = 2560;    // Increased for better performance at high zoom levels
-    int m_maxHeight = 1920;   // Increased for better performance at high zoom levels
+    int m_maxWidth = 2560;  // Increased for better performance at high zoom levels
+    int m_maxHeight = 1920; // Increased for better performance at high zoom levels
     int m_pageCount = 0;
     std::vector<PageDisplayData> m_pageDisplayData;
 

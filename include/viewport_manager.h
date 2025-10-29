@@ -130,7 +130,7 @@ public:
 
     // Scroll operations
     void clampScroll();
-    void recenterScrollOnZoom(int oldScale, int newScale);
+    void recenterScrollOnZoom(int oldScrollX, int oldScrollY, int oldMaxScrollX, int oldMaxScrollY);
     void alignToTopOfCurrentPage();
 
     // Page change operations

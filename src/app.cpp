@@ -945,6 +945,11 @@ void App::loadDocument()
     // Don't reset page to 0 if it's already been set (e.g., from reading history)
     // Just fit the current page to window
     m_viewportManager->fitPageToWindow(m_document.get(), m_navigationManager->getCurrentPage());
+
+    // Ensure we start from the top-left corner so the restored page is fully visible
+    m_viewportManager->alignToTopOfCurrentPage();
+    m_viewportManager->setScrollX(m_viewportManager->getMaxScrollX());
+    m_viewportManager->clampScroll();
 }
 
 void App::applyPendingFontChange()

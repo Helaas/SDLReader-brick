@@ -64,9 +64,33 @@ void ViewportManager::applyPendingZoom(Document* document, int currentPage)
 
     if (newScale != oldScale)
     {
+        // Ensure current scroll values reflect the existing page bounds
+        clampScroll();
+
+        int oldScrollX = m_state.scrollX;
+        int oldScrollY = m_state.scrollY;
+        int oldPageWidth = m_state.pageWidth;
+        int oldPageHeight = m_state.pageHeight;
+        int oldMaxScrollX = 0;
+        int oldMaxScrollY = 0;
+
+        if (m_renderer)
+        {
+            int windowWidth = m_renderer->getWindowWidth();
+            int windowHeight = m_renderer->getWindowHeight();
+            if (oldPageWidth > 0)
+            {
+                oldMaxScrollX = std::max(0, (oldPageWidth - windowWidth) / 2);
+            }
+            if (oldPageHeight > 0)
+            {
+                oldMaxScrollY = std::max(0, (oldPageHeight - windowHeight) / 2);
+            }
+        }
+
         m_state.currentScale = newScale;
         updatePageDimensions(document, currentPage);
-        recenterScrollOnZoom(oldScale, newScale);
+        recenterScrollOnZoom(oldScrollX, oldScrollY, oldMaxScrollX, oldMaxScrollY);
         clampScroll();
     }
 
@@ -104,11 +128,10 @@ void ViewportManager::fitPageToWindow(Document* document, int currentPage)
 
 #ifndef TG5040_PLATFORM
     // Update max render size for downsampling - allow for meaningful zoom levels on non-TG5040 platforms
-    // Use 4x window size to enable proper zooming while TG5040 has no limit
+    // Use a generous base multiplier; updatePageDimensions fine-tunes this per zoom level
     if (auto muDoc = dynamic_cast<MuPdfDocument*>(document))
     {
-        // Allow 2x zoom by setting max render size to 2x window size for balanced performance
-        muDoc->setMaxRenderSize(windowWidth * 2, windowHeight * 2);
+        muDoc->setMaxRenderSize(windowWidth * 3, windowHeight * 3);
     }
 #endif
 
@@ -149,7 +172,7 @@ void ViewportManager::fitPageToWidth(Document* document, int currentPage)
     if (auto muDoc = dynamic_cast<MuPdfDocument*>(document))
     {
         int windowHeight = m_renderer->getWindowHeight();
-        muDoc->setMaxRenderSize(windowWidth * 2, windowHeight * 2);
+        muDoc->setMaxRenderSize(windowWidth * 3, windowHeight * 3);
     }
 #endif
 
@@ -187,17 +210,39 @@ void ViewportManager::clampScroll()
     m_state.scrollY = std::max(-maxScrollY, std::min(maxScrollY, m_state.scrollY));
 }
 
-void ViewportManager::recenterScrollOnZoom(int oldScale, int newScale)
+void ViewportManager::recenterScrollOnZoom(int oldScrollX, int oldScrollY, int oldMaxScrollX, int oldMaxScrollY)
 {
-    if (oldScale == 0)
-        return; // Prevent division by zero
+    int newMaxScrollX = getMaxScrollX();
+    if (newMaxScrollX == 0)
+    {
+        m_state.scrollX = 0;
+    }
+    else if (oldMaxScrollX > 0)
+    {
+        double ratioX = static_cast<double>(oldScrollX) / static_cast<double>(oldMaxScrollX);
+        m_state.scrollX = static_cast<int>(std::round(ratioX * newMaxScrollX));
+    }
+    else
+    {
+        // Previously centered horizontally; remain centered after zoom
+        m_state.scrollX = 0;
+    }
 
-    // Calculate the scaling factor
-    double scaleFactor = static_cast<double>(newScale) / oldScale;
-
-    // Scale the current scroll position
-    m_state.scrollX = static_cast<int>(m_state.scrollX * scaleFactor);
-    m_state.scrollY = static_cast<int>(m_state.scrollY * scaleFactor);
+    int newMaxScrollY = getMaxScrollY();
+    if (newMaxScrollY == 0)
+    {
+        m_state.scrollY = 0;
+    }
+    else if (oldMaxScrollY > 0)
+    {
+        double ratioY = static_cast<double>(oldScrollY) / static_cast<double>(oldMaxScrollY);
+        m_state.scrollY = static_cast<int>(std::round(ratioY * newMaxScrollY));
+    }
+    else
+    {
+        // Page previously fit vertically: respect preferred alignment when zooming in
+        m_state.scrollY = m_state.topAlignWhenFits ? newMaxScrollY : 0;
+    }
 }
 
 void ViewportManager::onPageChangedKeepZoom(Document* document, int newPage)
@@ -259,6 +304,9 @@ void ViewportManager::rotateClockwise()
     // Reset scroll position after rotation
     m_state.scrollX = 0;
     m_state.scrollY = 0;
+
+    // Ensure scroll remains within bounds for the new orientation
+    clampScroll();
 }
 
 void ViewportManager::toggleMirrorVertical()
@@ -343,6 +391,32 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
     auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(document);
     if (muPdfDoc)
     {
+        if (m_renderer)
+        {
+            int windowWidth = m_renderer->getWindowWidth();
+            int windowHeight = m_renderer->getWindowHeight();
+
+            int renderScaleMultiplier = 2;
+            if (m_state.currentScale >= 300)
+            {
+                renderScaleMultiplier = 6;
+            }
+            else if (m_state.currentScale >= 220)
+            {
+                renderScaleMultiplier = 5;
+            }
+            else if (m_state.currentScale >= 150)
+            {
+                renderScaleMultiplier = 4;
+            }
+            else if (m_state.currentScale >= 110)
+            {
+                renderScaleMultiplier = 3;
+            }
+
+            muPdfDoc->setMaxRenderSize(windowWidth * renderScaleMultiplier, windowHeight * renderScaleMultiplier);
+        }
+
         auto dims = muPdfDoc->getPageDimensionsEffective(currentPage, m_state.currentScale);
         m_state.pageWidth = dims.first;
         m_state.pageHeight = dims.second;

@@ -310,7 +310,7 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int& width,
             fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to create draw device for page %d", pageNumber);
         }
 
-    fz_run_display_list(ctx, scaleInfo.displayList, dev, scaleInfo.transform, scaleInfo.bounds, nullptr);
+        fz_run_display_list(ctx, scaleInfo.displayList, dev, scaleInfo.transform, scaleInfo.bounds, nullptr);
         fz_close_device(ctx, dev);
         fz_drop_device(ctx, dev);
         dev = nullptr;
@@ -633,6 +633,16 @@ int MuPdfDocument::getPageCount() const
 
 void MuPdfDocument::setMaxRenderSize(int width, int height)
 {
+    if (width <= 0 || height <= 0)
+    {
+        return;
+    }
+
+    if (width == m_maxWidth && height == m_maxHeight)
+    {
+        return;
+    }
+
     m_maxWidth = width;
     m_maxHeight = height;
     {
@@ -732,7 +742,8 @@ void MuPdfDocument::prerenderAdjacentPagesAsync(int currentPage, int scale)
 
     uint64_t generation = m_prerenderGeneration.fetch_add(1, std::memory_order_relaxed) + 1;
 
-    m_prerenderThread = std::thread([this, currentPage, scale, generation]() {
+    m_prerenderThread = std::thread([this, currentPage, scale, generation]()
+                                    {
         try
         {
             prerenderAdjacentPagesInternal(currentPage, scale, generation);
@@ -742,8 +753,7 @@ void MuPdfDocument::prerenderAdjacentPagesAsync(int currentPage, int scale)
             std::cerr << "Background prerendering failed: " << e.what() << std::endl;
         }
 
-        m_prerenderActive = false;
-    });
+        m_prerenderActive = false; });
 }
 
 void MuPdfDocument::setUserCSSBeforeOpen(const std::string& css)
@@ -796,7 +806,7 @@ void MuPdfDocument::ensureDisplayList(int pageNumber)
 
         bounds = fz_bound_page(ctx, page);
 
-    list = fz_new_display_list(ctx, bounds);
+        list = fz_new_display_list(ctx, bounds);
         if (!list)
         {
             fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to allocate display list for page %d", pageNumber);

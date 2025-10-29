@@ -110,28 +110,27 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
         storeLastRender(currentPage, currentScale, argbData, srcW, srcH);
     }
 
-    // Ensure page dimensions are updated BEFORE calculating positions
-    int newPageWidth, newPageHeight;
+    if (!usedPreview)
+    {
+        int newPageWidth;
+        int newPageHeight;
 
-    // displayed page size after rotation
-    if (viewportManager->getRotation() % 180 == 0)
-    {
-        newPageWidth = srcW;
-        newPageHeight = srcH;
-    }
-    else
-    {
-        newPageWidth = srcH;
-        newPageHeight = srcW;
-    }
+        if (viewportManager->getRotation() % 180 == 0)
+        {
+            newPageWidth = srcW;
+            newPageHeight = srcH;
+        }
+        else
+        {
+            newPageWidth = srcH;
+            newPageHeight = srcW;
+        }
 
-    // Only update page dimensions if they've actually changed
-    // This provides more stable rendering during rapid input
-    if (viewportManager->getPageWidth() != newPageWidth || viewportManager->getPageHeight() != newPageHeight)
-    {
-        viewportManager->setPageDimensions(newPageWidth, newPageHeight);
-        // Clamp scroll position when page dimensions change to prevent out-of-bounds rendering
-        viewportManager->clampScroll();
+        if (viewportManager->getPageWidth() != newPageWidth || viewportManager->getPageHeight() != newPageHeight)
+        {
+            viewportManager->setPageDimensions(newPageWidth, newPageHeight);
+            viewportManager->clampScroll();
+        }
     }
 
     int posX = (winW - viewportManager->getPageWidth()) / 2 + viewportManager->getScrollX();
