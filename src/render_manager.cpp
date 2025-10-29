@@ -29,6 +29,21 @@ bool RenderManager::initialize()
     return m_renderer && m_textRenderer;
 }
 
+void RenderManager::clearLastRender(Document* document)
+{
+    // Clear the cached preview render
+    m_lastArgbValid = false;
+    m_lastArgbBuffer.clear();
+    m_lastArgbPage = -1;
+    m_lastArgbScale = -1;
+    
+    // Clear MuPDF's render and dimension caches
+    if (auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(document))
+    {
+        muPdfDoc->clearCache();
+    }
+}
+
 void RenderManager::renderCurrentPage(Document* document, NavigationManager* navigationManager,
                                       ViewportManager* viewportManager, std::mutex& documentMutex,
                                       bool isDragging)
@@ -61,10 +76,12 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
             {
                 if (muPdfDocPtr->tryGetCachedPageARGB(currentPage, currentScale, argbData, srcW, srcH))
                 {
+                    // Exact scale is cached, use it immediately
                     highResReady = true;
                 }
                 else if (m_lastArgbValid && m_lastArgbPage == currentPage && !m_lastArgbBuffer.empty())
                 {
+                    // No exact match, use last render as preview (only if same page!)
                     argbData = m_lastArgbBuffer;
                     srcW = m_lastArgbWidth;
                     srcH = m_lastArgbHeight;
@@ -72,6 +89,8 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
                 }
                 else
                 {
+                    // No preview available (wrong page or first render), must render synchronously
+                    // This is the slow path but necessary for page changes
                     argbData = muPdfDocPtr->renderPageARGB(currentPage, srcW, srcH, currentScale);
                     highResReady = true;
                 }
@@ -110,29 +129,10 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
         storeLastRender(currentPage, currentScale, argbData, srcW, srcH);
     }
 
-    if (!usedPreview)
-    {
-        int newPageWidth;
-        int newPageHeight;
-
-        if (viewportManager->getRotation() % 180 == 0)
-        {
-            newPageWidth = srcW;
-            newPageHeight = srcH;
-        }
-        else
-        {
-            newPageWidth = srcH;
-            newPageHeight = srcW;
-        }
-
-        if (viewportManager->getPageWidth() != newPageWidth || viewportManager->getPageHeight() != newPageHeight)
-        {
-            viewportManager->setPageDimensions(newPageWidth, newPageHeight);
-            viewportManager->clampScroll();
-        }
-    }
-
+    // Don't update viewport dimensions based on render buffer size!
+    // The viewport should use the logical page size at the current scale,
+    // not the actual render buffer size (which may include headroom for zooming)
+    
     int posX = (winW - viewportManager->getPageWidth()) / 2 + viewportManager->getScrollX();
 
     int posY;

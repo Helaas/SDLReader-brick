@@ -133,6 +133,9 @@ public:
         m_bgColorB = b;
     }
 
+    // Clear cached render and dimension cache (for document load/reset)
+    void clearLastRender(Document* document);
+
 private:
     // Rendering resources
     std::unique_ptr<Renderer> m_renderer;

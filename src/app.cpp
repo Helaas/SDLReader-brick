@@ -313,10 +313,10 @@ void App::run()
             // Normal rendering - only render if something changed
             bool panningChanged = updateHeldPanning(dt);
 
-            // Check for settled zoom input and apply pending zoom through ViewportManager
-            if (!m_viewportManager->isZoomDebouncing())
+            // Apply pending zoom immediately for responsive feel
+            // Don't wait for debouncing - apply incrementally
+            if (m_viewportManager->hasPendingZoom())
             {
-                // Zoom input has settled, apply the final accumulated zoom
                 m_viewportManager->applyPendingZoom(m_document.get(), m_navigationManager->getCurrentPage());
                 markDirty();
             }
@@ -579,15 +579,18 @@ void App::processInputAction(const InputActionData& actionData)
         break;
     case InputAction::FitPageToWidth:
         m_viewportManager->fitPageToWidth(m_document.get(), m_navigationManager->getCurrentPage());
+        m_renderManager->clearLastRender(m_document.get()); // Clear preview cache to force re-render at new scale
         markDirty();
         break;
     case InputAction::FitPageToWindow:
         m_viewportManager->fitPageToWindow(m_document.get(), m_navigationManager->getCurrentPage());
+        m_renderManager->clearLastRender(m_document.get()); // Clear preview cache to force re-render at new scale
         markDirty();
         break;
     case InputAction::ResetPageView:
-        m_viewportManager->resetPageView(m_document.get());
-        m_navigationManager->setCurrentPage(0); // Reset to first page
+        m_navigationManager->setCurrentPage(0); // Reset to first page FIRST
+        m_renderManager->clearLastRender(m_document.get()); // Clear any cached renders
+        m_viewportManager->resetPageView(m_document.get(), 0); // Now reset viewport for page 0
         markDirty();
         break;
     case InputAction::ToggleMirrorHorizontal:
@@ -942,14 +945,35 @@ void App::updateInputState(const SDL_Event& event)
 
 void App::loadDocument()
 {
+    int currentPage = m_navigationManager->getCurrentPage();
+    int currentScale = m_viewportManager->getCurrentScale();
+    
+    std::cout << "DEBUG loadDocument: BEFORE clear - page=" << currentPage 
+              << " scale=" << currentScale 
+              << " pageW=" << m_viewportManager->getPageWidth()
+              << " pageH=" << m_viewportManager->getPageHeight() << std::endl;
+    
+    // Clear any cached renders from previous session/document
+    m_renderManager->clearLastRender(m_document.get());
+    
+    std::cout << "DEBUG loadDocument: AFTER clear - page=" << m_navigationManager->getCurrentPage()
+              << " scale=" << m_viewportManager->getCurrentScale()
+              << " pageW=" << m_viewportManager->getPageWidth()
+              << " pageH=" << m_viewportManager->getPageHeight() << std::endl;
+    
     // Don't reset page to 0 if it's already been set (e.g., from reading history)
     // Just fit the current page to window
     m_viewportManager->fitPageToWindow(m_document.get(), m_navigationManager->getCurrentPage());
+    
+    std::cout << "DEBUG loadDocument: AFTER fitPageToWindow - page=" << m_navigationManager->getCurrentPage()
+              << " scale=" << m_viewportManager->getCurrentScale()
+              << " pageW=" << m_viewportManager->getPageWidth()
+              << " pageH=" << m_viewportManager->getPageHeight() << std::endl;
 
     // Ensure we start from the top-left corner so the restored page is fully visible
-    m_viewportManager->alignToTopOfCurrentPage();
-    m_viewportManager->setScrollX(m_viewportManager->getMaxScrollX());
-    m_viewportManager->clampScroll();
+    // m_viewportManager->alignToTopOfCurrentPage();
+    // m_viewportManager->setScrollX(m_viewportManager->getMaxScrollX());
+    // m_viewportManager->clampScroll();
 }
 
 void App::applyPendingFontChange()

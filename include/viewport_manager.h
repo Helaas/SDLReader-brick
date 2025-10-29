@@ -123,6 +123,10 @@ public:
     void zoomTo(int scale, Document* document);
     void applyPendingZoom(Document* document, int currentPage);
     bool isZoomDebouncing() const;
+    bool hasPendingZoom() const
+    {
+        return m_pendingZoomDelta != 0;
+    }
 
     // Fit operations
     void fitPageToWindow(Document* document, int currentPage);
@@ -135,7 +139,7 @@ public:
 
     // Page change operations
     void onPageChangedKeepZoom(Document* document, int newPage);
-    void resetPageView(Document* document);
+    void resetPageView(Document* document, int pageNum);
 
     // Rotation and mirroring
     void rotateClockwise();
