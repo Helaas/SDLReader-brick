@@ -310,7 +310,10 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int& width,
             fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to create draw device for page %d", pageNumber);
         }
 
-        fz_run_display_list(ctx, scaleInfo.displayList, dev, scaleInfo.transform, scaleInfo.bounds, nullptr);
+        // Clip rectangle must be in device space, otherwise high zoom levels clip content.
+        fz_rect clipRect = scaleInfo.bounds;
+        clipRect = fz_transform_rect(clipRect, scaleInfo.transform);
+        fz_run_display_list(ctx, scaleInfo.displayList, dev, scaleInfo.transform, clipRect, nullptr);
         fz_close_device(ctx, dev);
         fz_drop_device(ctx, dev);
         dev = nullptr;
