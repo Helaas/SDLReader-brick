@@ -91,11 +91,7 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
                 {
                     // No preview available (wrong page or first render), must render synchronously
                     // This is the slow path but necessary for page changes
-                    std::cout << "RENDER: Synchronous render page=" << currentPage
-                              << " scale=" << currentScale << std::endl;
                     argbData = muPdfDocPtr->renderPageARGB(currentPage, srcW, srcH, currentScale);
-                    std::cout << "RENDER: Got buffer srcW=" << srcW << " srcH=" << srcH
-                              << " for scale=" << currentScale << " dataSize=" << argbData.size() << std::endl;
                     highResReady = true;
                 }
             }
@@ -153,12 +149,6 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
         posY = (winH - viewportManager->getPageHeight()) / 2 + viewportManager->getScrollY();
     }
     viewportManager->setForceTopAlignNextRender(false);
-
-    std::cout << "RENDER: About to display - posX=" << posX << " posY=" << posY
-              << " viewportPageW=" << viewportManager->getPageWidth()
-              << " viewportPageH=" << viewportManager->getPageHeight()
-              << " bufferSrcW=" << srcW << " bufferSrcH=" << srcH
-              << " scale=" << viewportManager->getCurrentScale() << std::endl;
 
     m_renderer->renderPageExARGB(argbData, srcW, srcH,
                                  posX, posY, viewportManager->getPageWidth(), viewportManager->getPageHeight(),

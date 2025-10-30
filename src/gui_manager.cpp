@@ -692,10 +692,6 @@ void GuiManager::renderFontMenu()
                                 m_tempConfig.fontSize != m_currentConfig.fontSize ||
                                 m_tempConfig.readingStyle != m_currentConfig.readingStyle);
 
-    // Check if other settings have changed (zoom, edge progress bar)
-    bool otherSettingsChanged = (m_tempConfig.zoomStep != m_currentConfig.zoomStep ||
-                                 m_tempConfig.disableEdgeProgressBar != m_currentConfig.disableEdgeProgressBar);
-
     // Show warning if font settings changed
     if (fontSettingsChanged)
     {

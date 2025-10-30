@@ -633,24 +633,18 @@ int MuPdfDocument::getPageCount() const
 
 void MuPdfDocument::setMaxRenderSize(int width, int height)
 {
-    std::cout << "setMaxRenderSize called: width=" << width << " height=" << height
-              << " (current: " << m_maxWidth << "x" << m_maxHeight << ")" << std::endl;
-
     if (width <= 0 || height <= 0)
     {
-        std::cout << "setMaxRenderSize: Rejected - invalid dimensions" << std::endl;
         return;
     }
 
     if (width == m_maxWidth && height == m_maxHeight)
     {
-        std::cout << "setMaxRenderSize: Skipped - same as current" << std::endl;
         return;
     }
 
     m_maxWidth = width;
     m_maxHeight = height;
-    std::cout << "setMaxRenderSize: Applied - new max is " << m_maxWidth << "x" << m_maxHeight << std::endl;
     {
         std::lock_guard<std::mutex> dataLock(m_pageDataMutex);
         m_dimensionCache.clear();
@@ -901,16 +895,9 @@ MuPdfDocument::PageScaleInfo MuPdfDocument::computePageScaleInfoLocked(int pageN
     int scaledWidth = static_cast<int>(std::round(nativeWidth * info.baseScale));
     int scaledHeight = static_cast<int>(std::round(nativeHeight * info.baseScale));
 
-    std::cout << "MuPDF computePageScaleInfo: page=" << pageNumber << " zoom=" << zoom
-              << " baseScale=" << info.baseScale
-              << " nativeW=" << nativeWidth << " nativeH=" << nativeHeight
-              << " scaledW=" << scaledWidth << " scaledH=" << scaledHeight
-              << " maxW=" << m_maxWidth << " maxH=" << m_maxHeight << std::endl;
-
     info.downsampleScale = 1.0f;
     if (scaledWidth > m_maxWidth || scaledHeight > m_maxHeight)
     {
-        std::cout << "MuPDF: Downsampling needed! scaledW=" << scaledWidth << " > maxW=" << m_maxWidth << std::endl;
         float scaleX = static_cast<float>(m_maxWidth) / std::max(scaledWidth, 1);
         float scaleY = static_cast<float>(m_maxHeight) / std::max(scaledHeight, 1);
         info.downsampleScale = std::min(scaleX, scaleY);
@@ -921,29 +908,16 @@ MuPdfDocument::PageScaleInfo MuPdfDocument::computePageScaleInfoLocked(int pageN
             info.downsampleScale = std::min(info.downsampleScale * (1.0f + extraDetail), 1.0f);
         }
     }
-    else
-    {
-        std::cout << "MuPDF: No downsampling - rendering at requested scale" << std::endl;
-    }
 
     float finalScale = info.baseScale * info.downsampleScale;
-    std::cout << "MuPDF: downsampleScale=" << info.downsampleScale << " finalScale=" << finalScale << std::endl;
     info.transform = fz_scale(finalScale, finalScale);
 
     fz_rect transformed = info.bounds;
-    std::cout << "MuPDF: BEFORE transform: bounds=[" << transformed.x0 << "," << transformed.y0
-              << " to " << transformed.x1 << "," << transformed.y1 << "]" << std::endl;
-
     transformed = fz_transform_rect(transformed, info.transform);
-
-    std::cout << "MuPDF: AFTER transform: transformed=[" << transformed.x0 << "," << transformed.y0
-              << " to " << transformed.x1 << "," << transformed.y1 << "]" << std::endl;
 
     info.bbox = fz_round_rect(transformed);
     info.width = std::max(1, info.bbox.x1 - info.bbox.x0);
     info.height = std::max(1, info.bbox.y1 - info.bbox.y0);
-
-    std::cout << "MuPDF: Final buffer dimensions: width=" << info.width << " height=" << info.height << std::endl;
 
     {
         std::lock_guard<std::mutex> dataLock(m_pageDataMutex);
