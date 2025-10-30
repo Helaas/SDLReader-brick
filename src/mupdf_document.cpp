@@ -248,8 +248,6 @@ bool MuPdfDocument::reopenWithCSS(const std::string& css)
 
 std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int& width, int& height, int zoom)
 {
-    std::lock_guard<std::mutex> renderLock(m_renderMutex);
-
     if (!m_ctx || !m_doc)
     {
         throw std::runtime_error("Document not open");
@@ -274,6 +272,67 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int& width,
         }
     }
 
+    std::vector<uint32_t> argbData = renderPageARGB(pageNumber, width, height, zoom);
+    std::vector<unsigned char> rgbBuffer(static_cast<size_t>(width) * static_cast<size_t>(height) * 3);
+
+    for (int i = 0; i < width * height; ++i)
+    {
+        uint32_t argb = argbData[static_cast<size_t>(i)];
+        rgbBuffer[static_cast<size_t>(i) * 3] = static_cast<unsigned char>((argb >> 16) & 0xFF);
+        rgbBuffer[static_cast<size_t>(i) * 3 + 1] = static_cast<unsigned char>((argb >> 8) & 0xFF);
+        rgbBuffer[static_cast<size_t>(i) * 3 + 2] = static_cast<unsigned char>(argb & 0xFF);
+    }
+
+    {
+        std::lock_guard<std::mutex> cacheLock(m_cacheMutex);
+
+        if (zoom > 200 && m_cache.size() > 10)
+        {
+            auto it = m_cache.begin();
+            std::advance(it, static_cast<long>(m_cache.size() - 5));
+            m_cache.erase(m_cache.begin(), it);
+        }
+        else if (m_cache.size() > 20)
+        {
+            auto it = m_cache.begin();
+            std::advance(it, static_cast<long>(m_cache.size() - 15));
+            m_cache.erase(m_cache.begin(), it);
+        }
+
+        m_cache[key] = std::make_tuple(rgbBuffer, width, height);
+    }
+
+    return rgbBuffer;
+}
+
+std::vector<uint32_t> MuPdfDocument::renderPageARGB(int pageNumber, int& width, int& height, int zoom)
+{
+    std::lock_guard<std::mutex> renderLock(m_renderMutex);
+
+    if (!m_ctx || !m_doc)
+    {
+        throw std::runtime_error("Document not open");
+    }
+
+    if (pageNumber < 0 || pageNumber >= m_pageCount)
+    {
+        throw std::runtime_error("Invalid page number: " + std::to_string(pageNumber));
+    }
+
+    auto key = std::make_pair(pageNumber, zoom);
+
+    {
+        std::lock_guard<std::mutex> cacheLock(m_cacheMutex);
+        auto it = m_argbCache.find(key);
+        if (it != m_argbCache.end())
+        {
+            auto& [buffer, cachedWidth, cachedHeight] = it->second;
+            width = cachedWidth;
+            height = cachedHeight;
+            return buffer;
+        }
+    }
+
     fz_context* ctx = m_ctx.get();
     if (!ctx)
     {
@@ -290,11 +349,11 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int& width,
 
     fz_pixmap* pix = nullptr;
     fz_device* dev = nullptr;
-    std::vector<unsigned char> buffer;
+    std::vector<uint32_t> argbBuffer;
 
     fz_try(ctx)
     {
-        pix = fz_new_pixmap_with_bbox(ctx, fz_device_rgb(ctx), scaleInfo.bbox, nullptr, 0);
+        pix = fz_new_pixmap_with_bbox(ctx, fz_device_rgb(ctx), scaleInfo.bbox, nullptr, 1);
         if (!pix)
         {
             fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to allocate pixmap for page %d", pageNumber);
@@ -321,9 +380,23 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int& width,
         width = scaleInfo.width;
         height = scaleInfo.height;
 
-        size_t dataSize = static_cast<size_t>(width) * static_cast<size_t>(height) * 3;
-        buffer.resize(dataSize);
-        memcpy(buffer.data(), fz_pixmap_samples(ctx, pix), dataSize);
+        argbBuffer.resize(static_cast<size_t>(width) * static_cast<size_t>(height));
+        const unsigned char* samples = fz_pixmap_samples(ctx, pix);
+        int stride = fz_pixmap_stride(ctx, pix);
+
+        for (int y = 0; y < height; ++y)
+        {
+            const unsigned char* srcRow = samples + static_cast<size_t>(y) * stride;
+            for (int x = 0; x < width; ++x)
+            {
+                const unsigned char* srcPixel = srcRow + static_cast<size_t>(x) * 4;
+                uint32_t r = static_cast<uint32_t>(srcPixel[0]);
+                uint32_t g = static_cast<uint32_t>(srcPixel[1]);
+                uint32_t b = static_cast<uint32_t>(srcPixel[2]);
+                uint32_t a = static_cast<uint32_t>(srcPixel[3]);
+                argbBuffer[static_cast<size_t>(y) * width + x] = (a << 24) | (r << 16) | (g << 8) | b;
+            }
+        }
 
         fz_drop_pixmap(ctx, pix);
         pix = nullptr;
@@ -344,64 +417,6 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int& width,
         }
         std::cerr << "MuPdfDocument: " << message << std::endl;
         throw std::runtime_error(message);
-    }
-
-    {
-        std::lock_guard<std::mutex> cacheLock(m_cacheMutex);
-
-        if (zoom > 200 && m_cache.size() > 10)
-        {
-            auto it = m_cache.begin();
-            std::advance(it, static_cast<long>(m_cache.size() - 5));
-            m_cache.erase(m_cache.begin(), it);
-        }
-        else if (m_cache.size() > 20)
-        {
-            auto it = m_cache.begin();
-            std::advance(it, static_cast<long>(m_cache.size() - 15));
-            m_cache.erase(m_cache.begin(), it);
-        }
-
-        m_cache[key] = std::make_tuple(buffer, width, height);
-    }
-
-    return buffer;
-}
-
-std::vector<uint32_t> MuPdfDocument::renderPageARGB(int pageNumber, int& width, int& height, int zoom)
-{
-    if (!m_ctx || !m_doc)
-    {
-        throw std::runtime_error("Document not open");
-    }
-
-    if (pageNumber < 0 || pageNumber >= m_pageCount)
-    {
-        throw std::runtime_error("Invalid page number: " + std::to_string(pageNumber));
-    }
-
-    auto key = std::make_pair(pageNumber, zoom);
-
-    {
-        std::lock_guard<std::mutex> cacheLock(m_cacheMutex);
-        auto it = m_argbCache.find(key);
-        if (it != m_argbCache.end())
-        {
-            auto& [buffer, cachedWidth, cachedHeight] = it->second;
-            width = cachedWidth;
-            height = cachedHeight;
-            return buffer;
-        }
-    }
-
-    std::vector<unsigned char> rgbData = renderPage(pageNumber, width, height, zoom);
-
-    std::vector<uint32_t> argbBuffer(width * height);
-    const uint8_t* src = rgbData.data();
-    uint32_t* dst = argbBuffer.data();
-    for (int i = 0; i < width * height; ++i)
-    {
-        dst[i] = rgb24_to_argb32(src[i * 3], src[i * 3 + 1], src[i * 3 + 2]);
     }
 
     {
@@ -996,6 +1011,131 @@ bool MuPdfDocument::isRenderableQueued(const std::pair<int, int>& key)
     return false;
 }
 
+bool MuPdfDocument::renderPageARGBWithPrerenderContext(int pageNumber, int zoom, std::vector<uint32_t>& buffer,
+                                                       int& width, int& height)
+{
+    std::unique_lock<std::mutex> lock(m_prerenderMutex);
+
+    if (!m_prerenderCtx || !m_prerenderDoc)
+    {
+        return false;
+    }
+
+    fz_context* ctx = m_prerenderCtx.get();
+    fz_document* doc = m_prerenderDoc.get();
+
+    fz_page* page = nullptr;
+    fz_device* dev = nullptr;
+    fz_pixmap* pix = nullptr;
+    std::vector<uint32_t> localBuffer;
+    bool ok = true;
+
+    fz_try(ctx)
+    {
+        page = fz_load_page(ctx, doc, pageNumber);
+        if (!page)
+        {
+            fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to load page %d", pageNumber);
+        }
+
+        fz_rect bounds = fz_bound_page(ctx, page);
+
+        float baseScale = std::max(zoom, 1) / 100.0f;
+        int nativeWidth = std::max(1, static_cast<int>(std::round(bounds.x1 - bounds.x0)));
+        int nativeHeight = std::max(1, static_cast<int>(std::round(bounds.y1 - bounds.y0)));
+
+        int scaledWidth = std::max(1, static_cast<int>(std::round(nativeWidth * baseScale)));
+        int scaledHeight = std::max(1, static_cast<int>(std::round(nativeHeight * baseScale)));
+
+        float downsampleScale = 1.0f;
+        if (scaledWidth > m_maxWidth || scaledHeight > m_maxHeight)
+        {
+            float scaleX = static_cast<float>(m_maxWidth) / std::max(scaledWidth, 1);
+            float scaleY = static_cast<float>(m_maxHeight) / std::max(scaledHeight, 1);
+            downsampleScale = std::min(scaleX, scaleY);
+
+            if (baseScale > 1.5f)
+            {
+                float extraDetail = std::min(baseScale - 1.5f, 0.5f) * 0.1f;
+                downsampleScale = std::min(downsampleScale * (1.0f + extraDetail), 1.0f);
+            }
+        }
+
+        float finalScale = baseScale * downsampleScale;
+        fz_matrix transform = fz_scale(finalScale, finalScale);
+        fz_rect transformed = fz_transform_rect(bounds, transform);
+        fz_irect bbox = fz_round_rect(transformed);
+
+        width = std::max(1, bbox.x1 - bbox.x0);
+        height = std::max(1, bbox.y1 - bbox.y0);
+
+        pix = fz_new_pixmap_with_bbox(ctx, fz_device_rgb(ctx), bbox, nullptr, 1);
+        if (!pix)
+        {
+            fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to allocate pixmap for page %d", pageNumber);
+        }
+
+        fz_clear_pixmap_with_value(ctx, pix, 0xFF);
+
+        dev = fz_new_draw_device(ctx, fz_identity, pix);
+        if (!dev)
+        {
+            fz_drop_pixmap(ctx, pix);
+            pix = nullptr;
+            fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to create draw device for page %d", pageNumber);
+        }
+
+        fz_run_page(ctx, page, dev, transform, nullptr);
+        fz_close_device(ctx, dev);
+        fz_drop_device(ctx, dev);
+        dev = nullptr;
+
+        localBuffer.resize(static_cast<size_t>(width) * static_cast<size_t>(height));
+        const unsigned char* samples = fz_pixmap_samples(ctx, pix);
+        int stride = fz_pixmap_stride(ctx, pix);
+
+        for (int y = 0; y < height; ++y)
+        {
+            const unsigned char* srcRow = samples + static_cast<size_t>(y) * stride;
+            for (int x = 0; x < width; ++x)
+            {
+                const unsigned char* srcPixel = srcRow + static_cast<size_t>(x) * 4;
+                uint32_t r = static_cast<uint32_t>(srcPixel[0]);
+                uint32_t g = static_cast<uint32_t>(srcPixel[1]);
+                uint32_t b = static_cast<uint32_t>(srcPixel[2]);
+                uint32_t a = static_cast<uint32_t>(srcPixel[3]);
+                localBuffer[static_cast<size_t>(y) * width + x] = (a << 24) | (r << 16) | (g << 8) | b;
+            }
+        }
+
+        fz_drop_pixmap(ctx, pix);
+        pix = nullptr;
+        fz_drop_page(ctx, page);
+        page = nullptr;
+    }
+    fz_catch(ctx)
+    {
+        ok = false;
+
+        if (dev)
+            fz_drop_device(ctx, dev);
+        if (pix)
+            fz_drop_pixmap(ctx, pix);
+        if (page)
+            fz_drop_page(ctx, page);
+    }
+
+    lock.unlock();
+
+    if (!ok)
+    {
+        return false;
+    }
+
+    buffer = std::move(localBuffer);
+    return true;
+}
+
 void MuPdfDocument::asyncRenderWorker()
 {
     while (true)
@@ -1032,19 +1172,38 @@ void MuPdfDocument::asyncRenderWorker()
             }
         }
 
-        try
+        std::vector<uint32_t> asyncBuffer;
+        int tmpW = 0;
+        int tmpH = 0;
+
+        if (!renderPageARGBWithPrerenderContext(task.first, task.second, asyncBuffer, tmpW, tmpH))
         {
-            int tmpW = 0;
-            int tmpH = 0;
-            renderPageARGB(task.first, tmpW, tmpH, task.second);
+            continue;
         }
-        catch (const std::exception& e)
+
+        if (asyncBuffer.empty() || tmpW <= 0 || tmpH <= 0)
         {
-            std::cerr << "Async render failed for page " << task.first << " scale " << task.second << ": " << e.what() << std::endl;
+            continue;
         }
-        catch (...)
+
         {
-            std::cerr << "Async render encountered unknown error for page " << task.first << std::endl;
+            std::lock_guard<std::mutex> cacheLock(m_cacheMutex);
+#ifdef TG5040_PLATFORM
+            if (m_argbCache.size() >= 2)
+            {
+#else
+            if (m_argbCache.size() >= 5)
+            {
+#endif
+                m_argbCache.erase(m_argbCache.begin());
+            }
+
+            m_argbCache[key] = std::make_tuple(std::move(asyncBuffer), tmpW, tmpH);
+        }
+
+        {
+            std::lock_guard<std::mutex> dataLock(m_pageDataMutex);
+            m_dimensionCache[key] = {tmpW, tmpH};
         }
     }
 }

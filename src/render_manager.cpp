@@ -48,6 +48,8 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
                                       ViewportManager* viewportManager, std::mutex& documentMutex,
                                       bool isDragging)
 {
+    (void) documentMutex; // Rendering now relies on per-document locking
+
     Uint32 renderStart = SDL_GetTicks();
 
     // Use the configured background color for document margins
@@ -67,46 +69,32 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
 
     m_previewActive = false;
 
+    if (muPdfDocPtr)
     {
-        std::lock_guard<std::mutex> lock(documentMutex);
-
-        if (muPdfDocPtr)
+        try
         {
-            try
+            if (muPdfDocPtr->tryGetCachedPageARGB(currentPage, currentScale, argbData, srcW, srcH))
             {
-                if (muPdfDocPtr->tryGetCachedPageARGB(currentPage, currentScale, argbData, srcW, srcH))
-                {
-                    // Exact scale is cached, use it immediately
-                    highResReady = true;
-                }
-                else if (m_lastArgbValid && m_lastArgbPage == currentPage && !m_lastArgbBuffer.empty())
-                {
-                    // No exact match, use last render as preview (only if same page!)
-                    argbData = m_lastArgbBuffer;
-                    srcW = m_lastArgbWidth;
-                    srcH = m_lastArgbHeight;
-                    usedPreview = true;
-                }
-                else
-                {
-                    // No preview available (wrong page or first render), must render synchronously
-                    // This is the slow path but necessary for page changes
-                    argbData = muPdfDocPtr->renderPageARGB(currentPage, srcW, srcH, currentScale);
-                    highResReady = true;
-                }
+                // Exact scale is cached, use it immediately
+                highResReady = true;
             }
-            catch (const std::exception&)
+            else if (m_lastArgbValid && m_lastArgbPage == currentPage && !m_lastArgbBuffer.empty())
             {
-                std::vector<uint8_t> rgbData = document->renderPage(currentPage, srcW, srcH, currentScale);
-                argbData.resize(static_cast<size_t>(srcW) * static_cast<size_t>(srcH));
-                for (int i = 0; i < srcW * srcH; ++i)
-                {
-                    argbData[i] = rgb24_to_argb32(rgbData[i * 3], rgbData[i * 3 + 1], rgbData[i * 3 + 2]);
-                }
+                // No exact match, use last render as preview (only if same page!)
+                argbData = m_lastArgbBuffer;
+                srcW = m_lastArgbWidth;
+                srcH = m_lastArgbHeight;
+                usedPreview = true;
+            }
+            else
+            {
+                // No preview available (wrong page or first render), must render synchronously
+                // This is the slow path but necessary for page changes
+                argbData = muPdfDocPtr->renderPageARGB(currentPage, srcW, srcH, currentScale);
                 highResReady = true;
             }
         }
-        else
+        catch (const std::exception&)
         {
             std::vector<uint8_t> rgbData = document->renderPage(currentPage, srcW, srcH, currentScale);
             argbData.resize(static_cast<size_t>(srcW) * static_cast<size_t>(srcH));
@@ -116,6 +104,16 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
             }
             highResReady = true;
         }
+    }
+    else
+    {
+        std::vector<uint8_t> rgbData = document->renderPage(currentPage, srcW, srcH, currentScale);
+        argbData.resize(static_cast<size_t>(srcW) * static_cast<size_t>(srcH));
+        for (int i = 0; i < srcW * srcH; ++i)
+        {
+            argbData[i] = rgb24_to_argb32(rgbData[i * 3], rgbData[i * 3 + 1], rgbData[i * 3 + 2]);
+        }
+        highResReady = true;
     }
 
     if (usedPreview && muPdfDocPtr)

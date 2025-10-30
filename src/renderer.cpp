@@ -7,6 +7,15 @@
 #include <stdexcept>
 #include <vector>
 
+namespace
+{
+inline int roundUpTextureDimension(int value)
+{
+    constexpr int GRANULARITY = 64;
+    return ((value + GRANULARITY - 1) / GRANULARITY) * GRANULARITY;
+}
+} // namespace
+
 // Removed custom deleters for SDL_Window and SDL_Renderer as they are no longer owned by Renderer.
 // void SDL_Window_Deleter::operator()(SDL_Window* window) const {
 //     if (window) SDL_DestroyWindow(window);
@@ -51,22 +60,23 @@ void Renderer::renderPageEx(const std::vector<uint8_t>& pixelData,
         return;
     }
 
-    // Reuse the same persistent streaming texture path you already have:
-    if (!m_texture || srcWidth != m_currentTexWidth || srcHeight != m_currentTexHeight)
+    if (!m_texture || srcWidth > m_currentTexWidth || srcHeight > m_currentTexHeight)
     {
         if (m_texture)
             m_texture.reset();
+        int allocWidth = roundUpTextureDimension(std::max(srcWidth, m_currentTexWidth));
+        int allocHeight = roundUpTextureDimension(std::max(srcHeight, m_currentTexHeight));
         m_texture.reset(SDL_CreateTexture(m_renderer,
                                           SDL_PIXELFORMAT_ARGB8888,
                                           SDL_TEXTUREACCESS_STREAMING,
-                                          srcWidth, srcHeight));
+                                          allocWidth, allocHeight));
         if (!m_texture)
         {
             std::cerr << "Error: Unable to create texture! SDL_Error: " << SDL_GetError() << std::endl;
             return;
         }
-        m_currentTexWidth = srcWidth;
-        m_currentTexHeight = srcHeight;
+        m_currentTexWidth = allocWidth;
+        m_currentTexHeight = allocHeight;
     }
 
     void* pixels;
@@ -92,8 +102,9 @@ void Renderer::renderPageEx(const std::vector<uint8_t>& pixelData,
 
     SDL_UnlockTexture(m_texture.get());
 
+    SDL_Rect srcRect = {0, 0, srcWidth, srcHeight};
     SDL_Rect destRect = {destX, destY, destWidth, destHeight};
-    SDL_RenderCopyEx(m_renderer, m_texture.get(), NULL, &destRect, angleDeg, /*center*/ nullptr, flip);
+    SDL_RenderCopyEx(m_renderer, m_texture.get(), &srcRect, &destRect, angleDeg, /*center*/ nullptr, flip);
 }
 
 void Renderer::renderPageExARGB(const std::vector<uint32_t>& argbData,
@@ -107,22 +118,23 @@ void Renderer::renderPageExARGB(const std::vector<uint32_t>& argbData,
         return;
     }
 
-    // Reuse the same persistent streaming texture path
-    if (!m_texture || srcWidth != m_currentTexWidth || srcHeight != m_currentTexHeight)
+    if (!m_texture || srcWidth > m_currentTexWidth || srcHeight > m_currentTexHeight)
     {
         if (m_texture)
             m_texture.reset();
+        int allocWidth = roundUpTextureDimension(std::max(srcWidth, m_currentTexWidth));
+        int allocHeight = roundUpTextureDimension(std::max(srcHeight, m_currentTexHeight));
         m_texture.reset(SDL_CreateTexture(m_renderer,
                                           SDL_PIXELFORMAT_ARGB8888,
                                           SDL_TEXTUREACCESS_STREAMING,
-                                          srcWidth, srcHeight));
+                                          allocWidth, allocHeight));
         if (!m_texture)
         {
             std::cerr << "Error: Unable to create texture! SDL_Error: " << SDL_GetError() << std::endl;
             return;
         }
-        m_currentTexWidth = srcWidth;
-        m_currentTexHeight = srcHeight;
+        m_currentTexWidth = allocWidth;
+        m_currentTexHeight = allocHeight;
     }
 
     void* pixels;
@@ -144,8 +156,9 @@ void Renderer::renderPageExARGB(const std::vector<uint32_t>& argbData,
 
     SDL_UnlockTexture(m_texture.get());
 
+    SDL_Rect srcRect = {0, 0, srcWidth, srcHeight};
     SDL_Rect destRect = {destX, destY, destWidth, destHeight};
-    SDL_RenderCopyEx(m_renderer, m_texture.get(), NULL, &destRect, angleDeg, /*center*/ nullptr, flip);
+    SDL_RenderCopyEx(m_renderer, m_texture.get(), &srcRect, &destRect, angleDeg, /*center*/ nullptr, flip);
 }
 
 void Renderer::clear(uint8_t r, uint8_t g, uint8_t b, uint8_t a)

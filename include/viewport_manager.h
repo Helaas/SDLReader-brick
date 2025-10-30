@@ -4,6 +4,8 @@
 #include <SDL.h>
 #include <chrono>
 #include <memory>
+#include <utility>
+#include <unordered_map>
 
 // Forward declarations
 class Document;
@@ -196,6 +198,11 @@ private:
     // Helper methods
     void updatePageDimensions(Document* document, int currentPage);
     bool isNextRenderLikelyExpensive(int lastRenderDuration) const;
+    std::pair<int, int> getNativePageSize(Document* document, int currentPage) const;
+    void invalidateNativeSizeCache();
+
+    mutable Document* m_nativeSizeCacheDoc{nullptr};
+    mutable std::unordered_map<int, std::pair<int, int>> m_nativeSizeCache;
 };
 
 #endif // VIEWPORT_MANAGER_H

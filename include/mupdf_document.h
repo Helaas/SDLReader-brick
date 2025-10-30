@@ -200,6 +200,8 @@ private:
     void prerenderAdjacentPagesInternal(int currentPage, int scale, uint64_t generationToken);
     void asyncRenderWorker();
     bool isRenderableQueued(const std::pair<int, int>& key);
+    bool renderPageARGBWithPrerenderContext(int pageNumber, int zoom, std::vector<uint32_t>& buffer,
+                                            int& width, int& height);
 };
 
 #endif // MUPDF_DOCUMENT_H

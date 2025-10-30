@@ -316,6 +316,8 @@ void ViewportManager::resetPageView(Document* document, int pageNum)
         muPdfDoc->cancelPrerendering();
     }
 
+    invalidateNativeSizeCache();
+
     m_state.currentScale = 100;
     m_state.rotation = 0;
     m_state.mirrorH = false;
@@ -363,13 +365,46 @@ int ViewportManager::getMaxScrollY() const
     return std::max(0, (m_state.pageHeight - windowHeight) / 2);
 }
 
+void ViewportManager::invalidateNativeSizeCache()
+{
+    m_nativeSizeCache.clear();
+    m_nativeSizeCacheDoc = nullptr;
+}
+
+std::pair<int, int> ViewportManager::getNativePageSize(Document* document, int currentPage) const
+{
+    if (!document)
+        return {0, 0};
+
+    if (document != m_nativeSizeCacheDoc)
+    {
+        m_nativeSizeCacheDoc = document;
+        m_nativeSizeCache.clear();
+    }
+
+    auto it = m_nativeSizeCache.find(currentPage);
+    if (it != m_nativeSizeCache.end())
+    {
+        return it->second;
+    }
+
+    int nativeWidth = document->getPageWidthNative(currentPage);
+    int nativeHeight = document->getPageHeightNative(currentPage);
+
+    if (nativeWidth > 0 && nativeHeight > 0)
+    {
+        m_nativeSizeCache.emplace(currentPage, std::make_pair(nativeWidth, nativeHeight));
+    }
+
+    return {nativeWidth, nativeHeight};
+}
+
 int ViewportManager::effectiveNativeWidth(Document* document, int currentPage) const
 {
     if (!document)
         return 0;
 
-    int width = document->getPageWidthNative(currentPage);
-    int height = document->getPageHeightNative(currentPage);
+    auto [width, height] = getNativePageSize(document, currentPage);
 
     // Account for rotation
     if (m_state.rotation % 180 != 0)
@@ -384,8 +419,7 @@ int ViewportManager::effectiveNativeHeight(Document* document, int currentPage) 
     if (!document)
         return 0;
 
-    int width = document->getPageWidthNative(currentPage);
-    int height = document->getPageHeightNative(currentPage);
+    auto [width, height] = getNativePageSize(document, currentPage);
 
     // Account for rotation
     if (m_state.rotation % 180 != 0)
