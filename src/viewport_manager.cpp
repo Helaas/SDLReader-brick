@@ -315,7 +315,7 @@ void ViewportManager::resetPageView(Document* document, int pageNum)
     {
         muPdfDoc->cancelPrerendering();
     }
-    
+
     m_state.currentScale = 100;
     m_state.rotation = 0;
     m_state.mirrorH = false;

@@ -964,7 +964,7 @@ void App::loadDocument()
     // Don't reset page to 0 if it's already been set (e.g., from reading history)
     // Fit to width on startup for better comic reading experience
     m_viewportManager->fitPageToWidth(m_document.get(), m_navigationManager->getCurrentPage());
-    
+
     // Clear cache again after fitPageToWidth to ensure first render uses the correct scale
     // This is necessary because fitPageToWidth changes the scale and maxRenderSize
     m_renderManager->clearLastRender(m_document.get());
