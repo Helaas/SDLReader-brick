@@ -962,10 +962,14 @@ void App::loadDocument()
               << " pageH=" << m_viewportManager->getPageHeight() << std::endl;
 
     // Don't reset page to 0 if it's already been set (e.g., from reading history)
-    // Just fit the current page to window
-    m_viewportManager->fitPageToWindow(m_document.get(), m_navigationManager->getCurrentPage());
+    // Fit to width on startup for better comic reading experience
+    m_viewportManager->fitPageToWidth(m_document.get(), m_navigationManager->getCurrentPage());
+    
+    // Clear cache again after fitPageToWidth to ensure first render uses the correct scale
+    // This is necessary because fitPageToWidth changes the scale and maxRenderSize
+    m_renderManager->clearLastRender(m_document.get());
 
-    std::cout << "DEBUG loadDocument: AFTER fitPageToWindow - page=" << m_navigationManager->getCurrentPage()
+    std::cout << "DEBUG loadDocument: AFTER fitPageToWidth - page=" << m_navigationManager->getCurrentPage()
               << " scale=" << m_viewportManager->getCurrentScale()
               << " pageW=" << m_viewportManager->getPageWidth()
               << " pageH=" << m_viewportManager->getPageHeight() << std::endl;

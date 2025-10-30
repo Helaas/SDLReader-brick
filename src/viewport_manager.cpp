@@ -309,6 +309,13 @@ void ViewportManager::alignToTopOfCurrentPage()
 
 void ViewportManager::resetPageView(Document* document, int pageNum)
 {
+    // Cancel any ongoing prerendering
+    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(document);
+    if (muPdfDoc)
+    {
+        muPdfDoc->cancelPrerendering();
+    }
+    
     m_state.currentScale = 100;
     m_state.rotation = 0;
     m_state.mirrorH = false;
@@ -435,22 +442,28 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
             // 3. We respect platform constraints
 
             // For very low zoom levels (< 100%), we need to ensure the render buffer
-            // is large enough to show the full page detail
+            // matches the target size to avoid incorrect scaling
             int requiredWidth = targetWidth;
             int requiredHeight = targetHeight;
 
-            // Add generous headroom based on zoom level to allow further zooming
+            // Add headroom based on zoom level to allow further zooming
             // WITHOUT changing render buffer size (which is expensive)
-            if (m_state.currentScale < 100)
+            // At very low zoom (< 50%), use minimal or no headroom to ensure correct initial render
+            if (m_state.currentScale < 50)
             {
-                // At low zoom, ensure we have room to zoom in significantly
-                // Use at least 3x window size to allow zooming to ~300% without rerender
-                requiredWidth = std::max(targetWidth, windowWidth * 3);
-                requiredHeight = std::max(targetHeight, windowHeight * 3);
+                // Very low zoom - no headroom to ensure correct scale rendering
+                requiredWidth = targetWidth;
+                requiredHeight = targetHeight;
+            }
+            else if (m_state.currentScale < 100)
+            {
+                // Low zoom (50-99%) - use 2x target to allow some zoom without rerender
+                requiredWidth = std::max(targetWidth, windowWidth * 2);
+                requiredHeight = std::max(targetHeight, windowHeight * 2);
             }
             else if (m_state.currentScale < 150)
             {
-                // At moderate zoom, use 4x window size
+                // Moderate zoom, use 4x window size
                 requiredWidth = std::max(targetWidth, windowWidth * 4);
                 requiredHeight = std::max(targetHeight, windowHeight * 4);
             }
