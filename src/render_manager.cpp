@@ -121,7 +121,10 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
     if (usedPreview && muPdfDocPtr)
     {
         m_previewActive = true;
-        muPdfDocPtr->requestPageRenderAsync(currentPage, currentScale);
+        if (!viewportManager->isZoomDebouncing())
+        {
+            muPdfDocPtr->requestPageRenderAsync(currentPage, currentScale);
+        }
     }
 
     if (highResReady)

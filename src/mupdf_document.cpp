@@ -513,6 +513,17 @@ void MuPdfDocument::requestPageRenderAsync(int page, int scale)
         return;
     }
 
+    // Drop older requests for the same page so we only render the newest scale.
+    if (!m_asyncRenderQueue.empty())
+    {
+        m_asyncRenderQueue.erase(std::remove_if(m_asyncRenderQueue.begin(), m_asyncRenderQueue.end(),
+                                                [page](const std::pair<int, int>& pending)
+                                                {
+                                                    return pending.first == page;
+                                                }),
+                                 m_asyncRenderQueue.end());
+    }
+
     if (isRenderableQueued(key))
     {
         return;
@@ -636,18 +647,44 @@ int MuPdfDocument::getPageCount() const
 
 void MuPdfDocument::setMaxRenderSize(int width, int height)
 {
-    if (width <= 0 || height <= 0)
+    auto roundUpToBucket = [](int value) -> int {
+        constexpr int GRANULARITY = 128;
+        if (value <= 0)
+            return 0;
+        return ((value + GRANULARITY - 1) / GRANULARITY) * GRANULARITY;
+    };
+
+    int desiredWidth = roundUpToBucket(width);
+    int desiredHeight = roundUpToBucket(height);
+
+    if (desiredWidth <= 0 || desiredHeight <= 0)
     {
         return;
     }
 
-    if (width == m_maxWidth && height == m_maxHeight)
+    if (desiredWidth <= m_maxWidth && desiredHeight <= m_maxHeight)
+    {
+        // Retain the larger headroom to avoid thrashing caches during zoom out.
+        return;
+    }
+
+    bool changed = false;
+    if (desiredWidth > m_maxWidth)
+    {
+        m_maxWidth = desiredWidth;
+        changed = true;
+    }
+    if (desiredHeight > m_maxHeight)
+    {
+        m_maxHeight = desiredHeight;
+        changed = true;
+    }
+
+    if (!changed)
     {
         return;
     }
 
-    m_maxWidth = width;
-    m_maxHeight = height;
     {
         std::lock_guard<std::mutex> dataLock(m_pageDataMutex);
         m_dimensionCache.clear();
