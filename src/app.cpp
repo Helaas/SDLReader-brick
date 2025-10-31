@@ -221,6 +221,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     uint8_t bgR, bgG, bgB;
     OptionsManager::getReadingStyleBackgroundColor(savedConfig.readingStyle, bgR, bgG, bgB);
     m_renderManager->setBackgroundColor(bgR, bgG, bgB);
+    m_renderManager->setShowMinimap(savedConfig.showDocumentMinimap);
 
     // Update ViewportManager with the proper renderer from RenderManager
     m_viewportManager->setRenderer(m_renderManager->getRenderer());
@@ -979,13 +980,14 @@ void App::applyPendingFontChange()
     bool styleChanged = (m_pendingFontConfig.readingStyle != m_cachedConfig.readingStyle);
     bool zoomStepChanged = (m_pendingFontConfig.zoomStep != m_cachedConfig.zoomStep);
     bool edgeProgressBarChanged = (m_pendingFontConfig.disableEdgeProgressBar != m_cachedConfig.disableEdgeProgressBar);
+    bool minimapChanged = (m_pendingFontConfig.showDocumentMinimap != m_cachedConfig.showDocumentMinimap);
 
     if (!fontChanged && !sizeChanged && !styleChanged)
     {
         std::cout << "No font/size/style change detected - skipping document reopen" << std::endl;
 
         // Even if font/size/style didn't change, we still need to save other setting changes
-        if (zoomStepChanged || edgeProgressBarChanged)
+        if (zoomStepChanged || edgeProgressBarChanged || minimapChanged)
         {
             std::cout << "Zoom step or edge progress bar changed - saving config" << std::endl;
             m_optionsManager->saveConfig(m_pendingFontConfig);
@@ -994,6 +996,10 @@ void App::applyPendingFontChange()
             if (zoomStepChanged)
             {
                 m_inputManager->setZoomStep(m_pendingFontConfig.zoomStep);
+            }
+            if (m_renderManager)
+            {
+                m_renderManager->setShowMinimap(m_cachedConfig.showDocumentMinimap);
             }
         }
 
@@ -1076,6 +1082,11 @@ void App::applyPendingFontChange()
 
                     // Refresh cached config after saving
                     refreshCachedConfig();
+
+                    if (m_renderManager)
+                    {
+                        m_renderManager->setShowMinimap(m_cachedConfig.showDocumentMinimap);
+                    }
 
                     // Update InputManager's zoom step with the new value
                     m_inputManager->setZoomStep(m_pendingFontConfig.zoomStep);

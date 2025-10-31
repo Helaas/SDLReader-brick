@@ -136,6 +136,15 @@ public:
     // Clear cached render and dimension cache (for document load/reset)
     void clearLastRender(Document* document);
 
+    void setShowMinimap(bool enabled)
+    {
+        m_showMinimap = enabled;
+    }
+    bool isMinimapEnabled() const
+    {
+        return m_showMinimap;
+    }
+
 private:
     // Rendering resources
     std::unique_ptr<Renderer> m_renderer;
@@ -157,6 +166,7 @@ private:
     int m_lastArgbScale = 0;
     bool m_lastArgbValid = false;
     bool m_previewActive = false;
+    bool m_showMinimap = true;
 
     // UI rendering methods
     void renderPageInfo(NavigationManager* navigationManager, int windowWidth, int windowHeight);
@@ -166,6 +176,9 @@ private:
     void renderPageJumpInput(NavigationManager* navigationManager, int windowWidth, int windowHeight);
     void renderEdgeTurnProgressIndicator(class App* app, NavigationManager* navigationManager,
                                          ViewportManager* viewportManager, int windowWidth, int windowHeight);
+    void renderDocumentMinimap(std::shared_ptr<const std::vector<uint32_t>> argbData, int srcWidth, int srcHeight,
+                               const SDL_Rect& pageRect, ViewportManager* viewportManager,
+                               int windowWidth, int windowHeight);
 
     // Helper methods
     uint32_t rgb24_to_argb32(uint8_t r, uint8_t g, uint8_t b);

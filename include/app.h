@@ -196,6 +196,10 @@ private:
     void refreshCachedConfig()
     {
         m_cachedConfig = m_optionsManager->loadConfig();
+        if (m_renderManager)
+        {
+            m_renderManager->setShowMinimap(m_cachedConfig.showDocumentMinimap);
+        }
     }
 
     // Document path for reading history

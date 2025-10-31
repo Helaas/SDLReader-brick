@@ -42,13 +42,15 @@ struct FontConfig
     std::string lastBrowseDirectory = "/mnt/SDCARD";   // Last browsed directory for file browser
     ReadingStyle readingStyle = ReadingStyle::Default; // Reading style/theme
     bool disableEdgeProgressBar = false;               // Disable edge nudge progress bar for instant page turns
+    bool showDocumentMinimap = true;                   // Display minimap overlay when zoomed in
 
     // Default constructor
     FontConfig() = default;
 
     // Constructor with parameters
-    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10, const std::string& browseDir = "/mnt/SDCARD", ReadingStyle style = ReadingStyle::Default, bool disableEdgeBar = false)
-        : fontPath(path), fontName(name), fontSize(size), zoomStep(zoom), lastBrowseDirectory(browseDir), readingStyle(style), disableEdgeProgressBar(disableEdgeBar)
+    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10, const std::string& browseDir = "/mnt/SDCARD", ReadingStyle style = ReadingStyle::Default, bool disableEdgeBar = false, bool showMinimap = true)
+        : fontPath(path), fontName(name), fontSize(size), zoomStep(zoom), lastBrowseDirectory(browseDir), readingStyle(style),
+          disableEdgeProgressBar(disableEdgeBar), showDocumentMinimap(showMinimap)
     {
     }
 };

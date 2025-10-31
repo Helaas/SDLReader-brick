@@ -633,6 +633,24 @@ void GuiManager::renderFontMenu()
 
     ImGui::Spacing();
 
+    bool tempShowMinimap = m_tempConfig.showDocumentMinimap;
+    if (ImGui::Checkbox("Show Document Minimap", &tempShowMinimap))
+    {
+        m_tempConfig.showDocumentMinimap = tempShowMinimap;
+    }
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 0.2f, 0.2f, 0.5f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.2f, 0.2f, 0.2f, 0.5f));
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.7f, 1));
+    if (ImGui::SmallButton("(?)##MinimapHelp") || ImGui::IsItemFocused())
+    {
+        ImGui::SetTooltip("Show a miniature page overlay when zoomed in. This helps visualize\nwhich part of the page is currently visible.");
+    }
+    ImGui::PopStyleColor(4);
+
+    ImGui::Spacing();
+
     ImGui::Text("Jump to Page:");
     ImGui::SetNextItemWidth(100);
     if (ImGui::InputText("##PageJump", m_pageJumpInput, sizeof(m_pageJumpInput), ImGuiInputTextFlags_CharsDecimal))

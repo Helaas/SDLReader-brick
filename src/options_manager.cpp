@@ -29,6 +29,7 @@ std::string configToJson(const FontConfig& config)
     oss << "  \"zoomStep\": " << config.zoomStep << ",\n";
     oss << "  \"readingStyle\": " << static_cast<int>(config.readingStyle) << ",\n";
     oss << "  \"disableEdgeProgressBar\": " << (config.disableEdgeProgressBar ? "true" : "false") << ",\n";
+    oss << "  \"showDocumentMinimap\": " << (config.showDocumentMinimap ? "true" : "false") << ",\n";
     oss << "  \"lastBrowseDirectory\": \"" << config.lastBrowseDirectory << "\"\n";
     oss << "}";
     return oss.str();
@@ -125,6 +126,14 @@ FontConfig jsonToConfig(const std::string& json)
     config.zoomStep = findIntValue("zoomStep");
     config.readingStyle = static_cast<ReadingStyle>(findIntValue("readingStyle"));
     config.disableEdgeProgressBar = findBoolValue("disableEdgeProgressBar");
+    if (json.find("\"showDocumentMinimap\"") != std::string::npos)
+    {
+        config.showDocumentMinimap = findBoolValue("showDocumentMinimap");
+    }
+    else
+    {
+        config.showDocumentMinimap = true;
+    }
     config.lastBrowseDirectory = findStringValue("lastBrowseDirectory");
     if (config.lastBrowseDirectory.empty())
     {

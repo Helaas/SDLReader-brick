@@ -160,10 +160,14 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
     }
     viewportManager->setForceTopAlignNextRender(false);
 
+    SDL_Rect pageRect = {posX, posY, viewportManager->getPageWidth(), viewportManager->getPageHeight()};
+
     m_renderer->renderPageExARGB(*argbData, srcW, srcH,
-                                 posX, posY, viewportManager->getPageWidth(), viewportManager->getPageHeight(),
+                                 pageRect.x, pageRect.y, pageRect.w, pageRect.h,
                                  static_cast<double>(viewportManager->getRotation()),
                                  viewportManager->currentFlipFlags(), argbData.get());
+
+    renderDocumentMinimap(argbData, srcW, srcH, pageRect, viewportManager, winW, winH);
 
     // Trigger prerendering of adjacent pages for faster page changes
     // Do this after the main render to avoid blocking the current page display
@@ -287,6 +291,152 @@ void RenderManager::renderZoomProcessingIndicator(ViewportManager* viewportManag
 
         // Restore font size
         m_textRenderer->setFontSize(100);
+    }
+}
+
+void RenderManager::renderDocumentMinimap(std::shared_ptr<const std::vector<uint32_t>> argbData, int srcWidth, int srcHeight,
+                                          const SDL_Rect& pageRect, ViewportManager* viewportManager,
+                                          int windowWidth, int windowHeight)
+{
+    if (!m_showMinimap)
+    {
+        return;
+    }
+
+    if (!argbData || argbData->empty() || srcWidth <= 0 || srcHeight <= 0 || pageRect.w <= 0 || pageRect.h <= 0)
+    {
+        return;
+    }
+
+    // Only show when the full page is not visible in the viewport
+    if (pageRect.w <= windowWidth && pageRect.h <= windowHeight)
+    {
+        return;
+    }
+
+    constexpr int MINIMAP_MARGIN = 16;
+    constexpr int MINIMAP_PADDING = 6;
+    constexpr int MINIMAP_MAX_WIDTH = 220;
+    constexpr int MINIMAP_MAX_HEIGHT = 160;
+
+    int availableWidth = std::max(1, windowWidth - MINIMAP_MARGIN * 2);
+    int availableHeight = std::max(1, windowHeight - MINIMAP_MARGIN * 2);
+    int maxWidth = std::min(MINIMAP_MAX_WIDTH, availableWidth);
+    int maxHeight = std::min(MINIMAP_MAX_HEIGHT, availableHeight);
+
+    if (maxWidth <= 0 || maxHeight <= 0)
+    {
+        return;
+    }
+
+    double scale = std::min({static_cast<double>(maxWidth) / static_cast<double>(pageRect.w),
+                             static_cast<double>(maxHeight) / static_cast<double>(pageRect.h),
+                             1.0});
+
+    if (scale <= 0.0)
+    {
+        return;
+    }
+
+    int minimapWidth = std::max(1, static_cast<int>(std::round(pageRect.w * scale)));
+    int minimapHeight = std::max(1, static_cast<int>(std::round(pageRect.h * scale)));
+
+    int outerWidth = minimapWidth + MINIMAP_PADDING * 2;
+    int outerHeight = minimapHeight + MINIMAP_PADDING * 2;
+
+    int outerX = windowWidth - outerWidth - MINIMAP_MARGIN;
+    int outerY = windowHeight - outerHeight - MINIMAP_MARGIN;
+
+    if (outerX < MINIMAP_MARGIN / 2)
+        outerX = MINIMAP_MARGIN / 2;
+    if (outerY < MINIMAP_MARGIN / 2)
+        outerY = MINIMAP_MARGIN / 2;
+
+    SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
+
+    SDL_Rect backgroundRect = {outerX, outerY, outerWidth, outerHeight};
+    SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 0, 0, 0, 160);
+    SDL_RenderFillRect(m_renderer->getSDLRenderer(), &backgroundRect);
+
+    SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 255, 255, 255, 200);
+    SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &backgroundRect);
+
+    int contentX = outerX + MINIMAP_PADDING;
+    int contentY = outerY + MINIMAP_PADDING;
+
+    m_renderer->renderPageExARGB(*argbData, srcWidth, srcHeight,
+                                 contentX, contentY, minimapWidth, minimapHeight,
+                                 static_cast<double>(viewportManager->getRotation()),
+                                 viewportManager->currentFlipFlags(), argbData.get());
+
+    int pageLeft = pageRect.x;
+    int pageTop = pageRect.y;
+    int pageRight = pageRect.x + pageRect.w;
+    int pageBottom = pageRect.y + pageRect.h;
+
+    int visibleLeft = std::max(pageLeft, 0);
+    int visibleTop = std::max(pageTop, 0);
+    int visibleRight = std::min(pageRight, windowWidth);
+    int visibleBottom = std::min(pageBottom, windowHeight);
+
+    if (visibleRight <= visibleLeft || visibleBottom <= visibleTop)
+    {
+        return;
+    }
+
+    float normLeft = static_cast<float>(visibleLeft - pageLeft) / static_cast<float>(pageRect.w);
+    float normTop = static_cast<float>(visibleTop - pageTop) / static_cast<float>(pageRect.h);
+    float normRight = static_cast<float>(visibleRight - pageLeft) / static_cast<float>(pageRect.w);
+    float normBottom = static_cast<float>(visibleBottom - pageTop) / static_cast<float>(pageRect.h);
+
+    normLeft = std::clamp(normLeft, 0.0f, 1.0f);
+    normTop = std::clamp(normTop, 0.0f, 1.0f);
+    normRight = std::clamp(normRight, 0.0f, 1.0f);
+    normBottom = std::clamp(normBottom, 0.0f, 1.0f);
+
+    if (normRight <= normLeft || normBottom <= normTop)
+    {
+        return;
+    }
+
+    float viewLeft = contentX + normLeft * minimapWidth;
+    float viewTop = contentY + normTop * minimapHeight;
+    float viewRight = contentX + normRight * minimapWidth;
+    float viewBottom = contentY + normBottom * minimapHeight;
+
+    int viewX = static_cast<int>(std::floor(viewLeft));
+    int viewY = static_cast<int>(std::floor(viewTop));
+    int viewW = static_cast<int>(std::ceil(viewRight - viewLeft));
+    int viewH = static_cast<int>(std::ceil(viewBottom - viewTop));
+
+    viewW = std::max(2, std::min(viewW, minimapWidth));
+    viewH = std::max(2, std::min(viewH, minimapHeight));
+
+    if (viewX + viewW > contentX + minimapWidth)
+        viewW = contentX + minimapWidth - viewX;
+    if (viewY + viewH > contentY + minimapHeight)
+        viewH = contentY + minimapHeight - viewY;
+
+    if (viewW <= 0 || viewH <= 0)
+    {
+        return;
+    }
+
+    SDL_Rect viewRect = {viewX, viewY, viewW, viewH};
+    SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 30, 144, 255, 110);
+    SDL_RenderFillRect(m_renderer->getSDLRenderer(), &viewRect);
+
+    SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 0, 0, 0, 220);
+    SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &viewRect);
+
+    if (viewRect.w > 2 && viewRect.h > 2)
+    {
+        SDL_Rect innerRect = {viewRect.x + 1, viewRect.y + 1, viewRect.w - 2, viewRect.h - 2};
+        if (innerRect.w > 0 && innerRect.h > 0)
+        {
+            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 255, 255, 255, 230);
+            SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &innerRect);
+        }
     }
 }
 
