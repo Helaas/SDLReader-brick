@@ -18,8 +18,59 @@
 #include <iostream>
 #include <sys/stat.h>
 #include <vector>
+#include <cfloat>
 
 #include "mupdf_document.h"
+
+namespace
+{
+std::string truncateToWidth(const std::string& text, float maxWidth)
+{
+    if (text.empty())
+    {
+        return text;
+    }
+
+    ImFont* font = ImGui::GetFont();
+    if (!font)
+    {
+        return text;
+    }
+
+    const float fullWidth = font->CalcTextSizeA(font->FontSize, FLT_MAX, 0.0f, text.c_str()).x;
+    if (fullWidth <= maxWidth)
+    {
+        return text;
+    }
+
+    static const std::string ellipsis = "...";
+    const float ellipsisWidth = font->CalcTextSizeA(font->FontSize, FLT_MAX, 0.0f, ellipsis.c_str()).x;
+
+    std::string result;
+    result.reserve(text.size());
+    for (size_t i = 0; i < text.size(); ++i)
+    {
+        result.push_back(text[i]);
+        float width = font->CalcTextSizeA(font->FontSize, FLT_MAX, 0.0f, result.c_str()).x;
+        if (width + ellipsisWidth > maxWidth)
+        {
+            if (!result.empty())
+            {
+                result.pop_back();
+            }
+            break;
+        }
+    }
+
+    if (result.empty())
+    {
+        return ellipsis;
+    }
+
+    result.append(ellipsis);
+    return result;
+}
+} // namespace
 
 #ifdef TG5040_PLATFORM
 #define DEFAULT_START_PATH "/mnt/SDCARD"
@@ -929,11 +980,20 @@ void FileBrowser::renderThumbnailView(int windowWidth, int windowHeight)
                 drawList->AddText(messagePos, IM_COL32(230, 230, 230, 255), message);
             }
 
+            float labelMaxWidth = tileWidth - 20.0f;
+            std::string displayName = truncateToWidth(entry.name, labelMaxWidth);
+
             ImVec2 labelPos(tileMin.x + 10.0f, tileMin.y + thumbRegionSize + 6.0f);
             ImGui::SetCursorScreenPos(labelPos);
-            ImGui::PushTextWrapPos(tileMin.x + tileWidth - 10.0f);
-            ImGui::TextWrapped("%s", entry.name.c_str());
+            ImGui::PushTextWrapPos(labelPos.x + labelMaxWidth);
+            ImGui::TextUnformatted(displayName.c_str());
             ImGui::PopTextWrapPos();
+
+            if (isSelected)
+            {
+                ImGui::SetScrollHereY(0.5f);
+                ImGui::SetScrollHereX(0.5f);
+            }
 
             ImGui::SetCursorScreenPos(tileMax);
             ImGui::Dummy(ImVec2(0.0f, 0.0f));
