@@ -701,6 +701,12 @@ void MuPdfDocument::setMaxRenderSize(int width, int height)
     }
 
     {
+        std::lock_guard<std::mutex> cacheLock(m_cacheMutex);
+        m_cache.clear();
+        m_argbCache.clear();
+    }
+
+    {
         std::lock_guard<std::mutex> dataLock(m_pageDataMutex);
         m_dimensionCache.clear();
     }
