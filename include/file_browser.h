@@ -3,7 +3,9 @@
 
 #include <SDL.h>
 #include <functional>
+#include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #ifdef TG5040_PLATFORM
@@ -64,6 +66,25 @@ private:
         }
     };
 
+    struct SDLTextureDeleter
+    {
+        void operator()(SDL_Texture* texture) const
+        {
+            if (texture)
+            {
+                SDL_DestroyTexture(texture);
+            }
+        }
+    };
+
+    struct ThumbnailData
+    {
+        std::unique_ptr<SDL_Texture, SDLTextureDeleter> texture;
+        int width{0};
+        int height{0};
+        bool failed{false};
+    };
+
     SDL_Window* m_window;
     SDL_Renderer* m_renderer;
     bool m_initialized;
@@ -74,6 +95,14 @@ private:
     std::string m_selectedFile;
     SDL_GameController* m_gameController;
     SDL_JoystickID m_gameControllerInstanceID;
+
+    bool m_thumbnailView{false};
+    int m_gridColumns{1};
+    int m_lastWindowWidth{0};
+    int m_lastWindowHeight{0};
+    static constexpr int THUMBNAIL_MAX_DIM = 200;
+
+    std::unordered_map<std::string, ThumbnailData> m_thumbnailCache;
 
     // D-pad hold state for continuous scrolling
     bool m_dpadUpHeld;
@@ -105,6 +134,8 @@ private:
      * @brief Render the file browser UI
      */
     void render();
+    void renderListView(int windowWidth, int windowHeight);
+    void renderThumbnailView(int windowWidth, int windowHeight);
 
     /**
      * @brief Handle SDL events
@@ -121,6 +152,17 @@ private:
      * @brief Navigate into selected directory or open selected file
      */
     void navigateInto();
+
+    void toggleViewMode();
+    void moveSelectionVertical(int direction);
+    void moveSelectionHorizontal(int direction);
+    void clampSelection();
+    ThumbnailData& getOrCreateThumbnail(const FileEntry& entry);
+    bool generateThumbnail(const FileEntry& entry, ThumbnailData& data);
+    bool generateDirectoryThumbnail(const FileEntry& entry, ThumbnailData& data);
+    void clearThumbnailCache();
+    SDL_Texture* createTextureFromPixels(const std::vector<uint32_t>& pixels, int width, int height);
+    SDL_Texture* createSolidTexture(int width, int height, SDL_Color color, Uint8 alpha = 255);
 };
 
 #endif // FILE_BROWSER_H
