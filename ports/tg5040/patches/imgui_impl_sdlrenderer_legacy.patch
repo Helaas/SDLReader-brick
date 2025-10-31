@@ -1,8 +1,8 @@
 diff --git a/backends/imgui_impl_sdlrenderer.cpp b/backends/imgui_impl_sdlrenderer.cpp
-index 87381f2..20e3c5d 100644
+index 87381f2..b42c95c 100644
 --- a/backends/imgui_impl_sdlrenderer.cpp
 +++ b/backends/imgui_impl_sdlrenderer.cpp
-@@ -24,33 +24,40 @@
+@@ -24,33 +24,41 @@
  //  2021-10-06: Backup and restore modified ClipRect/Viewport.
  //  2021-09-21: Initial version.
 
@@ -21,6 +21,7 @@ index 87381f2..20e3c5d 100644
 +#include <cmath>
 +#include <cstdlib>
 +#include <cstring>
++#include <unordered_map>
 +#include <vector>
 +
  // SDL
@@ -53,7 +54,7 @@ index 87381f2..20e3c5d 100644
  }
 
  // Functions
-@@ -62,9 +69,9 @@ bool ImGui_ImplSDLRenderer_Init(SDL_Renderer* renderer)
+@@ -62,9 +70,9 @@ bool ImGui_ImplSDLRenderer_Init(SDL_Renderer* renderer)
 
      // Setup backend capabilities flags
      ImGui_ImplSDLRenderer_Data* bd = IM_NEW(ImGui_ImplSDLRenderer_Data)();
@@ -65,7 +66,7 @@ index 87381f2..20e3c5d 100644
 
      bd->SDLRenderer = renderer;
 
-@@ -86,12 +93,12 @@ void ImGui_ImplSDLRenderer_Shutdown()
+@@ -86,12 +94,12 @@ void ImGui_ImplSDLRenderer_Shutdown()
 
  static void ImGui_ImplSDLRenderer_SetupRenderState()
  {
@@ -82,7 +83,7 @@ index 87381f2..20e3c5d 100644
  }
 
  void ImGui_ImplSDLRenderer_NewFrame()
-@@ -105,39 +112,39 @@ void ImGui_ImplSDLRenderer_NewFrame()
+@@ -105,39 +113,39 @@ void ImGui_ImplSDLRenderer_NewFrame()
 
  void ImGui_ImplSDLRenderer_RenderDrawData(ImDrawData* draw_data)
  {
@@ -139,7 +140,7 @@ index 87381f2..20e3c5d 100644
 
      // Render command lists
      ImGui_ImplSDLRenderer_SetupRenderState();
-@@ -164,32 +171,44 @@ void ImGui_ImplSDLRenderer_RenderDrawData(ImDrawData* draw_data)
+@@ -164,32 +172,44 @@ void ImGui_ImplSDLRenderer_RenderDrawData(ImDrawData* draw_data)
                  // Project scissor/clipping rectangles into framebuffer space
                  ImVec2 clip_min((pcmd->ClipRect.x - clip_off.x) * clip_scale.x, (pcmd->ClipRect.y - clip_off.y) * clip_scale.y);
                  ImVec2 clip_max((pcmd->ClipRect.z - clip_off.x) * clip_scale.x, (pcmd->ClipRect.w - clip_off.y) * clip_scale.y);
@@ -174,14 +175,16 @@ index 87381f2..20e3c5d 100644
 -                const float* uv = (const float*)(const void*)((const char*)(vtx_buffer + pcmd->VtxOffset) + IM_OFFSETOF(ImDrawVert, uv));
 -#if SDL_VERSION_ATLEAST(2,0,19)
 -                const SDL_Color* color = (const SDL_Color*)(const void*)((const char*)(vtx_buffer + pcmd->VtxOffset) + IM_OFFSETOF(ImDrawVert, col)); // SDL 2.0.19+
+-#else
+-                const int* color = (const int*)(const void*)((const char*)(vtx_buffer + pcmd->VtxOffset) + IM_OFFSETOF(ImDrawVert, col)); // SDL 2.0.17 and 2.0.18
+-#endif
 +                const float* xy = (const float*) (const void*) ((const char*) (vtx_buffer + pcmd->VtxOffset) + IM_OFFSETOF(ImDrawVert, pos));
 +                const float* uv = (const float*) (const void*) ((const char*) (vtx_buffer + pcmd->VtxOffset) + IM_OFFSETOF(ImDrawVert, uv));
-+#if SDL_VERSION_ATLEAST(2, 0, 19)
++                #if SDL_VERSION_ATLEAST(2, 0, 19)
 +                const SDL_Color* color = (const SDL_Color*) (const void*) ((const char*) (vtx_buffer + pcmd->VtxOffset) + IM_OFFSETOF(ImDrawVert, col)); // SDL 2.0.19+
- #else
--                const int* color = (const int*)(const void*)((const char*)(vtx_buffer + pcmd->VtxOffset) + IM_OFFSETOF(ImDrawVert, col)); // SDL 2.0.17 and 2.0.18
++                #else
 +                const int* color = (const int*) (const void*) ((const char*) (vtx_buffer + pcmd->VtxOffset) + IM_OFFSETOF(ImDrawVert, col)); // SDL 2.0.17 and 2.0.18
- #endif
++                #endif
 
                  // Bind texture, Draw
 -				SDL_Texture* tex = (SDL_Texture*)pcmd->GetTexID();
@@ -200,7 +203,7 @@ index 87381f2..20e3c5d 100644
              }
          }
      }
-@@ -208,7 +227,7 @@ bool ImGui_ImplSDLRenderer_CreateFontsTexture()
+@@ -208,7 +228,7 @@ bool ImGui_ImplSDLRenderer_CreateFontsTexture()
      // Build texture atlas
      unsigned char* pixels;
      int width, height;
@@ -209,7 +212,7 @@ index 87381f2..20e3c5d 100644
 
      // Upload texture to graphics system
      // (Bilinear sampling is required by default. Set 'io.Fonts->Flags |= ImFontAtlasFlags_NoBakedLines' or 'style.AntiAliasedLinesUseTex = false' to allow point/nearest sampling)
-@@ -223,7 +242,7 @@ bool ImGui_ImplSDLRenderer_CreateFontsTexture()
+@@ -223,7 +243,7 @@ bool ImGui_ImplSDLRenderer_CreateFontsTexture()
      SDL_SetTextureScaleMode(bd->FontTexture, SDL_ScaleModeLinear);
 
      // Store our identifier
@@ -218,11 +221,55 @@ index 87381f2..20e3c5d 100644
 
      return true;
  }
-@@ -249,3 +268,684 @@ void ImGui_ImplSDLRenderer_DestroyDeviceObjects()
+@@ -249,3 +269,900 @@ void ImGui_ImplSDLRenderer_DestroyDeviceObjects()
  {
      ImGui_ImplSDLRenderer_DestroyFontsTexture();
  }
 +#else
++
++struct ImGui_ImplSDLRenderer_TextureCacheEntry
++{
++    std::vector<Uint32> Pixels;
++    int Width = 0;
++    int Height = 0;
++    int Pitch = 0;
++    Uint32 Format = 0;
++    Uint8 RShift = 0;
++    Uint8 GShift = 0;
++    Uint8 BShift = 0;
++    Uint8 AShift = 0;
++    Uint32 RMask = 0;
++    Uint32 GMask = 0;
++    Uint32 BMask = 0;
++    Uint32 AMask = 0;
++    float RScale = 1.0f;
++    float GScale = 1.0f;
++    float BScale = 1.0f;
++    float AScale = 1.0f;
++    bool Valid = false;
++    bool PermanentFailure = false;
++};
++
++struct ImGui_ImplSDLRenderer_TextureSample
++{
++    const Uint32* Pixels = nullptr;
++    int Width = 0;
++    int Height = 0;
++    int Pitch = 0;
++    Uint8 RShift = 0;
++    Uint8 GShift = 0;
++    Uint8 BShift = 0;
++    Uint8 AShift = 0;
++    Uint32 RMask = 0;
++    Uint32 GMask = 0;
++    Uint32 BMask = 0;
++    Uint32 AMask = 0;
++    float RScale = 1.0f;
++    float GScale = 1.0f;
++    float BScale = 1.0f;
++    float AScale = 1.0f;
++    bool Valid = false;
++};
 +
 +struct ImGui_ImplSDLRenderer_Data
 +{
@@ -245,9 +292,10 @@ index 87381f2..20e3c5d 100644
 +    bool LastFrameHadWork;
 +    bool CachedFrameValid;
 +    Uint64 LastFrameHash;
++    std::unordered_map<SDL_Texture*, ImGui_ImplSDLRenderer_TextureCacheEntry> TextureCache;
 +
 +    ImGui_ImplSDLRenderer_Data()
-+        : SDLRenderer(nullptr), FontTexture(nullptr), FrameTexture(nullptr), FontWidth(0), FontHeight(0), FrameWidth(0), FrameHeight(0), MinDirtyX(0), MinDirtyY(0), MaxDirtyX(0), MaxDirtyY(0), HasDirtyRegion(false), EnableProfiling(false), ProfileLogFrequency(120), ProfileCounter(0), PerfFrequency(0), LastDirtyPixels(0), LastFrameHadWork(false), CachedFrameValid(false), LastFrameHash(0)
++    : SDLRenderer(nullptr), FontTexture(nullptr), FrameTexture(nullptr), FontWidth(0), FontHeight(0), FrameWidth(0), FrameHeight(0), MinDirtyX(0), MinDirtyY(0), MaxDirtyX(0), MaxDirtyY(0), HasDirtyRegion(false), EnableProfiling(false), ProfileLogFrequency(120), ProfileCounter(0), PerfFrequency(0), LastDirtyPixels(0), LastFrameHadWork(false), CachedFrameValid(false), LastFrameHash(0)
 +    {
 +    }
 +};
@@ -314,6 +362,179 @@ index 87381f2..20e3c5d 100644
 +    }
 +
 +    return hash;
++}
++
++static int ImGui_ImplSDLRenderer_CalcShift(Uint32 mask)
++{
++    if (mask == 0)
++        return 0;
++    int shift = 0;
++    while ((mask & 1u) == 0u)
++    {
++        mask >>= 1;
++        shift++;
++    }
++    return shift;
++}
++
++static float ImGui_ImplSDLRenderer_CalcScale(Uint32 mask, int shift)
++{
++    if (mask == 0)
++        return 1.0f;
++    Uint32 component_max = mask >> shift;
++    if (component_max == 0)
++        return 1.0f;
++    return 1.0f / static_cast<float>(component_max);
++}
++
++static bool ImGui_ImplSDLRenderer_LoadTextureToCache(SDL_Texture* texture,
++                                                     int width,
++                                                     int height,
++                                                     Uint32 format,
++                                                     ImGui_ImplSDLRenderer_TextureCacheEntry& entry)
++{
++    if (texture == nullptr || width <= 0 || height <= 0)
++        return false;
++
++    void* pixels = nullptr;
++    int pitch = 0;
++    if (SDL_LockTexture(texture, nullptr, &pixels, &pitch) != 0)
++        return false;
++
++    entry.Pixels.resize(static_cast<size_t>(width) * static_cast<size_t>(height));
++    const Uint8* src_bytes = static_cast<const Uint8*>(pixels);
++    for (int y = 0; y < height; ++y)
++    {
++        const Uint32* row = reinterpret_cast<const Uint32*>(src_bytes + static_cast<size_t>(y) * pitch);
++        std::copy(row, row + width, entry.Pixels.begin() + static_cast<size_t>(y) * width);
++    }
++    SDL_UnlockTexture(texture);
++
++    entry.Width = width;
++    entry.Height = height;
++    entry.Pitch = width;
++    entry.Format = format;
++
++    int bpp = 0;
++    Uint32 rmask = 0, gmask = 0, bmask = 0, amask = 0;
++    if (!SDL_PixelFormatEnumToMasks(format, &bpp, &rmask, &gmask, &bmask, &amask) || bpp != 32)
++    {
++        rmask = 0x00FF0000u;
++        gmask = 0x0000FF00u;
++        bmask = 0x000000FFu;
++        amask = 0xFF000000u;
++    }
++
++    entry.RMask = rmask;
++    entry.GMask = gmask;
++    entry.BMask = bmask;
++    entry.AMask = amask;
++    entry.RShift = (Uint8) ImGui_ImplSDLRenderer_CalcShift(rmask);
++    entry.GShift = (Uint8) ImGui_ImplSDLRenderer_CalcShift(gmask);
++    entry.BShift = (Uint8) ImGui_ImplSDLRenderer_CalcShift(bmask);
++    entry.AShift = (Uint8) ImGui_ImplSDLRenderer_CalcShift(amask);
++    entry.RScale = ImGui_ImplSDLRenderer_CalcScale(rmask, entry.RShift);
++    entry.GScale = ImGui_ImplSDLRenderer_CalcScale(gmask, entry.GShift);
++    entry.BScale = ImGui_ImplSDLRenderer_CalcScale(bmask, entry.BShift);
++    entry.AScale = ImGui_ImplSDLRenderer_CalcScale(amask, entry.AShift);
++    entry.Valid = true;
++    entry.PermanentFailure = false;
++    return true;
++}
++
++static ImGui_ImplSDLRenderer_TextureSample ImGui_ImplSDLRenderer_GetTextureSample(ImGui_ImplSDLRenderer_Data* bd, SDL_Texture* texture)
++{
++    ImGui_ImplSDLRenderer_TextureSample sample;
++    if (texture == nullptr)
++        return sample;
++
++    if (texture == bd->FontTexture && !bd->FontPixels.empty() && bd->FontWidth > 0 && bd->FontHeight > 0)
++    {
++        sample.Pixels = bd->FontPixels.data();
++        sample.Width = bd->FontWidth;
++        sample.Height = bd->FontHeight;
++        sample.Pitch = bd->FontWidth;
++        sample.RMask = ((Uint32) 0xFFu) << IM_COL32_R_SHIFT;
++        sample.GMask = ((Uint32) 0xFFu) << IM_COL32_G_SHIFT;
++        sample.BMask = ((Uint32) 0xFFu) << IM_COL32_B_SHIFT;
++        sample.AMask = ((Uint32) 0xFFu) << IM_COL32_A_SHIFT;
++        sample.RShift = IM_COL32_R_SHIFT;
++        sample.GShift = IM_COL32_G_SHIFT;
++        sample.BShift = IM_COL32_B_SHIFT;
++        sample.AShift = IM_COL32_A_SHIFT;
++        sample.RScale = 1.0f / 255.0f;
++        sample.GScale = 1.0f / 255.0f;
++        sample.BScale = 1.0f / 255.0f;
++        sample.AScale = 1.0f / 255.0f;
++        sample.Valid = true;
++        return sample;
++    }
++
++    Uint32 format = 0;
++    int access = 0;
++    int width = 0;
++    int height = 0;
++    if (SDL_QueryTexture(texture, &format, &access, &width, &height) != 0 || width <= 0 || height <= 0)
++        return sample;
++
++    auto it = bd->TextureCache.find(texture);
++    if (it == bd->TextureCache.end())
++    {
++        it = bd->TextureCache.emplace(texture, ImGui_ImplSDLRenderer_TextureCacheEntry{}).first;
++    }
++
++    ImGui_ImplSDLRenderer_TextureCacheEntry& entry = it->second;
++    const bool signature_matches = entry.Valid && entry.Width == width && entry.Height == height && entry.Format == format;
++    if (entry.PermanentFailure && signature_matches)
++        return sample;
++
++    if (!signature_matches)
++    {
++        entry.Valid = false;
++        entry.PermanentFailure = false;
++    }
++
++    if (!entry.Valid)
++    {
++        if (!ImGui_ImplSDLRenderer_LoadTextureToCache(texture, width, height, format, entry))
++        {
++            if (!entry.PermanentFailure)
++            {
++                entry.Pixels.clear();
++                entry.Width = width;
++                entry.Height = height;
++                entry.Pitch = 0;
++                entry.Format = format;
++                entry.Valid = false;
++                entry.PermanentFailure = true;
++                SDL_Log("ImGui legacy renderer: unable to sample texture %p (format=0x%x, access=%d): %s",
++                        (void*) texture, format, access, SDL_GetError());
++            }
++            return sample;
++        }
++    }
++
++    if (!entry.Valid || entry.Pixels.empty())
++        return sample;
++
++    sample.Pixels = entry.Pixels.data();
++    sample.Width = entry.Width;
++    sample.Height = entry.Height;
++    sample.Pitch = entry.Pitch;
++    sample.RMask = entry.RMask;
++    sample.GMask = entry.GMask;
++    sample.BMask = entry.BMask;
++    sample.AMask = entry.AMask;
++    sample.RShift = entry.RShift;
++    sample.GShift = entry.GShift;
++    sample.BShift = entry.BShift;
++    sample.AShift = entry.AShift;
++    sample.RScale = entry.RScale;
++    sample.GScale = entry.GScale;
++    sample.BScale = entry.BScale;
++    sample.AScale = entry.AScale;
++    sample.Valid = true;
++    return sample;
 +}
 +
 +static bool ImGui_ImplSDLRenderer_EnsureFramebuffer(ImGui_ImplSDLRenderer_Data* bd, int width, int height)
@@ -387,9 +608,9 @@ index 87381f2..20e3c5d 100644
 +    const float inv255 = 1.0f / 255.0f;
 +    return ImVec4(
 +        ((col >> IM_COL32_R_SHIFT) & 0xFF) * inv255,
-+        ((col >> IM_COL32_G_SHIFT) & 0xFF) * inv255,
-+        ((col >> IM_COL32_B_SHIFT) & 0xFF) * inv255,
-+        ((col >> IM_COL32_A_SHIFT) & 0xFF) * inv255);
++                  ((col >> IM_COL32_G_SHIFT) & 0xFF) * inv255,
++                  ((col >> IM_COL32_B_SHIFT) & 0xFF) * inv255,
++                  ((col >> IM_COL32_A_SHIFT) & 0xFF) * inv255);
 +}
 +
 +static void ImGui_ImplSDLRenderer_RasterizeTriangle(
@@ -397,7 +618,7 @@ index 87381f2..20e3c5d 100644
 +    const ImVec2& p0, const ImVec2& p1, const ImVec2& p2,
 +    const ImVec2& uv0, const ImVec2& uv1, const ImVec2& uv2,
 +    const ImVec4& c0, const ImVec4& c1, const ImVec4& c2,
-+    SDL_Texture* texture, const SDL_Rect& clip_rect)
++    const ImGui_ImplSDLRenderer_TextureSample& texture, const SDL_Rect& clip_rect)
 +{
 +    float min_x = std::floor(std::min({p0.x, p1.x, p2.x}));
 +    float max_x = std::ceil(std::max({p0.x, p1.x, p2.x}));
@@ -427,11 +648,7 @@ index 87381f2..20e3c5d 100644
 +    float edge1_b = p0.x - p2.x;
 +    float edge1_c = p2.x * p0.y - p0.x * p2.y;
 +
-+    // Cache font texture info for faster access
-+    const bool is_font_texture = (texture == bd->FontTexture && !bd->FontPixels.empty() && bd->FontWidth > 0 && bd->FontHeight > 0);
-+    const ImU32* font_data = is_font_texture ? bd->FontPixels.data() : nullptr;
-+    const int font_w = bd->FontWidth;
-+    const int font_h = bd->FontHeight;
++    const bool has_texture = texture.Valid && texture.Pixels != nullptr && texture.Width > 0 && texture.Height > 0 && texture.Pitch > 0;
 +    const int frame_width = bd->FrameWidth;
 +    Uint32* framebuffer = bd->Framebuffer.data();
 +
@@ -481,22 +698,22 @@ index 87381f2..20e3c5d 100644
 +            // Interpolate UV (only if using texture)
 +            float tex_r = 1.0f, tex_g = 1.0f, tex_b = 1.0f, tex_a = 1.0f;
 +
-+            if (is_font_texture)
++            if (has_texture)
 +            {
 +                float u = uv0.x * w0 + uv1.x * w1 + uv2.x * w2;
 +                float v = uv0.y * w0 + uv1.y * w1 + uv2.y * w2;
 +
-+                int tx = (int) (u * font_w);
-+                int ty = (int) (v * font_h);
-+                tx = std::clamp(tx, 0, font_w - 1);
-+                ty = std::clamp(ty, 0, font_h - 1);
++                int tx = (int) (u * static_cast<float>(texture.Width));
++                int ty = (int) (v * static_cast<float>(texture.Height));
++                tx = std::clamp(tx, 0, texture.Width - 1);
++                ty = std::clamp(ty, 0, texture.Height - 1);
 +
-+                const ImU32 texel = font_data[ty * font_w + tx];
-+                const float inv255 = 1.0f / 255.0f;
-+                tex_r = ((texel >> IM_COL32_R_SHIFT) & 0xFF) * inv255;
-+                tex_g = ((texel >> IM_COL32_G_SHIFT) & 0xFF) * inv255;
-+                tex_b = ((texel >> IM_COL32_B_SHIFT) & 0xFF) * inv255;
-+                tex_a = ((texel >> IM_COL32_A_SHIFT) & 0xFF) * inv255;
++                const size_t tex_index = static_cast<size_t>(ty) * static_cast<size_t>(texture.Pitch) + static_cast<size_t>(tx);
++                const Uint32 texel = texture.Pixels[tex_index];
++                tex_r = ((texel & texture.RMask) >> texture.RShift) * texture.RScale;
++                tex_g = ((texel & texture.GMask) >> texture.GShift) * texture.GScale;
++                tex_b = ((texel & texture.BMask) >> texture.BShift) * texture.BScale;
++                tex_a = ((texel & texture.AMask) >> texture.AShift) * texture.AScale;
 +            }
 +
 +            float src_a = color_a * tex_a;
@@ -731,6 +948,7 @@ index 87381f2..20e3c5d 100644
 +                SDL_RenderSetClipRect(bd->SDLRenderer, &clip_rect);
 +
 +                SDL_Texture* texture = (SDL_Texture*) pcmd->GetTexID();
++                const ImGui_ImplSDLRenderer_TextureSample tex_sample = ImGui_ImplSDLRenderer_GetTextureSample(bd, texture);
 +
 +                for (unsigned int idx = 0; idx < pcmd->ElemCount; idx += 3)
 +                {
@@ -750,7 +968,7 @@ index 87381f2..20e3c5d 100644
 +                    ImVec4 c1 = ImGui_ImplSDLRenderer_UnpackColor(v1.col);
 +                    ImVec4 c2 = ImGui_ImplSDLRenderer_UnpackColor(v2.col);
 +
-+                    ImGui_ImplSDLRenderer_RasterizeTriangle(bd, p0, p1, p2, v0.uv, v1.uv, v2.uv, c0, c1, c2, texture, clip_rect);
++                    ImGui_ImplSDLRenderer_RasterizeTriangle(bd, p0, p1, p2, v0.uv, v1.uv, v2.uv, c0, c1, c2, tex_sample, clip_rect);
 +                }
 +            }
 +        }
@@ -900,6 +1118,7 @@ index 87381f2..20e3c5d 100644
 +    bd->FrameWidth = 0;
 +    bd->FrameHeight = 0;
 +    bd->HasDirtyRegion = false;
++    bd->TextureCache.clear();
 +}
 +
 +#endif // SDL_VERSION_ATLEAST(2,0,17)

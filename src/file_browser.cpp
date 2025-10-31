@@ -425,16 +425,33 @@ SDL_Texture* FileBrowser::createTextureFromPixels(const std::vector<uint32_t>& p
         return nullptr;
     }
 
-    SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_ARGB8888);
-    if (!surface)
+    SDL_Texture* texture = SDL_CreateTexture(m_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
+    if (!texture)
     {
         return nullptr;
     }
 
-    std::memcpy(surface->pixels, pixels.data(), static_cast<size_t>(width) * static_cast<size_t>(height) * sizeof(uint32_t));
+    void* texturePixels = nullptr;
+    int pitch = 0;
+    if (SDL_LockTexture(texture, nullptr, &texturePixels, &pitch) != 0)
+    {
+        SDL_DestroyTexture(texture);
+        return nullptr;
+    }
 
-    SDL_Texture* texture = SDL_CreateTextureFromSurface(m_renderer, surface);
-    SDL_FreeSurface(surface);
+    const size_t rowBytes = static_cast<size_t>(width) * sizeof(uint32_t);
+    Uint8* dst = static_cast<Uint8*>(texturePixels);
+    const Uint8* src = reinterpret_cast<const Uint8*>(pixels.data());
+    for (int y = 0; y < height; ++y)
+    {
+        std::memcpy(dst + static_cast<size_t>(y) * pitch, src + static_cast<size_t>(y) * rowBytes, rowBytes);
+    }
+
+    SDL_UnlockTexture(texture);
+    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+#if SDL_VERSION_ATLEAST(2, 0, 12)
+    SDL_SetTextureScaleMode(texture, SDL_ScaleModeLinear);
+#endif
     return texture;
 }
 
@@ -445,18 +462,17 @@ SDL_Texture* FileBrowser::createSolidTexture(int width, int height, SDL_Color co
         return nullptr;
     }
 
-    SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_ARGB8888);
-    if (!surface)
+    SDL_PixelFormat* format = SDL_AllocFormat(SDL_PIXELFORMAT_ARGB8888);
+    if (!format)
     {
         return nullptr;
     }
 
-    Uint32 fillColor = SDL_MapRGBA(surface->format, color.r, color.g, color.b, alpha);
-    SDL_FillRect(surface, nullptr, fillColor);
+    const Uint32 fillColor = SDL_MapRGBA(format, color.r, color.g, color.b, alpha);
+    SDL_FreeFormat(format);
 
-    SDL_Texture* texture = SDL_CreateTextureFromSurface(m_renderer, surface);
-    SDL_FreeSurface(surface);
-    return texture;
+    std::vector<uint32_t> pixels(static_cast<size_t>(width) * static_cast<size_t>(height), fillColor);
+    return createTextureFromPixels(pixels, width, height);
 }
 
 FileBrowser::ThumbnailData& FileBrowser::getOrCreateThumbnail(const FileEntry& entry)
