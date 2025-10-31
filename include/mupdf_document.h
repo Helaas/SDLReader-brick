@@ -29,17 +29,19 @@
 class MuPdfDocument : public Document
 {
 public:
+    using ArgbBufferPtr = std::shared_ptr<const std::vector<uint32_t>>;
+
     MuPdfDocument();
     ~MuPdfDocument() override;
 
     std::vector<unsigned char> renderPage(int page, int& width, int& height, int scale) override;
-    std::vector<uint32_t> renderPageARGB(int page, int& width, int& height, int scale);
+    ArgbBufferPtr renderPageARGB(int page, int& width, int& height, int scale);
     int getPageWidthNative(int page) override;
     int getPageHeightNative(int page) override;
     int getPageWidthEffective(int page, int zoom);
     int getPageHeightEffective(int page, int zoom);
     std::pair<int, int> getPageDimensionsEffective(int page, int zoom);
-    bool tryGetCachedPageARGB(int page, int scale, std::vector<uint32_t>& buffer, int& width, int& height);
+    bool tryGetCachedPageARGB(int page, int scale, ArgbBufferPtr& buffer, int& width, int& height);
     void requestPageRenderAsync(int page, int scale);
     bool open(const std::string& filePath) override;
     bool reopenWithCSS(const std::string& css); // Reopen document with new CSS
@@ -159,7 +161,7 @@ private:
     std::mutex m_prerenderMutex; // Protects prerender context operations
 
     std::map<std::pair<int, int>, std::tuple<std::vector<unsigned char>, int, int>> m_cache;
-    std::map<std::pair<int, int>, std::tuple<std::vector<uint32_t>, int, int>> m_argbCache;
+    std::map<std::pair<int, int>, std::tuple<ArgbBufferPtr, int, int>> m_argbCache;
     std::map<std::pair<int, int>, std::pair<int, int>> m_dimensionCache;
     std::mutex m_cacheMutex;
     std::mutex m_renderMutex; // Protects MuPDF context operations

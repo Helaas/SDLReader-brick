@@ -150,7 +150,7 @@ private:
     uint8_t m_bgColorB = 255;
 
     // Cached render for rapid zoom previews
-    std::vector<uint32_t> m_lastArgbBuffer;
+    std::shared_ptr<const std::vector<uint32_t>> m_lastArgbBuffer;
     int m_lastArgbWidth = 0;
     int m_lastArgbHeight = 0;
     int m_lastArgbPage = -1;
@@ -171,7 +171,7 @@ private:
     uint32_t rgb24_to_argb32(uint8_t r, uint8_t g, uint8_t b);
     void renderProgressBar(int x, int y, int width, int height, float progress, SDL_Color bgColor, SDL_Color fillColor);
     SDL_Color getContrastingTextColor() const;
-    void storeLastRender(int page, int scale, const std::vector<uint32_t>& buffer, int width, int height);
+    void storeLastRender(int page, int scale, std::shared_ptr<const std::vector<uint32_t>> buffer, int width, int height);
 };
 
 #endif // RENDER_MANAGER_H

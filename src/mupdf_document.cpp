@@ -272,15 +272,19 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int& width,
         }
     }
 
-    std::vector<uint32_t> argbData = renderPageARGB(pageNumber, width, height, zoom);
+    ArgbBufferPtr argbData = renderPageARGB(pageNumber, width, height, zoom);
     std::vector<unsigned char> rgbBuffer(static_cast<size_t>(width) * static_cast<size_t>(height) * 3);
 
-    for (int i = 0; i < width * height; ++i)
+    if (argbData)
     {
-        uint32_t argb = argbData[static_cast<size_t>(i)];
-        rgbBuffer[static_cast<size_t>(i) * 3] = static_cast<unsigned char>((argb >> 16) & 0xFF);
-        rgbBuffer[static_cast<size_t>(i) * 3 + 1] = static_cast<unsigned char>((argb >> 8) & 0xFF);
-        rgbBuffer[static_cast<size_t>(i) * 3 + 2] = static_cast<unsigned char>(argb & 0xFF);
+        const auto& pixels = *argbData;
+        for (int i = 0; i < width * height; ++i)
+        {
+            uint32_t argb = pixels[static_cast<size_t>(i)];
+            rgbBuffer[static_cast<size_t>(i) * 3] = static_cast<unsigned char>((argb >> 16) & 0xFF);
+            rgbBuffer[static_cast<size_t>(i) * 3 + 1] = static_cast<unsigned char>((argb >> 8) & 0xFF);
+            rgbBuffer[static_cast<size_t>(i) * 3 + 2] = static_cast<unsigned char>(argb & 0xFF);
+        }
     }
 
     {
@@ -305,7 +309,7 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int& width,
     return rgbBuffer;
 }
 
-std::vector<uint32_t> MuPdfDocument::renderPageARGB(int pageNumber, int& width, int& height, int zoom)
+MuPdfDocument::ArgbBufferPtr MuPdfDocument::renderPageARGB(int pageNumber, int& width, int& height, int zoom)
 {
     std::lock_guard<std::mutex> renderLock(m_renderMutex);
 
@@ -419,9 +423,10 @@ std::vector<uint32_t> MuPdfDocument::renderPageARGB(int pageNumber, int& width, 
         throw std::runtime_error(message);
     }
 
+    ArgbBufferPtr bufferPtr = std::make_shared<std::vector<uint32_t>>(std::move(argbBuffer));
+
     {
         std::lock_guard<std::mutex> cacheLock(m_cacheMutex);
-
 #ifdef TG5040_PLATFORM
         if (m_argbCache.size() >= 2)
         {
@@ -432,13 +437,13 @@ std::vector<uint32_t> MuPdfDocument::renderPageARGB(int pageNumber, int& width, 
             m_argbCache.erase(m_argbCache.begin());
         }
 
-        m_argbCache[key] = std::make_tuple(argbBuffer, width, height);
+        m_argbCache[key] = std::make_tuple(bufferPtr, width, height);
     }
 
-    return argbBuffer;
+    return bufferPtr;
 }
 
-bool MuPdfDocument::tryGetCachedPageARGB(int pageNumber, int scale, std::vector<uint32_t>& buffer, int& width, int& height)
+bool MuPdfDocument::tryGetCachedPageARGB(int pageNumber, int scale, ArgbBufferPtr& buffer, int& width, int& height)
 {
     auto key = std::make_pair(pageNumber, scale);
 
@@ -453,7 +458,7 @@ bool MuPdfDocument::tryGetCachedPageARGB(int pageNumber, int scale, std::vector<
             buffer = cachedBuffer;
             width = cachedWidth;
             height = cachedHeight;
-            return true;
+            return static_cast<bool>(buffer);
         }
 
         auto rgbIt = m_cache.find(key);
@@ -474,12 +479,12 @@ bool MuPdfDocument::tryGetCachedPageARGB(int pageNumber, int scale, std::vector<
         return false;
     }
 
-    buffer.resize(static_cast<size_t>(width) * static_cast<size_t>(height));
+    auto converted = std::make_shared<std::vector<uint32_t>>(static_cast<size_t>(width) * static_cast<size_t>(height));
     const unsigned char* src = rgbCopy.data();
-    for (size_t i = 0; i < buffer.size(); ++i)
+    for (size_t i = 0; i < converted->size(); ++i)
     {
-        buffer[i] = (0xFFu << 24) | (static_cast<uint32_t>(src[i * 3]) << 16) |
-                    (static_cast<uint32_t>(src[i * 3 + 1]) << 8) | static_cast<uint32_t>(src[i * 3 + 2]);
+        (*converted)[i] = (0xFFu << 24) | (static_cast<uint32_t>(src[i * 3]) << 16) |
+                          (static_cast<uint32_t>(src[i * 3 + 1]) << 8) | static_cast<uint32_t>(src[i * 3 + 2]);
     }
 
     {
@@ -494,10 +499,11 @@ bool MuPdfDocument::tryGetCachedPageARGB(int pageNumber, int scale, std::vector<
             m_argbCache.erase(m_argbCache.begin());
         }
 
-        m_argbCache[key] = std::make_tuple(buffer, width, height);
+        m_argbCache[key] = std::make_tuple(converted, width, height);
     }
 
-    return true;
+    buffer = std::move(converted);
+    return static_cast<bool>(buffer);
 }
 
 void MuPdfDocument::requestPageRenderAsync(int page, int scale)
@@ -1192,6 +1198,8 @@ void MuPdfDocument::asyncRenderWorker()
             continue;
         }
 
+        auto bufferPtr = std::make_shared<std::vector<uint32_t>>(std::move(asyncBuffer));
+
         {
             std::lock_guard<std::mutex> cacheLock(m_cacheMutex);
 #ifdef TG5040_PLATFORM
@@ -1204,7 +1212,7 @@ void MuPdfDocument::asyncRenderWorker()
                 m_argbCache.erase(m_argbCache.begin());
             }
 
-            m_argbCache[key] = std::make_tuple(std::move(asyncBuffer), tmpW, tmpH);
+            m_argbCache[key] = std::make_tuple(bufferPtr, tmpW, tmpH);
         }
 
         {

@@ -33,7 +33,7 @@ void RenderManager::clearLastRender(Document* document)
 {
     // Clear the cached preview render
     m_lastArgbValid = false;
-    m_lastArgbBuffer.clear();
+    m_lastArgbBuffer.reset();
     m_lastArgbPage = -1;
     m_lastArgbScale = -1;
 
@@ -60,7 +60,7 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
 
     int srcW = 0;
     int srcH = 0;
-    std::vector<uint32_t> argbData;
+    std::shared_ptr<const std::vector<uint32_t>> argbData;
     bool usedPreview = false;
     bool highResReady = false;
     MuPdfDocument* muPdfDocPtr = dynamic_cast<MuPdfDocument*>(document);
@@ -73,12 +73,14 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
     {
         try
         {
-            if (muPdfDocPtr->tryGetCachedPageARGB(currentPage, currentScale, argbData, srcW, srcH))
+            MuPdfDocument::ArgbBufferPtr cachedBuffer;
+            if (muPdfDocPtr->tryGetCachedPageARGB(currentPage, currentScale, cachedBuffer, srcW, srcH))
             {
                 // Exact scale is cached, use it immediately
-                highResReady = true;
+                argbData = cachedBuffer;
+                highResReady = static_cast<bool>(argbData);
             }
-            else if (m_lastArgbValid && m_lastArgbPage == currentPage && !m_lastArgbBuffer.empty())
+            else if (m_lastArgbValid && m_lastArgbPage == currentPage && m_lastArgbBuffer)
             {
                 // No exact match, use last render as preview (only if same page!)
                 argbData = m_lastArgbBuffer;
@@ -91,29 +93,36 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
                 // No preview available (wrong page or first render), must render synchronously
                 // This is the slow path but necessary for page changes
                 argbData = muPdfDocPtr->renderPageARGB(currentPage, srcW, srcH, currentScale);
-                highResReady = true;
+                highResReady = static_cast<bool>(argbData);
             }
         }
         catch (const std::exception&)
         {
             std::vector<uint8_t> rgbData = document->renderPage(currentPage, srcW, srcH, currentScale);
-            argbData.resize(static_cast<size_t>(srcW) * static_cast<size_t>(srcH));
+            auto converted = std::make_shared<std::vector<uint32_t>>(static_cast<size_t>(srcW) * static_cast<size_t>(srcH));
             for (int i = 0; i < srcW * srcH; ++i)
             {
-                argbData[i] = rgb24_to_argb32(rgbData[i * 3], rgbData[i * 3 + 1], rgbData[i * 3 + 2]);
+                (*converted)[static_cast<size_t>(i)] = rgb24_to_argb32(rgbData[i * 3], rgbData[i * 3 + 1], rgbData[i * 3 + 2]);
             }
+            argbData = converted;
             highResReady = true;
         }
     }
     else
     {
         std::vector<uint8_t> rgbData = document->renderPage(currentPage, srcW, srcH, currentScale);
-        argbData.resize(static_cast<size_t>(srcW) * static_cast<size_t>(srcH));
+        auto converted = std::make_shared<std::vector<uint32_t>>(static_cast<size_t>(srcW) * static_cast<size_t>(srcH));
         for (int i = 0; i < srcW * srcH; ++i)
         {
-            argbData[i] = rgb24_to_argb32(rgbData[i * 3], rgbData[i * 3 + 1], rgbData[i * 3 + 2]);
+            (*converted)[static_cast<size_t>(i)] = rgb24_to_argb32(rgbData[i * 3], rgbData[i * 3 + 1], rgbData[i * 3 + 2]);
         }
+        argbData = converted;
         highResReady = true;
+    }
+
+    if (!argbData)
+    {
+        return;
     }
 
     if (usedPreview && muPdfDocPtr)
@@ -151,10 +160,10 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
     }
     viewportManager->setForceTopAlignNextRender(false);
 
-    m_renderer->renderPageExARGB(argbData, srcW, srcH,
+    m_renderer->renderPageExARGB(*argbData, srcW, srcH,
                                  posX, posY, viewportManager->getPageWidth(), viewportManager->getPageHeight(),
                                  static_cast<double>(viewportManager->getRotation()),
-                                 viewportManager->currentFlipFlags());
+                                 viewportManager->currentFlipFlags(), argbData.get());
 
     // Trigger prerendering of adjacent pages for faster page changes
     // Do this after the main render to avoid blocking the current page display
@@ -609,12 +618,12 @@ SDL_Color RenderManager::getContrastingTextColor() const
     }
 }
 
-void RenderManager::storeLastRender(int page, int scale, const std::vector<uint32_t>& buffer, int width, int height)
+void RenderManager::storeLastRender(int page, int scale, std::shared_ptr<const std::vector<uint32_t>> buffer, int width, int height)
 {
-    m_lastArgbBuffer = buffer;
+    m_lastArgbBuffer = std::move(buffer);
     m_lastArgbWidth = width;
     m_lastArgbHeight = height;
     m_lastArgbPage = page;
     m_lastArgbScale = scale;
-    m_lastArgbValid = !buffer.empty();
+    m_lastArgbValid = (m_lastArgbBuffer && !m_lastArgbBuffer->empty());
 }

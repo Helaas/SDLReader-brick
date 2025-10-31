@@ -110,7 +110,7 @@ void Renderer::renderPageEx(const std::vector<uint8_t>& pixelData,
 void Renderer::renderPageExARGB(const std::vector<uint32_t>& argbData,
                                 int srcWidth, int srcHeight,
                                 int destX, int destY, int destWidth, int destHeight,
-                                double angleDeg, SDL_RendererFlip flip)
+                                double angleDeg, SDL_RendererFlip flip, const void* bufferToken)
 {
     if (argbData.empty() || srcWidth == 0 || srcHeight == 0)
     {
@@ -118,6 +118,7 @@ void Renderer::renderPageExARGB(const std::vector<uint32_t>& argbData,
         return;
     }
 
+    bool textureResized = false;
     if (!m_texture || srcWidth > m_currentTexWidth || srcHeight > m_currentTexHeight)
     {
         if (m_texture)
@@ -135,26 +136,40 @@ void Renderer::renderPageExARGB(const std::vector<uint32_t>& argbData,
         }
         m_currentTexWidth = allocWidth;
         m_currentTexHeight = allocHeight;
+        textureResized = true;
+        m_lastBufferToken = nullptr;
+        m_lastBufferWidth = 0;
+        m_lastBufferHeight = 0;
     }
 
-    void* pixels;
-    int pitch;
-    if (SDL_LockTexture(m_texture.get(), NULL, &pixels, &pitch) != 0)
+    bool needsUpload = textureResized || bufferToken == nullptr || bufferToken != m_lastBufferToken ||
+                       srcWidth != m_lastBufferWidth || srcHeight != m_lastBufferHeight;
+
+    if (needsUpload)
     {
-        std::cerr << "Error: Unable to lock texture! SDL_Error: " << SDL_GetError() << std::endl;
-        return;
-    }
+        void* pixels = nullptr;
+        int pitch = 0;
+        if (SDL_LockTexture(m_texture.get(), NULL, &pixels, &pitch) != 0)
+        {
+            std::cerr << "Error: Unable to lock texture! SDL_Error: " << SDL_GetError() << std::endl;
+            return;
+        }
 
-    // Direct copy of ARGB data - much faster than RGB conversion
-    const uint32_t* srcData = argbData.data();
-    for (int y = 0; y < srcHeight; ++y)
-    {
-        uint32_t* destRow = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(pixels) + (static_cast<size_t>(y) * pitch));
-        const uint32_t* srcRow = srcData + (static_cast<size_t>(y) * srcWidth);
-        memcpy(destRow, srcRow, srcWidth * sizeof(uint32_t));
-    }
+        // Direct copy of ARGB data - much faster than RGB conversion
+        const uint32_t* srcData = argbData.data();
+        for (int y = 0; y < srcHeight; ++y)
+        {
+            uint32_t* destRow = reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(pixels) + (static_cast<size_t>(y) * pitch));
+            const uint32_t* srcRow = srcData + (static_cast<size_t>(y) * srcWidth);
+            memcpy(destRow, srcRow, srcWidth * sizeof(uint32_t));
+        }
 
-    SDL_UnlockTexture(m_texture.get());
+        SDL_UnlockTexture(m_texture.get());
+
+        m_lastBufferToken = bufferToken;
+        m_lastBufferWidth = srcWidth;
+        m_lastBufferHeight = srcHeight;
+    }
 
     SDL_Rect srcRect = {0, 0, srcWidth, srcHeight};
     SDL_Rect destRect = {destX, destY, destWidth, destHeight};
