@@ -366,7 +366,9 @@ MuPdfDocument::ArgbBufferPtr MuPdfDocument::renderPageARGB(int pageNumber, int& 
             fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to allocate pixmap for page %d", pageNumber);
         }
 
-        fz_clear_pixmap_with_value(ctx, pix, 0xFF);
+        // Clear pixmap with background color instead of white to avoid white lines in dark mode
+        unsigned char clearValue = (m_bgR + m_bgG + m_bgB) / 3; // Average for grayscale fill
+        fz_clear_pixmap_with_value(ctx, pix, clearValue);
 
         dev = fz_new_draw_device(ctx, fz_identity, pix);
         if (!dev)
@@ -1094,7 +1096,9 @@ bool MuPdfDocument::renderPageARGBWithPrerenderContext(int pageNumber, int zoom,
             fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to allocate pixmap for page %d", pageNumber);
         }
 
-        fz_clear_pixmap_with_value(ctx, pix, 0xFF);
+        // Clear pixmap with background color instead of white to avoid white lines in dark mode
+        unsigned char clearValue = (m_bgR + m_bgG + m_bgB) / 3; // Average for grayscale fill
+        fz_clear_pixmap_with_value(ctx, pix, clearValue);
 
         dev = fz_new_draw_device(ctx, fz_identity, pix);
         if (!dev)

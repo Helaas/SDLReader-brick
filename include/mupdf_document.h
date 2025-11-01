@@ -79,6 +79,14 @@ public:
         return m_ctx.get();
     }
 
+    // Set background color for page rendering (default is white)
+    void setBackgroundColor(uint8_t r, uint8_t g, uint8_t b)
+    {
+        m_bgR = r;
+        m_bgG = g;
+        m_bgB = b;
+    }
+
 private:
     // Internal open method with context reuse option to avoid TG5040 crash
     bool open(const std::string& filePath, bool reuseContexts);
@@ -183,6 +191,11 @@ private:
 
     // Store file path for reopening with new CSS
     std::string m_filePath;
+
+    // Background color for page rendering (default white)
+    uint8_t m_bgR = 255;
+    uint8_t m_bgG = 255;
+    uint8_t m_bgB = 255;
 
     // Asynchronous current page rendering support
     std::thread m_asyncRenderThread;

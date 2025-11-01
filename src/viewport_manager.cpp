@@ -207,10 +207,10 @@ void ViewportManager::fitPageToWidth(Document* document, int currentPage)
         return;
     }
 
-    // Calculate scale to fit page width within window
-    // Use floor (integer truncation) to ensure the page fits WITHIN the window
-    // This prevents the page from being wider than the window and appearing off-screen
-    int scaleToFitWidth = static_cast<int>((static_cast<double>(windowWidth) / nativeWidth) * 100.0);
+    // Calculate scale to fit page width within window.
+    // Use rounding to avoid undershooting by a pixel, which caused visible gutters.
+    double scaleRatio = static_cast<double>(windowWidth) / static_cast<double>(nativeWidth);
+    int scaleToFitWidth = static_cast<int>(std::lround(scaleRatio * 100.0));
 
     m_state.currentScale = std::clamp(scaleToFitWidth, 10, 350);
 
@@ -467,8 +467,8 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
             int nativeHeight = effectiveNativeHeight(document, currentPage);
 
             // Calculate what the page size would be at current zoom (before downsampling)
-            int targetWidth = static_cast<int>(nativeWidth * (m_state.currentScale / 100.0f));
-            int targetHeight = static_cast<int>(nativeHeight * (m_state.currentScale / 100.0f));
+            int targetWidth = std::max(1, static_cast<int>(std::lround(nativeWidth * (m_state.currentScale / 100.0f))));
+            int targetHeight = std::max(1, static_cast<int>(std::lround(nativeHeight * (m_state.currentScale / 100.0f))));
 
             // Dynamically adjust max render size to ensure:
             // 1. We can actually see zoom changes (don't downsample to same size)
@@ -519,19 +519,35 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
             // setMaxRenderSize internally checks if the size changed and skips if not
             muPdfDoc->setMaxRenderSize(requiredWidth, requiredHeight);
 
-            // Use the target dimensions directly for viewport calculations
-            // The actual render might be downsampled, but the viewport should track
-            // the logical page size at the current scale
-            m_state.pageWidth = targetWidth;
-            m_state.pageHeight = targetHeight;
+            // Query effective dimensions from MuPDF to capture exact rounding
+            auto dims = muPdfDoc->getPageDimensionsEffective(currentPage, m_state.currentScale);
+            if (dims.first > 0 && dims.second > 0)
+            {
+                m_state.pageWidth = dims.first;
+                m_state.pageHeight = dims.second;
+            }
+            else
+            {
+                // Fallback to computed target dimensions if effective size unavailable
+                m_state.pageWidth = targetWidth;
+                m_state.pageHeight = targetHeight;
+            }
         }
         else
         {
-            // No renderer available, calculate dimensions directly
-            int nativeWidth = effectiveNativeWidth(document, currentPage);
-            int nativeHeight = effectiveNativeHeight(document, currentPage);
-            m_state.pageWidth = static_cast<int>(nativeWidth * (m_state.currentScale / 100.0f));
-            m_state.pageHeight = static_cast<int>(nativeHeight * (m_state.currentScale / 100.0f));
+            auto dims = muPdfDoc->getPageDimensionsEffective(currentPage, m_state.currentScale);
+            if (dims.first > 0 && dims.second > 0)
+            {
+                m_state.pageWidth = dims.first;
+                m_state.pageHeight = dims.second;
+            }
+            else
+            {
+                int nativeWidth = effectiveNativeWidth(document, currentPage);
+                int nativeHeight = effectiveNativeHeight(document, currentPage);
+                m_state.pageWidth = std::max(1, static_cast<int>(std::lround(nativeWidth * (m_state.currentScale / 100.0f))));
+                m_state.pageHeight = std::max(1, static_cast<int>(std::lround(nativeHeight * (m_state.currentScale / 100.0f))));
+            }
         }
 
         // Apply rotation
@@ -545,8 +561,8 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
         // Fallback for other document types
         int nativeWidth = effectiveNativeWidth(document, currentPage);
         int nativeHeight = effectiveNativeHeight(document, currentPage);
-        m_state.pageWidth = static_cast<int>(nativeWidth * (m_state.currentScale / 100.0));
-        m_state.pageHeight = static_cast<int>(nativeHeight * (m_state.currentScale / 100.0));
+        m_state.pageWidth = std::max(1, static_cast<int>(std::lround(nativeWidth * (m_state.currentScale / 100.0))));
+        m_state.pageHeight = std::max(1, static_cast<int>(std::lround(nativeHeight * (m_state.currentScale / 100.0))));
     }
 }
 

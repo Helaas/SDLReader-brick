@@ -71,6 +71,9 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
 
     if (muPdfDocPtr)
     {
+        // Pass background color to MuPDF for proper rendering
+        muPdfDocPtr->setBackgroundColor(m_bgColorR, m_bgColorG, m_bgColorB);
+        
         try
         {
             MuPdfDocument::ArgbBufferPtr cachedBuffer;
