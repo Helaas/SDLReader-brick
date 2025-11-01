@@ -106,7 +106,7 @@ private:
     int m_lastWindowWidth{0};
     int m_lastWindowHeight{0};
 #ifdef TG5040_PLATFORM
-    static constexpr int THUMBNAIL_MAX_DIM = 128;
+    static constexpr int THUMBNAIL_MAX_DIM = 150;
 #else
     static constexpr int THUMBNAIL_MAX_DIM = 200;
 #endif

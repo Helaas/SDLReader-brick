@@ -1114,15 +1114,19 @@ void FileBrowser::renderThumbnailView(int windowWidth, int windowHeight)
 
     const float thumbRegionSize = static_cast<float>(THUMBNAIL_MAX_DIM);
     float tilePadding = 20.0f;
-    float tileWidth = thumbRegionSize + tilePadding;
+    float labelHorizontalPadding = 10.0f;
+    float imageHorizontalMargin = 10.0f;
+    float imageVerticalMargin = 10.0f;
+    float placeholderInset = 6.0f;
 #ifdef TG5040_PLATFORM
-    const float baseTilePadding = 16.0f;
-    const int targetColumns = 4;
-    const float desiredTileWidth = (thumbRegionSize + baseTilePadding) * 1.2f;
-    tilePadding = baseTilePadding;
-    tileWidth = thumbRegionSize + tilePadding;
+    constexpr int TARGET_TG5040_COLUMNS = 4;
+    tilePadding = 12.0f;
+    labelHorizontalPadding = 8.0f;
+    imageHorizontalMargin = 4.0f;
+    imageVerticalMargin = 6.0f;
+    placeholderInset = 4.0f;
 #endif
-    const float labelHorizontalPadding = 10.0f;
+    float tileWidth = thumbRegionSize + tilePadding;
     const float labelTopMargin = 6.0f;
     const float labelBottomMargin = 6.0f;
     const float maxLabelLines = 2.0f;
@@ -1141,24 +1145,17 @@ void FileBrowser::renderThumbnailView(int windowWidth, int windowHeight)
     contentWidth = std::max(0.0f, contentWidth - scrollbarReserve);
     if (contentWidth > 0.0f)
     {
-        float maxTileWidth = (contentWidth / static_cast<float>(targetColumns)) - 2.0f;
-        float minTileWidth = thumbRegionSize + baseTilePadding * 0.5f;
-        tileWidth = std::clamp(maxTileWidth, minTileWidth, desiredTileWidth);
+        const float baseTileWidth = thumbRegionSize + 16.0f;
+        const float desiredTileWidth = baseTileWidth * 1.2f;
+        float maxWidthPerColumn = contentWidth / static_cast<float>(TARGET_TG5040_COLUMNS);
+        tileWidth = std::max(thumbRegionSize + 4.0f, std::min(desiredTileWidth, maxWidthPerColumn));
         tilePadding = std::max(tileWidth - thumbRegionSize, 4.0f);
     }
 #endif
 
     int columns = std::max(1, static_cast<int>(std::floor((contentWidth + tilePadding * 0.5f) / tileWidth)));
 #ifdef TG5040_PLATFORM
-    columns = std::min(columns, targetColumns);
-    if (columns < targetColumns && contentWidth > 0.0f)
-    {
-        columns = targetColumns;
-        float adjustedWidth = (contentWidth / static_cast<float>(columns)) - 2.0f;
-        adjustedWidth = std::clamp(adjustedWidth, thumbRegionSize + 4.0f, desiredTileWidth);
-        tileWidth = adjustedWidth;
-        tilePadding = std::max(tileWidth - thumbRegionSize, 4.0f);
-    }
+    columns = (contentWidth > 0.0f) ? TARGET_TG5040_COLUMNS : 1;
 #endif
     m_gridColumns = columns;
 
@@ -1209,8 +1206,8 @@ void FileBrowser::renderThumbnailView(int windowWidth, int windowHeight)
                                            : IM_COL32(90, 90, 90, hovered ? 255 : 200);
             drawList->AddRect(tileMin, tileMax, borderColor, 8.0f, 0, 2.0f);
 
-            ImVec2 imageRegionMin(tileMin.x + 10.0f, tileMin.y + 10.0f);
-            ImVec2 imageRegionMax(tileMin.x + tileWidth - 10.0f, tileMin.y + thumbRegionSize - 6.0f);
+            ImVec2 imageRegionMin(tileMin.x + imageHorizontalMargin, tileMin.y + imageVerticalMargin);
+            ImVec2 imageRegionMax(tileMin.x + tileWidth - imageHorizontalMargin, tileMin.y + thumbRegionSize - imageVerticalMargin);
 
             if (texture)
             {
@@ -1228,8 +1225,8 @@ void FileBrowser::renderThumbnailView(int windowWidth, int windowHeight)
             }
             else
             {
-                ImVec2 placeholderMin(imageRegionMin.x + 6.0f, imageRegionMin.y + 6.0f);
-                ImVec2 placeholderMax(imageRegionMax.x - 6.0f, imageRegionMax.y - 6.0f);
+                ImVec2 placeholderMin(imageRegionMin.x + placeholderInset, imageRegionMin.y + placeholderInset);
+                ImVec2 placeholderMax(imageRegionMax.x - placeholderInset, imageRegionMax.y - placeholderInset);
                 drawList->AddRect(placeholderMin, placeholderMax, IM_COL32(180, 180, 180, 180), 6.0f, 0, 2.0f);
 
                 const char* message = thumb.failed ? "N/A" : "Loading";
