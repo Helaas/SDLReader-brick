@@ -19,6 +19,7 @@
 #include <sys/stat.h>
 #include <vector>
 #include <cfloat>
+#include <utility>
 
 #include "mupdf_document.h"
 
@@ -234,6 +235,8 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
 #endif
     }
 
+    startThumbnailWorker();
+
     m_initialized = true;
     return true;
 }
@@ -272,6 +275,7 @@ void FileBrowser::cleanup()
         m_gameControllerInstanceID = -1;
     }
 
+    stopThumbnailWorker();
     clearThumbnailCache();
 }
 
@@ -416,6 +420,9 @@ bool FileBrowser::isSupportedFile(const std::string& filename) const
 void FileBrowser::clearThumbnailCache()
 {
     m_thumbnailCache.clear();
+    std::lock_guard<std::mutex> lock(m_thumbnailMutex);
+    m_thumbnailJobs.clear();
+    m_thumbnailResults.clear();
 }
 
 SDL_Texture* FileBrowser::createTextureFromPixels(const std::vector<uint32_t>& pixels, int width, int height)
@@ -478,25 +485,48 @@ SDL_Texture* FileBrowser::createSolidTexture(int width, int height, SDL_Color co
 FileBrowser::ThumbnailData& FileBrowser::getOrCreateThumbnail(const FileEntry& entry)
 {
     auto& data = m_thumbnailCache[entry.fullPath];
+
+    if (entry.isDirectory)
+    {
+        if (!data.texture && !data.failed)
+        {
+            if (!generateDirectoryThumbnail(entry, data))
+            {
+                data.failed = true;
+            }
+        }
+        return data;
+    }
+
     if (!data.texture && !data.failed)
     {
-        if (!generateThumbnail(entry, data))
+        if (m_thumbnailThreadRunning)
         {
-            data.failed = true;
+            if (!data.pending)
+            {
+                data.pending = true;
+                enqueueThumbnailJob(entry);
+            }
+        }
+        else
+        {
+            if (!generateThumbnail(entry, data))
+            {
+                data.failed = true;
+            }
         }
     }
+
     return data;
 }
 
-bool FileBrowser::generateDirectoryThumbnail(const FileEntry& entry, ThumbnailData& data)
+bool FileBrowser::buildDirectoryThumbnailPixels(std::vector<uint32_t>& pixels, int& width, int& height)
 {
-    (void) entry; // Directory thumbnails are generic
+    width = THUMBNAIL_MAX_DIM;
+    height = static_cast<int>(THUMBNAIL_MAX_DIM * 0.75f);
+    pixels.assign(static_cast<size_t>(width) * static_cast<size_t>(height), 0);
 
-    const int width = THUMBNAIL_MAX_DIM;
-    const int height = static_cast<int>(THUMBNAIL_MAX_DIM * 0.75f);
-    std::vector<uint32_t> pixels(static_cast<size_t>(width) * static_cast<size_t>(height), 0);
-
-    const uint32_t folderBody = 0xFFE2A95Fu; // Warm folder color
+    const uint32_t folderBody = 0xFFE2A95Fu;
     const uint32_t folderTab = 0xFFF4D3A8u;
 
     for (int y = 0; y < height; ++y)
@@ -508,26 +538,11 @@ bool FileBrowser::generateDirectoryThumbnail(const FileEntry& entry, ThumbnailDa
         }
     }
 
-    SDL_Texture* texture = createTextureFromPixels(pixels, width, height);
-    if (!texture)
-    {
-        return false;
-    }
-
-    data.texture.reset(texture);
-    data.width = width;
-    data.height = height;
-    data.failed = false;
     return true;
 }
 
-bool FileBrowser::generateThumbnail(const FileEntry& entry, ThumbnailData& data)
+bool FileBrowser::buildDocumentThumbnailPixels(const FileEntry& entry, std::vector<uint32_t>& pixels, int& width, int& height)
 {
-    if (entry.isDirectory)
-    {
-        return generateDirectoryThumbnail(entry, data);
-    }
-
     try
     {
         MuPdfDocument document;
@@ -557,8 +572,8 @@ bool FileBrowser::generateThumbnail(const FileEntry& entry, ThumbnailData& data)
         int zoom = static_cast<int>(std::round(targetScale * 100.0f));
         zoom = std::clamp(zoom, 10, 200);
 
-        int width = 0;
-        int height = 0;
+        width = 0;
+        height = 0;
         auto bufferPtr = document.renderPageARGB(0, width, height, zoom);
         document.close();
 
@@ -567,24 +582,214 @@ bool FileBrowser::generateThumbnail(const FileEntry& entry, ThumbnailData& data)
             return false;
         }
 
-        std::vector<uint32_t> pixels(bufferPtr->begin(), bufferPtr->end());
-
-        SDL_Texture* texture = createTextureFromPixels(pixels, width, height);
-        if (!texture)
-        {
-            return false;
-        }
-
-        data.texture.reset(texture);
-        data.width = width;
-        data.height = height;
-        data.failed = false;
+        pixels.assign(bufferPtr->begin(), bufferPtr->end());
         return true;
     }
     catch (const std::exception& ex)
     {
         std::cerr << "Thumbnail generation failed for \"" << entry.fullPath << "\": " << ex.what() << std::endl;
         return false;
+    }
+}
+
+bool FileBrowser::generateDirectoryThumbnail(const FileEntry& entry, ThumbnailData& data)
+{
+    (void) entry;
+    std::vector<uint32_t> pixels;
+    int width = 0;
+    int height = 0;
+    if (!buildDirectoryThumbnailPixels(pixels, width, height))
+    {
+        return false;
+    }
+
+    SDL_Texture* texture = createTextureFromPixels(pixels, width, height);
+    if (!texture)
+    {
+        return false;
+    }
+
+    data.texture.reset(texture);
+    data.width = width;
+    data.height = height;
+    data.failed = false;
+    data.pending = false;
+    return true;
+}
+
+bool FileBrowser::generateThumbnail(const FileEntry& entry, ThumbnailData& data)
+{
+    std::vector<uint32_t> pixels;
+    int width = 0;
+    int height = 0;
+
+    bool success = entry.isDirectory ? buildDirectoryThumbnailPixels(pixels, width, height)
+                                     : buildDocumentThumbnailPixels(entry, pixels, width, height);
+    if (!success)
+    {
+        return false;
+    }
+
+    SDL_Texture* texture = createTextureFromPixels(pixels, width, height);
+    if (!texture)
+    {
+        return false;
+    }
+
+    data.texture.reset(texture);
+    data.width = width;
+    data.height = height;
+    data.failed = false;
+    data.pending = false;
+    return true;
+}
+
+void FileBrowser::startThumbnailWorker()
+{
+    if (m_thumbnailThreadRunning)
+    {
+        return;
+    }
+
+    m_thumbnailThreadStop = false;
+    m_thumbnailThreadRunning = true;
+    m_thumbnailThread = std::thread(&FileBrowser::thumbnailWorkerLoop, this);
+}
+
+void FileBrowser::stopThumbnailWorker()
+{
+    if (!m_thumbnailThreadRunning)
+    {
+        return;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(m_thumbnailMutex);
+        m_thumbnailThreadStop = true;
+    }
+    m_thumbnailCv.notify_all();
+
+    if (m_thumbnailThread.joinable())
+    {
+        m_thumbnailThread.join();
+    }
+
+    m_thumbnailThreadRunning = false;
+    m_thumbnailThreadStop = false;
+
+    {
+        std::lock_guard<std::mutex> lock(m_thumbnailMutex);
+        m_thumbnailJobs.clear();
+        m_thumbnailResults.clear();
+    }
+
+    for (auto& [path, cacheEntry] : m_thumbnailCache)
+    {
+        (void) path;
+        cacheEntry.pending = false;
+    }
+}
+
+void FileBrowser::enqueueThumbnailJob(const FileEntry& entry)
+{
+    if (entry.isDirectory)
+    {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(m_thumbnailMutex);
+    if (!m_thumbnailThreadRunning || m_thumbnailThreadStop)
+    {
+        return;
+    }
+
+    m_thumbnailJobs.emplace_back(entry.name, entry.fullPath, entry.isDirectory);
+    m_thumbnailCv.notify_one();
+}
+
+void FileBrowser::pumpThumbnailResults()
+{
+    std::deque<ThumbnailJobResult> ready;
+    {
+        std::lock_guard<std::mutex> lock(m_thumbnailMutex);
+        if (m_thumbnailResults.empty())
+        {
+            return;
+        }
+        ready.swap(m_thumbnailResults);
+    }
+
+    for (auto& result : ready)
+    {
+        auto it = m_thumbnailCache.find(result.fullPath);
+        if (it == m_thumbnailCache.end())
+        {
+            continue;
+        }
+
+        ThumbnailData& data = it->second;
+        data.pending = false;
+
+        if (!result.success)
+        {
+            data.failed = true;
+            continue;
+        }
+
+        SDL_Texture* texture = createTextureFromPixels(result.pixels, result.width, result.height);
+        if (!texture)
+        {
+            data.failed = true;
+            continue;
+        }
+
+        data.texture.reset(texture);
+        data.width = result.width;
+        data.height = result.height;
+        data.failed = false;
+    }
+}
+
+void FileBrowser::thumbnailWorkerLoop()
+{
+    for (;;)
+    {
+        FileEntry job("", "", false);
+        {
+            std::unique_lock<std::mutex> lock(m_thumbnailMutex);
+            m_thumbnailCv.wait(lock, [this]()
+                               { return m_thumbnailThreadStop || !m_thumbnailJobs.empty(); });
+
+            if (m_thumbnailThreadStop && m_thumbnailJobs.empty())
+            {
+                return;
+            }
+
+            job = m_thumbnailJobs.front();
+            m_thumbnailJobs.pop_front();
+        }
+
+        ThumbnailJobResult result;
+        result.fullPath = job.fullPath;
+
+        if (!job.isDirectory)
+        {
+            std::vector<uint32_t> pixels;
+            int width = 0;
+            int height = 0;
+            if (buildDocumentThumbnailPixels(job, pixels, width, height))
+            {
+                result.success = true;
+                result.width = width;
+                result.height = height;
+                result.pixels = std::move(pixels);
+            }
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(m_thumbnailMutex);
+            m_thumbnailResults.push_back(std::move(result));
+        }
     }
 }
 
@@ -821,6 +1026,8 @@ void FileBrowser::render()
 #endif
     ImGui::Separator();
 
+    pumpThumbnailResults();
+
     if (m_thumbnailView)
     {
         renderThumbnailView(windowWidth, windowHeight);
@@ -915,7 +1122,15 @@ void FileBrowser::renderThumbnailView(int windowWidth, int windowHeight)
         contentWidth = static_cast<float>(windowWidth) - 32.0f;
     }
 
+#ifdef TG5040_PLATFORM
+    const float scrollbarReserve = ImGui::GetStyle().ScrollbarSize + ImGui::GetStyle().WindowPadding.x;
+    contentWidth = std::max(0.0f, contentWidth - scrollbarReserve);
+#endif
+
     int columns = std::max(1, static_cast<int>(std::floor((contentWidth + tilePadding * 0.5f) / tileWidth)));
+#ifdef TG5040_PLATFORM
+    columns = std::min(columns, 3);
+#endif
     m_gridColumns = columns;
 
     if (ImGui::BeginTable("ThumbnailTable", columns, ImGuiTableFlags_SizingFixedFit))

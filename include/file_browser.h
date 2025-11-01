@@ -2,9 +2,13 @@
 #define FILE_BROWSER_H
 
 #include <SDL.h>
+#include <condition_variable>
+#include <deque>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -83,6 +87,7 @@ private:
         int width{0};
         int height{0};
         bool failed{false};
+        bool pending{false};
     };
 
     SDL_Window* m_window;
@@ -115,6 +120,23 @@ private:
     std::unique_ptr<PowerHandler> m_powerHandler;
     bool m_inFakeSleep{false};
 #endif
+
+    struct ThumbnailJobResult
+    {
+        std::string fullPath;
+        std::vector<uint32_t> pixels;
+        int width{0};
+        int height{0};
+        bool success{false};
+    };
+
+    std::thread m_thumbnailThread;
+    std::mutex m_thumbnailMutex;
+    std::condition_variable m_thumbnailCv;
+    std::deque<FileEntry> m_thumbnailJobs;
+    std::deque<ThumbnailJobResult> m_thumbnailResults;
+    bool m_thumbnailThreadStop{false};
+    bool m_thumbnailThreadRunning{false};
 
     /**
      * @brief Scan directory and populate entries
@@ -159,10 +181,17 @@ private:
     void clampSelection();
     ThumbnailData& getOrCreateThumbnail(const FileEntry& entry);
     bool generateThumbnail(const FileEntry& entry, ThumbnailData& data);
+    bool buildDocumentThumbnailPixels(const FileEntry& entry, std::vector<uint32_t>& pixels, int& width, int& height);
+    bool buildDirectoryThumbnailPixels(std::vector<uint32_t>& pixels, int& width, int& height);
     bool generateDirectoryThumbnail(const FileEntry& entry, ThumbnailData& data);
     void clearThumbnailCache();
     SDL_Texture* createTextureFromPixels(const std::vector<uint32_t>& pixels, int width, int height);
     SDL_Texture* createSolidTexture(int width, int height, SDL_Color color, Uint8 alpha = 255);
+    void startThumbnailWorker();
+    void stopThumbnailWorker();
+    void enqueueThumbnailJob(const FileEntry& entry);
+    void pumpThumbnailResults();
+    void thumbnailWorkerLoop();
 };
 
 #endif // FILE_BROWSER_H
