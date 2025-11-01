@@ -49,7 +49,7 @@ This implementation adds a comprehensive font and reading-style menu to SDL Read
 
 ### Configuration
 
-Settings are stored in `config.json` in the executable directory:
+Settings are stored in `config.json` inside the reader state directory (`$SDL_READER_STATE_DIR`, defaulting to `$HOME`):
 
 ```json
 {
@@ -58,7 +58,7 @@ Settings are stored in `config.json` in the executable directory:
   "fontSize": 16,
   "zoomStep": 10,
   "readingStyle": 0,
-  "lastBrowseDirectory": "/mnt/SDCARD/Books"
+  "lastBrowseDirectory": "/path/to/library"
 }
 ```
 

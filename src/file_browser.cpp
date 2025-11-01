@@ -1,4 +1,5 @@
 #include "file_browser.h"
+#include "path_utils.h"
 #include <imgui.h>
 
 #ifdef TG5040_PLATFORM
@@ -13,8 +14,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cerrno>
+#include <cstdlib>
 #include <cstring>
 #include <dirent.h>
+#include <filesystem>
 #include <iostream>
 #include <sys/stat.h>
 #include <vector>
@@ -25,6 +28,16 @@
 
 namespace
 {
+std::filesystem::path normalizePath(const std::string& path)
+{
+    return std::filesystem::path(path).lexically_normal();
+}
+
+bool pathsEqual(const std::string& lhs, const std::string& rhs)
+{
+    return normalizePath(lhs) == normalizePath(rhs);
+}
+
 std::string truncateToWidth(const std::string& text, float maxWidth)
 {
     if (text.empty())
@@ -73,22 +86,15 @@ std::string truncateToWidth(const std::string& text, float maxWidth)
 }
 } // namespace
 
-#ifdef TG5040_PLATFORM
-#define DEFAULT_START_PATH "/mnt/SDCARD"
-#else
-#include <pwd.h>
-#include <unistd.h>
-#endif
-
 FileBrowser::FileBrowser()
-    : m_window(nullptr), m_renderer(nullptr), m_initialized(false), m_running(false)
-#ifdef TG5040_PLATFORM
-      ,
-      m_currentPath(DEFAULT_START_PATH)
-#else
-      ,
-      m_currentPath(getenv("HOME") ? getenv("HOME") : "/")
-#endif
+    : m_window(nullptr), m_renderer(nullptr), m_initialized(false), m_running(false),
+      m_defaultRoot(getDefaultLibraryRoot()),
+      m_lockToDefaultRoot([]
+                          {
+                              const char* root = std::getenv("SDL_READER_DEFAULT_DIR");
+                              return root && root[0] != '\0';
+                          }()),
+      m_currentPath(m_defaultRoot)
       ,
       m_selectedIndex(0), m_gameController(nullptr), m_gameControllerInstanceID(-1),
       m_dpadUpHeld(false), m_dpadDownHeld(false), m_lastScrollTime(0)
@@ -105,7 +111,7 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
 {
     m_window = window;
     m_renderer = renderer;
-    m_currentPath = startPath;
+    m_currentPath = startPath.empty() ? m_defaultRoot : startPath;
 
     // Setup Dear ImGui context (or reuse existing one in browse mode)
     bool isNewContext = (ImGui::GetCurrentContext() == nullptr);
@@ -200,40 +206,46 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
     if (!scanDirectory(m_currentPath))
     {
         std::cerr << "Failed to scan initial directory: " << m_currentPath << std::endl;
-#ifdef TG5040_PLATFORM
-        // Try fallback to /mnt/SDCARD
-        if (m_currentPath != "/mnt/SDCARD")
+
+        std::vector<std::string> candidates;
+        auto addCandidate = [&candidates](const std::string& candidate)
         {
-            m_currentPath = "/mnt/SDCARD";
-            if (!scanDirectory(m_currentPath))
+            if (candidate.empty())
+                return;
+            if (std::none_of(candidates.begin(), candidates.end(),
+                             [&](const std::string& existing)
+                             { return pathsEqual(existing, candidate); }))
             {
-                std::cerr << "Failed to scan fallback directory" << std::endl;
-                return false;
+                candidates.push_back(candidate);
+            }
+        };
+
+        addCandidate(m_defaultRoot);
+        if (const char* home = std::getenv("HOME"))
+        {
+            addCandidate(home);
+        }
+        addCandidate("/");
+
+        bool loaded = false;
+        for (const auto& candidate : candidates)
+        {
+            if (scanDirectory(candidate))
+            {
+                m_currentPath = candidate;
+                loaded = true;
+                break;
             }
         }
-        else
+
+        if (!loaded)
         {
+            std::cerr << "Failed to scan fallback directories." << std::endl;
             return false;
         }
-#else
-        // Try fallback to home directory or root
-        const char* home = getenv("HOME");
-        std::string fallbackPath = home ? home : "/";
-        if (m_currentPath != fallbackPath)
-        {
-            m_currentPath = fallbackPath;
-            if (!scanDirectory(m_currentPath))
-            {
-                std::cerr << "Failed to scan fallback directory" << std::endl;
-                return false;
-            }
-        }
-        else
-        {
-            return false;
-        }
-#endif
     }
+
+    m_currentPath = normalizePath(m_currentPath).string();
 
     startThumbnailWorker();
 
@@ -316,50 +328,44 @@ bool FileBrowser::scanDirectory(const std::string& path)
             continue;
         }
 
-        // Skip .. if we're at the base directory
-#ifdef TG5040_PLATFORM
-        if (name == ".." && (safePath == "/mnt/SDCARD" || safePath == "/"))
+        if (name == "..")
         {
-            continue;
-        }
-#else
-        if (name == ".." && safePath == "/")
-        {
-            continue;
-        }
-#endif
+            std::filesystem::path normalizedSafe = normalizePath(safePath);
+            if (m_lockToDefaultRoot && pathsEqual(safePath, m_defaultRoot))
+            {
+                continue;
+            }
 
-        std::string fullPath = safePath;
-        if (!fullPath.empty() && fullPath.back() != '/')
-        {
-            fullPath += "/";
+            if (normalizedSafe == normalizedSafe.root_path())
+            {
+                continue;
+            }
         }
-        fullPath += name;
+
+        std::string fullPath;
 
         if (name == "..")
         {
-            std::string trimmed = safePath;
-            while (trimmed.size() > 1 && trimmed.back() == '/')
+            std::filesystem::path normalizedSafe = normalizePath(safePath);
+            std::filesystem::path parent = normalizedSafe.parent_path();
+            if (parent.empty())
             {
-                trimmed.pop_back();
+                parent = normalizedSafe.root_path();
             }
-
-            if (trimmed.empty() || trimmed == "/")
+            if (parent.empty())
             {
-                fullPath = "/";
+                parent = "/";
             }
-            else
+            fullPath = parent.string();
+        }
+        else
+        {
+            fullPath = safePath;
+            if (!fullPath.empty() && fullPath.back() != '/')
             {
-                size_t lastSlash = trimmed.find_last_of('/');
-                if (lastSlash == std::string::npos || lastSlash == 0)
-                {
-                    fullPath = "/";
-                }
-                else
-                {
-                    fullPath = trimmed.substr(0, lastSlash);
-                }
+                fullPath += "/";
             }
+            fullPath += name;
         }
 
         struct stat statbuf;
@@ -1447,43 +1453,47 @@ void FileBrowser::handleEvent(const SDL_Event& event)
 
 void FileBrowser::navigateUp()
 {
-#ifdef TG5040_PLATFORM
-    // Don't allow navigation above /mnt/SDCARD on TG5040
-    if (m_currentPath == "/mnt/SDCARD" || m_currentPath == "/")
+    const std::filesystem::path current = normalizePath(m_currentPath);
+    std::filesystem::path rootPath = current.root_path();
+    if (rootPath.empty())
+    {
+        rootPath = "/";
+    }
+
+    if (m_lockToDefaultRoot && pathsEqual(m_currentPath, m_defaultRoot))
     {
         std::cout << "navigateUp: Already at base directory: " << m_currentPath << std::endl;
         return;
     }
-#else
-    // Don't allow navigation above root on other platforms
-    if (m_currentPath == "/")
+
+    if (current == rootPath)
     {
         std::cout << "navigateUp: Already at root" << std::endl;
         return;
     }
-#endif
 
-    // Get parent directory
-    size_t lastSlash = m_currentPath.find_last_of('/');
-    if (lastSlash != std::string::npos && lastSlash > 0)
+    std::filesystem::path parent = current.parent_path();
+    if (parent.empty())
     {
-        std::string parentPath = m_currentPath.substr(0, lastSlash);
-        if (parentPath.empty())
-        {
-            parentPath = "/";
-        }
+        parent = rootPath;
+    }
 
-        std::cout << "navigateUp: Moving from '" << m_currentPath << "' to '" << parentPath << "'" << std::endl;
+    std::string parentPath = parent.string();
+    if (parentPath.empty())
+    {
+        parentPath = "/";
+    }
 
-        if (scanDirectory(parentPath))
-        {
-            m_currentPath = parentPath;
-            std::cout << "navigateUp: Successfully changed to: " << m_currentPath << std::endl;
-        }
-        else
-        {
-            std::cout << "Failed to scan parent directory: " << parentPath << std::endl;
-        }
+    std::cout << "navigateUp: Moving from '" << m_currentPath << "' to '" << parentPath << "'" << std::endl;
+
+    if (scanDirectory(parentPath))
+    {
+        m_currentPath = normalizePath(parentPath).string();
+        std::cout << "navigateUp: Successfully changed to: " << m_currentPath << std::endl;
+    }
+    else
+    {
+        std::cout << "Failed to scan parent directory: " << parentPath << std::endl;
     }
 }
 
@@ -1509,7 +1519,7 @@ void FileBrowser::navigateInto()
 
         if (scanDirectory(targetPath))
         {
-            m_currentPath = targetPath;
+            m_currentPath = normalizePath(targetPath).string();
             std::cout << "Successfully changed to: " << m_currentPath << std::endl;
         }
         else

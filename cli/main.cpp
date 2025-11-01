@@ -1,6 +1,7 @@
 #include "app.h"
 #include "file_browser.h"
 #include "options_manager.h"
+#include "path_utils.h"
 #include "renderer.h"
 #include <SDL.h>
 #include <SDL_ttf.h>
@@ -112,13 +113,7 @@ int main(int argc, char* argv[])
             // Load config to get last browse directory
             OptionsManager optionsManager;
             FontConfig config = optionsManager.loadConfig();
-#ifdef TG5040_PLATFORM
-            std::string defaultPath = "/mnt/SDCARD";
-#else
-            const char* home = getenv("HOME");
-            std::string defaultPath = home ? home : "/";
-#endif
-            std::string startPath = config.lastBrowseDirectory.empty() ? defaultPath : config.lastBrowseDirectory;
+            std::string startPath = config.lastBrowseDirectory.empty() ? getDefaultLibraryRoot() : config.lastBrowseDirectory;
 
             FileBrowser browser;
             if (!browser.initialize(window, renderer, startPath))

@@ -137,12 +137,7 @@ FontConfig jsonToConfig(const std::string& json)
     config.lastBrowseDirectory = findStringValue("lastBrowseDirectory");
     if (config.lastBrowseDirectory.empty())
     {
-#ifdef TG5040_PLATFORM
-        config.lastBrowseDirectory = "/mnt/SDCARD";
-#else
-        const char* home = getenv("HOME");
-        config.lastBrowseDirectory = home ? home : "/";
-#endif
+        config.lastBrowseDirectory = getDefaultLibraryRoot();
     }
 
     return config;
@@ -467,28 +462,28 @@ std::string OptionsManager::generateCSS(const FontConfig& config) const
     return css.str();
 }
 
-bool OptionsManager::saveConfig(const FontConfig& config, const std::string& configPath) const
+bool OptionsManager::saveConfig(const FontConfig& config, std::string configPath) const
 {
     try
     {
         // Create directory if it doesn't exist
-        std::filesystem::path path(configPath);
+        std::filesystem::path path = configPath.empty() ? getDefaultConfigPath() : std::filesystem::path(configPath);
         if (path.has_parent_path())
         {
             std::filesystem::create_directories(path.parent_path());
         }
 
-        std::ofstream file(configPath);
+        std::ofstream file(path);
         if (!file.is_open())
         {
-            std::cerr << "Failed to open config file for writing: " << configPath << std::endl;
+            std::cerr << "Failed to open config file for writing: " << path << std::endl;
             return false;
         }
 
         file << configToJson(config);
         file.close();
 
-        std::cout << "Font configuration saved to: " << configPath << std::endl;
+        std::cout << "Font configuration saved to: " << path << std::endl;
         return true;
     }
     catch (const std::exception& e)
@@ -498,22 +493,23 @@ bool OptionsManager::saveConfig(const FontConfig& config, const std::string& con
     }
 }
 
-FontConfig OptionsManager::loadConfig(const std::string& configPath) const
+FontConfig OptionsManager::loadConfig(std::string configPath) const
 {
     FontConfig defaultConfig;
 
     try
     {
-        if (!std::filesystem::exists(configPath))
+        std::filesystem::path path = configPath.empty() ? getDefaultConfigPath() : std::filesystem::path(configPath);
+        if (!std::filesystem::exists(path))
         {
-            std::cout << "Config file not found, using defaults: " << configPath << std::endl;
+            std::cout << "Config file not found, using defaults: " << path << std::endl;
             return defaultConfig;
         }
 
-        std::ifstream file(configPath);
+        std::ifstream file(path);
         if (!file.is_open())
         {
-            std::cerr << "Failed to open config file: " << configPath << std::endl;
+            std::cerr << "Failed to open config file: " << path << std::endl;
             return defaultConfig;
         }
 

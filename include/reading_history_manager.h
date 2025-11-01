@@ -19,10 +19,10 @@ public:
     ~ReadingHistoryManager();
 
     // Load history from file
-    bool loadHistory(const std::string& historyFilePath = "./reading_history.json");
+    bool loadHistory(std::string historyFilePath = {});
 
     // Save history to file
-    bool saveHistory(const std::string& historyFilePath = "./reading_history.json");
+    bool saveHistory(std::string historyFilePath = {});
 
     // Get the last page for a document (returns -1 if not found)
     int getLastPage(const std::string& documentPath) const;

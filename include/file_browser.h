@@ -33,10 +33,10 @@ public:
      * @brief Initialize the file browser with SDL
      * @param window SDL window
      * @param renderer SDL renderer
-     * @param startPath Initial directory to browse (default: /mnt/SDCARD)
+     * @param startPath Initial directory to browse (empty string uses default library root)
      * @return true if successful
      */
-    bool initialize(SDL_Window* window, SDL_Renderer* renderer, const std::string& startPath = "/mnt/SDCARD");
+    bool initialize(SDL_Window* window, SDL_Renderer* renderer, const std::string& startPath = std::string());
 
     /**
      * @brief Run the file browser main loop
@@ -94,6 +94,8 @@ private:
     SDL_Renderer* m_renderer;
     bool m_initialized;
     bool m_running;
+    std::string m_defaultRoot;
+    bool m_lockToDefaultRoot{false};
     std::string m_currentPath;
     std::vector<FileEntry> m_entries;
     int m_selectedIndex;

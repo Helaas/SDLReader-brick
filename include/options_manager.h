@@ -1,6 +1,8 @@
 #ifndef OPTIONS_MANAGER_H
 #define OPTIONS_MANAGER_H
 
+#include "path_utils.h"
+
 #include <cstdint>
 #include <map>
 #include <string>
@@ -39,7 +41,7 @@ struct FontConfig
     std::string fontName;                              // Display name of selected font
     int fontSize = 12;                                 // Font size in points
     int zoomStep = 10;                                 // Zoom increment/decrement step
-    std::string lastBrowseDirectory = "/mnt/SDCARD";   // Last browsed directory for file browser
+    std::string lastBrowseDirectory = getDefaultLibraryRoot(); // Last browsed directory for file browser
     ReadingStyle readingStyle = ReadingStyle::Default; // Reading style/theme
     bool disableEdgeProgressBar = false;               // Disable edge nudge progress bar for instant page turns
     bool showDocumentMinimap = true;                   // Display minimap overlay when zoomed in
@@ -48,7 +50,7 @@ struct FontConfig
     FontConfig() = default;
 
     // Constructor with parameters
-    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10, const std::string& browseDir = "/mnt/SDCARD", ReadingStyle style = ReadingStyle::Default, bool disableEdgeBar = false, bool showMinimap = true)
+    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10, const std::string& browseDir = getDefaultLibraryRoot(), ReadingStyle style = ReadingStyle::Default, bool disableEdgeBar = false, bool showMinimap = true)
         : fontPath(path), fontName(name), fontSize(size), zoomStep(zoom), lastBrowseDirectory(browseDir), readingStyle(style),
           disableEdgeProgressBar(disableEdgeBar), showDocumentMinimap(showMinimap)
     {
@@ -103,17 +105,17 @@ public:
     /**
      * @brief Save font configuration to file
      * @param config Configuration to save
-     * @param configPath Path to save configuration (default: "./config.json")
+     * @param configPath Optional override path (defaults to the reader state directory)
      * @return true if successful, false otherwise
      */
-    bool saveConfig(const FontConfig& config, const std::string& configPath = "./config.json") const;
+    bool saveConfig(const FontConfig& config, std::string configPath = {}) const;
 
     /**
      * @brief Load font configuration from file
-     * @param configPath Path to load configuration from (default: "./config.json")
+     * @param configPath Optional override path (defaults to the reader state directory)
      * @return FontConfig if successful, default config otherwise
      */
-    FontConfig loadConfig(const std::string& configPath = "./config.json") const;
+    FontConfig loadConfig(std::string configPath = {}) const;
 
     /**
      * @brief Get font file path by display name (public accessor for font loader)

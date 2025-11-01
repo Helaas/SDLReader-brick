@@ -98,7 +98,7 @@ Run it from the project root with:
 ./bin/sdl_reader_cli --browse
 ```
 
-Launching with `--browse` opens the ImGui-driven file picker, auto-resumes your position using `reading_history.json`, and lets you tweak fonts/themes from a controller. Preferences are saved in `config.json` next to the executable.
+Launching with `--browse` opens the ImGui-driven file picker, auto-resumes your position using `reading_history.json`, and lets you tweak fonts/themes from a controller. Preferences are saved in the reader state directory (`$SDL_READER_STATE_DIR`, defaulting to `$HOME/config.json`).
 
 ### Fonts & Reading Styles
 

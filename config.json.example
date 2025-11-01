@@ -5,5 +5,5 @@
   "zoomStep": 10,
   "readingStyle": 0,
   "disableEdgeProgressBar": false,
-  "lastBrowseDirectory": "/mnt/SDCARD"
+  "lastBrowseDirectory": "/path/to/library"
 }

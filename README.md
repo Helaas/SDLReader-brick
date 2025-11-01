@@ -171,16 +171,16 @@ After building, you can either launch straight into a document or drop into the 
 ./bin/sdl_reader_cli --browse
 ```
 
-When using `--browse`, SDL Reader will remember the last directory you visited (stored in `config.json`) and automatically resume the last page you read for each document (stored in `reading_history.json`).
+When using `--browse`, SDL Reader will remember the last directory you visited (stored in `config.json`) and automatically resume the last page you read for each document (stored in `reading_history.json`). Both files live in the reader state directory (`$SDL_READER_STATE_DIR`, defaulting to `$HOME`).
 
 ## Configuration
 
-SDL Reader uses a `config.json` file for customizing font settings and display options.
+SDL Reader uses a `config.json` file (stored under `$SDL_READER_STATE_DIR`, defaulting to `$HOME/config.json`) for customizing font settings and display options.
 
 ### Setting up Configuration
 1. Copy the example configuration file:
    ```bash
-   cp config.json.example config.json
+   cp config.json.example "$HOME/config.json"
    ```
 
 2. Edit `config.json` to customize settings:
@@ -192,7 +192,7 @@ SDL Reader uses a `config.json` file for customizing font settings and display o
      "zoomStep": 10,
      "readingStyle": 0,
      "disableEdgeProgressBar": false,
-     "lastBrowseDirectory": "/mnt/SDCARD/Books"
+     "lastBrowseDirectory": "/path/to/library"
    }
    ```
 
@@ -204,6 +204,7 @@ SDL Reader uses a `config.json` file for customizing font settings and display o
 - **readingStyle**: Numeric identifier for the active reading theme (see table below)
 - **lastBrowseDirectory**: Directory the file browser should open by default when launched with `--browse`
 - **disableEdgeProgressBar**: When `true`, panning at page edges changes pages instantly without the 300ms delay and progress bar. When `false` (default), the edge nudge progress bar is shown.
+- **Environment override**: Set `SDL_READER_DEFAULT_DIR` to control the starting directory for the browser. If unset, the reader defaults to `$HOME`.
 
 | `readingStyle` | Theme          | Background | Text Color |
 | :------------- | :------------- | :--------- | :--------- |
@@ -217,7 +218,7 @@ SDL Reader uses a `config.json` file for customizing font settings and display o
 
 All configuration values are saved automatically when you apply changes from the in-app font menu.
 
-**Note**: The `config.json` file is ignored by Git to allow personal customization without affecting the repository.
+**Note**: Runtime `config.json` files are stored outside the repository (in the reader state directory) and are ignored by Git so you can personalize settings without affecting the repo.
 
 **Adding new fonts:** Drop any `.ttf` or `.otf` files into the top-level `fonts/` directory (either on desktop or inside a TG5040 bundle). The Options → Font & Reading Style menu will automatically discover them, let you preview the typography, and persist your selection for EPUB/MOBI documents.
 
@@ -234,7 +235,7 @@ Full license texts are provided in [`fonts/LICENSES.md`](fonts/LICENSES.md). Kee
 
 ## Reading History
 
-SDL Reader keeps a lightweight `reading_history.json` file in the project root. Every time you change pages, the current document path and page number are persisted so the next launch resumes automatically. The history remembers the most recent 50 documents. Delete the file if you want to reset all progress.
+SDL Reader keeps a lightweight `reading_history.json` file in the reader state directory (`$SDL_READER_STATE_DIR`, defaulting to `$HOME/reading_history.json`). Every time you change pages, the current document path and page number are persisted so the next launch resumes automatically. The history remembers the most recent 50 documents. Delete the file if you want to reset all progress.
 
 ## TG5040 Deployment
 
@@ -394,7 +395,7 @@ SDLReader-brick/
 ├── cli/                          # Command-line interface
 ├── fonts/                        # Font files (available to the font picker)
 ├── config.json.example           # Sample runtime configuration
-├── reading_history.json          # Auto-generated reading history cache
+├── reading_history.json          # Runtime cache (stored in the reader state directory)
 └── ports/                        # Platform-specific builds
     ├── tg5040/                   # TG5040 embedded device
     │   ├── Makefile              # TG5040 build configuration

@@ -1,12 +1,15 @@
 #include "reading_history_manager.h"
+#include "path_utils.h"
+
 #include <algorithm>
 #include <chrono>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 
 ReadingHistoryManager::ReadingHistoryManager()
-    : m_historyFilePath("./reading_history.json")
+    : m_historyFilePath(getDefaultHistoryPath().string())
 {
 }
 
@@ -23,15 +26,16 @@ long long ReadingHistoryManager::getCurrentTimestamp()
     return std::chrono::duration_cast<std::chrono::seconds>(duration).count();
 }
 
-bool ReadingHistoryManager::loadHistory(const std::string& historyFilePath)
+bool ReadingHistoryManager::loadHistory(std::string historyFilePath)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
-    m_historyFilePath = historyFilePath;
+    std::filesystem::path path = historyFilePath.empty() ? getDefaultHistoryPath() : std::filesystem::path(historyFilePath);
+    m_historyFilePath = path.string();
 
-    std::ifstream file(historyFilePath);
+    std::ifstream file(path);
     if (!file.is_open())
     {
-        std::cout << "No reading history file found at " << historyFilePath << ", starting fresh" << std::endl;
+        std::cout << "No reading history file found at " << path << ", starting fresh" << std::endl;
         return false;
     }
 
@@ -150,14 +154,23 @@ bool ReadingHistoryManager::loadHistory(const std::string& historyFilePath)
     return true;
 }
 
-bool ReadingHistoryManager::saveHistory(const std::string& historyFilePath)
+bool ReadingHistoryManager::saveHistory(std::string historyFilePath)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    std::ofstream file(historyFilePath);
+    std::filesystem::path path = historyFilePath.empty() ? getDefaultHistoryPath() : std::filesystem::path(historyFilePath);
+    m_historyFilePath = path.string();
+
+    if (path.has_parent_path())
+    {
+        std::error_code ec;
+        std::filesystem::create_directories(path.parent_path(), ec);
+    }
+
+    std::ofstream file(path);
     if (!file.is_open())
     {
-        std::cerr << "Failed to save reading history to " << historyFilePath << std::endl;
+        std::cerr << "Failed to save reading history to " << path << std::endl;
         return false;
     }
 

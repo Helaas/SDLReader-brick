@@ -109,7 +109,7 @@ After building the first time, unless a dependency of the image has changed, `ma
 - **Volume mapping**: The project root is mounted at `/root/workspace` inside the container
 - **Toolchain**: Located at `/opt/` inside the container
 
-Runtime settings (`config.json`) and reading progress (`reading_history.json`) are generated next to the executable. They are ignored by Git so you can modify them freely on the device or within the container.
+Runtime settings (`config.json`) and reading progress (`reading_history.json`) are generated inside the reader state directory (`$SDL_READER_STATE_DIR`, set by `launch.sh`). They are ignored by Git so you can modify them freely on the device or within the container.
 
 ### Fonts & Reading Styles
 
