@@ -99,6 +99,7 @@ int main(int argc, char* argv[])
     }
 
     // Main loop: If browse mode, keep returning to file browser after closing document
+    FileBrowser browser;
     bool continueRunning = true;
     while (continueRunning)
     {
@@ -115,7 +116,6 @@ int main(int argc, char* argv[])
             FontConfig config = optionsManager.loadConfig();
             std::string startPath = config.lastBrowseDirectory.empty() ? getDefaultLibraryRoot() : config.lastBrowseDirectory;
 
-            FileBrowser browser;
             if (!browser.initialize(window, renderer, startPath))
             {
                 std::cerr << "Failed to initialize file browser" << std::endl;

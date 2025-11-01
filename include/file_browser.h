@@ -47,7 +47,7 @@ public:
     /**
      * @brief Cleanup resources
      */
-    void cleanup();
+    void cleanup(bool preserveThumbnails = false);
 
     /**
      * @brief Get the last browsed directory
@@ -198,6 +198,13 @@ private:
     void enqueueThumbnailJob(const FileEntry& entry);
     void pumpThumbnailResults();
     void thumbnailWorkerLoop();
+    void requestThumbnailShutdown();
+    void clearPendingThumbnails();
+
+    static bool s_lastThumbnailView;
+    static bool s_cachedThumbnailsValid;
+    static std::string s_cachedDirectory;
+    static std::unordered_map<std::string, ThumbnailData> s_cachedThumbnails;
 };
 
 #endif // FILE_BROWSER_H
