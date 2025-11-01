@@ -58,9 +58,21 @@ Settings are stored in `config.json` inside the reader state directory (`$SDL_RE
   "fontSize": 16,
   "zoomStep": 10,
   "readingStyle": 0,
+  "showDocumentMinimap": true,
   "lastBrowseDirectory": "/path/to/library"
 }
 ```
+
+Key configuration fields:
+
+- `fontPath`: Absolute or relative path to the font file.
+- `fontName`: Friendly display name shown in the in-app menu.
+- `fontSize`: Baseline font size (in points) applied via generated CSS.
+- `zoomStep`: Controller zoom increment/decrement percentage.
+- `readingStyle`: Numeric theme selector (see style table in the main README).
+- `disableEdgeProgressBar`: Set to `true` to skip the edge nudge delay when turning pages.
+- `showDocumentMinimap`: Set to `false` to hide the minimap overlay when zoomed in.
+- `lastBrowseDirectory`: Last directory opened by the ImGui file browser.
 
 ### CSS Generation
 

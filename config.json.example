@@ -5,5 +5,6 @@
   "zoomStep": 10,
   "readingStyle": 0,
   "disableEdgeProgressBar": false,
+  "showDocumentMinimap": true,
   "lastBrowseDirectory": "/path/to/library"
 }

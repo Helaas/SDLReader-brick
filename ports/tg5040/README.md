@@ -109,7 +109,7 @@ After building the first time, unless a dependency of the image has changed, `ma
 - **Volume mapping**: The project root is mounted at `/root/workspace` inside the container
 - **Toolchain**: Located at `/opt/` inside the container
 
-Runtime settings (`config.json`) and reading progress (`reading_history.json`) are generated inside the reader state directory (`$SDL_READER_STATE_DIR`, set by `launch.sh`). They are ignored by Git so you can modify them freely on the device or within the container.
+Runtime settings (`config.json`) and reading progress (`reading_history.json`) are generated inside the reader state directory (`$SDL_READER_STATE_DIR`, set by `launch.sh`). The launcher also sets `SDL_READER_DEFAULT_DIR=/mnt/SDCARD` so the browser never leaves the SD card root. Both files are ignored by Git so you can modify them freely on the device or within the container.
 
 ### Fonts & Reading Styles
 
@@ -123,6 +123,8 @@ Drop additional `.ttf` or `.otf` files into `ports/tg5040/pak/fonts/` (or the pr
 ## Platform-Specific Features
 The TG5040 build includes:
 - **ImGui UI Stack**: Built-in browser launched via `--browse`, font & reading-style menu, controller number pad, and persisted `reading_history.json`
+  - Toggle the new thumbnail grid with the **X** button for cover previews rendered asynchronously.
+  - Control the zoom minimap overlay via the `showDocumentMinimap` flag in `config.json`.
 - **Advanced Hardware Power Management**: NextUI-compatible power button handling
   - Power button monitoring via `/dev/input/event1`
   - Short press: Intelligent sleep with fake sleep fallback

@@ -15,8 +15,8 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 
 ## Features
 * View PDF documents, comic book archives (CBZ/ZIP & CBR/RAR), EPUB books, and MOBI e-books.
-* Built-in heads-up display with page, zoom, edge-turn, and error indicators.
-* Integrated file browser (`--browse`) with controller support, persistent last directory, and TG5040-friendly layout, powered by Dear ImGui.
+* Built-in heads-up display with page, zoom, edge-turn, minimap, and error indicators.
+* Integrated file browser (`--browse`) with controller support, persistent last directory, asynchronous thumbnail grid (toggle with **X**), and TG5040-friendly layout powered by Dear ImGui.
 * Custom font picker with live preview, reading style themes, and MuPDF-backed CSS injection.
 * On-screen number pad for page jumps when navigating with a controller.
 * Automatic reading history tracking with resume-on-open for the last 50 documents.
@@ -173,6 +173,11 @@ After building, you can either launch straight into a document or drop into the 
 
 When using `--browse`, SDL Reader will remember the last directory you visited (stored in `config.json`) and automatically resume the last page you read for each document (stored in `reading_history.json`). Both files live in the reader state directory (`$SDL_READER_STATE_DIR`, defaulting to `$HOME`).
 
+### File Browser Enhancements
+- Press `X` (or the controller `X` button) to toggle a high-performance thumbnail grid that previews covers and caches results in the background.
+- Thumbnails are generated asynchronously so scrolling stays responsive even on large folders.
+- The browser respects `SDL_READER_DEFAULT_DIR`; set this environment variable to confine browsing to a specific root directory.
+
 ## Configuration
 
 SDL Reader uses a `config.json` file (stored under `$SDL_READER_STATE_DIR`, defaulting to `$HOME/config.json`) for customizing font settings and display options.
@@ -192,6 +197,7 @@ SDL Reader uses a `config.json` file (stored under `$SDL_READER_STATE_DIR`, defa
      "zoomStep": 10,
      "readingStyle": 0,
      "disableEdgeProgressBar": false,
+     "showDocumentMinimap": true,
      "lastBrowseDirectory": "/path/to/library"
    }
    ```
@@ -204,6 +210,7 @@ SDL Reader uses a `config.json` file (stored under `$SDL_READER_STATE_DIR`, defa
 - **readingStyle**: Numeric identifier for the active reading theme (see table below)
 - **lastBrowseDirectory**: Directory the file browser should open by default when launched with `--browse`
 - **disableEdgeProgressBar**: When `true`, panning at page edges changes pages instantly without the 300ms delay and progress bar. When `false` (default), the edge nudge progress bar is shown.
+- **showDocumentMinimap**: Toggle the zoomed-in minimap overlay; set to `false` to hide it.
 - **Environment override**: Set `SDL_READER_DEFAULT_DIR` to control the starting directory for the browser. If unset, the reader defaults to `$HOME`.
 
 | `readingStyle` | Theme          | Background | Text Color |

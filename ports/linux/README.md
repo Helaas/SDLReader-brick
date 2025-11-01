@@ -98,7 +98,7 @@ Run it from the project root with:
 ./bin/sdl_reader_cli --browse
 ```
 
-Launching with `--browse` opens the ImGui-driven file picker, auto-resumes your position using `reading_history.json`, and lets you tweak fonts/themes from a controller. Preferences are saved in the reader state directory (`$SDL_READER_STATE_DIR`, defaulting to `$HOME/config.json`).
+Launching with `--browse` opens the ImGui-driven file picker, auto-resumes your position using `reading_history.json`, and lets you tweak fonts/themes from a controller. Preferences are saved in the reader state directory (`$SDL_READER_STATE_DIR`, defaulting to `$HOME/config.json`). Set `SDL_READER_DEFAULT_DIR` if you want the picker to start in a specific library folder. Press **X** to toggle the new thumbnail grid, and use the `showDocumentMinimap` flag in `config.json` to disable the zoom minimap if desired.
 
 ### Fonts & Reading Styles
 
