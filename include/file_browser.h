@@ -105,7 +105,11 @@ private:
     int m_gridColumns{1};
     int m_lastWindowWidth{0};
     int m_lastWindowHeight{0};
+#ifdef TG5040_PLATFORM
+    static constexpr int THUMBNAIL_MAX_DIM = 128;
+#else
     static constexpr int THUMBNAIL_MAX_DIM = 200;
+#endif
 
     std::unordered_map<std::string, ThumbnailData> m_thumbnailCache;
 

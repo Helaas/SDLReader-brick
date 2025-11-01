@@ -1112,9 +1112,23 @@ void FileBrowser::renderThumbnailView(int windowWidth, int windowHeight)
 
     ImGui::BeginChild("ThumbnailGrid", ImVec2(0, -40), true, ImGuiWindowFlags_HorizontalScrollbar);
 
-    const float tilePadding = 20.0f;
     const float thumbRegionSize = static_cast<float>(THUMBNAIL_MAX_DIM);
-    const float tileWidth = thumbRegionSize + tilePadding;
+    float tilePadding = 20.0f;
+    float tileWidth = thumbRegionSize + tilePadding;
+#ifdef TG5040_PLATFORM
+    const float baseTilePadding = 16.0f;
+    const int targetColumns = 4;
+    const float desiredTileWidth = (thumbRegionSize + baseTilePadding) * 1.2f;
+    tilePadding = baseTilePadding;
+    tileWidth = thumbRegionSize + tilePadding;
+#endif
+    const float labelHorizontalPadding = 10.0f;
+    const float labelTopMargin = 6.0f;
+    const float labelBottomMargin = 6.0f;
+    const float maxLabelLines = 2.0f;
+    const float labelLineHeight = ImGui::GetTextLineHeightWithSpacing();
+    const float labelRegionHeight = labelLineHeight * maxLabelLines;
+    const float tileHeight = thumbRegionSize + labelTopMargin + labelRegionHeight + labelBottomMargin;
 
     float contentWidth = ImGui::GetContentRegionAvail().x;
     if (contentWidth <= 0.0f)
@@ -1125,11 +1139,26 @@ void FileBrowser::renderThumbnailView(int windowWidth, int windowHeight)
 #ifdef TG5040_PLATFORM
     const float scrollbarReserve = ImGui::GetStyle().ScrollbarSize + ImGui::GetStyle().WindowPadding.x;
     contentWidth = std::max(0.0f, contentWidth - scrollbarReserve);
+    if (contentWidth > 0.0f)
+    {
+        float maxTileWidth = (contentWidth / static_cast<float>(targetColumns)) - 2.0f;
+        float minTileWidth = thumbRegionSize + baseTilePadding * 0.5f;
+        tileWidth = std::clamp(maxTileWidth, minTileWidth, desiredTileWidth);
+        tilePadding = std::max(tileWidth - thumbRegionSize, 4.0f);
+    }
 #endif
 
     int columns = std::max(1, static_cast<int>(std::floor((contentWidth + tilePadding * 0.5f) / tileWidth)));
 #ifdef TG5040_PLATFORM
-    columns = std::min(columns, 3);
+    columns = std::min(columns, targetColumns);
+    if (columns < targetColumns && contentWidth > 0.0f)
+    {
+        columns = targetColumns;
+        float adjustedWidth = (contentWidth / static_cast<float>(columns)) - 2.0f;
+        adjustedWidth = std::clamp(adjustedWidth, thumbRegionSize + 4.0f, desiredTileWidth);
+        tileWidth = adjustedWidth;
+        tilePadding = std::max(tileWidth - thumbRegionSize, 4.0f);
+    }
 #endif
     m_gridColumns = columns;
 
@@ -1145,7 +1174,6 @@ void FileBrowser::renderThumbnailView(int windowWidth, int windowHeight)
             SDL_Texture* texture = thumb.texture.get();
             bool isSelected = (static_cast<int>(i) == m_selectedIndex);
 
-            const float tileHeight = thumbRegionSize + 48.0f;
             ImVec2 tileSize(tileWidth, tileHeight);
             ImVec2 tileMin = ImGui::GetCursorScreenPos();
 
@@ -1211,14 +1239,18 @@ void FileBrowser::renderThumbnailView(int windowWidth, int windowHeight)
                 drawList->AddText(messagePos, IM_COL32(230, 230, 230, 255), message);
             }
 
-            float labelMaxWidth = tileWidth - 20.0f;
-            std::string displayName = truncateToWidth(entry.name, labelMaxWidth);
-
-            ImVec2 labelPos(tileMin.x + 10.0f, tileMin.y + thumbRegionSize + 6.0f);
+            float labelMaxWidth = tileWidth - (labelHorizontalPadding * 2.0f);
+            std::string displayName = truncateToWidth(entry.name, labelMaxWidth * maxLabelLines);
+            ImVec2 labelPos(tileMin.x + labelHorizontalPadding, tileMin.y + thumbRegionSize + labelTopMargin);
             ImGui::SetCursorScreenPos(labelPos);
-            ImGui::PushTextWrapPos(labelPos.x + labelMaxWidth);
-            ImGui::TextUnformatted(displayName.c_str());
+            ImGui::BeginChild("LabelRegion",
+                              ImVec2(labelMaxWidth, labelRegionHeight),
+                              false,
+                              ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMouseInputs);
+            ImGui::PushTextWrapPos(std::max(labelMaxWidth - 2.0f, 0.0f));
+            ImGui::TextWrapped(displayName.c_str());
             ImGui::PopTextWrapPos();
+            ImGui::EndChild();
 
             if (isSelected)
             {
