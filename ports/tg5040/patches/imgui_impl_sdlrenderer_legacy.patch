@@ -1,5 +1,5 @@
 diff --git a/backends/imgui_impl_sdlrenderer.cpp b/backends/imgui_impl_sdlrenderer.cpp
-index 87381f2..b42c95c 100644
+index 87381f2..a2529c0 100644
 --- a/backends/imgui_impl_sdlrenderer.cpp
 +++ b/backends/imgui_impl_sdlrenderer.cpp
 @@ -24,33 +24,41 @@
@@ -221,7 +221,7 @@ index 87381f2..b42c95c 100644
 
      return true;
  }
-@@ -249,3 +269,900 @@ void ImGui_ImplSDLRenderer_DestroyDeviceObjects()
+@@ -249,3 +269,1429 @@ void ImGui_ImplSDLRenderer_DestroyDeviceObjects()
  {
      ImGui_ImplSDLRenderer_DestroyFontsTexture();
  }
@@ -613,6 +613,421 @@ index 87381f2..b42c95c 100644
 +                  ((col >> IM_COL32_A_SHIFT) & 0xFF) * inv255);
 +}
 +
++static inline ImVec4 ImGui_ImplSDLRenderer_CombineColor(const ImVec4& c0, const ImVec4& c1, const ImVec4& c2, float w0, float w1, float w2)
++{
++    return ImVec4(
++        c0.x * w0 + c1.x * w1 + c2.x * w2,
++        c0.y * w0 + c1.y * w1 + c2.y * w2,
++        c0.z * w0 + c1.z * w1 + c2.z * w2,
++        c0.w * w0 + c1.w * w1 + c2.w * w2);
++}
++
++static inline ImVec4 ImGui_ImplSDLRenderer_Lerp(const ImVec4& a, const ImVec4& b, float t)
++{
++    return ImVec4(
++        a.x + (b.x - a.x) * t,
++                  a.y + (b.y - a.y) * t,
++                  a.z + (b.z - a.z) * t,
++                  a.w + (b.w - a.w) * t);
++}
++
++static inline ImVec2 ImGui_ImplSDLRenderer_CombineUV(const ImVec2& uv0, const ImVec2& uv1, const ImVec2& uv2, float w0, float w1, float w2)
++{
++    return ImVec2(
++        uv0.x * w0 + uv1.x * w1 + uv2.x * w2,
++        uv0.y * w0 + uv1.y * w1 + uv2.y * w2);
++}
++
++static inline ImVec2 ImGui_ImplSDLRenderer_Lerp(const ImVec2& a, const ImVec2& b, float t)
++{
++    return ImVec2(
++        a.x + (b.x - a.x) * t,
++                  a.y + (b.y - a.y) * t);
++}
++
++static inline bool ImGui_ImplSDLRenderer_IsTopLeft(const ImVec2& a, const ImVec2& b)
++{
++    const float dy = b.y - a.y;
++    if (dy > 0.0f)
++        return true;
++    if (dy < 0.0f)
++        return false;
++    return (b.x - a.x) < 0.0f;
++}
++
++static inline void ImGui_ImplSDLRenderer_UnpackTexel(const ImGui_ImplSDLRenderer_TextureSample& texture, Uint32 texel,
++                                                     float& out_r, float& out_g, float& out_b, float& out_a)
++{
++    out_r = ((texel & texture.RMask) >> texture.RShift) * texture.RScale;
++    out_g = ((texel & texture.GMask) >> texture.GShift) * texture.GScale;
++    out_b = ((texel & texture.BMask) >> texture.BShift) * texture.BScale;
++    out_a = ((texel & texture.AMask) >> texture.AShift) * texture.AScale;
++}
++
++static inline void ImGui_ImplSDLRenderer_SampleTextureBilinear(const ImGui_ImplSDLRenderer_TextureSample& texture,
++                                                               float u, float v,
++                                                               float& tex_r, float& tex_g, float& tex_b, float& tex_a)
++{
++    if (texture.Width <= 0 || texture.Height <= 0 || texture.Pitch <= 0 || texture.Pixels == nullptr)
++    {
++        tex_r = tex_g = tex_b = tex_a = 1.0f;
++        return;
++    }
++
++    u = std::clamp(u, 0.0f, 1.0f);
++    v = std::clamp(v, 0.0f, 1.0f);
++
++    float tex_x = u * static_cast<float>(texture.Width) - 0.5f;
++    float tex_y = v * static_cast<float>(texture.Height) - 0.5f;
++
++    int x0 = static_cast<int>(std::floor(tex_x));
++    int y0 = static_cast<int>(std::floor(tex_y));
++    int x1 = x0 + 1;
++    int y1 = y0 + 1;
++
++    float fx = tex_x - static_cast<float>(x0);
++    float fy = tex_y - static_cast<float>(y0);
++
++    x0 = std::clamp(x0, 0, texture.Width - 1);
++    y0 = std::clamp(y0, 0, texture.Height - 1);
++    x1 = std::clamp(x1, 0, texture.Width - 1);
++    y1 = std::clamp(y1, 0, texture.Height - 1);
++
++    if (x0 == x1)
++        fx = 0.0f;
++    if (y0 == y1)
++        fy = 0.0f;
++
++    const Uint32 texel00 = texture.Pixels[static_cast<size_t>(y0) * texture.Pitch + static_cast<size_t>(x0)];
++    const Uint32 texel10 = texture.Pixels[static_cast<size_t>(y0) * texture.Pitch + static_cast<size_t>(x1)];
++    const Uint32 texel01 = texture.Pixels[static_cast<size_t>(y1) * texture.Pitch + static_cast<size_t>(x0)];
++    const Uint32 texel11 = texture.Pixels[static_cast<size_t>(y1) * texture.Pitch + static_cast<size_t>(x1)];
++
++    float r00, g00, b00, a00;
++    float r10, g10, b10, a10;
++    float r01, g01, b01, a01;
++    float r11, g11, b11, a11;
++
++    ImGui_ImplSDLRenderer_UnpackTexel(texture, texel00, r00, g00, b00, a00);
++    ImGui_ImplSDLRenderer_UnpackTexel(texture, texel10, r10, g10, b10, a10);
++    ImGui_ImplSDLRenderer_UnpackTexel(texture, texel01, r01, g01, b01, a01);
++    ImGui_ImplSDLRenderer_UnpackTexel(texture, texel11, r11, g11, b11, a11);
++
++    const float w00 = (1.0f - fx) * (1.0f - fy);
++    const float w10 = fx * (1.0f - fy);
++    const float w01 = (1.0f - fx) * fy;
++    const float w11 = fx * fy;
++
++    tex_r = r00 * w00 + r10 * w10 + r01 * w01 + r11 * w11;
++    tex_g = g00 * w00 + g10 * w10 + g01 * w01 + g11 * w11;
++    tex_b = b00 * w00 + b10 * w10 + b01 * w01 + b11 * w11;
++    tex_a = a00 * w00 + a10 * w10 + a01 * w01 + a11 * w11;
++}
++
++static bool ImGui_ImplSDLRenderer_TryRasterizeRect(
++    ImGui_ImplSDLRenderer_Data* bd,
++    const ImDrawVert* vtx_buffer,
++    const ImDrawIdx* idx_buffer,
++    unsigned int idx_offset,
++    unsigned int vtx_offset,
++    const ImVec2& clip_off,
++    const ImVec2& clip_scale,
++    const SDL_Rect& clip_rect,
++    const ImGui_ImplSDLRenderer_TextureSample& texture)
++{
++    unsigned int indices[6];
++    for (int i = 0; i < 6; ++i)
++        indices[i] = vtx_offset + (unsigned int) idx_buffer[idx_offset + i];
++
++    unsigned int unique_indices[4];
++    int unique_count = 0;
++    for (int i = 0; i < 6; ++i)
++    {
++        unsigned int idx = indices[i];
++        bool found = false;
++        for (int u = 0; u < unique_count; ++u)
++        {
++            if (unique_indices[u] == idx)
++            {
++                found = true;
++                break;
++            }
++        }
++        if (!found)
++        {
++            if (unique_count == 4)
++                return false;
++            unique_indices[unique_count++] = idx;
++        }
++    }
++    if (unique_count != 4)
++        return false;
++
++    struct CornerData
++    {
++        ImVec2 Pos;
++        ImVec2 UV;
++        ImVec4 Col;
++    };
++
++    CornerData corners_raw[4];
++    for (int i = 0; i < 4; ++i)
++    {
++        const ImDrawVert& v = vtx_buffer[unique_indices[i]];
++        corners_raw[i].Pos = ImVec2((v.pos.x - clip_off.x) * clip_scale.x,
++                                    (v.pos.y - clip_off.y) * clip_scale.y);
++        corners_raw[i].UV = v.uv;
++        corners_raw[i].Col = ImGui_ImplSDLRenderer_UnpackColor(v.col);
++    }
++
++    float min_x = corners_raw[0].Pos.x;
++    float max_x = corners_raw[0].Pos.x;
++    float min_y = corners_raw[0].Pos.y;
++    float max_y = corners_raw[0].Pos.y;
++    for (int i = 1; i < 4; ++i)
++    {
++        min_x = std::min(min_x, corners_raw[i].Pos.x);
++        max_x = std::max(max_x, corners_raw[i].Pos.x);
++        min_y = std::min(min_y, corners_raw[i].Pos.y);
++        max_y = std::max(max_y, corners_raw[i].Pos.y);
++    }
++
++    const float width = max_x - min_x;
++    const float height = max_y - min_y;
++    if (width <= 0.0f || height <= 0.0f)
++        return false;
++
++    CornerData tl{}, tr{}, bl{}, br{};
++    bool has_tl = false, has_tr = false, has_bl = false, has_br = false;
++    const float eps = 0.05f;
++
++    for (int i = 0; i < 4; ++i)
++    {
++        const CornerData& c = corners_raw[i];
++        const bool left = fabsf(c.Pos.x - min_x) <= eps;
++        const bool right = fabsf(c.Pos.x - max_x) <= eps;
++        const bool top = fabsf(c.Pos.y - min_y) <= eps;
++        const bool bottom = fabsf(c.Pos.y - max_y) <= eps;
++
++        if (top && left && !has_tl)
++        {
++            tl = c;
++            has_tl = true;
++        }
++        else if (top && right && !has_tr)
++        {
++            tr = c;
++            has_tr = true;
++        }
++        else if (bottom && left && !has_bl)
++        {
++            bl = c;
++            has_bl = true;
++        }
++        else if (bottom && right && !has_br)
++        {
++            br = c;
++            has_br = true;
++        }
++        else
++        {
++            return false;
++        }
++    }
++
++    if (!has_tl || !has_tr || !has_bl || !has_br)
++        return false;
++
++    int x0 = std::max((int) std::floor(min_x), clip_rect.x);
++    int y0 = std::max((int) std::floor(min_y), clip_rect.y);
++    int x1 = std::min((int) std::ceil(max_x) - 1, clip_rect.x + clip_rect.w - 1);
++    int y1 = std::min((int) std::ceil(max_y) - 1, clip_rect.y + clip_rect.h - 1);
++    if (x0 > x1 || y0 > y1)
++        return false;
++
++    const bool has_texture = texture.Valid && texture.Pixels != nullptr && texture.Width > 0 && texture.Height > 0 && texture.Pitch > 0;
++
++    float inv_width = (width != 0.0f) ? (1.0f / width) : 0.0f;
++    float inv_height = (height != 0.0f) ? (1.0f / height) : 0.0f;
++
++    bool use_bilinear = has_texture;
++    if (has_texture && inv_width != 0.0f && inv_height != 0.0f)
++    {
++        ImVec2 uv_dx = ImVec2(tr.UV.x - tl.UV.x, tr.UV.y - tl.UV.y);
++        ImVec2 uv_dy = ImVec2(bl.UV.x - tl.UV.x, bl.UV.y - tl.UV.y);
++
++        float u_dx_pixels = fabsf(uv_dx.x * texture.Width * inv_width);
++        float v_dx_pixels = fabsf(uv_dx.y * texture.Height * inv_width);
++        float u_dy_pixels = fabsf(uv_dy.x * texture.Width * inv_height);
++        float v_dy_pixels = fabsf(uv_dy.y * texture.Height * inv_height);
++
++        const float eps_tex = 1e-3f;
++        if (u_dy_pixels < eps_tex && v_dx_pixels < eps_tex &&
++            fabsf(u_dx_pixels - 1.0f) < 2e-2f && fabsf(v_dy_pixels - 1.0f) < 2e-2f)
++        {
++            use_bilinear = false;
++        }
++    }
++
++    Uint32* framebuffer = bd->Framebuffer.data();
++    const int frame_width = bd->FrameWidth;
++
++    for (int y = y0; y <= y1; ++y)
++    {
++        float fy = ((y + 0.5f) - min_y) * inv_height;
++        fy = std::clamp(fy, 0.0f, 1.0f);
++
++        ImVec4 color_left = ImGui_ImplSDLRenderer_Lerp(tl.Col, bl.Col, fy);
++        ImVec4 color_right = ImGui_ImplSDLRenderer_Lerp(tr.Col, br.Col, fy);
++        ImVec4 color = color_left;
++        ImVec4 color_step = ImVec4(0, 0, 0, 0);
++
++        ImVec2 uv_left = ImGui_ImplSDLRenderer_Lerp(tl.UV, bl.UV, fy);
++        ImVec2 uv_right = ImGui_ImplSDLRenderer_Lerp(tr.UV, br.UV, fy);
++        ImVec2 uv = uv_left;
++        ImVec2 uv_step = ImVec2(0, 0);
++
++        float fx = ((x0 + 0.5f) - min_x) * inv_width;
++        fx = std::clamp(fx, 0.0f, 1.0f);
++
++        if (inv_width != 0.0f)
++        {
++            ImVec4 row_delta = ImVec4(color_right.x - color_left.x,
++                                      color_right.y - color_left.y,
++                                      color_right.z - color_left.z,
++                                      color_right.w - color_left.w);
++            color_step.x = row_delta.x * inv_width;
++            color_step.y = row_delta.y * inv_width;
++            color_step.z = row_delta.z * inv_width;
++            color_step.w = row_delta.w * inv_width;
++
++            ImVec2 uv_delta = ImVec2(uv_right.x - uv_left.x, uv_right.y - uv_left.y);
++            uv_step.x = uv_delta.x * inv_width;
++            uv_step.y = uv_delta.y * inv_width;
++
++            color.x = color_left.x + row_delta.x * fx;
++            color.y = color_left.y + row_delta.y * fx;
++            color.z = color_left.z + row_delta.z * fx;
++            color.w = color_left.w + row_delta.w * fx;
++
++            uv.x = uv_left.x + uv_delta.x * fx;
++            uv.y = uv_left.y + uv_delta.y * fx;
++        }
++        else
++        {
++            color = color_left;
++            uv = uv_left;
++        }
++
++        Uint32* pixel_ptr = framebuffer + (size_t) y * frame_width + x0;
++        for (int x = x0; x <= x1; ++x, ++pixel_ptr)
++        {
++            float tex_r = 1.0f, tex_g = 1.0f, tex_b = 1.0f, tex_a = 1.0f;
++            if (has_texture)
++            {
++                if (use_bilinear)
++                {
++                    ImGui_ImplSDLRenderer_SampleTextureBilinear(texture, uv.x, uv.y, tex_r, tex_g, tex_b, tex_a);
++                }
++                else
++                {
++                    float u = uv.x;
++                    float v = uv.y;
++                    int tx = (int) (u * texture.Width + 0.5f);
++                    int ty = (int) (v * texture.Height + 0.5f);
++                    tx = std::clamp(tx, 0, texture.Width - 1);
++                    ty = std::clamp(ty, 0, texture.Height - 1);
++                    const Uint32 texel = texture.Pixels[static_cast<size_t>(ty) * texture.Pitch + static_cast<size_t>(tx)];
++                    ImGui_ImplSDLRenderer_UnpackTexel(texture, texel, tex_r, tex_g, tex_b, tex_a);
++                }
++            }
++
++            float src_a = color.w * tex_a;
++            if (src_a > 0.0f)
++            {
++                float src_r = color.x * tex_r;
++                float src_g = color.y * tex_g;
++                float src_b = color.z * tex_b;
++
++                if (!bd->HasDirtyRegion)
++                {
++                    bd->MinDirtyX = bd->MaxDirtyX = x;
++                    bd->MinDirtyY = bd->MaxDirtyY = y;
++                    bd->HasDirtyRegion = true;
++                }
++                else
++                {
++                    if (x < bd->MinDirtyX)
++                        bd->MinDirtyX = x;
++                    if (x > bd->MaxDirtyX)
++                        bd->MaxDirtyX = x;
++                    if (y < bd->MinDirtyY)
++                        bd->MinDirtyY = y;
++                    if (y > bd->MaxDirtyY)
++                        bd->MaxDirtyY = y;
++                }
++
++                if (src_a >= 1.0f)
++                {
++                    int r = (int) (src_r * 255.0f + 0.5f);
++                    int g = (int) (src_g * 255.0f + 0.5f);
++                    int b = (int) (src_b * 255.0f + 0.5f);
++                    r = (r > 255) ? 255 : (r < 0 ? 0 : r);
++                    g = (g > 255) ? 255 : (g < 0 ? 0 : g);
++                    b = (b > 255) ? 255 : (b < 0 ? 0 : b);
++
++                    *pixel_ptr = (Uint32) r | ((Uint32) g << 8) | ((Uint32) b << 16) | 0xFF000000;
++                }
++                else
++                {
++                    Uint32 dst = *pixel_ptr;
++                    int dst_r = (int) (dst & 0xFF);
++                    int dst_g = (int) ((dst >> 8) & 0xFF);
++                    int dst_b = (int) ((dst >> 16) & 0xFF);
++                    int dst_a = (int) ((dst >> 24) & 0xFF);
++
++                    int src_a_i = (int) (src_a * 255.0f + 0.5f);
++                    int src_r_i = (int) (src_r * 255.0f + 0.5f);
++                    int src_g_i = (int) (src_g * 255.0f + 0.5f);
++                    int src_b_i = (int) (src_b * 255.0f + 0.5f);
++
++                    src_r_i = (src_r_i > 255) ? 255 : (src_r_i < 0 ? 0 : src_r_i);
++                    src_g_i = (src_g_i > 255) ? 255 : (src_g_i < 0 ? 0 : src_g_i);
++                    src_b_i = (src_b_i > 255) ? 255 : (src_b_i < 0 ? 0 : src_b_i);
++                    src_a_i = (src_a_i > 255) ? 255 : (src_a_i < 0 ? 0 : src_a_i);
++
++                    int inv_a = 255 - src_a_i;
++
++                    int out_r = (src_r_i * src_a_i + dst_r * inv_a + 128) >> 8;
++                    int out_g = (src_g_i * src_a_i + dst_g * inv_a + 128) >> 8;
++                    int out_b = (src_b_i * src_a_i + dst_b * inv_a + 128) >> 8;
++                    int out_a = src_a_i + ((dst_a * inv_a + 128) >> 8);
++
++                    out_r = (out_r > 255) ? 255 : (out_r < 0 ? 0 : out_r);
++                    out_g = (out_g > 255) ? 255 : (out_g < 0 ? 0 : out_g);
++                    out_b = (out_b > 255) ? 255 : (out_b < 0 ? 0 : out_b);
++                    out_a = (out_a > 255) ? 255 : (out_a < 0 ? 0 : out_a);
++
++                    *pixel_ptr = (Uint32) out_r | ((Uint32) out_g << 8) | ((Uint32) out_b << 16) | ((Uint32) out_a << 24);
++                }
++            }
++
++            color.x += color_step.x;
++            color.y += color_step.y;
++            color.z += color_step.z;
++            color.w += color_step.w;
++
++            if (has_texture)
++            {
++                uv.x += uv_step.x;
++                uv.y += uv_step.y;
++            }
++        }
++    }
++
++    return true;
++}
++
 +static void ImGui_ImplSDLRenderer_RasterizeTriangle(
 +    ImGui_ImplSDLRenderer_Data* bd,
 +    const ImVec2& p0, const ImVec2& p1, const ImVec2& p2,
@@ -636,17 +1051,45 @@ index 87381f2..b42c95c 100644
 +    float area = (p1.y - p2.y) * (p0.x - p2.x) + (p2.x - p1.x) * (p0.y - p2.y);
 +    if (fabsf(area) < 1e-6f)
 +        return;
-+    float inv_area = 1.0f / area;
-+    bool area_positive = area > 0.0f;
++
++    const float inv_area = 1.0f / area;
++    const bool area_positive = area > 0.0f;
++    const float area_sign = area_positive ? 1.0f : -1.0f;
 +
 +    // Precompute edge equation coefficients
-+    float edge0_a = p1.y - p2.y;
-+    float edge0_b = p2.x - p1.x;
-+    float edge0_c = p1.x * p2.y - p2.x * p1.y;
++    const float edge0_a = p1.y - p2.y;
++    const float edge0_b = p2.x - p1.x;
++    const float edge0_c = p1.x * p2.y - p2.x * p1.y;
 +
-+    float edge1_a = p2.y - p0.y;
-+    float edge1_b = p0.x - p2.x;
-+    float edge1_c = p2.x * p0.y - p0.x * p2.y;
++    const float edge1_a = p2.y - p0.y;
++    const float edge1_b = p0.x - p2.x;
++    const float edge1_c = p2.x * p0.y - p0.x * p2.y;
++
++    const float w0_num_dx = edge0_a;
++    const float w1_num_dx = edge1_a;
++    const float w2_num_dx = -(w0_num_dx + w1_num_dx);
++
++    const float w0_num_dy = edge0_b;
++    const float w1_num_dy = edge1_b;
++    const float w2_num_dy = -(w0_num_dy + w1_num_dy);
++
++    const float w0_dx = w0_num_dx * inv_area;
++    const float w1_dx = w1_num_dx * inv_area;
++    const float w2_dx = -(w0_dx + w1_dx);
++
++    const float w0_dy = w0_num_dy * inv_area;
++    const float w1_dy = w1_num_dy * inv_area;
++    const float w2_dy = -(w0_dy + w1_dy);
++
++    bool edge0_top_left = ImGui_ImplSDLRenderer_IsTopLeft(p1, p2);
++    bool edge1_top_left = ImGui_ImplSDLRenderer_IsTopLeft(p2, p0);
++    bool edge2_top_left = ImGui_ImplSDLRenderer_IsTopLeft(p0, p1);
++    if (!area_positive)
++    {
++        edge0_top_left = !edge0_top_left;
++        edge1_top_left = !edge1_top_left;
++        edge2_top_left = !edge2_top_left;
++    }
 +
 +    const bool has_texture = texture.Valid && texture.Pixels != nullptr && texture.Width > 0 && texture.Height > 0 && texture.Pitch > 0;
 +    const int frame_width = bd->FrameWidth;
@@ -655,139 +1098,204 @@ index 87381f2..b42c95c 100644
 +    if (frame_width <= 0 || framebuffer == nullptr)
 +        return;
 +
-+    // Scanline rasterization with incremental barycentric coordinates
++    const float px_start = x0 + 0.5f;
++    float py = y0 + 0.5f;
++
++    float w0_num_base = edge0_a * px_start + edge0_b * py + edge0_c;
++    float w1_num_base = edge1_a * px_start + edge1_b * py + edge1_c;
++    float w2_num_base = area - w0_num_base - w1_num_base;
++
++    float w0_base = w0_num_base * inv_area;
++    float w1_base = w1_num_base * inv_area;
++    float w2_base = 1.0f - w0_base - w1_base;
++
++    ImVec4 color_base = ImGui_ImplSDLRenderer_CombineColor(c0, c1, c2, w0_base, w1_base, w2_base);
++    ImVec4 color_dx = ImGui_ImplSDLRenderer_CombineColor(c0, c1, c2, w0_dx, w1_dx, w2_dx);
++    ImVec4 color_dy = ImGui_ImplSDLRenderer_CombineColor(c0, c1, c2, w0_dy, w1_dy, w2_dy);
++
++    ImVec2 uv_base(0.0f, 0.0f);
++    ImVec2 uv_dx(0.0f, 0.0f);
++    ImVec2 uv_dy(0.0f, 0.0f);
++    bool use_bilinear = has_texture;
++    if (has_texture)
++    {
++        uv_base = ImGui_ImplSDLRenderer_CombineUV(uv0, uv1, uv2, w0_base, w1_base, w2_base);
++        uv_dx = ImGui_ImplSDLRenderer_CombineUV(uv0, uv1, uv2, w0_dx, w1_dx, w2_dx);
++        uv_dy = ImGui_ImplSDLRenderer_CombineUV(uv0, uv1, uv2, w0_dy, w1_dy, w2_dy);
++
++        const float u_dx_tex = fabsf(uv_dx.x * texture.Width);
++        const float u_dy_tex = fabsf(uv_dy.x * texture.Width);
++        const float v_dx_tex = fabsf(uv_dx.y * texture.Height);
++        const float v_dy_tex = fabsf(uv_dy.y * texture.Height);
++        const float eps = 1e-4f;
++        if (u_dy_tex < eps && v_dx_tex < eps)
++        {
++            if (fabsf(u_dx_tex - 1.0f) < 1e-3f && fabsf(v_dy_tex - 1.0f) < 1e-3f)
++            {
++                use_bilinear = false;
++            }
++        }
++    }
++
 +    for (int y = y0; y <= y1; ++y)
 +    {
-+        float py = y + 0.5f;
++        float w0_num = w0_num_base;
++        float w1_num = w1_num_base;
++        float w2_num = w2_num_base;
 +
-+        // Calculate barycentric coordinates at start of scanline
-+        float px_start = x0 + 0.5f;
-+        float w0_row = edge0_a * px_start + edge0_b * py + edge0_c;
-+        float w1_row = edge1_a * px_start + edge1_b * py + edge1_c;
++        float w0 = w0_base;
++        float w1 = w1_base;
++        float w2 = w2_base;
++
++        ImVec4 color = color_base;
++        ImVec2 uv = uv_base;
 +
 +        Uint32* pixel_ptr = framebuffer + (size_t) y * frame_width + x0;
 +
-+        for (int x = x0; x <= x1; ++x, w0_row += edge0_a, w1_row += edge1_a, ++pixel_ptr)
++        for (int x = x0; x <= x1; ++x, ++pixel_ptr)
 +        {
-+            float w0 = w0_row;
-+            float w1 = w1_row;
-+            float w2 = area - w0 - w1;
++            float w0_test = w0_num * area_sign;
++            float w1_test = w1_num * area_sign;
++            float w2_test = w2_num * area_sign;
 +
-+            // Inside test
-+            if (area_positive)
++            bool inside = true;
++            if (w0_test < 0.0f || (!edge0_top_left && w0_test <= 0.0f))
++                inside = false;
++            else if (w1_test < 0.0f || (!edge1_top_left && w1_test <= 0.0f))
++                inside = false;
++            else if (w2_test < 0.0f || (!edge2_top_left && w2_test <= 0.0f))
++                inside = false;
++
++            if (inside)
 +            {
-+                if (w0 < 0.0f || w1 < 0.0f || w2 < 0.0f)
-+                    continue;
++                float tex_r = 1.0f, tex_g = 1.0f, tex_b = 1.0f, tex_a = 1.0f;
++                if (has_texture)
++                {
++                    if (use_bilinear)
++                    {
++                        ImGui_ImplSDLRenderer_SampleTextureBilinear(texture, uv.x, uv.y, tex_r, tex_g, tex_b, tex_a);
++                    }
++                    else
++                    {
++                        float u = uv.x;
++                        float v = uv.y;
++                        int tx = (int) (u * texture.Width + 0.5f);
++                        int ty = (int) (v * texture.Height + 0.5f);
++                        tx = std::clamp(tx, 0, texture.Width - 1);
++                        ty = std::clamp(ty, 0, texture.Height - 1);
++                        const Uint32 texel = texture.Pixels[static_cast<size_t>(ty) * texture.Pitch + static_cast<size_t>(tx)];
++                        ImGui_ImplSDLRenderer_UnpackTexel(texture, texel, tex_r, tex_g, tex_b, tex_a);
++                    }
++                }
++
++                float src_a = color.w * tex_a;
++                if (src_a > 0.0f)
++                {
++                    float src_r = color.x * tex_r;
++                    float src_g = color.y * tex_g;
++                    float src_b = color.z * tex_b;
++
++                    if (!bd->HasDirtyRegion)
++                    {
++                        bd->MinDirtyX = bd->MaxDirtyX = x;
++                        bd->MinDirtyY = bd->MaxDirtyY = y;
++                        bd->HasDirtyRegion = true;
++                    }
++                    else
++                    {
++                        if (x < bd->MinDirtyX)
++                            bd->MinDirtyX = x;
++                        if (x > bd->MaxDirtyX)
++                            bd->MaxDirtyX = x;
++                        if (y < bd->MinDirtyY)
++                            bd->MinDirtyY = y;
++                        if (y > bd->MaxDirtyY)
++                            bd->MaxDirtyY = y;
++                    }
++
++                    if (src_a >= 1.0f)
++                    {
++                        int r = (int) (src_r * 255.0f + 0.5f);
++                        int g = (int) (src_g * 255.0f + 0.5f);
++                        int b = (int) (src_b * 255.0f + 0.5f);
++                        r = (r > 255) ? 255 : (r < 0 ? 0 : r);
++                        g = (g > 255) ? 255 : (g < 0 ? 0 : g);
++                        b = (b > 255) ? 255 : (b < 0 ? 0 : b);
++
++                        *pixel_ptr = (Uint32) r | ((Uint32) g << 8) | ((Uint32) b << 16) | 0xFF000000;
++                    }
++                    else
++                    {
++                        Uint32 dst = *pixel_ptr;
++                        int dst_r = (int) (dst & 0xFF);
++                        int dst_g = (int) ((dst >> 8) & 0xFF);
++                        int dst_b = (int) ((dst >> 16) & 0xFF);
++                        int dst_a = (int) ((dst >> 24) & 0xFF);
++
++                        int src_a_i = (int) (src_a * 255.0f + 0.5f);
++                        int src_r_i = (int) (src_r * 255.0f + 0.5f);
++                        int src_g_i = (int) (src_g * 255.0f + 0.5f);
++                        int src_b_i = (int) (src_b * 255.0f + 0.5f);
++
++                        src_r_i = (src_r_i > 255) ? 255 : (src_r_i < 0 ? 0 : src_r_i);
++                        src_g_i = (src_g_i > 255) ? 255 : (src_g_i < 0 ? 0 : src_g_i);
++                        src_b_i = (src_b_i > 255) ? 255 : (src_b_i < 0 ? 0 : src_b_i);
++                        src_a_i = (src_a_i > 255) ? 255 : (src_a_i < 0 ? 0 : src_a_i);
++
++                        int inv_a = 255 - src_a_i;
++
++                        int out_r = (src_r_i * src_a_i + dst_r * inv_a + 128) >> 8;
++                        int out_g = (src_g_i * src_a_i + dst_g * inv_a + 128) >> 8;
++                        int out_b = (src_b_i * src_a_i + dst_b * inv_a + 128) >> 8;
++                        int out_a = src_a_i + ((dst_a * inv_a + 128) >> 8);
++
++                        out_r = (out_r > 255) ? 255 : (out_r < 0 ? 0 : out_r);
++                        out_g = (out_g > 255) ? 255 : (out_g < 0 ? 0 : out_g);
++                        out_b = (out_b > 255) ? 255 : (out_b < 0 ? 0 : out_b);
++                        out_a = (out_a > 255) ? 255 : (out_a < 0 ? 0 : out_a);
++
++                        *pixel_ptr = (Uint32) out_r | ((Uint32) out_g << 8) | ((Uint32) out_b << 16) | ((Uint32) out_a << 24);
++                    }
++                }
 +            }
-+            else
-+            {
-+                if (w0 > 0.0f || w1 > 0.0f || w2 > 0.0f)
-+                    continue;
-+            }
 +
-+            w0 *= inv_area;
-+            w1 *= inv_area;
-+            w2 *= inv_area;
++            w0_num += w0_num_dx;
++            w1_num += w1_num_dx;
++            w2_num += w2_num_dx;
 +
-+            // Interpolate color
-+            float color_r = c0.x * w0 + c1.x * w1 + c2.x * w2;
-+            float color_g = c0.y * w0 + c1.y * w1 + c2.y * w2;
-+            float color_b = c0.z * w0 + c1.z * w1 + c2.z * w2;
-+            float color_a = c0.w * w0 + c1.w * w1 + c2.w * w2;
++            w0 += w0_dx;
++            w1 += w1_dx;
++            w2 += w2_dx;
 +
-+            // Interpolate UV (only if using texture)
-+            float tex_r = 1.0f, tex_g = 1.0f, tex_b = 1.0f, tex_a = 1.0f;
++            color.x += color_dx.x;
++            color.y += color_dx.y;
++            color.z += color_dx.z;
++            color.w += color_dx.w;
 +
 +            if (has_texture)
 +            {
-+                float u = uv0.x * w0 + uv1.x * w1 + uv2.x * w2;
-+                float v = uv0.y * w0 + uv1.y * w1 + uv2.y * w2;
-+
-+                int tx = (int) (u * static_cast<float>(texture.Width));
-+                int ty = (int) (v * static_cast<float>(texture.Height));
-+                tx = std::clamp(tx, 0, texture.Width - 1);
-+                ty = std::clamp(ty, 0, texture.Height - 1);
-+
-+                const size_t tex_index = static_cast<size_t>(ty) * static_cast<size_t>(texture.Pitch) + static_cast<size_t>(tx);
-+                const Uint32 texel = texture.Pixels[tex_index];
-+                tex_r = ((texel & texture.RMask) >> texture.RShift) * texture.RScale;
-+                tex_g = ((texel & texture.GMask) >> texture.GShift) * texture.GScale;
-+                tex_b = ((texel & texture.BMask) >> texture.BShift) * texture.BScale;
-+                tex_a = ((texel & texture.AMask) >> texture.AShift) * texture.AScale;
++                uv.x += uv_dx.x;
++                uv.y += uv_dx.y;
 +            }
++        }
 +
-+            float src_a = color_a * tex_a;
-+            if (src_a <= 0.0f)
-+                continue;
++        w0_num_base += w0_num_dy;
++        w1_num_base += w1_num_dy;
++        w2_num_base += w2_num_dy;
 +
-+            float src_r = color_r * tex_r;
-+            float src_g = color_g * tex_g;
-+            float src_b = color_b * tex_b;
++        w0_base += w0_dy;
++        w1_base += w1_dy;
++        w2_base += w2_dy;
 +
-+            // Track dirty region
-+            if (!bd->HasDirtyRegion)
-+            {
-+                bd->MinDirtyX = bd->MaxDirtyX = x;
-+                bd->MinDirtyY = bd->MaxDirtyY = y;
-+                bd->HasDirtyRegion = true;
-+            }
-+            else
-+            {
-+                if (x < bd->MinDirtyX)
-+                    bd->MinDirtyX = x;
-+                if (x > bd->MaxDirtyX)
-+                    bd->MaxDirtyX = x;
-+                if (y < bd->MinDirtyY)
-+                    bd->MinDirtyY = y;
-+                if (y > bd->MaxDirtyY)
-+                    bd->MaxDirtyY = y;
-+            }
++        color_base.x += color_dy.x;
++        color_base.y += color_dy.y;
++        color_base.z += color_dy.z;
++        color_base.w += color_dy.w;
 +
-+            // Fast path for fully opaque pixels
-+            if (src_a >= 1.0f)
-+            {
-+                int r = (int) (src_r * 255.0f + 0.5f);
-+                int g = (int) (src_g * 255.0f + 0.5f);
-+                int b = (int) (src_b * 255.0f + 0.5f);
-+                r = (r > 255) ? 255 : r;
-+                g = (g > 255) ? 255 : g;
-+                b = (b > 255) ? 255 : b;
-+
-+                *pixel_ptr = (Uint32) r | ((Uint32) g << 8) | ((Uint32) b << 16) | 0xFF000000;
-+            }
-+            else
-+            {
-+                // Alpha blending with optimized integer math
-+                Uint32 dst = *pixel_ptr;
-+                int dst_r = (int) (dst & 0xFF);
-+                int dst_g = (int) ((dst >> 8) & 0xFF);
-+                int dst_b = (int) ((dst >> 16) & 0xFF);
-+                int dst_a = (int) ((dst >> 24) & 0xFF);
-+
-+                int src_a_i = (int) (src_a * 255.0f + 0.5f);
-+                int src_r_i = (int) (src_r * 255.0f + 0.5f);
-+                int src_g_i = (int) (src_g * 255.0f + 0.5f);
-+                int src_b_i = (int) (src_b * 255.0f + 0.5f);
-+
-+                src_r_i = (src_r_i > 255) ? 255 : src_r_i;
-+                src_g_i = (src_g_i > 255) ? 255 : src_g_i;
-+                src_b_i = (src_b_i > 255) ? 255 : src_b_i;
-+                src_a_i = (src_a_i > 255) ? 255 : src_a_i;
-+
-+                int inv_a = 255 - src_a_i;
-+
-+                int out_r = (src_r_i * src_a_i + dst_r * inv_a + 128) >> 8;
-+                int out_g = (src_g_i * src_a_i + dst_g * inv_a + 128) >> 8;
-+                int out_b = (src_b_i * src_a_i + dst_b * inv_a + 128) >> 8;
-+                int out_a = src_a_i + ((dst_a * inv_a + 128) >> 8);
-+
-+                out_r = (out_r > 255) ? 255 : out_r;
-+                out_g = (out_g > 255) ? 255 : out_g;
-+                out_b = (out_b > 255) ? 255 : out_b;
-+                out_a = (out_a > 255) ? 255 : out_a;
-+
-+                *pixel_ptr = (Uint32) out_r | ((Uint32) out_g << 8) | ((Uint32) out_b << 16) | ((Uint32) out_a << 24);
-+            }
++        if (has_texture)
++        {
++            uv_base.x += uv_dy.x;
++            uv_base.y += uv_dy.y;
 +        }
 +    }
 +}
@@ -950,8 +1458,27 @@ index 87381f2..b42c95c 100644
 +                SDL_Texture* texture = (SDL_Texture*) pcmd->GetTexID();
 +                const ImGui_ImplSDLRenderer_TextureSample tex_sample = ImGui_ImplSDLRenderer_GetTextureSample(bd, texture);
 +
-+                for (unsigned int idx = 0; idx < pcmd->ElemCount; idx += 3)
++                unsigned int idx = 0;
++                while (idx < pcmd->ElemCount)
 +                {
++                    if (idx + 6 <= pcmd->ElemCount &&
++                        ImGui_ImplSDLRenderer_TryRasterizeRect(bd,
++                                                               vtx_buffer,
++                                                               idx_buffer,
++                                                               pcmd->IdxOffset + idx,
++                                                               pcmd->VtxOffset,
++                                                               clip_off,
++                                                               clip_scale,
++                                                               clip_rect,
++                                                               tex_sample))
++                    {
++                        idx += 6;
++                        continue;
++                    }
++
++                    if (idx + 3 > pcmd->ElemCount)
++                        break;
++
 +                    const unsigned int index0 = pcmd->VtxOffset + (unsigned int) idx_buffer[pcmd->IdxOffset + idx + 0];
 +                    const unsigned int index1 = pcmd->VtxOffset + (unsigned int) idx_buffer[pcmd->IdxOffset + idx + 1];
 +                    const unsigned int index2 = pcmd->VtxOffset + (unsigned int) idx_buffer[pcmd->IdxOffset + idx + 2];
@@ -969,6 +1496,8 @@ index 87381f2..b42c95c 100644
 +                    ImVec4 c2 = ImGui_ImplSDLRenderer_UnpackColor(v2.col);
 +
 +                    ImGui_ImplSDLRenderer_RasterizeTriangle(bd, p0, p1, p2, v0.uv, v1.uv, v2.uv, c0, c1, c2, tex_sample, clip_rect);
++
++                    idx += 3;
 +                }
 +            }
 +        }

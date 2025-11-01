@@ -100,6 +100,7 @@ bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
 
     // Create separate context for prerendering to avoid race conditions
     fz_context* prerenderCtx = nullptr;
+    fz_var(prerenderCtx);
     if (!reuseContexts || !m_prerenderCtx)
     {
         prerenderCtx = fz_new_context(nullptr, nullptr, 256 << 20); // 256MB
@@ -353,6 +354,8 @@ MuPdfDocument::ArgbBufferPtr MuPdfDocument::renderPageARGB(int pageNumber, int& 
 
     fz_pixmap* pix = nullptr;
     fz_device* dev = nullptr;
+    fz_var(pix);
+    fz_var(dev);
     std::vector<uint32_t> argbBuffer;
 
     fz_try(ctx)
@@ -1039,8 +1042,12 @@ bool MuPdfDocument::renderPageARGBWithPrerenderContext(int pageNumber, int zoom,
     fz_page* page = nullptr;
     fz_device* dev = nullptr;
     fz_pixmap* pix = nullptr;
+    fz_var(page);
+    fz_var(dev);
+    fz_var(pix);
     std::vector<uint32_t> localBuffer;
     bool ok = true;
+    fz_var(ok);
 
     fz_try(ctx)
     {
