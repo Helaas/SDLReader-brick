@@ -162,6 +162,18 @@ GuiManager::GuiManager()
     {
         std::cerr << "Warning: Font size input buffer may be truncated" << std::endl;
     }
+
+    // Initialize reading style index
+    auto allStyles = OptionsManager::getAllReadingStyles();
+    m_selectedStyleIndex = 0;
+    for (size_t i = 0; i < allStyles.size(); i++)
+    {
+        if (allStyles[i] == m_currentConfig.readingStyle)
+        {
+            m_selectedStyleIndex = static_cast<int>(i);
+            break;
+        }
+    }
 }
 
 GuiManager::~GuiManager()
@@ -325,12 +337,16 @@ void GuiManager::toggleFontMenu()
     if (m_showFontMenu)
     {
         m_fontDropdownHighlightedIndex = m_selectedFontIndex;
+        m_styleDropdownHighlightedIndex = m_selectedStyleIndex;
     }
     else
     {
         m_fontDropdownOpen = false;
         m_fontDropdownSelectRequested = false;
         m_fontDropdownCancelRequested = false;
+        m_styleDropdownOpen = false;
+        m_styleDropdownSelectRequested = false;
+        m_styleDropdownCancelRequested = false;
     }
     std::cout << "Font menu " << (m_showFontMenu ? "opened" : "closed") << std::endl;
 }
@@ -355,6 +371,19 @@ void GuiManager::setCurrentFontConfig(const FontConfig& config)
 
     m_selectedFontIndex = findFontIndex(config.fontName);
     m_fontDropdownHighlightedIndex = m_selectedFontIndex;
+
+    // Update reading style index
+    auto allStyles = OptionsManager::getAllReadingStyles();
+    m_selectedStyleIndex = 0;
+    for (size_t i = 0; i < allStyles.size(); i++)
+    {
+        if (allStyles[i] == config.readingStyle)
+        {
+            m_selectedStyleIndex = static_cast<int>(i);
+            break;
+        }
+    }
+    m_styleDropdownHighlightedIndex = m_selectedStyleIndex;
 }
 
 bool GuiManager::wantsCaptureMouse() const
@@ -393,12 +422,12 @@ void GuiManager::renderFontMenu()
     // Center the window and make it appropriately sized
     float centerX = windowWidth * 0.5f;
     float centerY = windowHeight * 0.5f;
-    float windowW = 450.0f;
-    float windowH = 600.0f;
+    float windowW = 500.0f;
+    float windowH = 650.0f; // Increased height for new sections
 
-    // Create settings window
+    // Create settings window with scrollbar support
     if (nk_begin(m_ctx, "Settings", nk_rect(centerX - windowW / 2, centerY - windowH / 2, windowW, windowH),
-                 NK_WINDOW_BORDER | NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR))
+                 NK_WINDOW_BORDER | NK_WINDOW_TITLE))
     {
         // Set initial focus to enable keyboard navigation
         static bool initialFocusSet = false;
@@ -419,8 +448,9 @@ void GuiManager::renderFontMenu()
         nk_layout_row_dynamic(m_ctx, 20, 1);
         char focusDebug[64];
         const char* widgetNames[] = {
-            "Font Dropdown", "Font Size Input", "Font Size Slider", "Zoom Step Input",
-            "Zoom Step Slider", "Page Jump Input", "Go Button", "Numpad Button",
+            "Font Dropdown", "Font Size Input", "Font Size Slider", "Reading Style Dropdown",
+            "Zoom Step Input", "Zoom Step Slider", "Edge Progress Checkbox", "Minimap Checkbox",
+            "Page Jump Input", "Go Button", "Numpad Button",
             "Apply Button", "Reset Button", "Close Button"};
         snprintf(focusDebug, sizeof(focusDebug), "Focus: %s (%d)",
                  widgetNames[m_mainScreenFocusIndex % WIDGET_COUNT], m_mainScreenFocusIndex);
@@ -626,6 +656,129 @@ void GuiManager::renderFontMenu()
             nk_layout_row_dynamic(m_ctx, 15, 1); // Spacing
         }
 
+        // === READING STYLE SECTION ===
+        nk_layout_row_dynamic(m_ctx, 25, 1);
+        nk_label(m_ctx, "Reading Style", NK_TEXT_LEFT);
+
+        // Separator line
+        nk_layout_row_dynamic(m_ctx, 1, 1);
+        bounds = nk_widget_bounds(m_ctx);
+        canvas = nk_window_get_canvas(m_ctx);
+        nk_stroke_line(canvas, bounds.x, bounds.y, bounds.x + bounds.w, bounds.y, 1.0f, nk_rgb(100, 100, 100));
+
+        // Informational notice
+        nk_layout_row_dynamic(m_ctx, 35, 1);
+        nk_label_colored_wrap(m_ctx, "Choose a color theme for comfortable reading. Applies to EPUB/MOBI only.", nk_rgb(102, 178, 255));
+
+        nk_layout_row_dynamic(m_ctx, 20, 1);
+        nk_label(m_ctx, "Color Theme:", NK_TEXT_LEFT);
+
+        // Get all available reading styles
+        auto allStyles = OptionsManager::getAllReadingStyles();
+        
+        // Ensure selected index is valid
+        if (m_selectedStyleIndex < 0 || m_selectedStyleIndex >= (int) allStyles.size())
+        {
+            m_selectedStyleIndex = 0;
+        }
+
+        // Create dropdown
+        nk_layout_row_dynamic(m_ctx, 25, 1);
+
+        // Highlight reading style dropdown if focused
+        if (m_mainScreenFocusIndex == WIDGET_READING_STYLE_DROPDOWN)
+        {
+            m_ctx->style.combo.button.normal = nk_style_item_color(nk_rgb(0, 122, 255));
+            m_ctx->style.combo.button.hover = nk_style_item_color(nk_rgb(30, 142, 255));
+            m_ctx->style.combo.button.active = nk_style_item_color(nk_rgb(0, 102, 235));
+            m_ctx->style.combo.normal = nk_style_item_color(nk_rgb(0, 122, 255));
+            m_ctx->style.combo.hover = nk_style_item_color(nk_rgb(30, 142, 255));
+            m_ctx->style.combo.active = nk_style_item_color(nk_rgb(0, 102, 235));
+        }
+        
+        const char* currentStyle = OptionsManager::getReadingStyleName(allStyles[m_selectedStyleIndex]);
+
+        if (m_styleDropdownHighlightedIndex < 0 || m_styleDropdownHighlightedIndex >= (int) allStyles.size())
+        {
+            m_styleDropdownHighlightedIndex = (m_selectedStyleIndex >= 0 && m_selectedStyleIndex < (int) allStyles.size()) ? m_selectedStyleIndex : 0;
+        }
+
+        bool forceStyleOpen = m_styleDropdownOpen || m_styleDropdownSelectRequested || m_styleDropdownCancelRequested;
+        if (nk_combo_begin_label_controller(m_ctx, currentStyle, nk_vec2(nk_widget_width(m_ctx), 200), forceStyleOpen))
+        {
+            nk_layout_row_dynamic(m_ctx, 20, 1);
+            for (size_t i = 0; i < allStyles.size(); ++i)
+            {
+                m_ctx->style.selectable = originalSelectableStyle;
+
+                bool isHighlighted = m_styleDropdownOpen && (m_styleDropdownHighlightedIndex == static_cast<int>(i));
+                if (isHighlighted)
+                {
+                    m_ctx->style.selectable.normal = nk_style_item_color(nk_rgb(0, 122, 255));
+                    m_ctx->style.selectable.hover = nk_style_item_color(nk_rgb(30, 142, 255));
+                    m_ctx->style.selectable.pressed = nk_style_item_color(nk_rgb(0, 102, 235));
+                    m_ctx->style.selectable.text_normal = nk_rgb(255, 255, 255);
+                    m_ctx->style.selectable.text_hover = nk_rgb(255, 255, 255);
+                    m_ctx->style.selectable.text_pressed = nk_rgb(255, 255, 255);
+                }
+
+                nk_bool isSelected = (m_selectedStyleIndex == static_cast<int>(i));
+                nk_bool selectionChanged = nk_selectable_label(m_ctx, OptionsManager::getReadingStyleName(allStyles[i]), NK_TEXT_LEFT, &isSelected);
+                if (selectionChanged && isSelected)
+                {
+                    std::cout << "[DEBUG] Reading style selected: " << OptionsManager::getReadingStyleName(allStyles[i]) << std::endl;
+                    m_selectedStyleIndex = static_cast<int>(i);
+                    m_tempConfig.readingStyle = allStyles[i];
+                    m_styleDropdownHighlightedIndex = m_selectedStyleIndex;
+                    nk_combo_close(m_ctx);
+                    m_styleDropdownOpen = false;
+                    m_styleDropdownSelectRequested = false;
+                    m_styleDropdownCancelRequested = false;
+                }
+            }
+
+            if (m_styleDropdownSelectRequested)
+            {
+                if (m_styleDropdownHighlightedIndex >= 0 && m_styleDropdownHighlightedIndex < (int) allStyles.size())
+                {
+                    int chosenIndex = m_styleDropdownHighlightedIndex;
+                    std::cout << "[DEBUG] Reading style selected (controller): " << OptionsManager::getReadingStyleName(allStyles[chosenIndex]) << std::endl;
+                    m_selectedStyleIndex = chosenIndex;
+                    m_tempConfig.readingStyle = allStyles[chosenIndex];
+                }
+                nk_combo_close(m_ctx);
+                m_styleDropdownOpen = false;
+                m_styleDropdownSelectRequested = false;
+                m_styleDropdownHighlightedIndex = m_selectedStyleIndex;
+            }
+
+            if (m_styleDropdownCancelRequested)
+            {
+                nk_combo_close(m_ctx);
+                m_styleDropdownOpen = false;
+                m_styleDropdownCancelRequested = false;
+                m_styleDropdownHighlightedIndex = m_selectedStyleIndex;
+            }
+
+            nk_combo_end(m_ctx);
+            m_ctx->style.selectable = originalSelectableStyle;
+        }
+        else
+        {
+            if (m_styleDropdownOpen || m_styleDropdownSelectRequested || m_styleDropdownCancelRequested)
+            {
+                m_styleDropdownOpen = false;
+                m_styleDropdownSelectRequested = false;
+                m_styleDropdownCancelRequested = false;
+                m_styleDropdownHighlightedIndex = m_selectedStyleIndex;
+            }
+            m_ctx->style.selectable = originalSelectableStyle;
+        }
+
+        // Restore combo style
+        m_ctx->style.combo = originalComboStyle;
+        nk_layout_row_dynamic(m_ctx, 15, 1); // Spacing
+
         // === ZOOM SETTINGS SECTION ===
         nk_layout_row_dynamic(m_ctx, 25, 1);
         nk_label(m_ctx, "Zoom Settings", NK_TEXT_LEFT);
@@ -714,6 +867,63 @@ void GuiManager::renderFontMenu()
         snprintf(pageInfo, sizeof(pageInfo), "Current Page: %d / %d", m_currentPage + 1, m_pageCount);
         nk_layout_row_dynamic(m_ctx, 20, 1);
         nk_label(m_ctx, pageInfo, NK_TEXT_LEFT);
+
+        nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
+
+        // Edge Progress Bar checkbox
+        nk_layout_row_dynamic(m_ctx, 25, 1);
+        
+        // Highlight checkbox if focused
+        struct nk_style_toggle originalToggleStyle = m_ctx->style.checkbox;
+        if (m_mainScreenFocusIndex == WIDGET_EDGE_PROGRESS_CHECKBOX)
+        {
+            m_ctx->style.checkbox.normal = nk_style_item_color(nk_rgb(0, 122, 255));
+            m_ctx->style.checkbox.hover = nk_style_item_color(nk_rgb(30, 142, 255));
+            m_ctx->style.checkbox.cursor_normal = nk_style_item_color(nk_rgb(0, 122, 255));
+            m_ctx->style.checkbox.cursor_hover = nk_style_item_color(nk_rgb(30, 142, 255));
+        }
+        
+        nk_bool disableEdgeBar = m_tempConfig.disableEdgeProgressBar ? nk_true : nk_false;
+        if (nk_checkbox_label(m_ctx, "Disable Edge Progress Bar", &disableEdgeBar))
+        {
+            m_tempConfig.disableEdgeProgressBar = (disableEdgeBar == nk_true);
+        }
+        
+        // Restore checkbox style
+        m_ctx->style.checkbox = originalToggleStyle;
+        
+        // Help text
+        nk_layout_row_dynamic(m_ctx, 30, 1);
+        nk_label_colored_wrap(m_ctx, "When enabled, panning at page edges changes pages instantly. When disabled, hold at edge for 300ms.", nk_rgb(178, 178, 178));
+
+        nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
+
+        // Document Minimap checkbox
+        nk_layout_row_dynamic(m_ctx, 25, 1);
+        
+        // Highlight checkbox if focused
+        if (m_mainScreenFocusIndex == WIDGET_MINIMAP_CHECKBOX)
+        {
+            m_ctx->style.checkbox.normal = nk_style_item_color(nk_rgb(0, 122, 255));
+            m_ctx->style.checkbox.hover = nk_style_item_color(nk_rgb(30, 142, 255));
+            m_ctx->style.checkbox.cursor_normal = nk_style_item_color(nk_rgb(0, 122, 255));
+            m_ctx->style.checkbox.cursor_hover = nk_style_item_color(nk_rgb(30, 142, 255));
+        }
+        
+        nk_bool showMinimap = m_tempConfig.showDocumentMinimap ? nk_true : nk_false;
+        if (nk_checkbox_label(m_ctx, "Show Document Minimap", &showMinimap))
+        {
+            m_tempConfig.showDocumentMinimap = (showMinimap == nk_true);
+        }
+        
+        // Restore checkbox style
+        m_ctx->style.checkbox = originalToggleStyle;
+        
+        // Help text
+        nk_layout_row_dynamic(m_ctx, 30, 1);
+        nk_label_colored_wrap(m_ctx, "Show a miniature page overlay when zoomed in to visualize which part is visible.", nk_rgb(178, 178, 178));
+
+        nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
         nk_layout_row_dynamic(m_ctx, 20, 1);
         nk_label(m_ctx, "Jump to Page:", NK_TEXT_LEFT);
@@ -1383,6 +1593,48 @@ bool GuiManager::handleKeyboardNavigation(const SDL_Event& event)
             }
         }
 
+        if (m_styleDropdownOpen)
+        {
+            auto allStyles = OptionsManager::getAllReadingStyles();
+            int styleCount = static_cast<int>(allStyles.size());
+            if (styleCount == 0)
+            {
+                m_styleDropdownHighlightedIndex = 0;
+            }
+
+            switch (event.key.keysym.sym)
+            {
+            case SDLK_UP:
+                if (styleCount > 0)
+                {
+                    m_styleDropdownHighlightedIndex = (m_styleDropdownHighlightedIndex - 1 + styleCount) % styleCount;
+                    std::cout << "[DEBUG] Keyboard style dropdown UP - highlight: " << m_styleDropdownHighlightedIndex << std::endl;
+                }
+                return true;
+            case SDLK_DOWN:
+                if (styleCount > 0)
+                {
+                    m_styleDropdownHighlightedIndex = (m_styleDropdownHighlightedIndex + 1) % styleCount;
+                    std::cout << "[DEBUG] Keyboard style dropdown DOWN - highlight: " << m_styleDropdownHighlightedIndex << std::endl;
+                }
+                return true;
+            case SDLK_RETURN:
+            case SDLK_SPACE:
+                std::cout << "[DEBUG] Keyboard confirm style dropdown index " << m_styleDropdownHighlightedIndex << std::endl;
+                m_styleDropdownSelectRequested = true;
+                return true;
+            case SDLK_ESCAPE:
+                std::cout << "[DEBUG] Keyboard cancel style dropdown" << std::endl;
+                m_styleDropdownCancelRequested = true;
+                return true;
+            case SDLK_LEFT:
+            case SDLK_RIGHT:
+                return true;
+            default:
+                break;
+            }
+        }
+
         switch (event.key.keysym.sym)
         {
         case SDLK_UP:
@@ -1510,6 +1762,42 @@ void GuiManager::activateFocusedWidget()
             m_fontDropdownSelectRequested = true;
         }
         break;
+    case WIDGET_READING_STYLE_DROPDOWN:
+        if (!m_styleDropdownOpen)
+        {
+            auto allStyles = OptionsManager::getAllReadingStyles();
+            if (!allStyles.empty())
+            {
+                std::cout << "[DEBUG] Opening reading style dropdown" << std::endl;
+                m_styleDropdownOpen = true;
+                m_styleDropdownSelectRequested = false;
+                m_styleDropdownCancelRequested = false;
+                if (m_selectedStyleIndex >= 0 && m_selectedStyleIndex < (int) allStyles.size())
+                {
+                    m_styleDropdownHighlightedIndex = m_selectedStyleIndex;
+                }
+                else
+                {
+                    m_styleDropdownHighlightedIndex = 0;
+                }
+            }
+        }
+        else
+        {
+            std::cout << "[DEBUG] Confirming selection from reading style dropdown" << std::endl;
+            m_styleDropdownSelectRequested = true;
+        }
+        break;
+    case WIDGET_EDGE_PROGRESS_CHECKBOX:
+        // Toggle checkbox
+        m_tempConfig.disableEdgeProgressBar = !m_tempConfig.disableEdgeProgressBar;
+        std::cout << "[DEBUG] Toggle Edge Progress Bar: " << (m_tempConfig.disableEdgeProgressBar ? "disabled" : "enabled") << std::endl;
+        break;
+    case WIDGET_MINIMAP_CHECKBOX:
+        // Toggle checkbox
+        m_tempConfig.showDocumentMinimap = !m_tempConfig.showDocumentMinimap;
+        std::cout << "[DEBUG] Toggle Document Minimap: " << (m_tempConfig.showDocumentMinimap ? "enabled" : "disabled") << std::endl;
+        break;
     case WIDGET_GO_BUTTON:
         // Activate Go button
         if (strlen(m_pageJumpInput) > 0)
@@ -1537,18 +1825,37 @@ void GuiManager::activateFocusedWidget()
         // Reset to defaults
         m_tempConfig = FontConfig();
         m_selectedFontIndex = 0;
+        m_selectedStyleIndex = 0;
         snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_tempConfig.fontSize);
         snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_tempConfig.zoomStep);
         break;
     case WIDGET_CLOSE_BUTTON:
+    {
         // Close menu
         m_showFontMenu = false;
         m_fontDropdownOpen = false;
         m_fontDropdownSelectRequested = false;
         m_fontDropdownCancelRequested = false;
+        m_styleDropdownOpen = false;
+        m_styleDropdownSelectRequested = false;
+        m_styleDropdownCancelRequested = false;
         m_tempConfig = m_currentConfig;
         m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
         m_fontDropdownHighlightedIndex = m_selectedFontIndex;
+        
+        // Update reading style index
+        auto allStyles = OptionsManager::getAllReadingStyles();
+        m_selectedStyleIndex = 0;
+        for (size_t i = 0; i < allStyles.size(); i++)
+        {
+            if (allStyles[i] == m_currentConfig.readingStyle)
+            {
+                m_selectedStyleIndex = static_cast<int>(i);
+                break;
+            }
+        }
+        m_styleDropdownHighlightedIndex = m_selectedStyleIndex;
+        
         snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
         snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_currentConfig.zoomStep);
         if (m_closeCallback)
@@ -1556,6 +1863,7 @@ void GuiManager::activateFocusedWidget()
             m_closeCallback();
         }
         break;
+    }
     default:
         // Other widgets don't have simple activation
         break;
@@ -1615,6 +1923,48 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
             case kCancelButton:
                 std::cout << "[DEBUG] Controller B - cancel dropdown" << std::endl;
                 m_fontDropdownCancelRequested = true;
+                return true;
+            default:
+                break;
+            }
+        }
+
+        if (m_styleDropdownOpen)
+        {
+            auto allStyles = OptionsManager::getAllReadingStyles();
+            int styleCount = static_cast<int>(allStyles.size());
+            if (styleCount == 0)
+            {
+                m_styleDropdownHighlightedIndex = 0;
+            }
+
+            switch (event.cbutton.button)
+            {
+            case SDL_CONTROLLER_BUTTON_DPAD_UP:
+                if (styleCount > 0)
+                {
+                    m_styleDropdownHighlightedIndex = (m_styleDropdownHighlightedIndex - 1 + styleCount) % styleCount;
+                    std::cout << "[DEBUG] Controller style dropdown UP - highlight: " << m_styleDropdownHighlightedIndex << std::endl;
+                }
+                return true;
+            case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+                if (styleCount > 0)
+                {
+                    m_styleDropdownHighlightedIndex = (m_styleDropdownHighlightedIndex + 1) % styleCount;
+                    std::cout << "[DEBUG] Controller style dropdown DOWN - highlight: " << m_styleDropdownHighlightedIndex << std::endl;
+                }
+                return true;
+            case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+            case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+                // Ignore left/right while dropdown is open
+                return true;
+            case kAcceptButton:
+                std::cout << "[DEBUG] Controller A - confirm style dropdown index " << m_styleDropdownHighlightedIndex << std::endl;
+                m_styleDropdownSelectRequested = true;
+                return true;
+            case kCancelButton:
+                std::cout << "[DEBUG] Controller B - cancel style dropdown" << std::endl;
+                m_styleDropdownCancelRequested = true;
                 return true;
             default:
                 break;
@@ -1776,10 +2126,26 @@ void GuiManager::closeFontMenu()
     m_fontDropdownOpen = false;
     m_fontDropdownSelectRequested = false;
     m_fontDropdownCancelRequested = false;
+    m_styleDropdownOpen = false;
+    m_styleDropdownSelectRequested = false;
+    m_styleDropdownCancelRequested = false;
 
     m_tempConfig = m_currentConfig;
     m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
     m_fontDropdownHighlightedIndex = m_selectedFontIndex;
+
+    // Update reading style index
+    auto allStyles = OptionsManager::getAllReadingStyles();
+    m_selectedStyleIndex = 0;
+    for (size_t i = 0; i < allStyles.size(); i++)
+    {
+        if (allStyles[i] == m_currentConfig.readingStyle)
+        {
+            m_selectedStyleIndex = static_cast<int>(i);
+            break;
+        }
+    }
+    m_styleDropdownHighlightedIndex = m_selectedStyleIndex;
 
     snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
     snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_currentConfig.zoomStep);

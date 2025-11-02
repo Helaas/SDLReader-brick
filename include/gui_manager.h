@@ -98,6 +98,7 @@ private:
     std::function<void(int)> m_pageJumpCallback;
 
     int m_selectedFontIndex = 0;
+    int m_selectedStyleIndex = 0;
     char m_fontSizeInput[16] = "12";
     char m_zoomStepInput[16] = "10";
     char m_pageJumpInput[16] = "1";
@@ -113,8 +114,11 @@ private:
         WIDGET_FONT_DROPDOWN = 0,
         WIDGET_FONT_SIZE_INPUT,
         WIDGET_FONT_SIZE_SLIDER,
+        WIDGET_READING_STYLE_DROPDOWN,
         WIDGET_ZOOM_STEP_INPUT,
         WIDGET_ZOOM_STEP_SLIDER,
+        WIDGET_EDGE_PROGRESS_CHECKBOX,
+        WIDGET_MINIMAP_CHECKBOX,
         WIDGET_PAGE_JUMP_INPUT,
         WIDGET_GO_BUTTON,
         WIDGET_NUMPAD_BUTTON,
@@ -129,6 +133,11 @@ private:
     int m_fontDropdownHighlightedIndex = 0;
     bool m_fontDropdownSelectRequested = false;
     bool m_fontDropdownCancelRequested = false;
+
+    bool m_styleDropdownOpen = false;
+    int m_styleDropdownHighlightedIndex = 0;
+    bool m_styleDropdownSelectRequested = false;
+    bool m_styleDropdownCancelRequested = false;
 
     Uint32 m_lastButtonPressTime = 0;
     static constexpr Uint32 BUTTON_DEBOUNCE_MS = 100;
