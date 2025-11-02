@@ -67,6 +67,9 @@ private:
 
     GLuint m_vertexBuffer = 0;
     GLuint m_indexBuffer = 0;
+#ifndef TG5040_PLATFORM
+    GLuint m_vertexArray = 0;
+#endif
 
     std::array<float, 16> m_projection{};
     std::vector<uint32_t> m_uploadBuffer;

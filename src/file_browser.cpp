@@ -11,18 +11,18 @@
 #include <imgui_impl_opengl3.h>
 
 #include <algorithm>
-#include <cmath>
 #include <cerrno>
+#include <cfloat>
+#include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <cstdint>
 #include <dirent.h>
 #include <filesystem>
 #include <iostream>
 #include <sys/stat.h>
-#include <vector>
-#include <cfloat>
 #include <utility>
+#include <vector>
 
 #include "mupdf_document.h"
 
@@ -92,8 +92,7 @@ FileBrowser::FileBrowser()
       m_lockToDefaultRoot([]
                           {
                               const char* root = std::getenv("SDL_READER_DEFAULT_DIR");
-                              return root && root[0] != '\0';
-                          }()),
+                              return root && root[0] != '\0'; }()),
       m_currentPath(m_defaultRoot),
       m_selectedIndex(0), m_selectedFile(), m_gameController(nullptr), m_gameControllerInstanceID(-1),
       m_thumbnailView(s_lastThumbnailView), m_gridColumns(1), m_lastWindowWidth(0), m_lastWindowHeight(0),
@@ -536,10 +535,11 @@ GLuint FileBrowser::createTextureFromPixels(const std::vector<uint32_t>& pixels,
         uint8_t r = static_cast<uint8_t>((argb >> 16) & 0xFF);
         uint8_t g = static_cast<uint8_t>((argb >> 8) & 0xFF);
         uint8_t b = static_cast<uint8_t>(argb & 0xFF);
-        rgbaPixels[i] = (static_cast<uint32_t>(a) << 24) |
-                        (static_cast<uint32_t>(b) << 16) |
+        // Convert ARGB to RGBA for OpenGL
+        rgbaPixels[i] = (static_cast<uint32_t>(r) << 0) |
                         (static_cast<uint32_t>(g) << 8) |
-                        static_cast<uint32_t>(r);
+                        (static_cast<uint32_t>(b) << 16) |
+                        (static_cast<uint32_t>(a) << 24);
     }
 
     GLuint textureId = 0;
@@ -562,10 +562,11 @@ GLuint FileBrowser::createSolidTexture(int width, int height, SDL_Color color, U
         return 0;
     }
 
+    // Create ARGB format to match what createTextureFromPixels expects
     uint32_t fillColor = (static_cast<uint32_t>(alpha) << 24) |
-                         (static_cast<uint32_t>(color.b) << 16) |
+                         (static_cast<uint32_t>(color.r) << 16) |
                          (static_cast<uint32_t>(color.g) << 8) |
-                         static_cast<uint32_t>(color.r);
+                         static_cast<uint32_t>(color.b);
 
     std::vector<uint32_t> pixels(static_cast<size_t>(width) * static_cast<size_t>(height), fillColor);
     return createTextureFromPixels(pixels, width, height);
@@ -1389,7 +1390,7 @@ void FileBrowser::renderThumbnailView(int windowWidth, int windowHeight)
                 ImVec2 imageSize(static_cast<float>(thumb.width) * scale,
                                  static_cast<float>(thumb.height) * scale);
                 ImVec2 imageMin(imageRegionMin.x + (availableWidth - imageSize.x) * 0.5f,
-                                 imageRegionMin.y + (availableHeight - imageSize.y) * 0.5f);
+                                imageRegionMin.y + (availableHeight - imageSize.y) * 0.5f);
                 ImVec2 imageMax(imageMin.x + imageSize.x, imageMin.y + imageSize.y);
                 ImTextureID texId = reinterpret_cast<ImTextureID>(static_cast<intptr_t>(textureId));
                 drawList->AddImage(texId, imageMin, imageMax);
@@ -1403,7 +1404,7 @@ void FileBrowser::renderThumbnailView(int windowWidth, int windowHeight)
                 const char* message = thumb.failed ? "N/A" : "Loading";
                 ImVec2 textSize = ImGui::CalcTextSize(message);
                 ImVec2 messagePos(tileMin.x + (tileWidth - textSize.x) * 0.5f,
-                                   tileMin.y + (thumbRegionSize - textSize.y) * 0.5f);
+                                  tileMin.y + (thumbRegionSize - textSize.y) * 0.5f);
                 drawList->AddText(messagePos, IM_COL32(230, 230, 230, 255), message);
             }
 

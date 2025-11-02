@@ -148,7 +148,15 @@ Renderer::Renderer(SDL_Window* window)
     m_colorUniformMVP = glGetUniformLocation(m_colorProgram, "uMVP");
     m_colorUniformColor = glGetUniformLocation(m_colorProgram, "uColor");
 
+#ifndef TG5040_PLATFORM
+    glGenVertexArrays(1, &m_vertexArray);
+    glBindVertexArray(m_vertexArray);
+#endif
+
     ensureBuffers();
+#ifndef TG5040_PLATFORM
+    glBindVertexArray(0);
+#endif
     setBlendMode();
     updateProjection();
 }
@@ -175,6 +183,13 @@ Renderer::~Renderer()
         glDeleteProgram(m_textureProgram);
         m_textureProgram = 0;
     }
+#ifndef TG5040_PLATFORM
+    if (m_vertexArray != 0)
+    {
+        glDeleteVertexArrays(1, &m_vertexArray);
+        m_vertexArray = 0;
+    }
+#endif
     if (m_colorProgram)
     {
         glDeleteProgram(m_colorProgram);
@@ -327,6 +342,9 @@ void Renderer::drawQuad(float x, float y, float width, float height, bool flipX,
     glUniform1i(m_texUniformSampler, 0);
     glUniform4f(m_texUniformTint, 1.0f, 1.0f, 1.0f, 1.0f);
 
+#ifndef TG5040_PLATFORM
+    glBindVertexArray(m_vertexArray);
+#endif
     glBindBuffer(GL_ARRAY_BUFFER, m_vertexBuffer);
     glBufferData(GL_ARRAY_BUFFER, sizeof(VertexPT) * vertices.size(), vertices.data(), GL_STREAM_DRAW);
 
@@ -340,6 +358,9 @@ void Renderer::drawQuad(float x, float y, float width, float height, bool flipX,
 
     glDisableVertexAttribArray(m_texAttribPos);
     glDisableVertexAttribArray(m_texAttribUV);
+#ifndef TG5040_PLATFORM
+    glBindVertexArray(0);
+#endif
 }
 
 void Renderer::drawColoredQuad(float x, float y, float width, float height, float r, float g, float b, float a, bool outline)
@@ -358,6 +379,9 @@ void Renderer::drawColoredQuad(float x, float y, float width, float height, floa
     glUniformMatrix4fv(m_colorUniformMVP, 1, GL_FALSE, m_projection.data());
     glUniform4f(m_colorUniformColor, r, g, b, a);
 
+#ifndef TG5040_PLATFORM
+    glBindVertexArray(m_vertexArray);
+#endif
     glBindBuffer(GL_ARRAY_BUFFER, m_vertexBuffer);
     glBufferData(GL_ARRAY_BUFFER, sizeof(VertexP) * vertices.size(), vertices.data(), GL_STREAM_DRAW);
 
@@ -377,6 +401,9 @@ void Renderer::drawColoredQuad(float x, float y, float width, float height, floa
     }
 
     glDisableVertexAttribArray(m_colorAttribPos);
+#ifndef TG5040_PLATFORM
+    glBindVertexArray(0);
+#endif
 }
 
 void Renderer::drawColoredLine(float x1, float y1, float x2, float y2, float r, float g, float b, float a)
@@ -391,12 +418,18 @@ void Renderer::drawColoredLine(float x1, float y1, float x2, float y2, float r, 
     glUniformMatrix4fv(m_colorUniformMVP, 1, GL_FALSE, m_projection.data());
     glUniform4f(m_colorUniformColor, r, g, b, a);
 
+#ifndef TG5040_PLATFORM
+    glBindVertexArray(m_vertexArray);
+#endif
     glBindBuffer(GL_ARRAY_BUFFER, m_vertexBuffer);
     glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STREAM_DRAW);
     glEnableVertexAttribArray(m_colorAttribPos);
     glVertexAttribPointer(m_colorAttribPos, 2, GL_FLOAT, GL_FALSE, sizeof(VertexP), reinterpret_cast<void*>(0));
     glDrawArrays(GL_LINES, 0, 2);
     glDisableVertexAttribArray(m_colorAttribPos);
+#ifndef TG5040_PLATFORM
+    glBindVertexArray(0);
+#endif
 }
 
 void Renderer::renderPageEx(const std::vector<uint8_t>& pixelData,
@@ -510,6 +543,9 @@ void Renderer::renderPageExARGB(const std::vector<uint32_t>& argbData,
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, m_textureId);
 
+#ifndef TG5040_PLATFORM
+    glBindVertexArray(m_vertexArray);
+#endif
     for (int i = 0; i < 4; ++i)
     {
         vertices[i].uv[0] = uv[i * 2 + 0];
@@ -530,6 +566,9 @@ void Renderer::renderPageExARGB(const std::vector<uint32_t>& argbData,
 
     glDisableVertexAttribArray(m_texAttribPos);
     glDisableVertexAttribArray(m_texAttribUV);
+#ifndef TG5040_PLATFORM
+    glBindVertexArray(0);
+#endif
 }
 
 void Renderer::drawFilledRect(int x, int y, int width, int height, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
