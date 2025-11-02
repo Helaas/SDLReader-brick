@@ -1,5 +1,5 @@
 #!/bin/sh
-# SDL Reader launcher with built-in ImGui file browser
+# SDL Reader launcher with built-in Nuklear file browser
 #  - On first run (per shared userdata) opens docs.pdf.
 #  - Subsequent runs launch the internal file browser (-b).
 

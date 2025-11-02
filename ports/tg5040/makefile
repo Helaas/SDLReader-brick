@@ -16,14 +16,12 @@ endif
 CXX      := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTG5040_PLATFORM\
             -I$(WORKSPACE_PATH)/src -I$(WORKSPACE_PATH)/include -I$(BASE_PATH)/include -I$(BASE_PATH)/mupdf/include \
-            -I$(BASE_PATH)/imgui -I$(BASE_PATH)/imgui/backends \
             -I$(BASE_PATH)/nuklear -I$(BASE_PATH)/nuklear/demo/sdl_renderer \
             -I/usr/local/libarchive-minimal/include -D_REENTRANT -I/usr/include/SDL2
 
 # Source directories
 SRC_DIR = $(WORKSPACE_PATH)/src
 CLI_DIR = $(WORKSPACE_PATH)/cli
-IMGUI_DIR = $(BASE_PATH)/imgui
 TG_SRC_DIR = $(BASE_PATH)/src
 
 # Output locations
@@ -35,35 +33,16 @@ TARGET   := $(BIN_DIR)/sdl_reader_cli
 SRC_FILES = $(filter-out $(SRC_DIR)/power_handler.cpp, $(wildcard $(SRC_DIR)/*.cpp))
 SRCS = $(SRC_FILES) $(wildcard $(CLI_DIR)/*.cpp)
 
-# Dear ImGui source files (using SDL Renderer backend for TG5040 framebuffer compatibility)
-IMGUI_SRCS = $(IMGUI_DIR)/imgui.cpp \
-             $(IMGUI_DIR)/imgui_demo.cpp \
-             $(IMGUI_DIR)/imgui_draw.cpp \
-             $(IMGUI_DIR)/imgui_tables.cpp \
-             $(IMGUI_DIR)/imgui_widgets.cpp \
-             $(IMGUI_DIR)/backends/imgui_impl_sdl.cpp \
-             $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer.cpp
-
-# Add ImGui sources to compilation
-SRCS += $(IMGUI_SRCS)
-
 # All object files (will be placed in the build directory)
 # Transforms src/file.cpp into build/file.o and cli/file.cpp into build/file.o
 OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS))) \
        $(patsubst $(CLI_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(CLI_DIR)/%,$(SRCS))) \
-       $(BUILD_DIR)/imgui.o \
-       $(BUILD_DIR)/imgui_demo.o \
-       $(BUILD_DIR)/imgui_draw.o \
-       $(BUILD_DIR)/imgui_tables.o \
-       $(BUILD_DIR)/imgui_widgets.o \
-       $(BUILD_DIR)/imgui_impl_sdl.o \
-       $(BUILD_DIR)/imgui_impl_sdlrenderer.o \
        $(BUILD_DIR)/tg5040_power_handler.o
 
 # Path to minimal libarchive static library
 LIBARCHIVE_MINIMAL := /usr/local/libarchive-minimal/lib/libarchive.a
 
-# Libraries (link order matters) - No OpenGL needed for SDL Renderer backend
+# Libraries (link order matters)
 # Using static libarchive to avoid bundling extra dependencies
 LIBS := -lSDL2_ttf -lSDL2 \
   -L$(BASE_PATH)/mupdf/build/release \
@@ -72,10 +51,10 @@ LIBS := -lSDL2_ttf -lSDL2 \
   -ljpeg -lopenjp2 -lharfbuzz -ljbig2dec \
   -lfreetype -lz -llzma -lm -lpthread -ldl -lwebp -lwebpdemux -lgumbo -lstdc++fs
 
-.PHONY: all clean export-bundle build-mupdf setup-mupdf clean-mupdf build-libarchive clean-libarchive setup-imgui clean-imgui setup-nuklear clean-nuklear check-libarchive
+.PHONY: all clean export-bundle build-mupdf setup-mupdf clean-mupdf build-libarchive clean-libarchive setup-nuklear clean-nuklear check-libarchive
 
 # Default goal - ensures minimal libarchive is built before anything else
-all: setup-imgui setup-nuklear build-libarchive setup-mupdf build-mupdf $(TARGET)
+all: setup-nuklear build-libarchive setup-mupdf build-mupdf $(TARGET)
 
 # Helper target to verify minimal libarchive is built
 check-libarchive:
@@ -107,34 +86,6 @@ setup-nuklear:
 		rm -f nuklear/demo/sdl_renderer/nuklear_sdl_renderer.h.rej; \
 		else \
 			echo "Nuklear SDL renderer already patched"; \
-		fi; \
-	fi
-
-# Setup Dear ImGui if it doesn't exist or is incomplete
-# Using v1.89 for TG5040 compatibility with older SDL2 (2.0.9)
-setup-imgui:
-	@if [ ! -d "$(BASE_PATH)/imgui" ]; then \
-		echo "Setting up Dear ImGui repository (v1.89 for SDL2 2.0.9 compatibility)..."; \
-		rm -rf $(BASE_PATH)/imgui; \
-		cd $(BASE_PATH) && git clone --depth 1 --branch v1.89 https://github.com/ocornut/imgui.git; \
-		echo "Dear ImGui setup completed successfully"; \
-	else \
-		echo "Dear ImGui repository already exists and is complete"; \
-	fi
-	@if [ -d "$(BASE_PATH)/imgui" ] && [ -f "$(BASE_PATH)/imgui/backends/imgui_impl_sdlrenderer.cpp" ]; then \
-		if ! grep -q "imgui_impl_sdlrenderer_legacy" $(BASE_PATH)/imgui/backends/imgui_impl_sdlrenderer.cpp; then \
-			echo "Applying SDL 2.0.9 fallback patch to ImGui SDL renderer backend..."; \
-			cd $(BASE_PATH)/imgui && patch -p1 < ../patches/imgui_impl_sdlrenderer_legacy.patch; \
-		else \
-			echo "ImGui SDL renderer backend already patched"; \
-		fi; \
-	fi
-	@if [ -d "$(BASE_PATH)/imgui" ] && [ -f "$(BASE_PATH)/imgui/backends/imgui_impl_sdl.cpp" ]; then \
-		if ! grep -q "TG5040 PATCH: Swap A & B buttons" $(BASE_PATH)/imgui/backends/imgui_impl_sdl.cpp; then \
-			echo "Applying TG5040 A & B button swap patch to ImGui SDL backend..."; \
-			patch -d $(BASE_PATH)/imgui -p1 < $(BASE_PATH)/patches/imgui_swap_ab_buttons_tg5040.patch; \
-		else \
-			echo "ImGui SDL backend already patched for TG5040 button swap"; \
 		fi; \
 	fi
 
@@ -260,36 +211,6 @@ $(BUILD_DIR)/%.o: $(CLI_DIR)/%.cpp | $(BUILD_DIR)
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Compile Dear ImGui core sources
-$(BUILD_DIR)/imgui.o: $(IMGUI_DIR)/imgui.cpp | $(BUILD_DIR)
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_demo.o: $(IMGUI_DIR)/imgui_demo.cpp | $(BUILD_DIR)
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_draw.o: $(IMGUI_DIR)/imgui_draw.cpp | $(BUILD_DIR)
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_tables.o: $(IMGUI_DIR)/imgui_tables.cpp | $(BUILD_DIR)
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_widgets.o: $(IMGUI_DIR)/imgui_widgets.cpp | $(BUILD_DIR)
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-# Compile Dear ImGui SDL backend sources
-$(BUILD_DIR)/imgui_impl_sdl.o: $(IMGUI_DIR)/backends/imgui_impl_sdl.cpp | $(BUILD_DIR)
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_impl_sdlrenderer.o: $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer.cpp | $(BUILD_DIR)
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
-
 # Compile TG5040-specific sources
 $(BUILD_DIR)/tg5040_power_handler.o: $(TG_SRC_DIR)/power_handler.cpp | $(BUILD_DIR)
 	@mkdir -p $(BUILD_DIR)
@@ -327,14 +248,8 @@ clean-nuklear:
 	@echo "Removing Nuklear checkout..."
 	rm -rf $(BASE_PATH)/nuklear
 
-# Clean ImGui (removes the entire directory)
-clean-imgui:
-	@echo "Cleaning Dear ImGui..."
-	rm -rf $(BASE_PATH)/imgui
-	@echo "Dear ImGui cleaned"
-
 # Deep clean - removes everything including downloaded dependencies
-clean-all: clean clean-mupdf clean-libarchive clean-imgui
+clean-all: clean clean-mupdf clean-libarchive clean-nuklear
 	@echo "Removing downloaded dependencies..."
 	rm -rf $(BASE_PATH)/libarchive-3.3.3
 	rm -rf $(BASE_PATH)/mupdf

@@ -87,7 +87,7 @@ The exported bundle (`ports/tg5040/pak/`) contains:
 When you run `make tg5040` or `make export-tg5040`, the build system applies several patches automatically:
 
 - `webp-upstream-697749.patch` (MuPDF) — shared with other platforms to backport WebP decoding fixes from KOReader.
-- `patches/imgui_swap_ab_buttons_tg5040.patch` — **DEPRECATED** (no longer needed with Nuklear; button mapping now handled in code)
+- `patches/nuklear_sdl_renderer_compat.patch` — Backports SDL renderer support from newer Nuklear versions to ensure compatibility with the TG5040's SDL 2.0.9 environment, enabling proper texture rendering and input handling.
 
 The TG5040 build uses the Nuklear UI framework with a custom SDL renderer backend optimized for the device's SDL 2.0.10 stack and low-power GPU.
 
