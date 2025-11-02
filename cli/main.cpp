@@ -7,6 +7,7 @@
 #include <SDL_ttf.h>
 #include <cstring>
 #include <iostream>
+#include <memory>
 
 void cleanupSDL(SDL_Window* window, SDL_Renderer* renderer)
 {
@@ -92,7 +93,8 @@ int main(int argc, char* argv[])
     }
 
     // Main loop: If browse mode, keep returning to file browser after closing document
-    FileBrowser browser;
+    // Use unique_ptr to avoid stack overflow - FileBrowser has large members
+    auto browser = std::make_unique<FileBrowser>();
     bool continueRunning = true;
     while (continueRunning)
     {
@@ -109,7 +111,7 @@ int main(int argc, char* argv[])
             FontConfig config = optionsManager.loadConfig();
             std::string startPath = config.lastBrowseDirectory.empty() ? getDefaultLibraryRoot() : config.lastBrowseDirectory;
 
-            if (!browser.initialize(window, renderer, startPath))
+            if (!browser->initialize(window, renderer, startPath))
             {
                 std::cerr << "Failed to initialize file browser" << std::endl;
                 cleanupSDL(window, renderer);
@@ -117,10 +119,10 @@ int main(int argc, char* argv[])
             }
 
             // Run browser and get selected file (cleanup happens automatically inside run())
-            documentPath = browser.run();
+            documentPath = browser->run();
 
             // Save last browsed directory back to config
-            std::string lastDir = browser.getLastDirectory();
+            std::string lastDir = browser->getLastDirectory();
             if (!lastDir.empty())
             {
                 config.lastBrowseDirectory = lastDir;
