@@ -22,8 +22,8 @@
 #ifndef NK_INCLUDE_FONT_BAKING
 #define NK_INCLUDE_FONT_BAKING
 #endif
-#include "demo/sdl_renderer/nuklear_sdl_renderer.h"
 #include "nuklear.h"
+#include "demo/sdl_renderer/nuklear_sdl_renderer.h"
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
 #endif
@@ -1165,15 +1165,21 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         m_running = false;
     }
 
-    if (m_ctx && !m_inFakeSleep)
+    if (m_ctx
+#ifdef TG5040_PLATFORM
+        && !m_inFakeSleep
+#endif
+    )
     {
         nk_sdl_handle_event(const_cast<SDL_Event*>(&event));
     }
 
+#ifdef TG5040_PLATFORM
     if (m_inFakeSleep)
     {
         return;
     }
+#endif
 
     switch (event.type)
     {
@@ -1259,12 +1265,21 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
             moveSelectionHorizontal(1);
             break;
+#ifdef TG5040_PLATFORM
         case kAcceptButton:
             navigateInto();
             break;
         case kCancelButton:
             navigateUp();
             break;
+#else
+        case SDL_CONTROLLER_BUTTON_A:
+            navigateInto();
+            break;
+        case SDL_CONTROLLER_BUTTON_B:
+            navigateUp();
+            break;
+#endif
         case SDL_CONTROLLER_BUTTON_X:
             toggleViewMode();
             break;
@@ -1393,7 +1408,6 @@ bool FileBrowser::s_lastThumbnailView = false;
 bool FileBrowser::s_cachedThumbnailsValid = false;
 std::string FileBrowser::s_cachedDirectory;
 std::unordered_map<std::string, FileBrowser::ThumbnailData> FileBrowser::s_cachedThumbnails;
-#ifdef TG5040_PLATFORM
 
 void FileBrowser::setupNuklearStyle()
 {
@@ -1552,7 +1566,10 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
                 ThumbnailData& thumb = getOrCreateThumbnail(entry);
                 bool isSelected = (static_cast<int>(i) == m_selectedIndex);
 
-                std::string displayName = truncateToWidth(entry.name, tileWidth - 16.0f);
+                std::string displayName = entry.name;
+#ifdef TG5040_PLATFORM
+                displayName = truncateToWidth(entry.name, tileWidth - 16.0f);
+#endif
                 if (entry.isDirectory)
                 {
                     displayName = "[DIR] " + displayName;
@@ -1609,4 +1626,3 @@ void FileBrowser::resetSelectionScrollTargets()
     m_lastThumbEnsureIndex = -1;
 }
 
-#endif // TG5040_PLATFORM

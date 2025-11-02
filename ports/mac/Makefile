@@ -34,12 +34,6 @@ SRCS = $(SRC_FILES) $(wildcard $(CLI_DIR)/*.cpp)
 # Nuklear directory (using tg5040's nuklear port)
 NUKLEAR_DIR = ../tg5040/nuklear
 
-# Nuklear SDL renderer implementation
-NUKLEAR_IMPL = $(NUKLEAR_DIR)/demo/sdl_renderer/nuklear_sdl_renderer.c
-
-# Add Nuklear implementation to compilation
-SRCS += $(NUKLEAR_IMPL)
-
 # Local MuPDF Build Paths (using our custom build with libarchive support)
 MUPDF_BUILD_PATH = mupdf/build/release
 
@@ -73,8 +67,7 @@ LIBS = -L$(MUPDF_BUILD_PATH) -lmupdf -lmupdf-third \
 # All object files (will be placed in the build directory)
 # Transforms src/file.cpp into build/file.o and cli/file.cpp into build/file.o
 OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS))) \
-       $(patsubst $(CLI_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(CLI_DIR)/%,$(SRCS))) \
-       $(BUILD_DIR)/nuklear_sdl_renderer.o
+       $(patsubst $(CLI_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(CLI_DIR)/%,$(SRCS)))
 
 .PHONY: all clean build-mupdf setup-mupdf clean-mupdf check-deps install-deps clean-all help
 
@@ -162,10 +155,6 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
 
 $(BUILD_DIR)/%.o: $(CLI_DIR)/%.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
-
-# Compile Nuklear SDL renderer (C file)
-$(BUILD_DIR)/nuklear_sdl_renderer.o: $(NUKLEAR_IMPL) | $(BUILD_DIR)
-	$(CC) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
 
 # Clean up compiled files and directories
 clean:

@@ -121,11 +121,13 @@ private:
 #ifdef TG5040_PLATFORM
     std::unique_ptr<PowerHandler> m_powerHandler;
     bool m_inFakeSleep{false};
+#endif
+
+    // Scroll tracking for Nuklear list/thumbnail views (used by all platforms)
     float m_listScrollY{0.0f};
     float m_thumbnailScrollY{0.0f};
     int m_lastListEnsureIndex{-1};
     int m_lastThumbEnsureIndex{-1};
-#endif
 
     struct ThumbnailJobResult
     {
