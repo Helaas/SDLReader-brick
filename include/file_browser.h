@@ -13,12 +13,11 @@
 #include <vector>
 
 #ifdef TG5040_PLATFORM
-#include <memory>
 class PowerHandler;
-#endif
-
-// Forward declarations
+struct nk_context;
+#else
 struct ImGuiContext;
+#endif
 
 /**
  * @brief Simple file browser using ImGui
@@ -92,6 +91,9 @@ private:
 
     SDL_Window* m_window;
     SDL_Renderer* m_renderer;
+#ifdef TG5040_PLATFORM
+    nk_context* m_ctx = nullptr;
+#endif
     bool m_initialized;
     bool m_running;
     std::string m_defaultRoot;
@@ -125,6 +127,10 @@ private:
 #ifdef TG5040_PLATFORM
     std::unique_ptr<PowerHandler> m_powerHandler;
     bool m_inFakeSleep{false};
+    float m_listScrollY{0.0f};
+    float m_thumbnailScrollY{0.0f};
+    int m_lastListEnsureIndex{-1};
+    int m_lastThumbEnsureIndex{-1};
 #endif
 
     struct ThumbnailJobResult
@@ -164,6 +170,13 @@ private:
     void render();
     void renderListView(int windowWidth, int windowHeight);
     void renderThumbnailView(int windowWidth, int windowHeight);
+#ifdef TG5040_PLATFORM
+    void setupNuklearStyle();
+    void renderListViewNuklear(float viewHeight, int windowWidth);
+    void renderThumbnailViewNuklear(float viewHeight, int windowWidth);
+    void ensureSelectionVisible(float itemHeight, float viewHeight, float& scrollY, int& lastEnsureIndex);
+    void resetSelectionScrollTargets();
+#endif
 
     /**
      * @brief Handle SDL events

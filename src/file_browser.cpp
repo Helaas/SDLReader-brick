@@ -1,18 +1,40 @@
 #include "file_browser.h"
 #include "path_utils.h"
-#include <imgui.h>
 
 #ifdef TG5040_PLATFORM
+#ifndef NK_INCLUDE_FIXED_TYPES
+#define NK_INCLUDE_FIXED_TYPES
+#endif
+#ifndef NK_INCLUDE_STANDARD_IO
+#define NK_INCLUDE_STANDARD_IO
+#endif
+#ifndef NK_INCLUDE_STANDARD_VARARGS
+#define NK_INCLUDE_STANDARD_VARARGS
+#endif
+#ifndef NK_INCLUDE_DEFAULT_ALLOCATOR
+#define NK_INCLUDE_DEFAULT_ALLOCATOR
+#endif
+#ifndef NK_INCLUDE_VERTEX_BUFFER_OUTPUT
+#define NK_INCLUDE_VERTEX_BUFFER_OUTPUT
+#endif
+#ifndef NK_INCLUDE_DEFAULT_FONT
+#define NK_INCLUDE_DEFAULT_FONT
+#endif
+#ifndef NK_INCLUDE_FONT_BAKING
+#define NK_INCLUDE_FONT_BAKING
+#endif
+#include "../ports/tg5040/nuklear/nuklear.h"
+#include "../ports/tg5040/nuklear/demo/sdl_renderer/nuklear_sdl_renderer.h"
 #include "power_handler.h"
-#include <imgui_impl_sdl.h>         // TG5040 uses v1.85 headers
-#include <imgui_impl_sdlrenderer.h> // Compatible with SDL 2.0.9
 #else
-#include <imgui_impl_sdl2.h> // Modern platforms use v1.89+ headers
+#include <imgui.h>
+#include <imgui_impl_sdl2.h>        // Modern platforms use v1.89+ headers
 #include <imgui_impl_sdlrenderer2.h>
 #endif
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
@@ -25,6 +47,11 @@
 #include <utility>
 
 #include "mupdf_document.h"
+
+#ifdef TG5040_PLATFORM
+static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_B;
+static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_A;
+#endif
 
 namespace
 {
@@ -45,6 +72,33 @@ std::string truncateToWidth(const std::string& text, float maxWidth)
         return text;
     }
 
+#ifdef TG5040_PLATFORM
+    if (maxWidth <= 0.0f)
+    {
+        return text;
+    }
+
+    const float approxCharWidth = 14.0f; // heuristic for TG5040 font sizing
+    size_t maxChars = static_cast<size_t>(std::floor(maxWidth / approxCharWidth));
+    if (maxChars == 0)
+    {
+        return "...";
+    }
+
+    if (text.size() <= maxChars)
+    {
+        return text;
+    }
+
+    if (maxChars <= 3)
+    {
+        return "...";
+    }
+
+    std::string result = text.substr(0, maxChars - 3);
+    result.append("...");
+    return result;
+#else
     ImFont* font = ImGui::GetFont();
     if (!font)
     {
@@ -83,6 +137,7 @@ std::string truncateToWidth(const std::string& text, float maxWidth)
 
     result.append(ellipsis);
     return result;
+#endif
 }
 } // namespace
 
@@ -126,6 +181,20 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
     m_renderer = renderer;
     m_currentPath = startPath.empty() ? m_defaultRoot : startPath;
 
+#ifdef TG5040_PLATFORM
+    m_ctx = nk_sdl_init(m_window, m_renderer);
+    if (!m_ctx)
+    {
+        std::cerr << "Failed to initialize Nuklear SDL context" << std::endl;
+        return false;
+    }
+
+    struct nk_font_atlas* atlas = nullptr;
+    nk_sdl_font_stash_begin(&atlas);
+    nk_sdl_font_stash_end();
+
+    setupNuklearStyle();
+#else
     // Setup Dear ImGui context (or reuse existing one in browse mode)
     bool isNewContext = (ImGui::GetCurrentContext() == nullptr);
     if (isNewContext)
@@ -139,32 +208,11 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
     io.ConfigFlags = 0;                                                                          // Clear all flags first
     io.ConfigFlags &= ~(ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad); // rely on bespoke navigation to avoid ImGui's multi-highlight state
 
-#ifdef TG5040_PLATFORM
-    // FileBrowser uses 3x scaling for large, readable text on 640x480 display
-    // Always reset to default style first to avoid cumulative scaling
-    ImGui::GetStyle() = ImGuiStyle();      // Reset to default
-    ImGui::StyleColorsDark();              // Apply dark colors
-    ImGui::GetStyle().ScaleAllSizes(3.0f); // Scale to 3x from base
-    io.FontGlobalScale = 3.0f;
-#else
+    // Reset the style colors for non-TG5040 platforms
     // Reset the style colors for non-TG5040 platforms
     ImGui::StyleColorsDark();
-#endif
-
+    
     // Setup Platform/Renderer backends
-#ifdef TG5040_PLATFORM
-    if (!ImGui_ImplSDL2_InitForSDLRenderer(m_window, m_renderer))
-    {
-        std::cerr << "Failed to initialize ImGui SDL2 backend" << std::endl;
-        return false;
-    }
-
-    if (!ImGui_ImplSDLRenderer_Init(m_renderer))
-    {
-        std::cerr << "Failed to initialize ImGui SDL Renderer backend" << std::endl;
-        return false;
-    }
-#else
     if (!ImGui_ImplSDL2_InitForSDLRenderer(m_window, m_renderer))
     {
         std::cerr << "Failed to initialize ImGui SDL2 backend" << std::endl;
@@ -279,8 +327,8 @@ void FileBrowser::cleanup(bool preserveThumbnails)
     if (m_initialized)
     {
 #ifdef TG5040_PLATFORM
-        ImGui_ImplSDLRenderer_Shutdown();
-        ImGui_ImplSDL2_Shutdown();
+        nk_sdl_shutdown();
+        m_ctx = nullptr;
 #else
         ImGui_ImplSDLRenderer2_Shutdown();
         ImGui_ImplSDL2_Shutdown();
@@ -332,6 +380,9 @@ bool FileBrowser::scanDirectory(const std::string& path)
     m_entries.clear();
     m_selectedIndex = 0;
     clearPendingThumbnails();
+#ifdef TG5040_PLATFORM
+    resetSelectionScrollTargets();
+#endif
 
     bool reuseCachedThumbnails = s_cachedThumbnailsValid && pathsEqual(s_cachedDirectory, safePath);
     if (reuseCachedThumbnails)
@@ -908,6 +959,9 @@ void FileBrowser::toggleViewMode()
     m_gridColumns = 1;
     clampSelection();
     s_lastThumbnailView = m_thumbnailView;
+#ifdef TG5040_PLATFORM
+    resetSelectionScrollTargets();
+#endif
 }
 
 void FileBrowser::moveSelectionVertical(int direction)
@@ -935,6 +989,10 @@ void FileBrowser::moveSelectionVertical(int direction)
         const int total = static_cast<int>(m_entries.size());
         m_selectedIndex = (m_selectedIndex + direction + total) % total;
     }
+
+#ifdef TG5040_PLATFORM
+    resetSelectionScrollTargets();
+#endif
 }
 
 void FileBrowser::moveSelectionHorizontal(int direction)
@@ -957,6 +1015,10 @@ void FileBrowser::moveSelectionHorizontal(int direction)
         }
         m_selectedIndex = newIndex;
     }
+
+#ifdef TG5040_PLATFORM
+    resetSelectionScrollTargets();
+#endif
 }
 
 void FileBrowser::clampSelection()
@@ -992,6 +1054,12 @@ std::string FileBrowser::run()
 
     while (m_running)
     {
+#ifdef TG5040_PLATFORM
+        if (m_ctx)
+        {
+            nk_input_begin(m_ctx);
+        }
+#endif
         SDL_Event event;
         while (SDL_PollEvent(&event))
         {
@@ -1013,6 +1081,13 @@ std::string FileBrowser::run()
             handleEvent(event);
 #endif
         }
+
+#ifdef TG5040_PLATFORM
+        if (m_ctx)
+        {
+            nk_input_end(m_ctx);
+        }
+#endif
 
         // Handle continuous scrolling when D-pad is held
         Uint32 currentTime = SDL_GetTicks();
@@ -1057,6 +1132,7 @@ std::string FileBrowser::run()
     }
 
     // Clear ImGui IO state before cleanup to prevent state bleeding
+#ifndef TG5040_PLATFORM
     if (m_initialized)
     {
         ImGuiIO& io = ImGui::GetIO();
@@ -1065,6 +1141,7 @@ std::string FileBrowser::run()
         io.NavActive = false;
         io.NavVisible = false;
     }
+#endif
 
     // Cleanup ImGui immediately so it doesn't interfere with main app
     bool preserveThumbnails = m_thumbnailView && !m_selectedFile.empty();
@@ -1092,31 +1169,91 @@ std::string FileBrowser::run()
 
 void FileBrowser::render()
 {
-    // Start the Dear ImGui frame
 #ifdef TG5040_PLATFORM
-    ImGui_ImplSDLRenderer_NewFrame();
-    ImGui_ImplSDL2_NewFrame();
+    if (!m_ctx)
+    {
+        return;
+    }
+
+    int windowWidth = 0;
+    int windowHeight = 0;
+    SDL_GetWindowSize(m_window, &windowWidth, &windowHeight);
+    m_lastWindowWidth = windowWidth;
+    m_lastWindowHeight = windowHeight;
+
+    pumpThumbnailResults();
+
+    SDL_SetRenderDrawColor(m_renderer, 30, 30, 30, 255);
+    SDL_RenderClear(m_renderer);
+
+    const float windowWidthF = static_cast<float>(windowWidth);
+    const float windowHeightF = static_cast<float>(windowHeight);
+
+    if (nk_begin(m_ctx, "SDLReader###File Browser", nk_rect(0.0f, 0.0f, windowWidthF, windowHeightF),
+                 NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR))
+    {
+        const std::string pathLabel = "Cur. Directory: " + m_currentPath;
+        nk_layout_row_dynamic(m_ctx, 26.0f, 1);
+        nk_label(m_ctx, pathLabel.c_str(), NK_TEXT_LEFT);
+
+        nk_layout_row_dynamic(m_ctx, 20.0f, 1);
+        nk_label_colored(m_ctx, "D-Pad: Nav. | A: Select | B: Back | X: Toggle View | Menu: Quit",
+                         NK_TEXT_LEFT, nk_rgb(180, 180, 180));
+
+        nk_layout_row_dynamic(m_ctx, 6.0f, 1);
+        nk_spacing(m_ctx, 1);
+
+        const float contentHeight = std::max(60.0f, windowHeightF - 120.0f);
+
+        if (m_thumbnailView)
+        {
+            renderThumbnailViewNuklear(contentHeight, windowWidth);
+        }
+        else
+        {
+            renderListViewNuklear(contentHeight, windowWidth);
+            m_gridColumns = 1;
+        }
+
+        nk_layout_row_dynamic(m_ctx, 6.0f, 1);
+        nk_spacing(m_ctx, 1);
+
+        nk_layout_row_dynamic(m_ctx, 22.0f, 1);
+        if (m_entries.empty())
+        {
+            nk_label(m_ctx, "No files or directories found", NK_TEXT_LEFT);
+        }
+        else
+        {
+            int directoryCount = static_cast<int>(std::count_if(m_entries.begin(), m_entries.end(),
+                                                                [](const FileEntry& e)
+                                                                { return e.isDirectory; }));
+            int fileCount = static_cast<int>(m_entries.size()) - directoryCount;
+
+            char statusBuffer[128];
+            std::snprintf(statusBuffer, sizeof(statusBuffer), "%zu items (%d directories, %d files) | View: %s",
+                          m_entries.size(), directoryCount, fileCount,
+                          m_thumbnailView ? "Thumbnail" : "List");
+            nk_label(m_ctx, statusBuffer, NK_TEXT_LEFT);
+        }
+    }
+    nk_end(m_ctx);
+
+    nk_sdl_render(NK_ANTI_ALIASING_ON);
+    nk_sdl_handle_grab();
+    SDL_RenderPresent(m_renderer);
 #else
     ImGui_ImplSDLRenderer2_NewFrame();
     ImGui_ImplSDL2_NewFrame();
-#endif
     ImGui::NewFrame();
 
-    // Get window size
     int windowWidth, windowHeight;
     SDL_GetWindowSize(m_window, &windowWidth, &windowHeight);
     m_lastWindowWidth = windowWidth;
     m_lastWindowHeight = windowHeight;
 
-    // Create a fullscreen window
     ImGui::SetNextWindowPos(ImVec2(0, 0));
-#ifdef TG5040_PLATFORM
-    // Reduce size to account for scaled borders/padding/margins (3x scale)
-    // This prevents scrollbar from appearing
-    ImGui::SetNextWindowSize(ImVec2(static_cast<float>(windowWidth - 1), static_cast<float>(windowHeight - 1)));
-#else
     ImGui::SetNextWindowSize(ImVec2(static_cast<float>(windowWidth), static_cast<float>(windowHeight)));
-#endif
 
     ImGui::Begin("SDLReader###File Browser", nullptr,
                  ImGuiWindowFlags_NoResize |
@@ -1125,16 +1262,10 @@ void FileBrowser::render()
                      ImGuiWindowFlags_NoScrollbar |
                      ImGuiWindowFlags_NoScrollWithMouse);
 
-    // Display current path
     ImGui::TextWrapped("Cur. Directory: %s", m_currentPath.c_str());
     ImGui::Separator();
-
-    // Instructions
-#ifdef TG5040_PLATFORM
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "D-Pad: Nav. | A: Select | B: Back | X: Toggle View | Menu: Quit");
-#else
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Arrow Keys/D-Pad: Navigate | Enter/A: Select | Backspace/B: Back | X: Toggle View | Escape: Quit");
-#endif
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
+                       "Arrow Keys/D-Pad: Navigate | Enter/A: Select | Backspace/B: Back | X: Toggle View | Escape: Quit");
     ImGui::Separator();
 
     pumpThumbnailResults();
@@ -1149,7 +1280,6 @@ void FileBrowser::render()
         m_gridColumns = 1;
     }
 
-    // Status bar
     ImGui::Separator();
     if (m_entries.empty())
     {
@@ -1168,20 +1298,20 @@ void FileBrowser::render()
 
     ImGui::End();
 
-    // Rendering
     ImGui::Render();
     SDL_SetRenderDrawColor(m_renderer, 30, 30, 30, 255);
     SDL_RenderClear(m_renderer);
-#ifdef TG5040_PLATFORM
-    ImGui_ImplSDLRenderer_RenderDrawData(ImGui::GetDrawData());
-#else
     ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), m_renderer);
-#endif
     SDL_RenderPresent(m_renderer);
+#endif
 }
 
 void FileBrowser::renderListView(int windowWidth, int windowHeight)
 {
+#ifdef TG5040_PLATFORM
+    (void) windowWidth;
+    (void) windowHeight;
+#else
     (void) windowWidth;
     (void) windowHeight;
 
@@ -1215,10 +1345,15 @@ void FileBrowser::renderListView(int windowWidth, int windowHeight)
     }
 
     ImGui::EndChild();
+#endif
 }
 
 void FileBrowser::renderThumbnailView(int windowWidth, int windowHeight)
 {
+#ifdef TG5040_PLATFORM
+    (void) windowWidth;
+    (void) windowHeight;
+#else
     (void) windowHeight;
 
     ImGui::BeginChild("ThumbnailGrid", ImVec2(0, -40), true, ImGuiWindowFlags_HorizontalScrollbar);
@@ -1376,32 +1511,160 @@ void FileBrowser::renderThumbnailView(int windowWidth, int windowHeight)
     }
 
     ImGui::EndChild();
+#endif
 }
 
 void FileBrowser::handleEvent(const SDL_Event& event)
 {
-    // Let ImGui process the event first
 #ifdef TG5040_PLATFORM
-    ImGui_ImplSDL2_ProcessEvent(&event);
+    if (event.type == SDL_QUIT)
+    {
+        m_running = false;
+    }
+
+    if (m_ctx && !m_inFakeSleep)
+    {
+        nk_sdl_handle_event(const_cast<SDL_Event*>(&event));
+    }
+
+    if (m_inFakeSleep)
+    {
+        return;
+    }
+
+    switch (event.type)
+    {
+    case SDL_KEYDOWN:
+        switch (event.key.keysym.sym)
+        {
+        case SDLK_ESCAPE:
+        case SDLK_q:
+            m_running = false;
+            break;
+        case SDLK_UP:
+            moveSelectionVertical(-1);
+            break;
+        case SDLK_DOWN:
+            moveSelectionVertical(1);
+            break;
+        case SDLK_LEFT:
+            moveSelectionHorizontal(-1);
+            break;
+        case SDLK_RIGHT:
+            moveSelectionHorizontal(1);
+            break;
+        case SDLK_RETURN:
+        case SDLK_SPACE:
+            navigateInto();
+            break;
+        case SDLK_BACKSPACE:
+            navigateUp();
+            break;
+        case SDLK_x:
+            toggleViewMode();
+            break;
+        default:
+            break;
+        }
+        break;
+
+    case SDL_KEYUP:
+        switch (event.key.keysym.sym)
+        {
+        case SDLK_UP:
+            m_dpadUpHeld = false;
+            m_lastScrollTime = 0;
+            break;
+        case SDLK_DOWN:
+            m_dpadDownHeld = false;
+            m_lastScrollTime = 0;
+            break;
+        default:
+            break;
+        }
+        break;
+
+    case SDL_MOUSEBUTTONDOWN:
+        if (event.button.button == SDL_BUTTON_LEFT && event.button.clicks >= 2)
+        {
+            navigateInto();
+        }
+        break;
+
+    case SDL_CONTROLLERBUTTONDOWN:
+        switch (event.cbutton.button)
+        {
+        case SDL_CONTROLLER_BUTTON_DPAD_UP:
+            if (!m_dpadUpHeld)
+            {
+                moveSelectionVertical(-1);
+                m_dpadUpHeld = true;
+                m_lastScrollTime = SDL_GetTicks();
+            }
+            break;
+        case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+            if (!m_dpadDownHeld)
+            {
+                moveSelectionVertical(1);
+                m_dpadDownHeld = true;
+                m_lastScrollTime = SDL_GetTicks();
+            }
+            break;
+        case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+            moveSelectionHorizontal(-1);
+            break;
+        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+            moveSelectionHorizontal(1);
+            break;
+        case kAcceptButton:
+            navigateInto();
+            break;
+        case kCancelButton:
+            navigateUp();
+            break;
+        case SDL_CONTROLLER_BUTTON_X:
+            toggleViewMode();
+            break;
+        case SDL_CONTROLLER_BUTTON_BACK:
+        case SDL_CONTROLLER_BUTTON_START:
+        case SDL_CONTROLLER_BUTTON_GUIDE:
+            m_running = false;
+            break;
+        default:
+            break;
+        }
+        break;
+
+    case SDL_CONTROLLERBUTTONUP:
+        switch (event.cbutton.button)
+        {
+        case SDL_CONTROLLER_BUTTON_DPAD_UP:
+            m_dpadUpHeld = false;
+            m_lastScrollTime = 0;
+            break;
+        case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+            m_dpadDownHeld = false;
+            m_lastScrollTime = 0;
+            break;
+        default:
+            break;
+        }
+        break;
+
+    default:
+        break;
+    }
 #else
     ImGui_ImplSDL2_ProcessEvent(&event);
-#endif
 
-    // Check if ImGui wants to capture this event
     ImGuiIO& io = ImGui::GetIO();
-    if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP)
+    if ((event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) && io.WantCaptureKeyboard)
     {
-        if (io.WantCaptureKeyboard)
-        {
-            return; // ImGui is handling keyboard input
-        }
+        return;
     }
-    if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP || event.type == SDL_MOUSEMOTION)
+    if ((event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP || event.type == SDL_MOUSEMOTION) && io.WantCaptureMouse)
     {
-        if (io.WantCaptureMouse)
-        {
-            return; // ImGui is handling mouse input
-        }
+        return;
     }
 
     switch (event.type)
@@ -1417,36 +1680,28 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDLK_q:
             m_running = false;
             break;
-
         case SDLK_UP:
             moveSelectionVertical(-1);
             break;
-
         case SDLK_DOWN:
             moveSelectionVertical(1);
             break;
-
         case SDLK_LEFT:
             moveSelectionHorizontal(-1);
             break;
-
         case SDLK_RIGHT:
             moveSelectionHorizontal(1);
             break;
-
         case SDLK_RETURN:
         case SDLK_SPACE:
             navigateInto();
             break;
-
         case SDLK_BACKSPACE:
             navigateUp();
             break;
-
         case SDLK_x:
             toggleViewMode();
             break;
-
         default:
             break;
         }
@@ -1463,7 +1718,6 @@ void FileBrowser::handleEvent(const SDL_Event& event)
                 m_lastScrollTime = SDL_GetTicks();
             }
             break;
-
         case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
             if (!m_dpadDownHeld)
             {
@@ -1472,58 +1726,25 @@ void FileBrowser::handleEvent(const SDL_Event& event)
                 m_lastScrollTime = SDL_GetTicks();
             }
             break;
-
         case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
             moveSelectionHorizontal(-1);
             break;
-
         case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
             moveSelectionHorizontal(1);
             break;
-
-#ifdef TG5040_PLATFORM
-        // On TG5040: Physical A button sends SDL_CONTROLLER_BUTTON_B
-        // Physical B button sends SDL_CONTROLLER_BUTTON_A
-        // (ImGui patch only affects ImGui's internal gamepad API, not raw SDL events we receive here)
-        case SDL_CONTROLLER_BUTTON_B: // Physical A button -> Select/Enter
-            std::cout << "Button B pressed (Physical A) - navigating into" << std::endl;
-            navigateInto();
-            break;
-
-        case SDL_CONTROLLER_BUTTON_A: // Physical B button -> Back/Cancel
-            std::cout << "Button A pressed (Physical B) - navigating up" << std::endl;
-            navigateUp();
-            break;
-
-        // Menu button (physical button 10)
-        case SDL_CONTROLLER_BUTTON_BACK:
-            std::cout << "Back button pressed - exiting" << std::endl;
-            m_running = false;
-            break;
-
-        case SDL_CONTROLLER_BUTTON_X:
-            toggleViewMode();
-            break;
-#else
-        // Standard platforms: Physical A = SDL_A, Physical B = SDL_B
         case SDL_CONTROLLER_BUTTON_A:
             navigateInto();
             break;
-
         case SDL_CONTROLLER_BUTTON_B:
             navigateUp();
             break;
-
         case SDL_CONTROLLER_BUTTON_X:
             toggleViewMode();
             break;
-#endif
-
         case SDL_CONTROLLER_BUTTON_START:
         case SDL_CONTROLLER_BUTTON_GUIDE:
             m_running = false;
             break;
-
         default:
             break;
         }
@@ -1536,16 +1757,10 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             m_dpadUpHeld = false;
             m_lastScrollTime = 0;
             break;
-
         case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
             m_dpadDownHeld = false;
             m_lastScrollTime = 0;
             break;
-
-        case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-            break;
-
         default:
             break;
         }
@@ -1554,6 +1769,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
     default:
         break;
     }
+#endif
 }
 
 void FileBrowser::navigateUp()
@@ -1650,3 +1866,220 @@ bool FileBrowser::s_lastThumbnailView = false;
 bool FileBrowser::s_cachedThumbnailsValid = false;
 std::string FileBrowser::s_cachedDirectory;
 std::unordered_map<std::string, FileBrowser::ThumbnailData> FileBrowser::s_cachedThumbnails;
+#ifdef TG5040_PLATFORM
+
+void FileBrowser::setupNuklearStyle()
+{
+    if (!m_ctx)
+    {
+        return;
+    }
+
+    nk_style* style = &m_ctx->style;
+    style->window.padding = nk_vec2(12.0f, 12.0f);
+    style->window.spacing = nk_vec2(8.0f, 8.0f);
+    style->window.border_color = nk_rgb(70, 70, 80);
+    style->window.border = 1.0f;
+    style->window.background = nk_rgba(26, 26, 30, 240);
+
+    style->text.color = nk_rgb(235, 235, 235);
+
+    style->button.normal = nk_style_item_color(nk_rgb(52, 58, 68));
+    style->button.hover = nk_style_item_color(nk_rgb(70, 78, 92));
+    style->button.active = nk_style_item_color(nk_rgb(83, 93, 110));
+    style->button.border_color = nk_rgb(30, 30, 35);
+    style->button.text_normal = nk_rgb(235, 235, 235);
+    style->button.text_hover = nk_rgb(255, 255, 255);
+    style->button.text_active = nk_rgb(255, 255, 255);
+
+    style->scrollv.normal = nk_style_item_color(nk_rgba(60, 60, 70, 200));
+    style->scrollv.hover = nk_style_item_color(nk_rgba(70, 70, 80, 220));
+    style->scrollv.active = nk_style_item_color(nk_rgba(80, 80, 90, 255));
+    style->scrollv.cursor_normal = nk_style_item_color(nk_rgba(100, 100, 110, 220));
+    style->scrollv.cursor_hover = nk_style_item_color(nk_rgba(110, 110, 120, 230));
+    style->scrollv.cursor_active = nk_style_item_color(nk_rgba(120, 120, 130, 255));
+
+    style->scrollh = style->scrollv;
+}
+
+void FileBrowser::ensureSelectionVisible(float itemHeight, float viewHeight, float& scrollY, int& lastEnsureIndex)
+{
+    if (m_selectedIndex < 0 || m_entries.empty())
+    {
+        return;
+    }
+
+    float totalHeight = itemHeight * static_cast<float>(m_entries.size());
+    if (totalHeight <= viewHeight)
+    {
+        scrollY = 0.0f;
+        lastEnsureIndex = m_selectedIndex;
+        return;
+    }
+
+    float targetTop = itemHeight * static_cast<float>(m_selectedIndex);
+    float targetBottom = targetTop + itemHeight;
+
+    if (targetTop < scrollY)
+    {
+        scrollY = targetTop;
+    }
+    else if (targetBottom > scrollY + viewHeight)
+    {
+        scrollY = targetBottom - viewHeight;
+    }
+
+    scrollY = std::clamp(scrollY, 0.0f, std::max(0.0f, totalHeight - viewHeight));
+    lastEnsureIndex = m_selectedIndex;
+}
+
+void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
+{
+    (void) windowWidth;
+
+    if (!m_ctx)
+    {
+        return;
+    }
+
+    const float itemHeight = 40.0f;
+    const float clampedViewHeight = std::max(40.0f, viewHeight);
+
+    if (m_lastListEnsureIndex != m_selectedIndex)
+    {
+        ensureSelectionVisible(itemHeight, clampedViewHeight, m_listScrollY, m_lastListEnsureIndex);
+    }
+
+    nk_layout_row_dynamic(m_ctx, clampedViewHeight, 1);
+    nk_group_set_scroll(m_ctx, "FileList", 0, static_cast<nk_uint>(m_listScrollY));
+    if (nk_group_begin(m_ctx, "FileList", NK_WINDOW_BORDER | NK_WINDOW_SCROLL_AUTO_HIDE))
+    {
+        nk_layout_row_dynamic(m_ctx, itemHeight, 1);
+        for (size_t i = 0; i < m_entries.size(); ++i)
+        {
+            bool isSelected = (static_cast<int>(i) == m_selectedIndex);
+            const FileEntry& entry = m_entries[i];
+            std::string displayName = entry.isDirectory ? "[DIR] " + entry.name : entry.name;
+
+            struct nk_style_button backup = m_ctx->style.button;
+            if (isSelected)
+            {
+                m_ctx->style.button.normal = nk_style_item_color(nk_rgb(70, 110, 200));
+                m_ctx->style.button.hover = nk_style_item_color(nk_rgb(90, 130, 220));
+                m_ctx->style.button.active = nk_style_item_color(nk_rgb(100, 140, 230));
+                m_ctx->style.button.text_normal = nk_rgb(255, 255, 255);
+                m_ctx->style.button.text_hover = nk_rgb(255, 255, 255);
+                m_ctx->style.button.text_active = nk_rgb(255, 255, 255);
+            }
+
+            if (nk_button_label(m_ctx, displayName.c_str()))
+            {
+                m_selectedIndex = static_cast<int>(i);
+                m_selectedFile.clear();
+                ensureSelectionVisible(itemHeight, clampedViewHeight, m_listScrollY, m_lastListEnsureIndex);
+            }
+
+            if (isSelected)
+            {
+                m_ctx->style.button = backup;
+            }
+        }
+
+        nk_uint scrollX = 0;
+        nk_uint scrollY = 0;
+        nk_group_get_scroll(m_ctx, "FileList", &scrollX, &scrollY);
+        m_listScrollY = static_cast<float>(scrollY);
+        nk_group_end(m_ctx);
+    }
+}
+
+void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
+{
+    if (!m_ctx)
+    {
+        return;
+    }
+
+    const float baseThumb = static_cast<float>(THUMBNAIL_MAX_DIM);
+    const float tileWidth = baseThumb + 24.0f;
+    const float tileHeight = baseThumb + 48.0f;
+    int columns = std::max(1, windowWidth / static_cast<int>(tileWidth + 12.0f));
+    const float clampedViewHeight = std::max(60.0f, viewHeight);
+
+    if (m_lastThumbEnsureIndex != m_selectedIndex)
+    {
+        ensureSelectionVisible(tileHeight, clampedViewHeight, m_thumbnailScrollY, m_lastThumbEnsureIndex);
+    }
+
+    nk_layout_row_dynamic(m_ctx, clampedViewHeight, 1);
+    nk_group_set_scroll(m_ctx, "ThumbnailGrid", 0, static_cast<nk_uint>(m_thumbnailScrollY));
+    if (nk_group_begin(m_ctx, "ThumbnailGrid", NK_WINDOW_BORDER | NK_WINDOW_SCROLL_AUTO_HIDE))
+    {
+        if (!m_entries.empty())
+        {
+            nk_layout_row_begin(m_ctx, NK_STATIC, tileHeight, columns);
+            for (size_t i = 0; i < m_entries.size(); ++i)
+            {
+                nk_layout_row_push(m_ctx, tileWidth);
+                const FileEntry& entry = m_entries[i];
+                ThumbnailData& thumb = getOrCreateThumbnail(entry);
+                bool isSelected = (static_cast<int>(i) == m_selectedIndex);
+
+                std::string displayName = truncateToWidth(entry.name, tileWidth - 16.0f);
+                if (entry.isDirectory)
+                {
+                    displayName = "[DIR] " + displayName;
+                }
+
+                struct nk_style_button backup = m_ctx->style.button;
+                if (isSelected)
+                {
+                    m_ctx->style.button.normal = nk_style_item_color(nk_rgb(70, 110, 200));
+                    m_ctx->style.button.hover = nk_style_item_color(nk_rgb(90, 130, 220));
+                    m_ctx->style.button.active = nk_style_item_color(nk_rgb(100, 140, 230));
+                    m_ctx->style.button.text_normal = nk_rgb(255, 255, 255);
+                    m_ctx->style.button.text_hover = nk_rgb(255, 255, 255);
+                    m_ctx->style.button.text_active = nk_rgb(255, 255, 255);
+                }
+
+                nk_bool pressed = nk_false;
+                if (thumb.texture)
+                {
+                    struct nk_image img = nk_image_ptr(static_cast<void*>(thumb.texture.get()));
+                    pressed = nk_button_image_label(m_ctx, img, displayName.c_str(), NK_TEXT_CENTERED);
+                }
+                else
+                {
+                    pressed = nk_button_label(m_ctx, displayName.c_str());
+                }
+
+                if (pressed)
+                {
+                    m_selectedIndex = static_cast<int>(i);
+                    m_selectedFile.clear();
+                    ensureSelectionVisible(tileHeight, clampedViewHeight, m_thumbnailScrollY, m_lastThumbEnsureIndex);
+                }
+
+                if (isSelected)
+                {
+                    m_ctx->style.button = backup;
+                }
+            }
+            nk_layout_row_end(m_ctx);
+        }
+
+        nk_uint scrollX = 0;
+        nk_uint scrollY = 0;
+        nk_group_get_scroll(m_ctx, "ThumbnailGrid", &scrollX, &scrollY);
+        m_thumbnailScrollY = static_cast<float>(scrollY);
+        nk_group_end(m_ctx);
+    }
+}
+
+void FileBrowser::resetSelectionScrollTargets()
+{
+    m_lastListEnsureIndex = -1;
+    m_lastThumbEnsureIndex = -1;
+}
+
+#endif // TG5040_PLATFORM

@@ -17,6 +17,7 @@ CXX      := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTG5040_PLATFORM\
             -I$(WORKSPACE_PATH)/src -I$(WORKSPACE_PATH)/include -I$(BASE_PATH)/include -I$(BASE_PATH)/mupdf/include \
             -I$(BASE_PATH)/imgui -I$(BASE_PATH)/imgui/backends \
+            -I$(BASE_PATH)/nuklear -I$(BASE_PATH)/nuklear/demo/sdl_renderer \
             -I/usr/local/libarchive-minimal/include -D_REENTRANT -I/usr/include/SDL2
 
 # Source directories
@@ -71,10 +72,10 @@ LIBS := -lSDL2_ttf -lSDL2 \
   -ljpeg -lopenjp2 -lharfbuzz -ljbig2dec \
   -lfreetype -lz -llzma -lm -lpthread -ldl -lwebp -lwebpdemux -lgumbo -lstdc++fs
 
-.PHONY: all clean export-bundle build-mupdf setup-mupdf clean-mupdf build-libarchive clean-libarchive setup-imgui clean-imgui check-libarchive
+.PHONY: all clean export-bundle build-mupdf setup-mupdf clean-mupdf build-libarchive clean-libarchive setup-imgui clean-imgui setup-nuklear clean-nuklear check-libarchive
 
 # Default goal - ensures minimal libarchive is built before anything else
-all: setup-imgui build-libarchive setup-mupdf build-mupdf $(TARGET)
+all: setup-imgui setup-nuklear build-libarchive setup-mupdf build-mupdf $(TARGET)
 
 # Helper target to verify minimal libarchive is built
 check-libarchive:
@@ -84,6 +85,29 @@ check-libarchive:
 		exit 1; \
 	else \
 		echo "✓ Minimal libarchive found at $(LIBARCHIVE_MINIMAL)"; \
+	fi
+
+# Setup Nuklear GUI library (header-only) if it doesn't exist
+setup-nuklear:
+	@cd $(BASE_PATH) && \
+	if [ ! -d "nuklear" ]; then \
+		echo "Setting up Nuklear GUI library (v4.12.2) for SDL 2.0.9 support..."; \
+		rm -rf nuklear; \
+		git clone --depth 1 --branch 4.12.2 https://github.com/Immediate-Mode-UI/Nuklear.git nuklear; \
+		echo "Nuklear repository cloned"; \
+	else \
+		echo "Nuklear repository already present"; \
+	fi
+	@cd $(BASE_PATH) && \
+	if [ -d "nuklear" ]; then \
+		if [ ! -f "nuklear/.tg5040_patched" ]; then \
+			echo "Applying TG5040 SDL renderer compatibility patch to Nuklear..."; \
+		(cd nuklear && (patch -s -N -p0 < ../patches/nuklear_sdl_renderer_compat.patch || true)); \
+		touch nuklear/.tg5040_patched; \
+		rm -f nuklear/demo/sdl_renderer/nuklear_sdl_renderer.h.rej; \
+		else \
+			echo "Nuklear SDL renderer already patched"; \
+		fi; \
 	fi
 
 # Setup Dear ImGui if it doesn't exist or is incomplete
@@ -297,6 +321,11 @@ clean-libarchive:
 		rm -rf /usr/local/libarchive-minimal; \
 	fi
 	@echo "Minimal libarchive cleaned"
+
+# Clean Nuklear checkout
+clean-nuklear:
+	@echo "Removing Nuklear checkout..."
+	rm -rf $(BASE_PATH)/nuklear
 
 # Clean ImGui (removes the entire directory)
 clean-imgui:

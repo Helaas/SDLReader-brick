@@ -2,7 +2,13 @@
 #define APP_H
 
 #include "document.h"
+#ifdef TG5040_PLATFORM
+#include "nuklear_gui_manager.h"
+using GuiManagerType = NuklearGuiManager;
+#else
 #include "gui_manager.h"
+using GuiManagerType = GuiManager;
+#endif
 #include "input_manager.h"
 #include "navigation_manager.h"
 #include "options_manager.h"
@@ -17,6 +23,7 @@
 
 #include <SDL.h>
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -138,7 +145,7 @@ private:
 
     // Core managers
     std::unique_ptr<Document> m_document;
-    std::unique_ptr<GuiManager> m_guiManager;
+    std::unique_ptr<GuiManagerType> m_guiManager;
     std::unique_ptr<OptionsManager> m_optionsManager;
     std::unique_ptr<ReadingHistoryManager> m_readingHistoryManager;
     std::unique_ptr<InputManager> m_inputManager;
@@ -229,6 +236,8 @@ private:
         if (m_renderManager)
             m_renderManager->updatePageDisplayTime();
     }
+
+    std::function<void(int)> makeSetCurrentPageCallback();
 };
 
 #endif // APP_H
