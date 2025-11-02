@@ -675,7 +675,7 @@ void GuiManager::renderFontMenu()
 
         // Get all available reading styles
         auto allStyles = OptionsManager::getAllReadingStyles();
-        
+
         // Ensure selected index is valid
         if (m_selectedStyleIndex < 0 || m_selectedStyleIndex >= (int) allStyles.size())
         {
@@ -695,7 +695,7 @@ void GuiManager::renderFontMenu()
             m_ctx->style.combo.hover = nk_style_item_color(nk_rgb(30, 142, 255));
             m_ctx->style.combo.active = nk_style_item_color(nk_rgb(0, 102, 235));
         }
-        
+
         const char* currentStyle = OptionsManager::getReadingStyleName(allStyles[m_selectedStyleIndex]);
 
         if (m_styleDropdownHighlightedIndex < 0 || m_styleDropdownHighlightedIndex >= (int) allStyles.size())
@@ -872,7 +872,7 @@ void GuiManager::renderFontMenu()
 
         // Edge Progress Bar checkbox
         nk_layout_row_dynamic(m_ctx, 25, 1);
-        
+
         // Highlight checkbox if focused
         struct nk_style_toggle originalToggleStyle = m_ctx->style.checkbox;
         if (m_mainScreenFocusIndex == WIDGET_EDGE_PROGRESS_CHECKBOX)
@@ -882,16 +882,16 @@ void GuiManager::renderFontMenu()
             m_ctx->style.checkbox.cursor_normal = nk_style_item_color(nk_rgb(0, 122, 255));
             m_ctx->style.checkbox.cursor_hover = nk_style_item_color(nk_rgb(30, 142, 255));
         }
-        
+
         nk_bool disableEdgeBar = m_tempConfig.disableEdgeProgressBar ? nk_true : nk_false;
         if (nk_checkbox_label(m_ctx, "Disable Edge Progress Bar", &disableEdgeBar))
         {
             m_tempConfig.disableEdgeProgressBar = (disableEdgeBar == nk_true);
         }
-        
+
         // Restore checkbox style
         m_ctx->style.checkbox = originalToggleStyle;
-        
+
         // Help text
         nk_layout_row_dynamic(m_ctx, 30, 1);
         nk_label_colored_wrap(m_ctx, "When enabled, panning at page edges changes pages instantly. When disabled, hold at edge for 300ms.", nk_rgb(178, 178, 178));
@@ -900,7 +900,7 @@ void GuiManager::renderFontMenu()
 
         // Document Minimap checkbox
         nk_layout_row_dynamic(m_ctx, 25, 1);
-        
+
         // Highlight checkbox if focused
         if (m_mainScreenFocusIndex == WIDGET_MINIMAP_CHECKBOX)
         {
@@ -909,16 +909,16 @@ void GuiManager::renderFontMenu()
             m_ctx->style.checkbox.cursor_normal = nk_style_item_color(nk_rgb(0, 122, 255));
             m_ctx->style.checkbox.cursor_hover = nk_style_item_color(nk_rgb(30, 142, 255));
         }
-        
+
         nk_bool showMinimap = m_tempConfig.showDocumentMinimap ? nk_true : nk_false;
         if (nk_checkbox_label(m_ctx, "Show Document Minimap", &showMinimap))
         {
             m_tempConfig.showDocumentMinimap = (showMinimap == nk_true);
         }
-        
+
         // Restore checkbox style
         m_ctx->style.checkbox = originalToggleStyle;
-        
+
         // Help text
         nk_layout_row_dynamic(m_ctx, 30, 1);
         nk_label_colored_wrap(m_ctx, "Show a miniature page overlay when zoomed in to visualize which part is visible.", nk_rgb(178, 178, 178));
@@ -1842,7 +1842,7 @@ void GuiManager::activateFocusedWidget()
         m_tempConfig = m_currentConfig;
         m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
         m_fontDropdownHighlightedIndex = m_selectedFontIndex;
-        
+
         // Update reading style index
         auto allStyles = OptionsManager::getAllReadingStyles();
         m_selectedStyleIndex = 0;
@@ -1855,7 +1855,7 @@ void GuiManager::activateFocusedWidget()
             }
         }
         m_styleDropdownHighlightedIndex = m_selectedStyleIndex;
-        
+
         snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
         snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_currentConfig.zoomStep);
         if (m_closeCallback)
