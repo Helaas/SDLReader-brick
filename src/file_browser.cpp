@@ -22,6 +22,8 @@
 #ifndef NK_INCLUDE_FONT_BAKING
 #define NK_INCLUDE_FONT_BAKING
 #endif
+// IMPORTANT: nuklear.h MUST be included before nuklear_sdl_renderer.h
+// The SDL renderer header depends on types defined in the main Nuklear header
 #include "nuklear.h"
 #include "demo/sdl_renderer/nuklear_sdl_renderer.h"
 #ifdef TG5040_PLATFORM
