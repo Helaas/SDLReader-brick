@@ -1625,4 +1625,3 @@ void FileBrowser::resetSelectionScrollTargets()
     m_lastListEnsureIndex = -1;
     m_lastThumbEnsureIndex = -1;
 }
-
