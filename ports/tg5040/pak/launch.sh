@@ -59,12 +59,14 @@ export SDL_READER_STATE_DIR="$HOME"
 
 # Library path (only prepend if lib directory exists)
 if [ -d "$PAK_DIR/lib" ]; then
+    BASE_SYSTEM_LIBS="/usr/lib:/lib:/usr/local/lib:/usr/trimui/lib:/rom/usr/trimui/lib"
     if [ -n "${LD_LIBRARY_PATH-}" ]; then
-        export LD_LIBRARY_PATH="$PAK_DIR/lib:$LD_LIBRARY_PATH"
+        export LD_LIBRARY_PATH="$BASE_SYSTEM_LIBS:$PAK_DIR/lib:$LD_LIBRARY_PATH"
     else
-        export LD_LIBRARY_PATH="$PAK_DIR/lib"
+        export LD_LIBRARY_PATH="$BASE_SYSTEM_LIBS:$PAK_DIR/lib"
     fi
 fi
+echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH-}"
 
 READER_BIN="$BIN_DIR/sdl_reader_cli"
 
