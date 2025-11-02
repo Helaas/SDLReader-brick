@@ -25,7 +25,10 @@ public:
     void render();
 
     bool isFontMenuVisible() const;
-    bool isFontMenuOpen() const { return m_showFontMenu; }
+    bool isFontMenuOpen() const
+    {
+        return m_showFontMenu;
+    }
     void toggleFontMenu();
 
     void setFontApplyCallback(std::function<void(const FontConfig&)> callback)

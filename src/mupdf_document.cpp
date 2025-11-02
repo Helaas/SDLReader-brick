@@ -673,7 +673,8 @@ int MuPdfDocument::getPageCount() const
 
 void MuPdfDocument::setMaxRenderSize(int width, int height)
 {
-    auto roundUpToBucket = [](int value) -> int {
+    auto roundUpToBucket = [](int value) -> int
+    {
         constexpr int GRANULARITY = 128;
         if (value <= 0)
             return 0;

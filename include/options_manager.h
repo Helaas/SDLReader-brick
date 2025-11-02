@@ -37,14 +37,14 @@ enum class ReadingStyle
  */
 struct FontConfig
 {
-    std::string fontPath;                              // Path to selected font file
-    std::string fontName;                              // Display name of selected font
-    int fontSize = 12;                                 // Font size in points
-    int zoomStep = 10;                                 // Zoom increment/decrement step
+    std::string fontPath;                                      // Path to selected font file
+    std::string fontName;                                      // Display name of selected font
+    int fontSize = 12;                                         // Font size in points
+    int zoomStep = 10;                                         // Zoom increment/decrement step
     std::string lastBrowseDirectory = getDefaultLibraryRoot(); // Last browsed directory for file browser
-    ReadingStyle readingStyle = ReadingStyle::Default; // Reading style/theme
-    bool disableEdgeProgressBar = false;               // Disable edge nudge progress bar for instant page turns
-    bool showDocumentMinimap = true;                   // Display minimap overlay when zoomed in
+    ReadingStyle readingStyle = ReadingStyle::Default;         // Reading style/theme
+    bool disableEdgeProgressBar = false;                       // Disable edge nudge progress bar for instant page turns
+    bool showDocumentMinimap = true;                           // Display minimap overlay when zoomed in
 
     // Default constructor
     FontConfig() = default;
