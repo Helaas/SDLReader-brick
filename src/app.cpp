@@ -14,6 +14,7 @@
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 
 // --- App Class ---
 
@@ -25,7 +26,10 @@ App::App(const std::string& filename, SDL_Window* window, SDL_GLContext glContex
     SDL_Window* localWindow = window;
     if (localWindow && glContext)
     {
-        SDL_GL_MakeCurrent(localWindow, glContext);
+        if (SDL_GL_MakeCurrent(localWindow, glContext) != 0)
+        {
+            throw std::runtime_error(std::string("SDL_GL_MakeCurrent failed: ") + SDL_GetError());
+        }
     }
 
 #ifdef TG5040_PLATFORM

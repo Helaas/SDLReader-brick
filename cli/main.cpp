@@ -115,10 +115,23 @@ int main(int argc, char* argv[])
         cleanupSDL(window, glContext);
         return 1;
     }
+    if (SDL_GL_MakeCurrent(window, glContext) != 0)
+    {
+        std::cerr << "SDL_GL_MakeCurrent failed: " << SDL_GetError() << std::endl;
+        cleanupSDL(window, glContext);
+        return 1;
+    }
     if (SDL_GL_SetSwapInterval(1) != 0)
     {
         std::cerr << "Warning: Unable to set VSync! SDL_Error: " << SDL_GetError() << std::endl;
     }
+
+    const GLubyte* glVersion = glGetString(GL_VERSION);
+    const GLubyte* glRenderer = glGetString(GL_RENDERER);
+    const GLubyte* glslVersion = glGetString(GL_SHADING_LANGUAGE_VERSION);
+    std::cout << "GL Version: " << (glVersion ? reinterpret_cast<const char*>(glVersion) : "unknown") << std::endl;
+    std::cout << "GL Renderer: " << (glRenderer ? reinterpret_cast<const char*>(glRenderer) : "unknown") << std::endl;
+    std::cout << "GLSL Version: " << (glslVersion ? reinterpret_cast<const char*>(glslVersion) : "unknown") << std::endl;
 
     // Main loop: If browse mode, keep returning to file browser after closing document
     FileBrowser browser;

@@ -14,10 +14,10 @@ endif
 
 # Compiler and flags
 CXX      := g++
-CXXFLAGS := -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTG5040_PLATFORM\
+CXXFLAGS := -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTG5040_PLATFORM -DIMGUI_IMPL_OPENGL_DEBUG\
             -I$(WORKSPACE_PATH)/src -I$(WORKSPACE_PATH)/include -I$(BASE_PATH)/include -I$(BASE_PATH)/mupdf/include \
             -I$(BASE_PATH)/imgui -I$(BASE_PATH)/imgui/backends \
-            -I/usr/local/libarchive-minimal/include -D_REENTRANT -I/usr/include/SDL2 -DIMGUI_IMPL_OPENGL_ES2
+            -I/usr/local/libarchive-minimal/include -D_REENTRANT -I/usr/include/SDL2 -DIMGUI_IMPL_OPENGL_ES3
 
 # Source directories
 SRC_DIR = $(WORKSPACE_PATH)/src

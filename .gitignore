@@ -31,3 +31,4 @@ ports/tg5040/imgui
 imgui.ini
 reading_history.json
 test_transform.log
+ports/tg5040/bundle/*

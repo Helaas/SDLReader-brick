@@ -3,6 +3,15 @@
 #include <imgui.h>
 
 #ifdef TG5040_PLATFORM
+#include <SDL_opengles2.h>
+#else
+#include <SDL_opengl.h>
+#if defined(__APPLE__)
+#include <OpenGL/gl3.h>
+#endif
+#endif
+
+#ifdef TG5040_PLATFORM
 #include "power_handler.h"
 #include <imgui_impl_sdl.h>
 #else
@@ -137,7 +146,11 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_GLContext glContext, const 
 
     if (m_window && m_glContext)
     {
-        SDL_GL_MakeCurrent(m_window, m_glContext);
+        if (SDL_GL_MakeCurrent(m_window, m_glContext) != 0)
+        {
+            std::cerr << "FileBrowser::initialize: SDL_GL_MakeCurrent failed: " << SDL_GetError() << std::endl;
+            return false;
+        }
     }
 
     // Setup Dear ImGui context (or reuse existing one in browse mode)
@@ -166,20 +179,33 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_GLContext glContext, const 
 #endif
 
     // Setup Platform/Renderer backends
+    const char* gl_version_str = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+
 #ifdef TG5040_PLATFORM
+    const char* glsl_version = "#version 100";
+    if (gl_version_str && std::strstr(gl_version_str, "OpenGL ES 3"))
+    {
+        glsl_version = "#version 300 es";
+    }
     if (!ImGui_ImplSDL2_InitForOpenGL(m_window, m_glContext))
     {
         std::cerr << "Failed to initialize ImGui SDL backend" << std::endl;
         return false;
     }
-    const char* glsl_version = "#version 100";
 #else
+    const char* glsl_version = "#version 150";
+    if (gl_version_str)
+    {
+        if (std::strstr(gl_version_str, "OpenGL ES 3"))
+            glsl_version = "#version 300 es";
+        else if (std::strstr(gl_version_str, "OpenGL ES 2"))
+            glsl_version = "#version 100";
+    }
     if (!ImGui_ImplSDL2_InitForOpenGL(m_window, m_glContext))
     {
         std::cerr << "Failed to initialize ImGui SDL2 backend" << std::endl;
         return false;
     }
-    const char* glsl_version = "#version 150";
 #endif
 
     if (!ImGui_ImplOpenGL3_Init(glsl_version))
@@ -289,7 +315,11 @@ void FileBrowser::cleanup(bool preserveThumbnails)
 
     if (m_window && m_glContext)
     {
-        SDL_GL_MakeCurrent(m_window, m_glContext);
+        if (SDL_GL_MakeCurrent(m_window, m_glContext) != 0)
+        {
+            std::cerr << "FileBrowser::render: SDL_GL_MakeCurrent failed: " << SDL_GetError() << std::endl;
+            return;
+        }
     }
 
     if (m_initialized)

@@ -4,6 +4,15 @@
 #include <imgui.h>
 #include <imgui_internal.h> // For navigation wrapping functions
 
+#ifdef TG5040_PLATFORM
+#include <SDL_opengles2.h>
+#else
+#include <SDL_opengl.h>
+#if defined(__APPLE__)
+#include <OpenGL/gl3.h>
+#endif
+#endif
+
 // Platform-specific ImGui backends
 #ifdef TG5040_PLATFORM
 #include <imgui_impl_sdl.h>
@@ -34,6 +43,12 @@ bool GuiManager::initialize(SDL_Window* window, SDL_GLContext glContext)
 
     m_window = window;
     m_glContext = glContext;
+
+    if (SDL_GL_MakeCurrent(window, glContext) != 0)
+    {
+        std::cerr << "GuiManager::initialize: SDL_GL_MakeCurrent failed: " << SDL_GetError() << std::endl;
+        return false;
+    }
 
     // Setup Dear ImGui context (or reuse existing one from FileBrowser)
     bool isNewContext = (ImGui::GetCurrentContext() == nullptr);
@@ -66,7 +81,23 @@ bool GuiManager::initialize(SDL_Window* window, SDL_GLContext glContext)
         std::cerr << "Failed to initialize ImGui SDL backend" << std::endl;
         return false;
     }
+    const char* gl_version_str = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+#ifdef TG5040_PLATFORM
     const char* glsl_version = "#version 100";
+    if (gl_version_str && std::strstr(gl_version_str, "OpenGL ES 3"))
+    {
+        glsl_version = "#version 300 es";
+    }
+#else
+    const char* glsl_version = "#version 150";
+    if (gl_version_str)
+    {
+        if (std::strstr(gl_version_str, "OpenGL ES 3"))
+            glsl_version = "#version 300 es";
+        else if (std::strstr(gl_version_str, "OpenGL ES 2"))
+            glsl_version = "#version 100";
+    }
+#endif
 #else
     if (!ImGui_ImplSDL2_InitForOpenGL(window, glContext))
     {
@@ -333,7 +364,11 @@ void GuiManager::newFrame()
 
     if (m_window && m_glContext)
     {
-        SDL_GL_MakeCurrent(m_window, m_glContext);
+        if (SDL_GL_MakeCurrent(m_window, m_glContext) != 0)
+        {
+            std::cerr << "GuiManager::newFrame: SDL_GL_MakeCurrent failed: " << SDL_GetError() << std::endl;
+            return;
+        }
     }
 
     ImGui_ImplOpenGL3_NewFrame();
@@ -350,7 +385,11 @@ void GuiManager::render()
 
     if (m_window && m_glContext)
     {
-        SDL_GL_MakeCurrent(m_window, m_glContext);
+        if (SDL_GL_MakeCurrent(m_window, m_glContext) != 0)
+        {
+            std::cerr << "GuiManager::render: SDL_GL_MakeCurrent failed: " << SDL_GetError() << std::endl;
+            return;
+        }
     }
 
     // Render our font menu
