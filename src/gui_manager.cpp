@@ -232,57 +232,34 @@ bool GuiManager::handleEvent(const SDL_Event& event)
         return false;
     }
 
-    // Debug: Print event information when GUI is visible
-    if (m_showFontMenu || m_showNumberPad)
-    {
-        if (event.type == SDL_KEYDOWN)
-        {
-            std::cout << "[DEBUG] Key DOWN: " << SDL_GetKeyName(event.key.keysym.sym)
-                      << " (scancode: " << event.key.keysym.scancode << ")" << std::endl;
-        }
-        else if (event.type == SDL_KEYUP)
-        {
-            std::cout << "[DEBUG] Key UP: " << SDL_GetKeyName(event.key.keysym.sym) << std::endl;
-        }
-        else if (event.type == SDL_MOUSEBUTTONDOWN)
-        {
-            std::cout << "[DEBUG] Mouse DOWN at (" << event.button.x << ", " << event.button.y << ")" << std::endl;
-        }
-        else if (event.type == SDL_CONTROLLERBUTTONDOWN)
-        {
-            std::cout << "[DEBUG] Controller button DOWN: " << event.cbutton.button << std::endl;
-        }
-    }
-
     // Handle number pad input if visible
     if (m_showNumberPad && handleNumberPadInput(event))
     {
-        std::cout << "[DEBUG] Number pad handled event" << std::endl;
         return true;
     }
 
     // Handle keyboard navigation for GUI (before nuklear gets the events)
     if (handleKeyboardNavigation(event))
     {
-        std::cout << "[DEBUG] Keyboard navigation handled event" << std::endl;
         return true;
     }
 
     // Handle controller input for general GUI navigation
     if (handleControllerInput(event))
     {
-        std::cout << "[DEBUG] Controller input handled event" << std::endl;
         return true;
     }
 
-    // Use the proper SDL event handler for remaining events
-    bool nuklearHandled = nk_sdl_handle_event(const_cast<SDL_Event*>(&event));
-
-    if (m_showFontMenu || m_showNumberPad)
+    // Only let Nuklear consume events when a menu is actually visible
+    // Otherwise, keyboard input bleeds through and app can't process it
+    if (!m_showFontMenu && !m_showNumberPad)
     {
-        std::cout << "[DEBUG] nuklear handled event: " << (nuklearHandled ? "YES" : "NO") << std::endl;
+        // No menu visible - don't consume the event
+        return false;
     }
 
+    // Menu is visible - let Nuklear handle the event
+    bool nuklearHandled = nk_sdl_handle_event(const_cast<SDL_Event*>(&event));
     return nuklearHandled;
 }
 
@@ -397,15 +374,18 @@ void GuiManager::renderFontMenu()
     if (!m_ctx)
         return;
 
-    // Debug: Print nuklear input state periodically
+    // Nuklear state debug disabled (was too spammy)
+    // Uncomment below to debug Nuklear input state periodically
+    /*
     static int debugCounter = 0;
-    if (debugCounter++ % 60 == 0) // Print every 60 frames (about once per second at 60fps)
+    if (debugCounter++ % 60 == 0)
     {
         std::cout << "[DEBUG] Nuklear state - mouse: ("
                   << m_ctx->input.mouse.pos.x << ", " << m_ctx->input.mouse.pos.y << ")"
                   << ", mouse down: " << (m_ctx->input.mouse.buttons[0].down ? "YES" : "NO")
                   << ", keys pressed: " << m_ctx->input.keyboard.text_len << std::endl;
     }
+    */
 
     int windowWidth, windowHeight;
     SDL_GetWindowSize(m_window, &windowWidth, &windowHeight);
@@ -1644,29 +1624,23 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
         // Handle main screen navigation using our custom system
         if (m_showFontMenu)
         {
-            std::cout << "[DEBUG] Controller dpad input for font menu: " << event.cbutton.button << std::endl;
             switch (event.cbutton.button)
             {
             case SDL_CONTROLLER_BUTTON_DPAD_UP:
                 // Navigate up - move to previous widget
                 m_mainScreenFocusIndex = (m_mainScreenFocusIndex - 1 + WIDGET_COUNT) % WIDGET_COUNT;
-                std::cout << "[DEBUG] Controller UP - new focus: " << m_mainScreenFocusIndex << std::endl;
                 return true;
             case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
                 // Navigate down - move to next widget
                 m_mainScreenFocusIndex = (m_mainScreenFocusIndex + 1) % WIDGET_COUNT;
-                std::cout << "[DEBUG] Controller DOWN - new focus: " << m_mainScreenFocusIndex << std::endl;
                 return true;
             case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-                std::cout << "[DEBUG] Controller LEFT - adjusting widget" << std::endl;
                 adjustFocusedWidget(-1);
                 return true;
             case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-                std::cout << "[DEBUG] Controller RIGHT - adjusting widget" << std::endl;
                 adjustFocusedWidget(1);
                 return true;
             case kAcceptButton:
-                std::cout << "[DEBUG] Controller A - activating widget " << m_mainScreenFocusIndex << std::endl;
                 activateFocusedWidget();
                 return true;
             }
