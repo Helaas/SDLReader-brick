@@ -2,12 +2,19 @@
 #include <algorithm> // For std::max
 #include <iostream>
 #include <stdexcept> // For std::runtime_error
+#include <vector>
+#include <cstring>
 
 // --- TextRenderer Class ---
 
-TextRenderer::TextRenderer(SDL_Renderer* renderer, const std::string& fontPath, int fontSize)
-    : m_sdlRenderer(renderer), m_fontPath(fontPath), m_baseFontSize(fontSize), m_currentFontSize(0)
+TextRenderer::TextRenderer(Renderer* renderer, const std::string& fontPath, int fontSize)
+    : m_renderer(renderer), m_fontPath(fontPath), m_baseFontSize(fontSize), m_currentFontSize(0)
 {
+    if (!m_renderer)
+    {
+        throw std::runtime_error("TextRenderer received a null Renderer pointer.");
+    }
+
     if (TTF_Init() == -1)
     {
         // TBD - change to overlay warning message, prompting user to exit.
@@ -78,15 +85,19 @@ void TextRenderer::renderText(const std::string& text, int x, int y, SDL_Color c
         return;
     }
 
-    std::unique_ptr<SDL_Texture, MySDLTextureDeleter> textTexture(
-        SDL_CreateTextureFromSurface(m_sdlRenderer, textSurface.get()));
-    if (!textTexture)
+    std::unique_ptr<SDL_Surface, void (*)(SDL_Surface*)> converted(
+        SDL_ConvertSurfaceFormat(textSurface.get(), SDL_PIXELFORMAT_ARGB8888, 0),
+        SDL_FreeSurface);
+    if (!converted)
     {
-        std::cerr << "Error: Unable to create texture from rendered text! SDL_Error: " << SDL_GetError() << std::endl;
+        std::cerr << "Error: Unable to convert text surface to ARGB8888! SDL_Error: " << SDL_GetError() << std::endl;
         return;
     }
 
-    SDL_Rect renderQuad = {x, y, textSurface->w, textSurface->h};
+    const int width = converted->w;
+    const int height = converted->h;
+    std::vector<uint32_t> pixels(static_cast<size_t>(width) * static_cast<size_t>(height));
+    std::memcpy(pixels.data(), converted->pixels, pixels.size() * sizeof(uint32_t));
 
-    SDL_RenderCopy(m_sdlRenderer, textTexture.get(), NULL, &renderQuad);
+    m_renderer->drawARGBImage(pixels.data(), width, height, x, y, width, height, false, false);
 }

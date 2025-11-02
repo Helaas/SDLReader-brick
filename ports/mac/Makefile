@@ -39,7 +39,7 @@ IMGUI_SRCS = $(IMGUI_DIR)/imgui.cpp \
              $(IMGUI_DIR)/imgui_tables.cpp \
              $(IMGUI_DIR)/imgui_widgets.cpp \
              $(IMGUI_DIR)/backends/imgui_impl_sdl2.cpp \
-             $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer2.cpp
+             $(IMGUI_DIR)/backends/imgui_impl_opengl3.cpp
 
 # Add ImGui sources to compilation
 SRCS += $(IMGUI_SRCS)
@@ -72,7 +72,7 @@ INC_PATHS = $(shell pkg-config --cflags SDL2_ttf SDL2_image sdl2)
 LIBS = -L$(MUPDF_BUILD_PATH) -lmupdf -lmupdf-third \
        -L/opt/homebrew/opt/libarchive/lib -larchive \
        -L/opt/homebrew/opt/webp/lib -lwebp -lwebpdemux \
-       $(shell pkg-config --libs SDL2_ttf SDL2_image sdl2)
+       $(shell pkg-config --libs SDL2_ttf SDL2_image sdl2) -framework OpenGL
 
 # All object files (will be placed in the build directory)
 # Transforms src/file.cpp into build/file.o and cli/file.cpp into build/file.o
@@ -84,7 +84,7 @@ OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS
        $(BUILD_DIR)/imgui_tables.o \
        $(BUILD_DIR)/imgui_widgets.o \
        $(BUILD_DIR)/imgui_impl_sdl2.o \
-       $(BUILD_DIR)/imgui_impl_sdlrenderer2.o
+       $(BUILD_DIR)/imgui_impl_opengl3.o
 
 .PHONY: all clean build-mupdf setup-mupdf clean-mupdf setup-imgui check-deps install-deps clean-imgui clean-all help
 
@@ -207,7 +207,7 @@ $(BUILD_DIR)/imgui_widgets.o: $(IMGUI_DIR)/imgui_widgets.cpp | $(BUILD_DIR)
 $(BUILD_DIR)/imgui_impl_sdl2.o: $(IMGUI_DIR)/backends/imgui_impl_sdl2.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
 
-$(BUILD_DIR)/imgui_impl_sdlrenderer2.o: $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer2.cpp | $(BUILD_DIR)
+$(BUILD_DIR)/imgui_impl_opengl3.o: $(IMGUI_DIR)/backends/imgui_impl_opengl3.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
 
 # Clean up compiled files and directories

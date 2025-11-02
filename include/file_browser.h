@@ -2,6 +2,17 @@
 #define FILE_BROWSER_H
 
 #include <SDL.h>
+#ifdef TG5040_PLATFORM
+#include <SDL_opengles2.h>
+#else
+#if defined(__APPLE__)
+#define GL_SILENCE_DEPRECATION
+#include <OpenGL/gl3.h>
+#include <OpenGL/gl3ext.h>
+#else
+#include <SDL_opengl.h>
+#endif
+#endif
 #include <condition_variable>
 #include <deque>
 #include <functional>
@@ -36,7 +47,7 @@ public:
      * @param startPath Initial directory to browse (empty string uses default library root)
      * @return true if successful
      */
-    bool initialize(SDL_Window* window, SDL_Renderer* renderer, const std::string& startPath = std::string());
+    bool initialize(SDL_Window* window, SDL_GLContext glContext, const std::string& startPath = std::string());
 
     /**
      * @brief Run the file browser main loop
@@ -70,20 +81,9 @@ private:
         }
     };
 
-    struct SDLTextureDeleter
-    {
-        void operator()(SDL_Texture* texture) const
-        {
-            if (texture)
-            {
-                SDL_DestroyTexture(texture);
-            }
-        }
-    };
-
     struct ThumbnailData
     {
-        std::unique_ptr<SDL_Texture, SDLTextureDeleter> texture;
+        GLuint textureId{0};
         int width{0};
         int height{0};
         bool failed{false};
@@ -91,7 +91,7 @@ private:
     };
 
     SDL_Window* m_window;
-    SDL_Renderer* m_renderer;
+    SDL_GLContext m_glContext;
     bool m_initialized;
     bool m_running;
     std::string m_defaultRoot;
@@ -191,8 +191,8 @@ private:
     bool buildDirectoryThumbnailPixels(std::vector<uint32_t>& pixels, int& width, int& height);
     bool generateDirectoryThumbnail(const FileEntry& entry, ThumbnailData& data);
     void clearThumbnailCache();
-    SDL_Texture* createTextureFromPixels(const std::vector<uint32_t>& pixels, int width, int height);
-    SDL_Texture* createSolidTexture(int width, int height, SDL_Color color, Uint8 alpha = 255);
+    GLuint createTextureFromPixels(const std::vector<uint32_t>& pixels, int width, int height);
+    GLuint createSolidTexture(int width, int height, SDL_Color color, Uint8 alpha = 255);
     void startThumbnailWorker();
     void stopThumbnailWorker();
     void enqueueThumbnailJob(const FileEntry& entry);

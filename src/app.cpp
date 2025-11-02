@@ -17,14 +17,16 @@
 
 // --- App Class ---
 
-// Constructor now accepts pre-initialized SDL_Window* and SDL_Renderer*
-App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer)
+App::App(const std::string& filename, SDL_Window* window, SDL_GLContext glContext)
     : m_running(true)
 {
 
-    // Store window and renderer for RenderManager initialization
+    // Store window for RenderManager initialization
     SDL_Window* localWindow = window;
-    SDL_Renderer* localSDLRenderer = renderer;
+    if (localWindow && glContext)
+    {
+        SDL_GL_MakeCurrent(localWindow, glContext);
+    }
 
 #ifdef TG5040_PLATFORM
     // Initialize power handler
@@ -174,7 +176,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
 
     // Initialize GUI manager AFTER font manager
     m_guiManager = std::make_unique<GuiManager>();
-    if (!m_guiManager->initialize(window, renderer))
+    if (!m_guiManager->initialize(window, glContext))
     {
         throw std::runtime_error("Failed to initialize GUI manager");
     }
@@ -215,7 +217,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
               << ", Style=" << static_cast<int>(savedConfig.readingStyle) << std::endl;
 
     // Initialize RenderManager LAST after all dependencies are ready
-    m_renderManager = std::make_unique<RenderManager>(localWindow, localSDLRenderer);
+    m_renderManager = std::make_unique<RenderManager>(localWindow);
 
     // Set initial background color based on reading style
     uint8_t bgR, bgG, bgB;

@@ -10,11 +10,11 @@ all: $(PLATFORM)
 
 tg5040:
 	@echo "Building for TG5040..."
-	$(MAKE) -f ports/tg5040/Makefile
+	$(MAKE) -f ports/tg5040/makefile
 
 export-tg5040: tg5040
 	@echo "Exporting TG5040 bundle..."
-	$(MAKE) -f ports/tg5040/Makefile export-bundle
+	$(MAKE) -f ports/tg5040/makefile export-bundle
 
 mac:
 	@echo "Building for macOS..."

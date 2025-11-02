@@ -7,8 +7,6 @@
 
 #include "renderer.h"
 
-struct SDL_Renderer;
-
 struct TTF_Font_Deleter
 {
 
@@ -24,7 +22,7 @@ struct TTF_Font_Deleter
 class TextRenderer
 {
 public:
-    TextRenderer(SDL_Renderer* renderer, const std::string& fontPath, int fontSize);
+    TextRenderer(Renderer* renderer, const std::string& fontPath, int fontSize);
 
     // Destructor: No explicit TTF_Quit() here; it's handled in main.cpp for proper shutdown order.
     ~TextRenderer();
@@ -34,7 +32,7 @@ public:
     void renderText(const std::string& text, int x, int y, SDL_Color color);
 
 private:
-    SDL_Renderer* m_sdlRenderer;
+    Renderer* m_renderer;
     std::unique_ptr<TTF_Font, TTF_Font_Deleter> m_font;
     std::string m_fontPath;
     int m_baseFontSize;

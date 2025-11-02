@@ -45,8 +45,8 @@ public:
         ToggleFontMenu
     };
 
-    // Constructor now accepts pre-initialized SDL_Window* and SDL_Renderer*
-    App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer);
+    // Constructor now accepts pre-initialized SDL_Window*
+    App(const std::string& filename, SDL_Window* window, SDL_GLContext glContext);
     ~App();
 
     void run();

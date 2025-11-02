@@ -3,13 +3,18 @@
 #include "options_manager.h"
 #include "path_utils.h"
 #include "renderer.h"
+#ifdef TG5040_PLATFORM
+#include <SDL_opengles2.h>
+#else
+#include <SDL_opengl.h>
+#endif
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <cstring>
 #include <imgui.h>
 #include <iostream>
 
-void cleanupSDL(SDL_Window* window, SDL_Renderer* renderer)
+void cleanupSDL(SDL_Window* window, SDL_GLContext glContext)
 {
     // Clean up ImGui context if it exists
     if (ImGui::GetCurrentContext() != nullptr)
@@ -17,9 +22,9 @@ void cleanupSDL(SDL_Window* window, SDL_Renderer* renderer)
         ImGui::DestroyContext();
     }
 
-    if (renderer)
+    if (glContext)
     {
-        SDL_DestroyRenderer(renderer);
+        SDL_GL_DeleteContext(glContext);
     }
     if (window)
     {
@@ -32,7 +37,7 @@ void cleanupSDL(SDL_Window* window, SDL_Renderer* renderer)
 int main(int argc, char* argv[])
 {
     SDL_Window* window = nullptr;
-    SDL_Renderer* renderer = nullptr;
+    SDL_GLContext glContext = nullptr;
     int returnCode = 0;
 
     // Check for --browse flag
@@ -62,16 +67,32 @@ int main(int argc, char* argv[])
     if (SDL_Init(sdl_flags) < 0)
     {
         std::cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << std::endl;
-        cleanupSDL(window, renderer);
+        cleanupSDL(window, glContext);
         return 1;
     }
 
     if (TTF_Init() == -1)
     {
         std::cerr << "SDL_ttf could not initialize! TTF_Error: " << TTF_GetError() << std::endl;
-        cleanupSDL(window, renderer);
+        cleanupSDL(window, glContext);
         return 1;
     }
+
+#ifdef TG5040_PLATFORM
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#else
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+#ifdef __APPLE__
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+#endif
+#endif
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 
     window = SDL_CreateWindow(
         "SDLReader C++",
@@ -79,23 +100,24 @@ int main(int argc, char* argv[])
         SDL_WINDOWPOS_UNDEFINED,
         800,
         600,
-        SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
+        SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
     if (!window)
     {
         std::cerr << "Window could not be created! SDL_Error: " << SDL_GetError() << std::endl;
-        cleanupSDL(window, renderer);
+        cleanupSDL(window, glContext);
         return 1;
     }
 
-    renderer = SDL_CreateRenderer(
-        window,
-        -1,
-        SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    if (!renderer)
+    glContext = SDL_GL_CreateContext(window);
+    if (!glContext)
     {
-        std::cerr << "Renderer could not be created! SDL_Error: " << SDL_GetError() << std::endl;
-        cleanupSDL(window, renderer);
+        std::cerr << "OpenGL context could not be created! SDL_Error: " << SDL_GetError() << std::endl;
+        cleanupSDL(window, glContext);
         return 1;
+    }
+    if (SDL_GL_SetSwapInterval(1) != 0)
+    {
+        std::cerr << "Warning: Unable to set VSync! SDL_Error: " << SDL_GetError() << std::endl;
     }
 
     // Main loop: If browse mode, keep returning to file browser after closing document
@@ -116,10 +138,10 @@ int main(int argc, char* argv[])
             FontConfig config = optionsManager.loadConfig();
             std::string startPath = config.lastBrowseDirectory.empty() ? getDefaultLibraryRoot() : config.lastBrowseDirectory;
 
-            if (!browser.initialize(window, renderer, startPath))
+            if (!browser.initialize(window, glContext, startPath))
             {
                 std::cerr << "Failed to initialize file browser" << std::endl;
-                cleanupSDL(window, renderer);
+                cleanupSDL(window, glContext);
                 return 1;
             }
 
@@ -150,7 +172,7 @@ int main(int argc, char* argv[])
         std::cout.flush();
         try
         {
-            App app(documentPath, window, renderer);
+            App app(documentPath, window, glContext);
             std::cout << "Main: App instance created, calling run()" << std::endl;
             std::cout.flush();
             app.run();
@@ -187,7 +209,7 @@ int main(int argc, char* argv[])
         }
     }
 
-    cleanupSDL(window, renderer);
+    cleanupSDL(window, glContext);
 
     return returnCode;
 }

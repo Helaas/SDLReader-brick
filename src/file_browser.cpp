@@ -4,18 +4,18 @@
 
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
-#include <imgui_impl_sdl.h>         // TG5040 uses v1.85 headers
-#include <imgui_impl_sdlrenderer.h> // Compatible with SDL 2.0.9
+#include <imgui_impl_sdl.h>
 #else
-#include <imgui_impl_sdl2.h> // Modern platforms use v1.89+ headers
-#include <imgui_impl_sdlrenderer2.h>
+#include <imgui_impl_sdl2.h>
 #endif
+#include <imgui_impl_opengl3.h>
 
 #include <algorithm>
 #include <cmath>
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include <cstdint>
 #include <dirent.h>
 #include <filesystem>
 #include <iostream>
@@ -87,7 +87,7 @@ std::string truncateToWidth(const std::string& text, float maxWidth)
 } // namespace
 
 FileBrowser::FileBrowser()
-    : m_window(nullptr), m_renderer(nullptr), m_initialized(false), m_running(false),
+    : m_window(nullptr), m_glContext(nullptr), m_initialized(false), m_running(false),
       m_defaultRoot(getDefaultLibraryRoot()),
       m_lockToDefaultRoot([]
                           {
@@ -114,17 +114,32 @@ FileBrowser::~FileBrowser()
 {
     cleanup(false);
     clearThumbnailCache();
+    for (auto& [path, data] : s_cachedThumbnails)
+    {
+        (void) path;
+        if (data.textureId != 0)
+        {
+            GLuint tex = data.textureId;
+            glDeleteTextures(1, &tex);
+            data.textureId = 0;
+        }
+    }
     s_cachedThumbnails.clear();
     s_cachedThumbnailsValid = false;
     s_cachedDirectory.clear();
     s_lastThumbnailView = m_thumbnailView;
 }
 
-bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const std::string& startPath)
+bool FileBrowser::initialize(SDL_Window* window, SDL_GLContext glContext, const std::string& startPath)
 {
     m_window = window;
-    m_renderer = renderer;
+    m_glContext = glContext;
     m_currentPath = startPath.empty() ? m_defaultRoot : startPath;
+
+    if (m_window && m_glContext)
+    {
+        SDL_GL_MakeCurrent(m_window, m_glContext);
+    }
 
     // Setup Dear ImGui context (or reuse existing one in browse mode)
     bool isNewContext = (ImGui::GetCurrentContext() == nullptr);
@@ -153,30 +168,27 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
 
     // Setup Platform/Renderer backends
 #ifdef TG5040_PLATFORM
-    if (!ImGui_ImplSDL2_InitForSDLRenderer(m_window, m_renderer))
+    if (!ImGui_ImplSDL2_InitForOpenGL(m_window, m_glContext))
     {
-        std::cerr << "Failed to initialize ImGui SDL2 backend" << std::endl;
+        std::cerr << "Failed to initialize ImGui SDL backend" << std::endl;
         return false;
     }
-
-    if (!ImGui_ImplSDLRenderer_Init(m_renderer))
-    {
-        std::cerr << "Failed to initialize ImGui SDL Renderer backend" << std::endl;
-        return false;
-    }
+    const char* glsl_version = "#version 100";
 #else
-    if (!ImGui_ImplSDL2_InitForSDLRenderer(m_window, m_renderer))
+    if (!ImGui_ImplSDL2_InitForOpenGL(m_window, m_glContext))
     {
         std::cerr << "Failed to initialize ImGui SDL2 backend" << std::endl;
         return false;
     }
+    const char* glsl_version = "#version 150";
+#endif
 
-    if (!ImGui_ImplSDLRenderer2_Init(m_renderer))
+    if (!ImGui_ImplOpenGL3_Init(glsl_version))
     {
-        std::cerr << "Failed to initialize ImGui SDL Renderer backend" << std::endl;
+        std::cerr << "Failed to initialize ImGui OpenGL3 backend" << std::endl;
+        ImGui_ImplSDL2_Shutdown();
         return false;
     }
-#endif
 
 #ifdef TG5040_PLATFORM
     // Initialize power handler
@@ -276,19 +288,15 @@ void FileBrowser::cleanup(bool preserveThumbnails)
     }
 #endif
 
+    if (m_window && m_glContext)
+    {
+        SDL_GL_MakeCurrent(m_window, m_glContext);
+    }
+
     if (m_initialized)
     {
-#ifdef TG5040_PLATFORM
-        ImGui_ImplSDLRenderer_Shutdown();
+        ImGui_ImplOpenGL3_Shutdown();
         ImGui_ImplSDL2_Shutdown();
-#else
-        ImGui_ImplSDLRenderer2_Shutdown();
-        ImGui_ImplSDL2_Shutdown();
-#endif
-        // NOTE: We do NOT call ImGui::DestroyContext() here because:
-        // 1. In browse mode, the App (GuiManager) will need to create a new ImGui context after this
-        // 2. Destroying and recreating contexts can cause issues with SDL/ImGui state
-        // 3. The context will be cleaned up when the program actually exits
         m_initialized = false;
     }
 
@@ -307,6 +315,16 @@ void FileBrowser::cleanup(bool preserveThumbnails)
         clearPendingThumbnails();
         {
             std::lock_guard<std::mutex> lock(m_thumbnailMutex);
+            for (auto& [path, data] : s_cachedThumbnails)
+            {
+                (void) path;
+                if (data.textureId != 0)
+                {
+                    GLuint tex = data.textureId;
+                    glDeleteTextures(1, &tex);
+                    data.textureId = 0;
+                }
+            }
             s_cachedThumbnails = std::move(m_thumbnailCache);
             s_cachedThumbnailsValid = true;
             s_cachedDirectory = m_currentPath;
@@ -315,12 +333,23 @@ void FileBrowser::cleanup(bool preserveThumbnails)
     else
     {
         clearThumbnailCache();
+        for (auto& [path, data] : s_cachedThumbnails)
+        {
+            (void) path;
+            if (data.textureId != 0)
+            {
+                GLuint tex = data.textureId;
+                glDeleteTextures(1, &tex);
+                data.textureId = 0;
+            }
+        }
         s_cachedThumbnails.clear();
         s_cachedThumbnailsValid = false;
         s_cachedDirectory.clear();
     }
 
     s_lastThumbnailView = m_thumbnailView;
+    m_glContext = nullptr;
 }
 
 bool FileBrowser::scanDirectory(const std::string& path)
@@ -476,64 +505,67 @@ bool FileBrowser::isSupportedFile(const std::string& filename) const
 
 void FileBrowser::clearThumbnailCache()
 {
+    for (auto& [path, data] : m_thumbnailCache)
+    {
+        (void) path;
+        if (data.textureId != 0)
+        {
+            GLuint tex = data.textureId;
+            glDeleteTextures(1, &tex);
+            data.textureId = 0;
+        }
+    }
     m_thumbnailCache.clear();
     std::lock_guard<std::mutex> lock(m_thumbnailMutex);
     m_thumbnailJobs.clear();
     m_thumbnailResults.clear();
 }
 
-SDL_Texture* FileBrowser::createTextureFromPixels(const std::vector<uint32_t>& pixels, int width, int height)
+GLuint FileBrowser::createTextureFromPixels(const std::vector<uint32_t>& pixels, int width, int height)
 {
     if (width <= 0 || height <= 0 || pixels.empty())
     {
-        return nullptr;
+        return 0;
     }
 
-    SDL_Texture* texture = SDL_CreateTexture(m_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
-    if (!texture)
+    std::vector<uint32_t> rgbaPixels(pixels.size());
+    for (size_t i = 0; i < pixels.size(); ++i)
     {
-        return nullptr;
+        uint32_t argb = pixels[i];
+        uint8_t a = static_cast<uint8_t>((argb >> 24) & 0xFF);
+        uint8_t r = static_cast<uint8_t>((argb >> 16) & 0xFF);
+        uint8_t g = static_cast<uint8_t>((argb >> 8) & 0xFF);
+        uint8_t b = static_cast<uint8_t>(argb & 0xFF);
+        rgbaPixels[i] = (static_cast<uint32_t>(a) << 24) |
+                        (static_cast<uint32_t>(b) << 16) |
+                        (static_cast<uint32_t>(g) << 8) |
+                        static_cast<uint32_t>(r);
     }
 
-    void* texturePixels = nullptr;
-    int pitch = 0;
-    if (SDL_LockTexture(texture, nullptr, &texturePixels, &pitch) != 0)
-    {
-        SDL_DestroyTexture(texture);
-        return nullptr;
-    }
-
-    const size_t rowBytes = static_cast<size_t>(width) * sizeof(uint32_t);
-    Uint8* dst = static_cast<Uint8*>(texturePixels);
-    const Uint8* src = reinterpret_cast<const Uint8*>(pixels.data());
-    for (int y = 0; y < height; ++y)
-    {
-        std::memcpy(dst + static_cast<size_t>(y) * pitch, src + static_cast<size_t>(y) * rowBytes, rowBytes);
-    }
-
-    SDL_UnlockTexture(texture);
-    SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
-#if SDL_VERSION_ATLEAST(2, 0, 12)
-    SDL_SetTextureScaleMode(texture, SDL_ScaleModeLinear);
-#endif
-    return texture;
+    GLuint textureId = 0;
+    glGenTextures(1, &textureId);
+    glBindTexture(GL_TEXTURE_2D, textureId);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgbaPixels.data());
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    return textureId;
 }
 
-SDL_Texture* FileBrowser::createSolidTexture(int width, int height, SDL_Color color, Uint8 alpha)
+GLuint FileBrowser::createSolidTexture(int width, int height, SDL_Color color, Uint8 alpha)
 {
     if (width <= 0 || height <= 0)
     {
-        return nullptr;
+        return 0;
     }
 
-    SDL_PixelFormat* format = SDL_AllocFormat(SDL_PIXELFORMAT_ARGB8888);
-    if (!format)
-    {
-        return nullptr;
-    }
-
-    const Uint32 fillColor = SDL_MapRGBA(format, color.r, color.g, color.b, alpha);
-    SDL_FreeFormat(format);
+    uint32_t fillColor = (static_cast<uint32_t>(alpha) << 24) |
+                         (static_cast<uint32_t>(color.b) << 16) |
+                         (static_cast<uint32_t>(color.g) << 8) |
+                         static_cast<uint32_t>(color.r);
 
     std::vector<uint32_t> pixels(static_cast<size_t>(width) * static_cast<size_t>(height), fillColor);
     return createTextureFromPixels(pixels, width, height);
@@ -545,7 +577,7 @@ FileBrowser::ThumbnailData& FileBrowser::getOrCreateThumbnail(const FileEntry& e
 
     if (entry.isDirectory)
     {
-        if (!data.texture && !data.failed)
+        if (data.textureId == 0 && !data.failed)
         {
             if (!generateDirectoryThumbnail(entry, data))
             {
@@ -555,7 +587,7 @@ FileBrowser::ThumbnailData& FileBrowser::getOrCreateThumbnail(const FileEntry& e
         return data;
     }
 
-    if (!data.texture && !data.failed)
+    if (data.textureId == 0 && !data.failed)
     {
         if (m_thumbnailThreadRunning)
         {
@@ -659,13 +691,20 @@ bool FileBrowser::generateDirectoryThumbnail(const FileEntry& entry, ThumbnailDa
         return false;
     }
 
-    SDL_Texture* texture = createTextureFromPixels(pixels, width, height);
-    if (!texture)
+    if (data.textureId != 0)
+    {
+        GLuint old = data.textureId;
+        glDeleteTextures(1, &old);
+        data.textureId = 0;
+    }
+
+    GLuint textureId = createTextureFromPixels(pixels, width, height);
+    if (textureId == 0)
     {
         return false;
     }
 
-    data.texture.reset(texture);
+    data.textureId = textureId;
     data.width = width;
     data.height = height;
     data.failed = false;
@@ -686,13 +725,20 @@ bool FileBrowser::generateThumbnail(const FileEntry& entry, ThumbnailData& data)
         return false;
     }
 
-    SDL_Texture* texture = createTextureFromPixels(pixels, width, height);
-    if (!texture)
+    if (data.textureId != 0)
+    {
+        GLuint old = data.textureId;
+        glDeleteTextures(1, &old);
+        data.textureId = 0;
+    }
+
+    GLuint textureId = createTextureFromPixels(pixels, width, height);
+    if (textureId == 0)
     {
         return false;
     }
 
-    data.texture.reset(texture);
+    data.textureId = textureId;
     data.width = width;
     data.height = height;
     data.failed = false;
@@ -790,7 +836,7 @@ void FileBrowser::enqueueThumbnailJob(const FileEntry& entry)
     auto cacheIt = m_thumbnailCache.find(entry.fullPath);
     if (cacheIt != m_thumbnailCache.end())
     {
-        if (cacheIt->second.texture || cacheIt->second.failed || cacheIt->second.pending)
+        if (cacheIt->second.textureId != 0 || cacheIt->second.failed || cacheIt->second.pending)
         {
             return;
         }
@@ -845,14 +891,21 @@ void FileBrowser::pumpThumbnailResults()
             continue;
         }
 
-        SDL_Texture* texture = createTextureFromPixels(result.pixels, result.width, result.height);
-        if (!texture)
+        if (data.textureId != 0)
+        {
+            GLuint old = data.textureId;
+            glDeleteTextures(1, &old);
+            data.textureId = 0;
+        }
+
+        GLuint textureId = createTextureFromPixels(result.pixels, result.width, result.height);
+        if (textureId == 0)
         {
             data.failed = true;
             continue;
         }
 
-        data.texture.reset(texture);
+        data.textureId = textureId;
         data.width = result.width;
         data.height = result.height;
         data.failed = false;
@@ -979,6 +1032,11 @@ void FileBrowser::clampSelection()
 
 std::string FileBrowser::run()
 {
+    if (m_window && m_glContext)
+    {
+        SDL_GL_MakeCurrent(m_window, m_glContext);
+    }
+
     m_running = true;
     m_selectedFile.clear();
 
@@ -1040,9 +1098,10 @@ std::string FileBrowser::run()
         if (m_inFakeSleep)
         {
             // Fake sleep mode - render black screen
-            SDL_SetRenderDrawColor(m_renderer, 0, 0, 0, 255);
-            SDL_RenderClear(m_renderer);
-            SDL_RenderPresent(m_renderer);
+            glViewport(0, 0, m_lastWindowWidth, m_lastWindowHeight);
+            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            glClear(GL_COLOR_BUFFER_BIT);
+            SDL_GL_SwapWindow(m_window);
         }
         else
         {
@@ -1092,19 +1151,22 @@ std::string FileBrowser::run()
 
 void FileBrowser::render()
 {
+    if (m_window && m_glContext)
+    {
+        SDL_GL_MakeCurrent(m_window, m_glContext);
+    }
+
     // Start the Dear ImGui frame
-#ifdef TG5040_PLATFORM
-    ImGui_ImplSDLRenderer_NewFrame();
+    ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
-#else
-    ImGui_ImplSDLRenderer2_NewFrame();
-    ImGui_ImplSDL2_NewFrame();
-#endif
     ImGui::NewFrame();
 
     // Get window size
     int windowWidth, windowHeight;
     SDL_GetWindowSize(m_window, &windowWidth, &windowHeight);
+    int drawableWidth = windowWidth;
+    int drawableHeight = windowHeight;
+    SDL_GL_GetDrawableSize(m_window, &drawableWidth, &drawableHeight);
     m_lastWindowWidth = windowWidth;
     m_lastWindowHeight = windowHeight;
 
@@ -1170,14 +1232,11 @@ void FileBrowser::render()
 
     // Rendering
     ImGui::Render();
-    SDL_SetRenderDrawColor(m_renderer, 30, 30, 30, 255);
-    SDL_RenderClear(m_renderer);
-#ifdef TG5040_PLATFORM
-    ImGui_ImplSDLRenderer_RenderDrawData(ImGui::GetDrawData());
-#else
-    ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), m_renderer);
-#endif
-    SDL_RenderPresent(m_renderer);
+    glViewport(0, 0, drawableWidth, drawableHeight);
+    glClearColor(30.0f / 255.0f, 30.0f / 255.0f, 30.0f / 255.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    SDL_GL_SwapWindow(m_window);
 }
 
 void FileBrowser::renderListView(int windowWidth, int windowHeight)
@@ -1279,7 +1338,7 @@ void FileBrowser::renderThumbnailView(int windowWidth, int windowHeight)
 
             const FileEntry& entry = m_entries[i];
             ThumbnailData& thumb = getOrCreateThumbnail(entry);
-            SDL_Texture* texture = thumb.texture.get();
+            GLuint textureId = thumb.textureId;
             bool isSelected = (static_cast<int>(i) == m_selectedIndex);
 
             ImVec2 tileSize(tileWidth, tileHeight);
@@ -1320,7 +1379,7 @@ void FileBrowser::renderThumbnailView(int windowWidth, int windowHeight)
             ImVec2 imageRegionMin(tileMin.x + imageHorizontalMargin, tileMin.y + imageVerticalMargin);
             ImVec2 imageRegionMax(tileMin.x + tileWidth - imageHorizontalMargin, tileMin.y + thumbRegionSize - imageVerticalMargin);
 
-            if (texture)
+            if (textureId != 0)
             {
                 float availableWidth = imageRegionMax.x - imageRegionMin.x;
                 float availableHeight = imageRegionMax.y - imageRegionMin.y;
@@ -1332,7 +1391,8 @@ void FileBrowser::renderThumbnailView(int windowWidth, int windowHeight)
                 ImVec2 imageMin(imageRegionMin.x + (availableWidth - imageSize.x) * 0.5f,
                                  imageRegionMin.y + (availableHeight - imageSize.y) * 0.5f);
                 ImVec2 imageMax(imageMin.x + imageSize.x, imageMin.y + imageSize.y);
-                drawList->AddImage(reinterpret_cast<ImTextureID>(texture), imageMin, imageMax);
+                ImTextureID texId = reinterpret_cast<ImTextureID>(static_cast<intptr_t>(textureId));
+                drawList->AddImage(texId, imageMin, imageMax);
             }
             else
             {

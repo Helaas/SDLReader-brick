@@ -10,13 +10,10 @@
 #include <cmath>
 #include <iostream>
 
-RenderManager::RenderManager(SDL_Window* window, SDL_Renderer* renderer)
+RenderManager::RenderManager(SDL_Window* window)
 {
-    // Initialize renderer with the pre-initialized SDL objects
-    m_renderer = std::make_unique<Renderer>(window, renderer);
-
-    // Initialize text renderer with default font
-    m_textRenderer = std::make_unique<TextRenderer>(m_renderer->getSDLRenderer(), "fonts/Roboto-Regular.ttf", 16);
+    m_renderer = std::make_unique<Renderer>(window);
+    m_textRenderer = std::make_unique<TextRenderer>(m_renderer.get(), "fonts/Roboto-Regular.ttf", 16);
 
     // Initialize display timers
     m_state.scaleDisplayTime = SDL_GetTicks();
@@ -281,13 +278,10 @@ void RenderManager::renderZoomProcessingIndicator(ViewportManager* viewportManag
 
         // Draw prominent background with extra padding
         SDL_Rect bgRect = {textX - 20, textY - 10, textWidth + 40, textHeight + 20};
-        SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), processingBgColor.r, processingBgColor.g, processingBgColor.b, processingBgColor.a);
-        SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
-        SDL_RenderFillRect(m_renderer->getSDLRenderer(), &bgRect);
+        m_renderer->drawFilledRect(bgRect.x, bgRect.y, bgRect.w, bgRect.h, processingBgColor.r, processingBgColor.g, processingBgColor.b, processingBgColor.a);
 
         // Draw bright border for maximum visibility
-        SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 255, 255, 0, 255);
-        SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &bgRect);
+        m_renderer->drawRect(bgRect.x, bgRect.y, bgRect.w, bgRect.h, 255, 255, 0, 255);
 
         // Draw text
         m_textRenderer->renderText(processingText, textX, textY, processingColor);
@@ -355,14 +349,9 @@ void RenderManager::renderDocumentMinimap(std::shared_ptr<const std::vector<uint
     if (outerY < MINIMAP_MARGIN / 2)
         outerY = MINIMAP_MARGIN / 2;
 
-    SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
-
     SDL_Rect backgroundRect = {outerX, outerY, outerWidth, outerHeight};
-    SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 0, 0, 0, 160);
-    SDL_RenderFillRect(m_renderer->getSDLRenderer(), &backgroundRect);
-
-    SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 255, 255, 255, 200);
-    SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &backgroundRect);
+    m_renderer->drawFilledRect(backgroundRect.x, backgroundRect.y, backgroundRect.w, backgroundRect.h, 0, 0, 0, 160);
+    m_renderer->drawRect(backgroundRect.x, backgroundRect.y, backgroundRect.w, backgroundRect.h, 255, 255, 255, 200);
 
     int contentX = outerX + MINIMAP_PADDING;
     int contentY = outerY + MINIMAP_PADDING;
@@ -426,19 +415,15 @@ void RenderManager::renderDocumentMinimap(std::shared_ptr<const std::vector<uint
     }
 
     SDL_Rect viewRect = {viewX, viewY, viewW, viewH};
-    SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 30, 144, 255, 110);
-    SDL_RenderFillRect(m_renderer->getSDLRenderer(), &viewRect);
-
-    SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 0, 0, 0, 220);
-    SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &viewRect);
+        m_renderer->drawFilledRect(viewRect.x, viewRect.y, viewRect.w, viewRect.h, 30, 144, 255, 110);
+        m_renderer->drawRect(viewRect.x, viewRect.y, viewRect.w, viewRect.h, 0, 0, 0, 220);
 
     if (viewRect.w > 2 && viewRect.h > 2)
     {
         SDL_Rect innerRect = {viewRect.x + 1, viewRect.y + 1, viewRect.w - 2, viewRect.h - 2};
         if (innerRect.w > 0 && innerRect.h > 0)
         {
-            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 255, 255, 255, 230);
-            SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &innerRect);
+            m_renderer->drawRect(innerRect.x, innerRect.y, innerRect.w, innerRect.h, 255, 255, 255, 230);
         }
     }
 }
@@ -493,21 +478,19 @@ void RenderManager::renderErrorMessage(int windowWidth, int windowHeight)
         int messageX = (windowWidth - maxLineWidth) / 2;
         int messageY = (windowHeight - totalHeight) / 2;
 
-        int bgExtension = windowWidth * 0.1;
+        int bgExtension = static_cast<int>(windowWidth * 0.1f);
         SDL_Rect bgRect = {messageX - 20 - bgExtension / 2, messageY - 10, maxLineWidth + 60 + bgExtension, totalHeight + 20};
-        SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), bgColor.r, bgColor.g, bgColor.b, bgColor.a);
-        SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
-        SDL_RenderFillRect(m_renderer->getSDLRenderer(), &bgRect);
+        m_renderer->drawFilledRect(bgRect.x, bgRect.y, bgRect.w, bgRect.h, bgColor.r, bgColor.g, bgColor.b, bgColor.a);
 
         // Draw text lines
         int line1Width = static_cast<int>(line1.length()) * avgCharWidth;
-        int line1X = (windowWidth - line1Width) / 2 + (windowWidth * 0.05);
+        int line1X = static_cast<int>((windowWidth - line1Width) / 2 + (windowWidth * 0.05f));
         m_textRenderer->renderText(line1, line1X, messageY, errorColor);
 
         if (!line2.empty())
         {
             int line2Width = static_cast<int>(line2.length()) * avgCharWidth;
-            int line2X = (windowWidth - line2Width) / 2 + (windowWidth * 0.05);
+            int line2X = static_cast<int>((windowWidth - line2Width) / 2 + (windowWidth * 0.05f));
             int line2Y = messageY + actualFontSize + 10;
             m_textRenderer->renderText(line2, line2X, line2Y, errorColor);
         }
@@ -552,9 +535,7 @@ void RenderManager::renderPageJumpInput(NavigationManager* navigationManager, in
         int bgWidth = std::max(promptWidth, hintWidth) + 40;
         int bgHeight = actualFontSize * 3;
         SDL_Rect bgRect = {promptX - 20, promptY - 10, bgWidth, bgHeight};
-        SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), jumpBgColor.r, jumpBgColor.g, jumpBgColor.b, jumpBgColor.a);
-        SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
-        SDL_RenderFillRect(m_renderer->getSDLRenderer(), &bgRect);
+        m_renderer->drawFilledRect(bgRect.x, bgRect.y, bgRect.w, bgRect.h, jumpBgColor.r, jumpBgColor.g, jumpBgColor.b, jumpBgColor.a);
 
         // Draw prompt text
         m_textRenderer->renderText(jumpPrompt, promptX, promptY, jumpColor);
@@ -692,13 +673,8 @@ void RenderManager::renderEdgeTurnProgressIndicator(App* app, NavigationManager*
                 textY - textPadding,
                 textWidth + 2 * textPadding,
                 textHeight + 2 * textPadding};
-            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 0, 0, 0, 180);
-            SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
-            SDL_RenderFillRect(m_renderer->getSDLRenderer(), &textBgRect);
-
-            // Draw text background border
-            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 255, 255, 255, 255);
-            SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &textBgRect);
+            m_renderer->drawFilledRect(textBgRect.x, textBgRect.y, textBgRect.w, textBgRect.h, 0, 0, 0, 180);
+            m_renderer->drawRect(textBgRect.x, textBgRect.y, textBgRect.w, textBgRect.h, 255, 255, 255, 255);
 
             // Draw direction text
             m_textRenderer->setFontSize(120);
@@ -712,19 +688,15 @@ void RenderManager::renderEdgeTurnProgressIndicator(App* app, NavigationManager*
 
             // Draw background
             SDL_Rect bgRect = {indicatorX, indicatorY, barWidth, barHeight};
-            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), bgColor.r, bgColor.g, bgColor.b, bgColor.a);
-            SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
-            SDL_RenderFillRect(m_renderer->getSDLRenderer(), &bgRect);
+            m_renderer->drawFilledRect(bgRect.x, bgRect.y, bgRect.w, bgRect.h, bgColor.r, bgColor.g, bgColor.b, bgColor.a);
 
             // Draw fill
             int fillWidth = static_cast<int>(barWidth * visualProgress);
             SDL_Rect fillRect = {indicatorX, indicatorY, fillWidth, barHeight};
-            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), fillColor.r, fillColor.g, fillColor.b, fillColor.a);
-            SDL_RenderFillRect(m_renderer->getSDLRenderer(), &fillRect);
+            m_renderer->drawFilledRect(fillRect.x, fillRect.y, fillRect.w, fillRect.h, fillColor.r, fillColor.g, fillColor.b, fillColor.a);
 
             // Draw border
-            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 255, 255, 255, 255);
-            SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &bgRect);
+            m_renderer->drawRect(bgRect.x, bgRect.y, bgRect.w, bgRect.h, 255, 255, 255, 255);
         }
     }
 }

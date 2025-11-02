@@ -6,12 +6,11 @@
 
 // Platform-specific ImGui backends
 #ifdef TG5040_PLATFORM
-#include <imgui_impl_sdl.h>         // TG5040 uses v1.85 headers
-#include <imgui_impl_sdlrenderer.h> // Compatible with SDL 2.0.9
+#include <imgui_impl_sdl.h>
 #else
-#include <imgui_impl_sdl2.h> // Modern platforms use v1.89+ headers
-#include <imgui_impl_sdlrenderer2.h>
+#include <imgui_impl_sdl2.h>
 #endif
+#include <imgui_impl_opengl3.h>
 
 #include <iostream>
 
@@ -26,15 +25,15 @@ GuiManager::~GuiManager()
     cleanup();
 }
 
-bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
+bool GuiManager::initialize(SDL_Window* window, SDL_GLContext glContext)
 {
     if (m_initialized)
     {
         return true;
     }
 
-    // Store the renderer for later use
-    m_renderer = renderer;
+    m_window = window;
+    m_glContext = glContext;
 
     // Setup Dear ImGui context (or reuse existing one from FileBrowser)
     bool isNewContext = (ImGui::GetCurrentContext() == nullptr);
@@ -62,34 +61,27 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
 
     // Setup Platform/Renderer backends
 #ifdef TG5040_PLATFORM
-    // TG5040 uses patched v1.85 SDL Renderer backend for framebuffer compatibility
-    if (!ImGui_ImplSDL2_InitForSDLRenderer(window, renderer))
+    if (!ImGui_ImplSDL2_InitForOpenGL(window, glContext))
     {
         std::cerr << "Failed to initialize ImGui SDL backend" << std::endl;
         return false;
     }
-
-    if (!ImGui_ImplSDLRenderer_Init(renderer))
-    {
-        std::cerr << "Failed to initialize ImGui SDL Renderer backend" << std::endl;
-        ImGui_ImplSDL2_Shutdown();
-        return false;
-    }
+    const char* glsl_version = "#version 100";
 #else
-    // Modern platforms use SDL Renderer backend
-    if (!ImGui_ImplSDL2_InitForSDLRenderer(window, renderer))
+    if (!ImGui_ImplSDL2_InitForOpenGL(window, glContext))
     {
         std::cerr << "Failed to initialize ImGui SDL2 backend" << std::endl;
         return false;
     }
+    const char* glsl_version = "#version 150";
+#endif
 
-    if (!ImGui_ImplSDLRenderer2_Init(renderer))
+    if (!ImGui_ImplOpenGL3_Init(glsl_version))
     {
-        std::cerr << "Failed to initialize ImGui SDL Renderer backend" << std::endl;
+        std::cerr << "Failed to initialize ImGui OpenGL3 backend" << std::endl;
         ImGui_ImplSDL2_Shutdown();
         return false;
     }
-#endif
 
     m_initialized = true;
 
@@ -161,13 +153,8 @@ void GuiManager::cleanup()
         return;
     }
 
-#ifdef TG5040_PLATFORM
-    ImGui_ImplSDLRenderer_Shutdown();
+    ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
-#else
-    ImGui_ImplSDLRenderer2_Shutdown();
-    ImGui_ImplSDL2_Shutdown();
-#endif
 
     // NOTE: We do NOT call ImGui::DestroyContext() here because:
     // 1. In browse mode, the file browser will need to create a new ImGui context after this
@@ -175,6 +162,8 @@ void GuiManager::cleanup()
     // 3. The context will be cleaned up when the program actually exits (at cleanupSDL)
 
     m_initialized = false;
+    m_window = nullptr;
+    m_glContext = nullptr;
 }
 
 bool GuiManager::handleEvent(const SDL_Event& event)
@@ -342,21 +331,26 @@ void GuiManager::newFrame()
         return;
     }
 
-#ifdef TG5040_PLATFORM
-    ImGui_ImplSDLRenderer_NewFrame();
+    if (m_window && m_glContext)
+    {
+        SDL_GL_MakeCurrent(m_window, m_glContext);
+    }
+
+    ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
-#else
-    ImGui_ImplSDLRenderer2_NewFrame();
-    ImGui_ImplSDL2_NewFrame();
-#endif
     ImGui::NewFrame();
 }
 
 void GuiManager::render()
 {
-    if (!m_initialized || !m_renderer)
+    if (!m_initialized)
     {
         return;
+    }
+
+    if (m_window && m_glContext)
+    {
+        SDL_GL_MakeCurrent(m_window, m_glContext);
     }
 
     // Render our font menu
@@ -379,11 +373,7 @@ void GuiManager::render()
     // This prevents stale menu rendering on TG5040
     if (draw_data && (m_showFontMenu || m_showNumberPad))
     {
-#ifdef TG5040_PLATFORM
-        ImGui_ImplSDLRenderer_RenderDrawData(draw_data);
-#else
-        ImGui_ImplSDLRenderer2_RenderDrawData(draw_data, m_renderer);
-#endif
+        ImGui_ImplOpenGL3_RenderDrawData(draw_data);
     }
 }
 

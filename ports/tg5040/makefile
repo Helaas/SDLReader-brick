@@ -17,7 +17,7 @@ CXX      := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTG5040_PLATFORM\
             -I$(WORKSPACE_PATH)/src -I$(WORKSPACE_PATH)/include -I$(BASE_PATH)/include -I$(BASE_PATH)/mupdf/include \
             -I$(BASE_PATH)/imgui -I$(BASE_PATH)/imgui/backends \
-            -I/usr/local/libarchive-minimal/include -D_REENTRANT -I/usr/include/SDL2
+            -I/usr/local/libarchive-minimal/include -D_REENTRANT -I/usr/include/SDL2 -DIMGUI_IMPL_OPENGL_ES2
 
 # Source directories
 SRC_DIR = $(WORKSPACE_PATH)/src
@@ -41,7 +41,7 @@ IMGUI_SRCS = $(IMGUI_DIR)/imgui.cpp \
              $(IMGUI_DIR)/imgui_tables.cpp \
              $(IMGUI_DIR)/imgui_widgets.cpp \
              $(IMGUI_DIR)/backends/imgui_impl_sdl.cpp \
-             $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer.cpp
+             $(IMGUI_DIR)/backends/imgui_impl_opengl3.cpp
 
 # Add ImGui sources to compilation
 SRCS += $(IMGUI_SRCS)
@@ -56,7 +56,7 @@ OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS
        $(BUILD_DIR)/imgui_tables.o \
        $(BUILD_DIR)/imgui_widgets.o \
        $(BUILD_DIR)/imgui_impl_sdl.o \
-       $(BUILD_DIR)/imgui_impl_sdlrenderer.o \
+       $(BUILD_DIR)/imgui_impl_opengl3.o \
        $(BUILD_DIR)/tg5040_power_handler.o
 
 # Path to minimal libarchive static library
@@ -64,7 +64,7 @@ LIBARCHIVE_MINIMAL := /usr/local/libarchive-minimal/lib/libarchive.a
 
 # Libraries (link order matters) - No OpenGL needed for SDL Renderer backend
 # Using static libarchive to avoid bundling extra dependencies
-LIBS := -lSDL2_ttf -lSDL2 \
+LIBS := -lSDL2_ttf -lSDL2 -lGLESv2 -lEGL -ldl \
   -L$(BASE_PATH)/mupdf/build/release \
   -lmupdf -lmupdf-third \
   $(LIBARCHIVE_MINIMAL) \
@@ -97,14 +97,7 @@ setup-imgui:
 	else \
 		echo "Dear ImGui repository already exists and is complete"; \
 	fi
-	@if [ -d "$(BASE_PATH)/imgui" ] && [ -f "$(BASE_PATH)/imgui/backends/imgui_impl_sdlrenderer.cpp" ]; then \
-		if ! grep -q "imgui_impl_sdlrenderer_legacy" $(BASE_PATH)/imgui/backends/imgui_impl_sdlrenderer.cpp; then \
-			echo "Applying SDL 2.0.9 fallback patch to ImGui SDL renderer backend..."; \
-			cd $(BASE_PATH)/imgui && patch -p1 < ../patches/imgui_impl_sdlrenderer_legacy.patch; \
-		else \
-			echo "ImGui SDL renderer backend already patched"; \
-		fi; \
-	fi
+	@echo "Using OpenGL backend for ImGui; skipping SDL renderer legacy patch"
 	@if [ -d "$(BASE_PATH)/imgui" ] && [ -f "$(BASE_PATH)/imgui/backends/imgui_impl_sdl.cpp" ]; then \
 		if ! grep -q "TG5040 PATCH: Swap A & B buttons" $(BASE_PATH)/imgui/backends/imgui_impl_sdl.cpp; then \
 			echo "Applying TG5040 A & B button swap patch to ImGui SDL backend..."; \
@@ -262,7 +255,7 @@ $(BUILD_DIR)/imgui_impl_sdl.o: $(IMGUI_DIR)/backends/imgui_impl_sdl.cpp | $(BUIL
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/imgui_impl_sdlrenderer.o: $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer.cpp | $(BUILD_DIR)
+$(BUILD_DIR)/imgui_impl_opengl3.o: $(IMGUI_DIR)/backends/imgui_impl_opengl3.cpp | $(BUILD_DIR)
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 

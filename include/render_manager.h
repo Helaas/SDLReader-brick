@@ -47,7 +47,7 @@ struct RenderState
 class RenderManager
 {
 public:
-    RenderManager(SDL_Window* window, SDL_Renderer* renderer);
+    RenderManager(SDL_Window* window);
     ~RenderManager() = default;
 
     // Initialization

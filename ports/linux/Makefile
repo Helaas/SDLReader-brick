@@ -58,7 +58,7 @@ IMGUI_SRCS = $(IMGUI_DIR)/imgui.cpp \
              $(IMGUI_DIR)/imgui_tables.cpp \
              $(IMGUI_DIR)/imgui_widgets.cpp \
              $(IMGUI_DIR)/backends/imgui_impl_sdl2.cpp \
-             $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer2.cpp
+             $(IMGUI_DIR)/backends/imgui_impl_opengl3.cpp
 
 # Add ImGui sources to compilation
 SRCS += $(IMGUI_SRCS)
@@ -82,7 +82,7 @@ INC_PATHS = $(shell pkg-config --cflags sdl2 SDL2_ttf freetype2 harfbuzz)
 LIBS = -L$(MUPDF_BUILD_PATH) -lmupdf -lmupdf-third \
        -larchive -lwebp -lwebpdemux \
        $(shell pkg-config --libs sdl2 SDL2_ttf freetype2 harfbuzz) \
-       -lz -lm -lpthread
+       -lGL -ldl -lz -lm -lpthread
 
 # All object files (will be placed in the build directory)
 # Transforms src/file.cpp into build/file.o and cli/file.cpp into build/file.o
@@ -94,7 +94,7 @@ OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS
        $(BUILD_DIR)/imgui_tables.o \
        $(BUILD_DIR)/imgui_widgets.o \
        $(BUILD_DIR)/imgui_impl_sdl2.o \
-       $(BUILD_DIR)/imgui_impl_sdlrenderer2.o
+       $(BUILD_DIR)/imgui_impl_opengl3.o
 
 .PHONY: all clean build-mupdf install-deps help setup-mupdf clean-mupdf setup-imgui clean-imgui clean-all
 
@@ -182,8 +182,8 @@ $(BUILD_DIR)/imgui_widgets.o: $(IMGUI_DIR)/imgui_widgets.cpp | $(BUILD_DIR)
 $(BUILD_DIR)/imgui_impl_sdl2.o: $(IMGUI_DIR)/backends/imgui_impl_sdl2.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
 
-$(BUILD_DIR)/imgui_impl_sdlrenderer2.o: $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer2.cpp | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+$(BUILD_DIR)/imgui_impl_opengl3.o: $(IMGUI_DIR)/backends/imgui_impl_opengl3.cpp | $(BUILD_DIR)
+    $(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
 
 # Dependency installation targets for various distributions
 .PHONY: install-deps install-deps-ubuntu install-deps-debian install-deps-fedora install-deps-arch

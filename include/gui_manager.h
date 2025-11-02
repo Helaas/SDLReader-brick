@@ -22,12 +22,12 @@ public:
     ~GuiManager();
 
     /**
-     * @brief Initialize ImGui with SDL
+     * @brief Initialize ImGui with SDL + OpenGL
      * @param window SDL window
-     * @param renderer SDL renderer
+     * @param glContext OpenGL context associated with the window
      * @return true if successful
      */
-    bool initialize(SDL_Window* window, SDL_Renderer* renderer);
+    bool initialize(SDL_Window* window, SDL_GLContext glContext);
 
     /**
      * @brief Cleanup ImGui resources
@@ -204,7 +204,8 @@ public:
 private:
     bool m_initialized = false;
     bool m_showFontMenu = false;
-    SDL_Renderer* m_renderer = nullptr; // Store renderer for ImGui
+    SDL_Window* m_window = nullptr;
+    SDL_GLContext m_glContext = nullptr;
     OptionsManager m_optionsManager;
     FontConfig m_currentConfig;
     FontConfig m_tempConfig;                      // Temporary config for UI editing
