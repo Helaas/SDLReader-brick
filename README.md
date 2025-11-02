@@ -16,7 +16,7 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 ## Features
 * View PDF documents, comic book archives (CBZ/ZIP & CBR/RAR), EPUB books, and MOBI e-books.
 * Built-in heads-up display with page, zoom, edge-turn, minimap, and error indicators.
-* Integrated file browser (`--browse`) with controller support, persistent last directory, asynchronous thumbnail grid (toggle with **X**), and TG5040-friendly layout powered by Dear ImGui.
+* Integrated file browser (`--browse`) with controller support, persistent last directory, asynchronous thumbnail grid (toggle with **X**), and TG5040-friendly layout powered by Nuklear.
 * Custom font picker with live preview, reading style themes, and MuPDF-backed CSS injection.
 * On-screen number pad for page jumps when navigating with a controller.
 * Automatic reading history tracking with resume-on-open for the last 50 documents.
@@ -122,7 +122,7 @@ cd ports/linux && make install-deps
 
 ### Build-time Patches
 
-All `make` targets download MuPDF 1.26.7 and apply `webp-upstream-697749.patch` (sourced from KOReader) to enable modern WebP decoding and fix upstream regressions. Platform exports that embed Dear ImGui may apply additional patches—see each port README for details. In particular, the TG5040 build also patches the ImGui SDL renderer backend for legacy SDL compatibility and swaps the physical A/B buttons to match the TrimUI Brick layout.
+All `make` targets download MuPDF 1.26.7 and apply `webp-upstream-697749.patch` (sourced from KOReader) to enable modern WebP decoding and fix upstream regressions. Platform exports embed Nuklear for UI rendering. See each port README for platform-specific details.
 
 ## Platform-Specific Features
 
@@ -264,7 +264,7 @@ The exported bundle at `ports/tg5040/pak/` contains:
 - **lib/**: All shared library dependencies with proper RPATH setup
 - **fonts/**: All bundled font files ready for the runtime picker
 - **res/**: Optional resources (e.g., documentation PDFs)
-- **launch.sh**: Main launcher script that boots straight into the ImGui file browser
+- **launch.sh**: Main launcher script that boots straight into the Nuklear file browser
 - **README.md / pak.json**: Copied for reference inside the bundle
 
 ### Deployment to Device
@@ -455,7 +455,7 @@ Key architectural highlights:
 - [LoveRetro/NextUI](https://github.com/LoveRetro/NextUI), for creating an excellent OS for the TrimUI Brick.
 - <a href="https://github.com/josegonzalez" target="_blank" rel="noopener noreferrer"><img src="https://github.com/josegonzalez.png" alt="@josegonzalez" width="18" height="18" style="border-radius:50%"> josegonzalez</a>, for minui-list and countless other tools.
 - [UncleJunVIP/nextui-pak-store](https://github.com/UncleJunVIP/nextui-pak-store) for the Pak Store
-- [ocornut/imgui](https://github.com/ocornut/imgui), for the Dear ImGui UI framework powering the overlay, browser, and font menus.
+- [Immediate-Mode-UI/Nuklear](https://github.com/Immediate-Mode-UI/Nuklear), for the Nuklear UI framework powering the overlay, browser, and font menus.
 - [koreader/koreader](https://github.com/koreader/koreader), for the MuPDF WebP Patch.
 - [Claude.ai](https://claude.ai), for creating Sonnet 4. I’m not a C++ programmer, but Sonnet gave me a fighting chance at getting this done in a reasonable timeframe.
 

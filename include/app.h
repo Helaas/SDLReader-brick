@@ -2,13 +2,8 @@
 #define APP_H
 
 #include "document.h"
-#ifdef TG5040_PLATFORM
-#include "nuklear_gui_manager.h"
-using GuiManagerType = NuklearGuiManager;
-#else
 #include "gui_manager.h"
 using GuiManagerType = GuiManager;
-#endif
 #include "input_manager.h"
 #include "navigation_manager.h"
 #include "options_manager.h"

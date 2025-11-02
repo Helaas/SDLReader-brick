@@ -9,7 +9,7 @@ This directory contains the macOS-specific build configuration for SDL Reader.
 - **Built-in CBR Support**: Now includes support for CBR (Comic Book RAR) files alongside CBZ/ZIP comic books
 - **Self-Contained MuPDF**: Automatically downloads and builds MuPDF 1.26.7 with libarchive support
 - **Homebrew Integration**: Uses Homebrew libraries for SDL2 and libarchive dependencies
-- **ImGui Interface**: Desktop build includes the ImGui file browser, font & reading-style menu, and on-screen number pad
+- **Nuklear Interface**: Desktop build includes the Nuklear file browser, font & reading-style menu, and on-screen number pad
 
 ## Dependencies
 
@@ -69,7 +69,7 @@ Run it from the project root with:
 ./bin/sdl_reader_cli --browse
 ```
 
-Using `--browse` opens the ImGui file picker, restores your last-read page via `reading_history.json`, and lets you tweak fonts/themes from a controller-friendly UI. Settings live in the reader state directory (`$SDL_READER_STATE_DIR`, defaulting to `$HOME/config.json`). Set `SDL_READER_DEFAULT_DIR` to control which folder the browser opens by default. While browsing, press **X** to toggle the thumbnail grid; the viewer also supports a minimap overlay that can be disabled via `showDocumentMinimap` in `config.json`.
+Using `--browse` opens the Nuklear file picker, restores your last-read page via `reading_history.json`, and lets you tweak fonts/themes from a controller-friendly UI. Settings live in the reader state directory (`$SDL_READER_STATE_DIR`, defaulting to `$HOME/config.json`). Set `SDL_READER_DEFAULT_DIR` to control which folder the browser opens by default. While browsing, press **X** to toggle the thumbnail grid; the viewer also supports a minimap overlay that can be disabled via `showDocumentMinimap` in `config.json`.
 
 ### Fonts & Reading Styles
 

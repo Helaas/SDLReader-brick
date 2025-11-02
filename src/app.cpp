@@ -1,10 +1,5 @@
 #include "app.h"
 #include "document.h"
-#ifdef TG5040_PLATFORM
-#include "nuklear_gui_manager.h"
-#else
-#include "gui_manager.h"
-#endif
 #include "mupdf_document.h"
 #include "navigation_manager.h"
 #include "options_manager.h"
@@ -285,7 +280,7 @@ void App::run()
     SDL_Event event;
     while (m_running)
     {
-        // Always start ImGui frame at the beginning of each main loop iteration
+        // Always start GUI frame at the beginning of each main loop iteration
         // This ensures proper frame lifecycle management
         if (m_guiManager && !m_inFakeSleep)
         {
@@ -377,7 +372,7 @@ void App::run()
                     m_renderManager->renderUI(this, m_navigationManager.get(), m_viewportManager.get());
                 }
 
-                // Always render ImGui if we started a frame (which we always do when not in fake sleep)
+                // Always render GUI if we started a frame (which we always do when not in fake sleep)
                 if (m_guiManager)
                 {
                     m_guiManager->render();
@@ -397,7 +392,7 @@ void App::run()
             }
             else
             {
-                // Even if we don't render the main content, we must still finish the ImGui frame
+                // Even if we don't render the main content, we must still finish the GUI frame
                 // to maintain proper frame lifecycle
                 if (m_guiManager)
                 {
@@ -421,7 +416,7 @@ void App::run()
 
 void App::handleEvent(const SDL_Event& event)
 {
-    // Let ImGui handle the event first
+    // Let GUI handle the event first
     bool guiHandled = false;
     if (m_guiManager)
     {

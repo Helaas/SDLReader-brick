@@ -6,17 +6,10 @@
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <cstring>
-#include <imgui.h>
 #include <iostream>
 
 void cleanupSDL(SDL_Window* window, SDL_Renderer* renderer)
 {
-    // Clean up ImGui context if it exists
-    if (ImGui::GetCurrentContext() != nullptr)
-    {
-        ImGui::DestroyContext();
-    }
-
     if (renderer)
     {
         SDL_DestroyRenderer(renderer);

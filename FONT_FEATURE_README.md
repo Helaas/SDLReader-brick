@@ -34,16 +34,16 @@ This implementation adds a comprehensive font and reading-style menu to SDL Read
 ### Files Added/Modified
 
 - `include/options_manager.h` / `src/options_manager.cpp` - Font discovery, CSS generation, reading-style metadata, config persistence
-- `include/gui_manager.h` / `src/gui_manager.cpp` - Dear ImGui UI (font picker, reading style combo, number pad)
+- `include/gui_manager.h` / `src/gui_manager.cpp` - Nuklear UI (font picker, reading style combo, number pad)
 - `include/input_manager.h` / `src/input_manager.cpp` - New logical actions (`ToggleFontMenu`, number pad navigation)
 - `include/mupdf_document.h` / `src/mupdf_document.cpp` - CSS application via `fz_set_user_css` and pre-open injection
 - `include/app.h` / `src/app.cpp` - Event wiring, callbacks, document reload sequencing
 - `src/render_manager.cpp` - Overlay updates for page/scale indicators after reloads
-- `ports/*/Makefile` - Dear ImGui build integration per platform
+- `ports/*/Makefile` - Nuklear build integration per platform
 
 ### Dependencies
 
-- **Dear ImGui**: Provides the GUI framework
+- **Nuklear**: Provides the GUI framework
 - **MuPDF**: CSS support via `fz_set_user_css` function
 - **SDL2**: Existing dependency for windowing
 
@@ -72,7 +72,7 @@ Key configuration fields:
 - `readingStyle`: Numeric theme selector (see style table in the main README).
 - `disableEdgeProgressBar`: Set to `true` to skip the edge nudge delay when turning pages.
 - `showDocumentMinimap`: Set to `false` to hide the minimap overlay when zoomed in.
-- `lastBrowseDirectory`: Last directory opened by the ImGui file browser.
+- `lastBrowseDirectory`: Last directory opened by the Nuklear file browser.
 
 ### CSS Generation
 
@@ -115,7 +115,7 @@ body {
 
 ## Building
 
-The build system automatically downloads and compiles Dear ImGui v1.90.9. No additional setup required beyond existing SDL2 dependencies.
+The build system uses Nuklear from the `ports/tg5040/nuklear` directory. No additional setup required beyond existing SDL2 dependencies.
 
 ```bash
 make mac  # for macOS
@@ -126,4 +126,4 @@ make mac  # for macOS
 - **No fonts showing**: Check that `.ttf` or `.otf` files are in the `fonts/` directory
 - **CSS not applying**: Ensure document is EPUB/MOBI format (PDF not supported)
 - **Font not loading**: Verify font file is not corrupted and has correct permissions
-- **Menu not appearing**: Check that ImGui initialized correctly (see console output)
+- **Menu not appearing**: Check that Nuklear initialized correctly (see console output)

@@ -12,7 +12,7 @@ Based on the [Trimui toolchain Docker image](https://git.crowdedwood.com/trimui-
 - **Custom libarchive**: Builds minimal libarchive without ICU/XML dependencies for optimal bundle size
 - **Hardware Power Management**: NextUI-compatible power button handling
 - **Complete Bundle Export**: Creates self-contained distribution packages
-- **Integrated ImGui UI**: Controller-first file browser, font picker, reading-style themes, and on-screen number pad
+- **Integrated Nuklear UI**: Controller-first file browser, font picker, reading-style themes, and on-screen number pad
 - **Persistent Preferences**: Ships with curated fonts, `config.json` (user-managed), and automatic `reading_history.json` resume support
 
 ## Files in this directory
@@ -87,8 +87,9 @@ The exported bundle (`ports/tg5040/pak/`) contains:
 When you run `make tg5040` or `make export-tg5040`, the build system applies several patches automatically:
 
 - `webp-upstream-697749.patch` (MuPDF) — shared with other platforms to backport WebP decoding fixes from KOReader.
-- `patches/imgui_impl_sdlrenderer_legacy.patch` — replaces the Dear ImGui SDL renderer backend with a legacy-friendly version that works on the TG5040's SDL 2.0.10 stack and adds caching optimizations for the low-power GPU.
-- `patches/imgui_swap_ab_buttons_tg5040.patch` — swaps the reported A/B buttons so Dear ImGui's activation/cancel affordances match the TrimUI Brick's physical layout.
+- `patches/imgui_swap_ab_buttons_tg5040.patch` — **DEPRECATED** (no longer needed with Nuklear; button mapping now handled in code)
+
+The TG5040 build uses the Nuklear UI framework with a custom SDL renderer backend optimized for the device's SDL 2.0.10 stack and low-power GPU.
 
 ### Bundle Features
 - **Self-contained**: Includes all dependencies and resources
@@ -122,7 +123,7 @@ Drop additional `.ttf` or `.otf` files into `ports/tg5040/pak/fonts/` (or the pr
 
 ## Platform-Specific Features
 The TG5040 build includes:
-- **ImGui UI Stack**: Built-in browser launched via `--browse`, font & reading-style menu, controller number pad, and persisted `reading_history.json`
+- **Nuklear UI Stack**: Built-in browser launched via `--browse`, font & reading-style menu, controller number pad, and persisted `reading_history.json`
   - Toggle the new thumbnail grid with the **X** button for cover previews rendered asynchronously.
   - Control the zoom minimap overlay via the `showDocumentMinimap` flag in `config.json`.
 - **Advanced Hardware Power Management**: NextUI-compatible power button handling

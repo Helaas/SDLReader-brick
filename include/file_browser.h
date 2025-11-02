@@ -12,15 +12,11 @@
 #include <unordered_map>
 #include <vector>
 
-#ifdef TG5040_PLATFORM
 class PowerHandler;
 struct nk_context;
-#else
-struct ImGuiContext;
-#endif
 
 /**
- * @brief Simple file browser using ImGui
+ * @brief Simple file browser using Nuklear
  */
 class FileBrowser
 {
@@ -91,9 +87,7 @@ private:
 
     SDL_Window* m_window;
     SDL_Renderer* m_renderer;
-#ifdef TG5040_PLATFORM
     nk_context* m_ctx = nullptr;
-#endif
     bool m_initialized;
     bool m_running;
     std::string m_defaultRoot;
@@ -170,13 +164,11 @@ private:
     void render();
     void renderListView(int windowWidth, int windowHeight);
     void renderThumbnailView(int windowWidth, int windowHeight);
-#ifdef TG5040_PLATFORM
     void setupNuklearStyle();
     void renderListViewNuklear(float viewHeight, int windowWidth);
     void renderThumbnailViewNuklear(float viewHeight, int windowWidth);
     void ensureSelectionVisible(float itemHeight, float viewHeight, float& scrollY, int& lastEnsureIndex);
     void resetSelectionScrollTargets();
-#endif
 
     /**
      * @brief Handle SDL events

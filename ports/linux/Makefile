@@ -1,8 +1,8 @@
 # Makefile for SDL Reader on Linux
-# 
+#
 # This Makefile automatically handles dependencies:
 # - Checks for required system libraries (SDL2, libarchive, webp, etc.)
-# - Downloads and sets up ImGui and MuPDF if needed
+# - Downloads and sets up Nuklear and MuPDF if needed
 # - Provides targets for dependency management
 #
 # Usage:
@@ -29,8 +29,8 @@ SRC_DIR = $(WORKSPACE_PATH)/src
 CLI_DIR = $(WORKSPACE_PATH)/cli
 INCLUDE_DIR = $(WORKSPACE_PATH)/include
 
-# Dear ImGui directory
-IMGUI_DIR = $(BASE_PATH)/imgui
+# Nuklear directory (using tg5040's nuklear port)
+NUKLEAR_DIR = $(WORKSPACE_PATH)/ports/tg5040/nuklear
 
 # Local MuPDF Build Paths (using our custom build with libarchive support)
 MUPDF_DIR = $(BASE_PATH)/mupdf
@@ -51,17 +51,11 @@ TARGET = $(BIN_DIR)/$(TARGET_NAME)
 SRC_FILES = $(filter-out $(SRC_DIR)/power_handler.cpp, $(wildcard $(SRC_DIR)/*.cpp))
 SRCS = $(SRC_FILES) $(wildcard $(CLI_DIR)/*.cpp)
 
-# Dear ImGui source files
-IMGUI_SRCS = $(IMGUI_DIR)/imgui.cpp \
-             $(IMGUI_DIR)/imgui_demo.cpp \
-             $(IMGUI_DIR)/imgui_draw.cpp \
-             $(IMGUI_DIR)/imgui_tables.cpp \
-             $(IMGUI_DIR)/imgui_widgets.cpp \
-             $(IMGUI_DIR)/backends/imgui_impl_sdl2.cpp \
-             $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer2.cpp
+# Nuklear SDL renderer implementation
+NUKLEAR_IMPL = $(NUKLEAR_DIR)/demo/sdl_renderer/nuklear_sdl_renderer.c
 
-# Add ImGui sources to compilation
-SRCS += $(IMGUI_SRCS)
+# Add Nuklear implementation to compilation
+SRCS += $(NUKLEAR_IMPL)
 
 # Compiler flags
 # -std=c++17: Use C++17 standard
@@ -69,9 +63,9 @@ SRCS += $(IMGUI_SRCS)
 # -g: Include debugging information
 # -I$(INCLUDE_DIR): Include path for project's own header files
 # -I$(MUPDF_DIR)/include: Include path for our custom MuPDF headers with libarchive support
-# -I$(IMGUI_DIR): Include path for Dear ImGui headers
-# -I$(IMGUI_DIR)/backends: Include path for Dear ImGui backend headers
-CXXFLAGS = -std=c++17 -Wall -Wextra -g -I$(INCLUDE_DIR) -I$(MUPDF_DIR)/include -I$(IMGUI_DIR) -I$(IMGUI_DIR)/backends
+# -I$(NUKLEAR_DIR): Include path for Nuklear headers
+# -I$(NUKLEAR_DIR)/demo/sdl_renderer: Include path for Nuklear SDL renderer backend
+CXXFLAGS = -std=c++17 -Wall -Wextra -g -I$(INCLUDE_DIR) -I$(MUPDF_DIR)/include -I$(NUKLEAR_DIR) -I$(NUKLEAR_DIR)/demo/sdl_renderer
 
 # Include paths for SDL2 and SDL2_ttf
 INC_PATHS = $(shell pkg-config --cflags sdl2 SDL2_ttf freetype2 harfbuzz)
@@ -88,33 +82,12 @@ LIBS = -L$(MUPDF_BUILD_PATH) -lmupdf -lmupdf-third \
 # Transforms src/file.cpp into build/file.o and cli/file.cpp into build/file.o
 OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS))) \
        $(patsubst $(CLI_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(CLI_DIR)/%,$(SRCS))) \
-       $(BUILD_DIR)/imgui.o \
-       $(BUILD_DIR)/imgui_demo.o \
-       $(BUILD_DIR)/imgui_draw.o \
-       $(BUILD_DIR)/imgui_tables.o \
-       $(BUILD_DIR)/imgui_widgets.o \
-       $(BUILD_DIR)/imgui_impl_sdl2.o \
-       $(BUILD_DIR)/imgui_impl_sdlrenderer2.o
+       $(BUILD_DIR)/nuklear_sdl_renderer.o
 
-.PHONY: all clean build-mupdf install-deps help setup-mupdf clean-mupdf setup-imgui clean-imgui clean-all
+.PHONY: all clean build-mupdf install-deps help setup-mupdf clean-mupdf clean-all
 
 # Default target
-all: $(BIN_DIR) $(BUILD_DIR) setup-imgui setup-mupdf build-mupdf $(TARGET)
-
-# Setup Dear ImGui if it doesn't exist or is incomplete
-setup-imgui:
-	@if [ ! -d "$(IMGUI_DIR)" ] || [ ! -f "$(IMGUI_DIR)/imgui.h" ]; then \
-		echo "Setting up Dear ImGui repository..."; \
-		rm -rf $(IMGUI_DIR); \
-		cd $(BASE_PATH) && git clone --depth 1 --branch v1.90.9 https://github.com/ocornut/imgui.git; \
-		if [ ! -f "$(IMGUI_DIR)/imgui.h" ]; then \
-			echo "Error: ImGui setup failed - imgui.h not found"; \
-			exit 1; \
-		fi; \
-		echo "Dear ImGui setup completed successfully"; \
-	else \
-		echo "Dear ImGui repository already exists and is complete"; \
-	fi
+all: $(BIN_DIR) $(BUILD_DIR) setup-mupdf build-mupdf $(TARGET)
 
 # Setup MuPDF repository if it doesn't exist
 setup-mupdf:
@@ -163,27 +136,9 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
 $(BUILD_DIR)/%.o: $(CLI_DIR)/%.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
 
-# Compile ImGui source files
-$(BUILD_DIR)/imgui.o: $(IMGUI_DIR)/imgui.cpp | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_demo.o: $(IMGUI_DIR)/imgui_demo.cpp | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_draw.o: $(IMGUI_DIR)/imgui_draw.cpp | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_tables.o: $(IMGUI_DIR)/imgui_tables.cpp | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_widgets.o: $(IMGUI_DIR)/imgui_widgets.cpp | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_impl_sdl2.o: $(IMGUI_DIR)/backends/imgui_impl_sdl2.cpp | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
-
-$(BUILD_DIR)/imgui_impl_sdlrenderer2.o: $(IMGUI_DIR)/backends/imgui_impl_sdlrenderer2.cpp | $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
+# Compile Nuklear SDL renderer (C file)
+$(BUILD_DIR)/nuklear_sdl_renderer.o: $(NUKLEAR_IMPL) | $(BUILD_DIR)
+	$(CC) $(CXXFLAGS) $(INC_PATHS) -c $< -o $@
 
 # Dependency installation targets for various distributions
 .PHONY: install-deps install-deps-ubuntu install-deps-debian install-deps-fedora install-deps-arch
@@ -210,18 +165,13 @@ clean:
 	rm -f $(TARGET)
 	rm -f $(BASE_PATH)/webp-upstream-697749.patch
 
-# Clean ImGui (use with caution - will require re-download)
-clean-imgui:
-	@echo "Removing ImGui directory (will be re-downloaded on next build)..."
-	rm -rf $(IMGUI_DIR)
-
 # Clean MuPDF (use with caution - will require re-download and rebuild)
 clean-mupdf:
 	@echo "Removing MuPDF directory (will be re-downloaded on next build)..."
 	rm -rf $(MUPDF_DIR)
 
 # Clean everything including downloaded dependencies
-clean-all: clean clean-imgui clean-mupdf
+clean-all: clean clean-mupdf
 	@echo "All build artifacts and dependencies cleaned"
 
 # Help target
@@ -230,11 +180,9 @@ help:
 	@echo ""
 	@echo "Available targets:"
 	@echo "  all          - Build the complete project (default)"
-	@echo "  setup-imgui  - Setup Dear ImGui library"
 	@echo "  setup-mupdf  - Setup MuPDF library"
 	@echo "  build-mupdf  - Build MuPDF with libarchive and WebP support"
 	@echo "  clean        - Remove build artifacts"
-	@echo "  clean-imgui  - Remove ImGui directory"
 	@echo "  clean-mupdf  - Remove MuPDF directory"
 	@echo "  clean-all    - Remove all build artifacts and dependencies"
 	@echo "  help         - Show this help message"

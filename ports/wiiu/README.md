@@ -12,7 +12,7 @@ SDLReader is a document reader that compiles and runs on macOS, TG5040, and Wii 
 - **WebP Patch Applied**: WebP support patch applied to MuPDF (requires WebP libraries for full functionality)
 - **Self-Contained MuPDF**: Uses port-specific MuPDF build with libarchive support
 - **Wii U Optimized**: Static linking and console-specific optimizations
-- **ImGui UX (Desktop Parity)**: Shares the ImGui file browser, font picker, and reading-style menu introduced on desktop/TG5040 (rendering still under active debugging)
+- **Nuklear UX (Desktop Parity)**: Shares the Nuklear file browser, font picker, and reading-style menu introduced on desktop/TG5040 (rendering still under active debugging)
 - **Multiple Document Formats**: PDF, CBZ, CBR, ZIP, EPUB support
 
 ## Quick Start
@@ -41,7 +41,7 @@ The Wii U make target applies the shared `webp-upstream-697749.patch` before com
 
 ## Fonts & Reading Styles
 
-Copy custom `.ttf` or `.otf` fonts into the `fonts/` directory (either in the source tree or the deployed SD card layout). The Options → Font & Reading Style menu in the ImGui overlay will surface those fonts automatically so you can switch typography at runtime once rendering is stabilized.
+Copy custom `.ttf` or `.otf` fonts into the `fonts/` directory (either in the source tree or the deployed SD card layout). The Options → Font & Reading Style menu in the Nuklear overlay will surface those fonts automatically so you can switch typography at runtime once rendering is stabilized.
 
 ## Platform-Specific Features
 The Wii U build:
