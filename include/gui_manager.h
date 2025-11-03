@@ -4,6 +4,7 @@
 #include "button_mapper.h"
 #include "options_manager.h"
 #include <SDL.h>
+#include <array>
 #include <functional>
 #include <iostream>
 #include <string>
@@ -128,6 +129,15 @@ private:
         WIDGET_COUNT
     };
 
+    struct WidgetBounds
+    {
+        float x = 0.0f;
+        float y = 0.0f;
+        float w = 0.0f;
+        float h = 0.0f;
+        bool valid = false;
+    };
+
     int m_mainScreenFocusIndex = 0;
     bool m_fontDropdownOpen = false;
     int m_fontDropdownHighlightedIndex = 0;
@@ -143,6 +153,11 @@ private:
     static constexpr Uint32 BUTTON_DEBOUNCE_MS = 100;
 
     std::vector<std::string> m_fontNames;
+    std::array<WidgetBounds, WIDGET_COUNT> m_widgetBounds{};
+    bool m_focusScrollPending = false;
+    float m_windowClipY = 0.0f;
+    float m_windowClipHeight = 0.0f;
+    static constexpr float kScrollPadding = 12.0f;
 
     void endFrame();
     void setupColorScheme();
@@ -154,6 +169,9 @@ private:
     void adjustFocusedWidget(int direction);
     void activateFocusedWidget();
     int findFontIndex(const std::string& fontName) const;
+    void rememberWidgetBounds(MainScreenWidget widget);
+    void requestFocusScroll();
+    void scrollFocusedWidgetIntoView();
 };
 
 #endif // GUI_MANAGER_H

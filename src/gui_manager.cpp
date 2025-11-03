@@ -1,6 +1,8 @@
 #include "gui_manager.h"
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
+#include <system_error>
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -20,8 +22,13 @@
 // Include the SDL renderer implementation
 #include "demo/sdl_renderer/nuklear_sdl_renderer.h"
 
+#ifdef TG5040_PLATFORM
 static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_B;
 static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_A;
+#else
+static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_A;
+static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_B;
+#endif
 
 namespace
 {
@@ -199,10 +206,81 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
         return false;
     }
 
-    // Setup font atlas - use simplified approach to avoid API compatibility issues
-    struct nk_font_atlas* atlas;
+    // Setup font atlas and load a reliable UI font
+    struct nk_font_atlas* atlas = nullptr;
     nk_sdl_font_stash_begin(&atlas);
+    struct nk_font* uiFont = nullptr;
+    constexpr float kUiFontSize = 22.0f;
+
+    if (atlas)
+    {
+        auto fontExists = [](const std::string& path) -> bool
+        {
+            if (path.empty())
+            {
+                return false;
+            }
+            std::error_code ec;
+            return std::filesystem::exists(path, ec) && !ec;
+        };
+
+        const auto& availableFonts = m_optionsManager.getAvailableFonts();
+        for (const auto& fontInfo : availableFonts)
+        {
+            if (fontExists(fontInfo.filePath))
+            {
+                uiFont = nk_font_atlas_add_from_file(atlas, fontInfo.filePath.c_str(), kUiFontSize, nullptr);
+                if (uiFont)
+                {
+                    atlas->default_font = uiFont;
+                    std::cout << "Loaded UI font from options list: " << fontInfo.displayName << std::endl;
+                    break;
+                }
+            }
+        }
+
+        if (!uiFont)
+        {
+            static const char* fallbackFonts[] = {
+                "fonts/Inter-Regular.ttf",
+                "fonts/Roboto-Regular.ttf",
+                "fonts/JetBrainsMono-Regular.ttf"};
+
+            for (const char* path : fallbackFonts)
+            {
+                if (fontExists(path))
+                {
+                    uiFont = nk_font_atlas_add_from_file(atlas, path, kUiFontSize, nullptr);
+                    if (uiFont)
+                    {
+                        atlas->default_font = uiFont;
+                        std::cout << "Loaded fallback UI font: " << path << std::endl;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!uiFont)
+        {
+            uiFont = nk_font_atlas_add_default(atlas, kUiFontSize, nullptr);
+            if (uiFont)
+            {
+                atlas->default_font = uiFont;
+                std::cout << "Loaded Nuklear default font for UI fallback" << std::endl;
+            }
+            else
+            {
+                std::cerr << "Failed to load any UI font; interface text may be unavailable" << std::endl;
+            }
+        }
+    }
+
     nk_sdl_font_stash_end();
+    if (uiFont)
+    {
+        nk_style_set_font(m_ctx, &uiFont->handle);
+    }
 
     // Set up a modern, attractive color scheme
     setupColorScheme();
@@ -338,6 +416,7 @@ void GuiManager::toggleFontMenu()
     {
         m_fontDropdownHighlightedIndex = m_selectedFontIndex;
         m_styleDropdownHighlightedIndex = m_selectedStyleIndex;
+        requestFocusScroll();
     }
     else
     {
@@ -347,6 +426,7 @@ void GuiManager::toggleFontMenu()
         m_styleDropdownOpen = false;
         m_styleDropdownSelectRequested = false;
         m_styleDropdownCancelRequested = false;
+        m_focusScrollPending = false;
     }
     std::cout << "Font menu " << (m_showFontMenu ? "opened" : "closed") << std::endl;
 }
@@ -437,24 +517,17 @@ void GuiManager::renderFontMenu()
             initialFocusSet = true;
         }
 
+        for (auto& bounds : m_widgetBounds)
+        {
+            bounds.valid = false;
+        }
+
         // Store original styles for highlighting focused widgets
         struct nk_style_button originalButtonStyle = m_ctx->style.button;
         struct nk_style_combo originalComboStyle = m_ctx->style.combo;
         struct nk_style_edit originalEditStyle = m_ctx->style.edit;
         struct nk_style_slider originalSliderStyle = m_ctx->style.slider;
         struct nk_style_selectable originalSelectableStyle = m_ctx->style.selectable;
-
-        // === KEYBOARD NAVIGATION DEBUG ===
-        nk_layout_row_dynamic(m_ctx, 20, 1);
-        char focusDebug[64];
-        const char* widgetNames[] = {
-            "Font Dropdown", "Font Size Input", "Font Size Slider", "Reading Style Dropdown",
-            "Zoom Step Input", "Zoom Step Slider", "Edge Progress Checkbox", "Minimap Checkbox",
-            "Page Jump Input", "Go Button", "Numpad Button",
-            "Apply Button", "Reset Button", "Close Button"};
-        snprintf(focusDebug, sizeof(focusDebug), "Focus: %s (%d)",
-                 widgetNames[m_mainScreenFocusIndex % WIDGET_COUNT], m_mainScreenFocusIndex);
-        nk_label_colored(m_ctx, focusDebug, NK_TEXT_LEFT, nk_rgb(255, 255, 0));
 
         // === FONT SETTINGS SECTION ===
         nk_layout_row_dynamic(m_ctx, 25, 1);
@@ -506,7 +579,9 @@ void GuiManager::renderFontMenu()
             }
 
             bool forceOpen = m_fontDropdownOpen || m_fontDropdownSelectRequested || m_fontDropdownCancelRequested;
-            if (nk_combo_begin_label_controller(m_ctx, currentFont, nk_vec2(nk_widget_width(m_ctx), 200), forceOpen))
+            bool comboOpened = nk_combo_begin_label_controller(m_ctx, currentFont, nk_vec2(nk_widget_width(m_ctx), 200), forceOpen);
+            rememberWidgetBounds(WIDGET_FONT_DROPDOWN);
+            if (comboOpened)
             {
                 nk_layout_row_dynamic(m_ctx, 20, 1);
                 for (size_t i = 0; i < fonts.size(); ++i)
@@ -600,6 +675,7 @@ void GuiManager::renderFontMenu()
 
             int editFlags = nk_edit_string_zero_terminated(m_ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_SELECTABLE,
                                                            m_fontSizeInput, sizeof(m_fontSizeInput), nk_filter_decimal);
+            rememberWidgetBounds(WIDGET_FONT_SIZE_INPUT);
 
             // Restore edit style
             m_ctx->style.edit = originalEditStyle;
@@ -649,6 +725,7 @@ void GuiManager::renderFontMenu()
                 m_tempConfig.fontSize = static_cast<int>(fontSize);
                 snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_tempConfig.fontSize);
             }
+            rememberWidgetBounds(WIDGET_FONT_SIZE_SLIDER);
 
             // Restore slider style
             m_ctx->style.slider = originalSliderStyle;
@@ -704,7 +781,9 @@ void GuiManager::renderFontMenu()
         }
 
         bool forceStyleOpen = m_styleDropdownOpen || m_styleDropdownSelectRequested || m_styleDropdownCancelRequested;
-        if (nk_combo_begin_label_controller(m_ctx, currentStyle, nk_vec2(nk_widget_width(m_ctx), 200), forceStyleOpen))
+        bool readingComboOpened = nk_combo_begin_label_controller(m_ctx, currentStyle, nk_vec2(nk_widget_width(m_ctx), 200), forceStyleOpen);
+        rememberWidgetBounds(WIDGET_READING_STYLE_DROPDOWN);
+        if (readingComboOpened)
         {
             nk_layout_row_dynamic(m_ctx, 20, 1);
             for (size_t i = 0; i < allStyles.size(); ++i)
@@ -805,6 +884,7 @@ void GuiManager::renderFontMenu()
 
         int zoomEditFlags = nk_edit_string_zero_terminated(m_ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_SELECTABLE,
                                                            m_zoomStepInput, sizeof(m_zoomStepInput), nk_filter_decimal);
+        rememberWidgetBounds(WIDGET_ZOOM_STEP_INPUT);
 
         // Restore edit style
         m_ctx->style.edit = originalEditStyle;
@@ -846,6 +926,7 @@ void GuiManager::renderFontMenu()
             m_tempConfig.zoomStep = static_cast<int>(zoomStep);
             snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_tempConfig.zoomStep);
         }
+        rememberWidgetBounds(WIDGET_ZOOM_STEP_SLIDER);
 
         // Restore zoom slider style
         m_ctx->style.slider = originalSliderStyle;
@@ -888,13 +969,15 @@ void GuiManager::renderFontMenu()
         {
             m_tempConfig.disableEdgeProgressBar = (disableEdgeBar == nk_true);
         }
+        rememberWidgetBounds(WIDGET_EDGE_PROGRESS_CHECKBOX);
+
+        if (nk_widget_is_hovered(m_ctx) || m_mainScreenFocusIndex == WIDGET_EDGE_PROGRESS_CHECKBOX)
+        {
+            nk_tooltip(m_ctx, "When enabled, panning at page edges changes pages instantly.\nWhen disabled, hold at edge for 300ms.");
+        }
 
         // Restore checkbox style
         m_ctx->style.checkbox = originalToggleStyle;
-
-        // Help text
-        nk_layout_row_dynamic(m_ctx, 30, 1);
-        nk_label_colored_wrap(m_ctx, "When enabled, panning at page edges changes pages instantly. When disabled, hold at edge for 300ms.", nk_rgb(178, 178, 178));
 
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
@@ -915,13 +998,15 @@ void GuiManager::renderFontMenu()
         {
             m_tempConfig.showDocumentMinimap = (showMinimap == nk_true);
         }
+        rememberWidgetBounds(WIDGET_MINIMAP_CHECKBOX);
+
+        if (nk_widget_is_hovered(m_ctx) || m_mainScreenFocusIndex == WIDGET_MINIMAP_CHECKBOX)
+        {
+            nk_tooltip(m_ctx, "Show a miniature page overlay when zoomed in to visualize which part is visible.");
+        }
 
         // Restore checkbox style
         m_ctx->style.checkbox = originalToggleStyle;
-
-        // Help text
-        nk_layout_row_dynamic(m_ctx, 30, 1);
-        nk_label_colored_wrap(m_ctx, "Show a miniature page overlay when zoomed in to visualize which part is visible.", nk_rgb(178, 178, 178));
 
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
@@ -944,6 +1029,7 @@ void GuiManager::renderFontMenu()
         }
 
         nk_edit_string_zero_terminated(m_ctx, NK_EDIT_FIELD | NK_EDIT_SELECTABLE, m_pageJumpInput, sizeof(m_pageJumpInput), nk_filter_decimal);
+        rememberWidgetBounds(WIDGET_PAGE_JUMP_INPUT);
 
         // Restore edit style
         m_ctx->style.edit = originalEditStyle;
@@ -977,6 +1063,7 @@ void GuiManager::renderFontMenu()
                 m_pageJumpCallback(targetPage - 1); // Convert to 0-based
             }
         }
+        rememberWidgetBounds(WIDGET_GO_BUTTON);
         if (!validPageInput)
         {
             nk_widget_disable_end(m_ctx);
@@ -998,6 +1085,7 @@ void GuiManager::renderFontMenu()
         {
             showNumberPad();
         }
+        rememberWidgetBounds(WIDGET_NUMPAD_BUTTON);
 
         // Restore Number Pad button style
         m_ctx->style.button = originalButtonStyle;
@@ -1064,6 +1152,7 @@ void GuiManager::renderFontMenu()
                 m_fontApplyCallback(m_currentConfig);
             }
         }
+        rememberWidgetBounds(WIDGET_APPLY_BUTTON);
 
         // Restore Apply button style
         m_ctx->style.button = originalButtonStyle;
@@ -1075,6 +1164,12 @@ void GuiManager::renderFontMenu()
         nk_spacing(m_ctx, 1); // Empty column
 
         // Close button
+        if (m_mainScreenFocusIndex == WIDGET_CLOSE_BUTTON)
+        {
+            m_ctx->style.button.normal = nk_style_item_color(nk_rgb(0, 122, 255));
+            m_ctx->style.button.hover = nk_style_item_color(nk_rgb(30, 142, 255));
+            m_ctx->style.button.active = nk_style_item_color(nk_rgb(0, 102, 235));
+        }
         if (nk_button_label(m_ctx, "Close"))
         {
             m_showFontMenu = false;
@@ -1095,10 +1190,18 @@ void GuiManager::renderFontMenu()
                 m_closeCallback();
             }
         }
+        rememberWidgetBounds(WIDGET_CLOSE_BUTTON);
+        m_ctx->style.button = originalButtonStyle;
 
         nk_spacing(m_ctx, 1); // Empty column
 
         // Reset to Default button
+        if (m_mainScreenFocusIndex == WIDGET_RESET_BUTTON)
+        {
+            m_ctx->style.button.normal = nk_style_item_color(nk_rgb(0, 122, 255));
+            m_ctx->style.button.hover = nk_style_item_color(nk_rgb(30, 142, 255));
+            m_ctx->style.button.active = nk_style_item_color(nk_rgb(0, 102, 235));
+        }
         if (nk_button_label(m_ctx, "Reset to Default"))
         {
             // Reset to default config
@@ -1110,6 +1213,13 @@ void GuiManager::renderFontMenu()
             strcpy(m_fontSizeInput, "12");
             strcpy(m_zoomStepInput, "10");
             strcpy(m_pageJumpInput, "1");
+        }
+        rememberWidgetBounds(WIDGET_RESET_BUTTON);
+        m_ctx->style.button = originalButtonStyle;
+
+        if (m_focusScrollPending)
+        {
+            scrollFocusedWidgetIntoView();
         }
     }
     nk_end(m_ctx);
@@ -1291,7 +1401,7 @@ void GuiManager::renderNumberPad()
 
         // Controller hints
         nk_layout_row_dynamic(m_ctx, 15, 1);
-        nk_label_colored(m_ctx, "Controller: D-Pad=Navigate, A=Select, B=Backspace, Start=Go", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+        nk_label_colored(m_ctx, "Controller: D-Pad=Navigate, A=Select, B=Cancel, Start=Go", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
     }
     nk_end(m_ctx);
 }
@@ -1412,19 +1522,8 @@ bool GuiManager::handleNumberPadInput(const SDL_Event& event)
             return true;
         }
         case kCancelButton:
-            // Backspace function or cancel
-            {
-                int len = strlen(m_pageJumpInput);
-                if (len > 0)
-                {
-                    m_pageJumpInput[len - 1] = '\0';
-                }
-                else
-                {
-                    hideNumberPad();
-                }
-                return true;
-            }
+            hideNumberPad();
+            return true;
         case SDL_CONTROLLER_BUTTON_START:
             // Go to page if valid
             {
@@ -1458,6 +1557,7 @@ void GuiManager::showNumberPad()
 void GuiManager::hideNumberPad()
 {
     m_showNumberPad = false;
+    requestFocusScroll();
 }
 
 int GuiManager::findFontIndex(const std::string& fontName) const
@@ -1473,6 +1573,85 @@ int GuiManager::findFontIndex(const std::string& fontName) const
     return 0; // Default to first font if not found
 }
 
+void GuiManager::rememberWidgetBounds(MainScreenWidget widget)
+{
+    if (!m_ctx || widget < 0 || widget >= WIDGET_COUNT)
+    {
+        return;
+    }
+
+    struct nk_rect bounds = nk_widget_bounds(m_ctx);
+    WidgetBounds& slot = m_widgetBounds[widget];
+    slot.x = bounds.x;
+    slot.y = bounds.y;
+    slot.w = bounds.w;
+    slot.h = bounds.h;
+    slot.valid = (bounds.w > 0.0f && bounds.h > 0.0f);
+}
+
+void GuiManager::requestFocusScroll()
+{
+    m_focusScrollPending = true;
+}
+
+void GuiManager::scrollFocusedWidgetIntoView()
+{
+    if (!m_focusScrollPending || !m_ctx)
+    {
+        return;
+    }
+
+    if (m_mainScreenFocusIndex < 0 || m_mainScreenFocusIndex >= WIDGET_COUNT)
+    {
+        m_focusScrollPending = false;
+        return;
+    }
+
+    const WidgetBounds& bounds = m_widgetBounds[m_mainScreenFocusIndex];
+    if (!bounds.valid)
+    {
+        m_focusScrollPending = false;
+        return;
+    }
+
+    struct nk_rect clip = nk_window_get_content_region(m_ctx);
+    m_windowClipY = clip.y;
+    m_windowClipHeight = clip.h;
+
+    nk_uint scrollX = 0;
+    nk_uint scrollY = 0;
+    nk_window_get_scroll(m_ctx, &scrollX, &scrollY);
+
+    float clipTop = clip.y;
+    float clipBottom = clip.y + clip.h;
+    if (clipBottom - clipTop > 2.0f * kScrollPadding)
+    {
+        clipTop += kScrollPadding;
+        clipBottom -= kScrollPadding;
+    }
+
+    float widgetTop = bounds.y;
+    float widgetBottom = bounds.y + bounds.h;
+    float newScroll = static_cast<float>(scrollY);
+
+    if (widgetTop < clipTop)
+    {
+        newScroll = std::max(0.0f, newScroll - (clipTop - widgetTop));
+    }
+    else if (widgetBottom > clipBottom)
+    {
+        newScroll += (widgetBottom - clipBottom);
+    }
+
+    nk_uint newScrollY = static_cast<nk_uint>(std::max(0.0f, newScroll));
+    if (newScrollY != scrollY)
+    {
+        nk_window_set_scroll(m_ctx, scrollX, newScrollY);
+    }
+
+    m_focusScrollPending = false;
+}
+
 void GuiManager::setupColorScheme()
 {
     if (!m_ctx)
@@ -1482,38 +1661,38 @@ void GuiManager::setupColorScheme()
 
     // Modern dark theme with blue accents
     table[NK_COLOR_TEXT] = nk_rgb(210, 210, 210);
-    table[NK_COLOR_WINDOW] = nk_rgb(45, 45, 48);
-    table[NK_COLOR_HEADER] = nk_rgb(40, 40, 43);
+    table[NK_COLOR_WINDOW] = nk_rgba(45, 45, 48, 248);
+    table[NK_COLOR_HEADER] = nk_rgba(40, 40, 43, 252);
     table[NK_COLOR_BORDER] = nk_rgb(65, 65, 70);
-    table[NK_COLOR_BUTTON] = nk_rgb(60, 60, 65);
-    table[NK_COLOR_BUTTON_HOVER] = nk_rgb(70, 70, 75);
-    table[NK_COLOR_BUTTON_ACTIVE] = nk_rgb(50, 50, 55);
-    table[NK_COLOR_TOGGLE] = nk_rgb(80, 80, 85);
-    table[NK_COLOR_TOGGLE_HOVER] = nk_rgb(90, 90, 95);
+    table[NK_COLOR_BUTTON] = nk_rgba(60, 60, 65, 246);
+    table[NK_COLOR_BUTTON_HOVER] = nk_rgba(70, 70, 75, 252);
+    table[NK_COLOR_BUTTON_ACTIVE] = nk_rgba(50, 50, 55, 255);
+    table[NK_COLOR_TOGGLE] = nk_rgba(80, 80, 85, 246);
+    table[NK_COLOR_TOGGLE_HOVER] = nk_rgba(90, 90, 95, 252);
     table[NK_COLOR_TOGGLE_CURSOR] = nk_rgb(0, 122, 255);
-    table[NK_COLOR_SELECT] = nk_rgb(40, 40, 43);
+    table[NK_COLOR_SELECT] = nk_rgba(40, 40, 43, 246);
     table[NK_COLOR_SELECT_ACTIVE] = nk_rgb(0, 122, 255);
-    table[NK_COLOR_SLIDER] = nk_rgb(60, 60, 65);
+    table[NK_COLOR_SLIDER] = nk_rgba(60, 60, 65, 246);
     table[NK_COLOR_SLIDER_CURSOR] = nk_rgb(0, 122, 255);
     table[NK_COLOR_SLIDER_CURSOR_HOVER] = nk_rgb(30, 142, 255);
     table[NK_COLOR_SLIDER_CURSOR_ACTIVE] = nk_rgb(0, 102, 235);
-    table[NK_COLOR_PROPERTY] = nk_rgb(60, 60, 65);
-    table[NK_COLOR_EDIT] = nk_rgb(50, 50, 55);
+    table[NK_COLOR_PROPERTY] = nk_rgba(60, 60, 65, 246);
+    table[NK_COLOR_EDIT] = nk_rgba(50, 50, 55, 246);
     table[NK_COLOR_EDIT_CURSOR] = nk_rgb(0, 122, 255);
-    table[NK_COLOR_COMBO] = nk_rgb(60, 60, 65);
-    table[NK_COLOR_CHART] = nk_rgb(60, 60, 65);
+    table[NK_COLOR_COMBO] = nk_rgba(60, 60, 65, 246);
+    table[NK_COLOR_CHART] = nk_rgba(60, 60, 65, 246);
     table[NK_COLOR_CHART_COLOR] = nk_rgb(0, 122, 255);
     table[NK_COLOR_CHART_COLOR_HIGHLIGHT] = nk_rgb(30, 142, 255);
-    table[NK_COLOR_SCROLLBAR] = nk_rgb(50, 50, 55);
-    table[NK_COLOR_SCROLLBAR_CURSOR] = nk_rgb(70, 70, 75);
-    table[NK_COLOR_SCROLLBAR_CURSOR_HOVER] = nk_rgb(80, 80, 85);
-    table[NK_COLOR_SCROLLBAR_CURSOR_ACTIVE] = nk_rgb(60, 60, 65);
-    table[NK_COLOR_TAB_HEADER] = nk_rgb(50, 50, 55);
+    table[NK_COLOR_SCROLLBAR] = nk_rgba(50, 50, 55, 240);
+    table[NK_COLOR_SCROLLBAR_CURSOR] = nk_rgba(70, 70, 75, 246);
+    table[NK_COLOR_SCROLLBAR_CURSOR_HOVER] = nk_rgba(80, 80, 85, 252);
+    table[NK_COLOR_SCROLLBAR_CURSOR_ACTIVE] = nk_rgba(60, 60, 65, 252);
+    table[NK_COLOR_TAB_HEADER] = nk_rgba(50, 50, 55, 252);
 
     nk_style_from_table(m_ctx, table);
 
     // Fine-tune some specific elements
-    m_ctx->style.window.fixed_background = nk_style_item_color(nk_rgb(35, 35, 38));
+    m_ctx->style.window.fixed_background = nk_style_item_color(nk_rgba(35, 35, 38, 244));
     m_ctx->style.window.border_color = nk_rgb(0, 122, 255);
     m_ctx->style.window.border = 2.0f;
     m_ctx->style.window.rounding = 4.0f;
@@ -1640,10 +1819,12 @@ bool GuiManager::handleKeyboardNavigation(const SDL_Event& event)
         case SDLK_UP:
             // Navigate up - move to previous widget (same as numpad logic)
             m_mainScreenFocusIndex = (m_mainScreenFocusIndex - 1 + WIDGET_COUNT) % WIDGET_COUNT;
+            requestFocusScroll();
             return true;
         case SDLK_DOWN:
             // Navigate down - move to next widget (same as numpad logic)
             m_mainScreenFocusIndex = (m_mainScreenFocusIndex + 1) % WIDGET_COUNT;
+            requestFocusScroll();
             return true;
         case SDLK_LEFT:
             // Navigate left - adjust widget value if applicable
@@ -1658,11 +1839,13 @@ bool GuiManager::handleKeyboardNavigation(const SDL_Event& event)
             {
                 // Shift+Tab for previous widget
                 m_mainScreenFocusIndex = (m_mainScreenFocusIndex - 1 + WIDGET_COUNT) % WIDGET_COUNT;
+                requestFocusScroll();
             }
             else
             {
                 // Tab for next widget
                 m_mainScreenFocusIndex = (m_mainScreenFocusIndex + 1) % WIDGET_COUNT;
+                requestFocusScroll();
             }
             return true;
         case SDLK_RETURN:
@@ -1839,6 +2022,7 @@ void GuiManager::activateFocusedWidget()
         m_styleDropdownOpen = false;
         m_styleDropdownSelectRequested = false;
         m_styleDropdownCancelRequested = false;
+        m_focusScrollPending = false;
         m_tempConfig = m_currentConfig;
         m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
         m_fontDropdownHighlightedIndex = m_selectedFontIndex;
@@ -1979,10 +2163,12 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
             case SDL_CONTROLLER_BUTTON_DPAD_UP:
                 // Navigate up - move to previous widget
                 m_mainScreenFocusIndex = (m_mainScreenFocusIndex - 1 + WIDGET_COUNT) % WIDGET_COUNT;
+                requestFocusScroll();
                 return true;
             case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
                 // Navigate down - move to next widget
                 m_mainScreenFocusIndex = (m_mainScreenFocusIndex + 1) % WIDGET_COUNT;
+                requestFocusScroll();
                 return true;
             case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
                 adjustFocusedWidget(-1);
@@ -2129,6 +2315,7 @@ void GuiManager::closeFontMenu()
     m_styleDropdownOpen = false;
     m_styleDropdownSelectRequested = false;
     m_styleDropdownCancelRequested = false;
+    m_focusScrollPending = false;
 
     m_tempConfig = m_currentConfig;
     m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
