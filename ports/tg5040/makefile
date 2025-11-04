@@ -81,7 +81,7 @@ setup-nuklear:
 	if [ -d "nuklear-tg5040" ]; then \
 		if [ ! -f "nuklear-tg5040/.tg5040_patched" ]; then \
 			echo "Applying TG5040 SDL renderer compatibility patch to Nuklear..."; \
-		(cd nuklear-tg5040 && (patch -s -N -p0 < ../patches/nuklear_sdl_renderer_compat.patch || true)); \
+		(cd nuklear-tg5040 && (patch --batch -s -N -p1 < ../patches/nuklear_sdl_renderer_compat.patch || true)); \
 		touch nuklear-tg5040/.tg5040_patched; \
 		rm -f nuklear-tg5040/demo/sdl_renderer/nuklear_sdl_renderer.h.rej; \
 		else \
