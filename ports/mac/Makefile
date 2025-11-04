@@ -31,8 +31,8 @@ TARGET = $(BIN_DIR)/$(TARGET_NAME)
 SRC_FILES = $(filter-out src/power_handler.cpp, $(wildcard $(SRC_DIR)/*.cpp))
 SRCS = $(SRC_FILES) $(wildcard $(CLI_DIR)/*.cpp)
 
-# Nuklear directory (using tg5040's nuklear port)
-NUKLEAR_DIR = ../tg5040/nuklear
+# Nuklear directory (Mac-specific)
+NUKLEAR_DIR = nuklear-mac
 
 # Local MuPDF Build Paths (using our custom build with libarchive support)
 MUPDF_BUILD_PATH = mupdf/build/release
@@ -69,10 +69,10 @@ LIBS = -L$(MUPDF_BUILD_PATH) -lmupdf -lmupdf-third \
 OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS))) \
        $(patsubst $(CLI_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(CLI_DIR)/%,$(SRCS)))
 
-.PHONY: all clean build-mupdf setup-mupdf clean-mupdf check-deps install-deps clean-all help
+.PHONY: all clean build-mupdf setup-mupdf clean-mupdf check-deps install-deps clean-all help setup-nuklear clean-nuklear
 
 # Default target
-all: check-deps $(BIN_DIR) $(BUILD_DIR) setup-mupdf build-mupdf $(TARGET)
+all: check-deps $(BIN_DIR) $(BUILD_DIR) setup-nuklear setup-mupdf build-mupdf $(TARGET)
 
 # Check if required system dependencies are installed
 check-deps:
@@ -92,6 +92,17 @@ install-deps:
 	@command -v brew >/dev/null 2>&1 || { echo "Homebrew not found. Please install Homebrew first: https://brew.sh"; exit 1; }
 	brew install pkg-config sdl2 sdl2_ttf sdl2_image libarchive webp
 	@echo "System dependencies installed successfully!"
+
+# Setup Nuklear GUI library (header-only) if it doesn't exist
+setup-nuklear:
+	@if [ ! -d "nuklear-mac" ]; then \
+		echo "Setting up Nuklear GUI library (v4.12.8) for macOS..."; \
+		rm -rf nuklear-mac; \
+		git clone --depth 1 --branch 4.12.8 https://github.com/Immediate-Mode-UI/Nuklear.git nuklear-mac; \
+		echo "Nuklear repository cloned for macOS"; \
+	else \
+		echo "Nuklear repository already present for macOS"; \
+	fi
 
 # Setup MuPDF repository if it doesn't exist
 setup-mupdf:
@@ -167,8 +178,13 @@ clean-mupdf:
 	@echo "Removing MuPDF directory (will be re-downloaded on next build)..."
 	rm -rf mupdf
 
+# Clean Nuklear checkout
+clean-nuklear:
+	@echo "Removing Nuklear checkout..."
+	rm -rf nuklear-mac
+
 # Clean everything including downloaded dependencies
-clean-all: clean clean-mupdf
+clean-all: clean clean-mupdf clean-nuklear
 	@echo "All build artifacts and dependencies cleaned"
 
 # Show help information
@@ -179,9 +195,11 @@ help:
 	@echo "  all          - Build the complete project (default)"
 	@echo "  check-deps   - Check if system dependencies are installed"
 	@echo "  install-deps - Install system dependencies via Homebrew"
+	@echo "  setup-nuklear- Setup Nuklear GUI library"
 	@echo "  setup-mupdf  - Setup MuPDF library"
 	@echo "  build-mupdf  - Build MuPDF with libarchive and WebP support"
 	@echo "  clean        - Remove build artifacts"
+	@echo "  clean-nuklear- Remove Nuklear directory"
 	@echo "  clean-mupdf  - Remove MuPDF directory"
 	@echo "  clean-all    - Remove all build artifacts and dependencies"
 	@echo "  help         - Show this help message"

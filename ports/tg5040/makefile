@@ -16,7 +16,7 @@ endif
 CXX      := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTG5040_PLATFORM\
             -I$(WORKSPACE_PATH)/src -I$(WORKSPACE_PATH)/include -I$(BASE_PATH)/include -I$(BASE_PATH)/mupdf/include \
-            -I$(BASE_PATH)/nuklear -I$(BASE_PATH)/nuklear/demo/sdl_renderer \
+            -I$(BASE_PATH)/nuklear-tg5040 -I$(BASE_PATH)/nuklear-tg5040/demo/sdl_renderer \
             -I/usr/local/libarchive-minimal/include -D_REENTRANT -I/usr/include/SDL2
 
 # Source directories
@@ -69,23 +69,23 @@ check-libarchive:
 # Setup Nuklear GUI library (header-only) if it doesn't exist
 setup-nuklear:
 	@cd $(BASE_PATH) && \
-	if [ ! -d "nuklear" ]; then \
-		echo "Setting up Nuklear GUI library (v4.12.2) for SDL 2.0.9 support..."; \
-		rm -rf nuklear; \
-		git clone --depth 1 --branch 4.12.2 https://github.com/Immediate-Mode-UI/Nuklear.git nuklear; \
-		echo "Nuklear repository cloned"; \
+	if [ ! -d "nuklear-tg5040" ]; then \
+		echo "Setting up Nuklear GUI library (v4.12.8) for SDL 2.0.9 support (TG5040)..."; \
+		rm -rf nuklear-tg5040; \
+		git clone --depth 1 --branch 4.12.8 https://github.com/Immediate-Mode-UI/Nuklear.git nuklear-tg5040; \
+		echo "Nuklear repository cloned for TG5040"; \
 	else \
-		echo "Nuklear repository already present"; \
+		echo "Nuklear repository already present for TG5040"; \
 	fi
 	@cd $(BASE_PATH) && \
-	if [ -d "nuklear" ]; then \
-		if [ ! -f "nuklear/.tg5040_patched" ]; then \
+	if [ -d "nuklear-tg5040" ]; then \
+		if [ ! -f "nuklear-tg5040/.tg5040_patched" ]; then \
 			echo "Applying TG5040 SDL renderer compatibility patch to Nuklear..."; \
-		(cd nuklear && (patch -s -N -p0 < ../patches/nuklear_sdl_renderer_compat.patch || true)); \
-		touch nuklear/.tg5040_patched; \
-		rm -f nuklear/demo/sdl_renderer/nuklear_sdl_renderer.h.rej; \
+		(cd nuklear-tg5040 && (patch -s -N -p0 < ../patches/nuklear_sdl_renderer_compat.patch || true)); \
+		touch nuklear-tg5040/.tg5040_patched; \
+		rm -f nuklear-tg5040/demo/sdl_renderer/nuklear_sdl_renderer.h.rej; \
 		else \
-			echo "Nuklear SDL renderer already patched"; \
+			echo "Nuklear SDL renderer already patched for TG5040"; \
 		fi; \
 	fi
 
@@ -246,7 +246,7 @@ clean-libarchive:
 # Clean Nuklear checkout
 clean-nuklear:
 	@echo "Removing Nuklear checkout..."
-	rm -rf $(BASE_PATH)/nuklear
+	rm -rf $(BASE_PATH)/nuklear-tg5040
 
 # Deep clean - removes everything including downloaded dependencies
 clean-all: clean clean-mupdf clean-libarchive clean-nuklear

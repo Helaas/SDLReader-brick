@@ -29,8 +29,8 @@ SRC_DIR = $(WORKSPACE_PATH)/src
 CLI_DIR = $(WORKSPACE_PATH)/cli
 INCLUDE_DIR = $(WORKSPACE_PATH)/include
 
-# Nuklear directory (using tg5040's nuklear port)
-NUKLEAR_DIR = $(WORKSPACE_PATH)/ports/tg5040/nuklear
+# Nuklear directory (Linux-specific)
+NUKLEAR_DIR = $(BASE_PATH)/nuklear-linux
 
 # Local MuPDF Build Paths (using our custom build with libarchive support)
 MUPDF_DIR = $(BASE_PATH)/mupdf
@@ -84,10 +84,22 @@ OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS
        $(patsubst $(CLI_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(CLI_DIR)/%,$(SRCS))) \
        $(BUILD_DIR)/nuklear_sdl_renderer.o
 
-.PHONY: all clean build-mupdf install-deps help setup-mupdf clean-mupdf clean-all
+.PHONY: all clean build-mupdf install-deps help setup-mupdf clean-mupdf clean-all setup-nuklear clean-nuklear
 
 # Default target
-all: $(BIN_DIR) $(BUILD_DIR) setup-mupdf build-mupdf $(TARGET)
+all: $(BIN_DIR) $(BUILD_DIR) setup-nuklear setup-mupdf build-mupdf $(TARGET)
+
+# Setup Nuklear GUI library (header-only) if it doesn't exist
+setup-nuklear:
+	@cd $(BASE_PATH) && \
+	if [ ! -d "nuklear-linux" ]; then \
+		echo "Setting up Nuklear GUI library (v4.12.8) for Linux..."; \
+		rm -rf nuklear-linux; \
+		git clone --depth 1 --branch 4.12.8 https://github.com/Immediate-Mode-UI/Nuklear.git nuklear-linux; \
+		echo "Nuklear repository cloned for Linux"; \
+	else \
+		echo "Nuklear repository already present for Linux"; \
+	fi
 
 # Setup MuPDF repository if it doesn't exist
 setup-mupdf:
@@ -170,8 +182,13 @@ clean-mupdf:
 	@echo "Removing MuPDF directory (will be re-downloaded on next build)..."
 	rm -rf $(MUPDF_DIR)
 
+# Clean Nuklear checkout
+clean-nuklear:
+	@echo "Removing Nuklear checkout..."
+	rm -rf $(BASE_PATH)/nuklear-linux
+
 # Clean everything including downloaded dependencies
-clean-all: clean clean-mupdf
+clean-all: clean clean-mupdf clean-nuklear
 	@echo "All build artifacts and dependencies cleaned"
 
 # Help target
@@ -180,9 +197,11 @@ help:
 	@echo ""
 	@echo "Available targets:"
 	@echo "  all          - Build the complete project (default)"
+	@echo "  setup-nuklear- Setup Nuklear GUI library"
 	@echo "  setup-mupdf  - Setup MuPDF library"
 	@echo "  build-mupdf  - Build MuPDF with libarchive and WebP support"
 	@echo "  clean        - Remove build artifacts"
+	@echo "  clean-nuklear- Remove Nuklear directory"
 	@echo "  clean-mupdf  - Remove MuPDF directory"
 	@echo "  clean-all    - Remove all build artifacts and dependencies"
 	@echo "  help         - Show this help message"
