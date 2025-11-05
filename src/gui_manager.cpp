@@ -398,13 +398,8 @@ void GuiManager::render()
     }
 
     // Render Nuklear with proper anti-aliasing
-    // Disable anti-aliasing for SDL < 2.0.18 as the legacy renderer
-    // cannot properly handle the complex triangle geometry
-    #ifdef TG5040_PLATFORM
-    nk_sdl_render(NK_ANTI_ALIASING_OFF);
-    #else
     nk_sdl_render(NK_ANTI_ALIASING_ON);
-    #endif
+
     // Handle mouse grab state
     nk_sdl_handle_grab();
 }
