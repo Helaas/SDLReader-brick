@@ -1174,7 +1174,7 @@ void FileBrowser::render()
                                      ? m_ctx->style.font->height
                                      : 22.0f;
         const float helpTextHeight = std::max(24.0f, fontHeight + 4.0f);
-        const float statusBarHeight = std::max(36.0f, fontHeight + 12.0f);
+        const float statusBarHeight = std::max(40.0f, fontHeight + 16.0f);
         const float reservedHeight = 35.0f + helpTextHeight + statusBarHeight + 24.0f;
         const float contentHeight = std::max(60.0f, windowHeightF - reservedHeight);
 
@@ -1193,8 +1193,9 @@ void FileBrowser::render()
         }
 
         // Bottom status bar (no spacing before it) - height scales with current font
+        // Center text vertically by using equal top and bottom padding
         nk_layout_row_dynamic(m_ctx, statusBarHeight, 1);
-        const float statusTextPaddingY = std::max(2.0f, (statusBarHeight - fontHeight) * 0.25f);
+        const float statusTextPaddingY = std::max(6.0f, (statusBarHeight - fontHeight) * 0.5f);
         const struct nk_vec2 statusTextPadding = nk_vec2(m_ctx->style.text.padding.x, statusTextPaddingY);
         const nk_bool pushedStatusPadding = nk_style_push_vec2(m_ctx, &m_ctx->style.text.padding, statusTextPadding);
         if (m_entries.empty())
@@ -1545,12 +1546,20 @@ void FileBrowser::ensureSelectionVisible(float itemHeight, float viewHeight, flo
     float targetTop = itemHeight * static_cast<float>(m_selectedIndex);
     float targetBottom = targetTop + itemHeight;
 
-    if (targetTop < scrollY)
+    // Calculate the visible range
+    float visibleTop = scrollY;
+    float visibleBottom = scrollY + viewHeight;
+
+    // Check if item is going off the top
+    if (targetTop < visibleTop)
     {
+        // Scroll up by exactly the amount needed to show the item
         scrollY = targetTop;
     }
-    else if (targetBottom > scrollY + viewHeight)
+    // Check if item is going off the bottom (scroll before it disappears)
+    else if (targetBottom > visibleBottom)
     {
+        // Scroll down to bring the item into view at the bottom
         scrollY = targetBottom - viewHeight;
     }
 
@@ -1569,12 +1578,14 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
 
     const float itemHeight = 24.0f; // Reduced from 40.0f for less vertical spacing
     const float clampedViewHeight = std::max(40.0f, viewHeight);
+    // Account for Nuklear's internal padding and borders - reduce effective height
+    const float effectiveViewHeight = clampedViewHeight - itemHeight;
 
     // Check if we need to update scroll position for newly selected item
     bool needScrollUpdate = m_pendingListEnsure || (m_lastListEnsureIndex != m_selectedIndex);
     if (needScrollUpdate)
     {
-        ensureSelectionVisible(itemHeight, clampedViewHeight, m_listScrollY, m_lastListEnsureIndex);
+        ensureSelectionVisible(itemHeight, effectiveViewHeight, m_listScrollY, m_lastListEnsureIndex);
         m_pendingListEnsure = false;
     }
 
@@ -1676,12 +1687,14 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
     const float tileHeight = baseThumb + 48.0f;
     int columns = std::max(1, windowWidth / static_cast<int>(tileWidth + 12.0f));
     const float clampedViewHeight = std::max(60.0f, viewHeight);
+    // Account for Nuklear's internal padding - reduce effective height by one row
+    const float effectiveViewHeight = clampedViewHeight - tileHeight;
 
     // Check if we need to update scroll position for newly selected item
     bool needScrollUpdate = m_pendingThumbEnsure || (m_lastThumbEnsureIndex != m_selectedIndex);
     if (needScrollUpdate)
     {
-        ensureSelectionVisible(tileHeight, clampedViewHeight, m_thumbnailScrollY, m_lastThumbEnsureIndex);
+        ensureSelectionVisible(tileHeight, effectiveViewHeight, m_thumbnailScrollY, m_lastThumbEnsureIndex);
         m_pendingThumbEnsure = false;
     }
 
