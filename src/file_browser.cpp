@@ -1528,27 +1528,35 @@ void FileBrowser::setupNuklearStyle()
     style->scrollh = style->scrollv;
 }
 
-void FileBrowser::ensureSelectionVisible(float itemHeight, float viewHeight, float& scrollY, int& lastEnsureIndex)
+void FileBrowser::ensureSelectionVisible(float itemHeight, float viewHeight, float itemSpacing,
+                                         float& scrollY, int& lastEnsureIndex)
 {
     if (m_selectedIndex < 0 || m_entries.empty())
     {
         return;
     }
 
-    float totalHeight = itemHeight * static_cast<float>(m_entries.size());
-    if (totalHeight <= viewHeight)
+    const int totalEntries = static_cast<int>(m_entries.size());
+    const float clampedItemHeight = std::max(0.0f, itemHeight);
+    const float spacing = std::max(0.0f, itemSpacing);
+    const float clampedViewHeight = std::max(viewHeight, clampedItemHeight);
+    const float stride = clampedItemHeight + spacing;
+
+    const float totalHeight =
+        clampedItemHeight * static_cast<float>(totalEntries) + spacing * static_cast<float>(std::max(0, totalEntries - 1));
+    if (totalHeight <= clampedViewHeight)
     {
         scrollY = 0.0f;
         lastEnsureIndex = m_selectedIndex;
         return;
     }
 
-    float targetTop = itemHeight * static_cast<float>(m_selectedIndex);
-    float targetBottom = targetTop + itemHeight;
+    const float targetTop = stride * static_cast<float>(m_selectedIndex);
+    const float targetBottom = targetTop + clampedItemHeight;
 
     // Calculate the visible range
-    float visibleTop = scrollY;
-    float visibleBottom = scrollY + viewHeight;
+    const float visibleTop = scrollY;
+    const float visibleBottom = scrollY + clampedViewHeight;
 
     // Check if item is going off the top
     if (targetTop < visibleTop)
@@ -1560,10 +1568,11 @@ void FileBrowser::ensureSelectionVisible(float itemHeight, float viewHeight, flo
     else if (targetBottom > visibleBottom)
     {
         // Scroll down to bring the item into view at the bottom
-        scrollY = targetBottom - viewHeight;
+        scrollY = targetBottom - clampedViewHeight;
     }
 
-    scrollY = std::clamp(scrollY, 0.0f, std::max(0.0f, totalHeight - viewHeight));
+    const float maxScroll = std::max(0.0f, totalHeight - clampedViewHeight);
+    scrollY = std::clamp(scrollY, 0.0f, maxScroll);
     lastEnsureIndex = m_selectedIndex;
 }
 
@@ -1580,12 +1589,15 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
     const float clampedViewHeight = std::max(40.0f, viewHeight);
     // Account for Nuklear's internal padding and borders - reduce effective height
     const float effectiveViewHeight = clampedViewHeight - itemHeight;
+    const float rowSpacing = (m_ctx && m_ctx->style.window.spacing.y > 0.0f)
+                                 ? m_ctx->style.window.spacing.y
+                                 : 0.0f;
 
     // Check if we need to update scroll position for newly selected item
     bool needScrollUpdate = m_pendingListEnsure || (m_lastListEnsureIndex != m_selectedIndex);
     if (needScrollUpdate)
     {
-        ensureSelectionVisible(itemHeight, effectiveViewHeight, m_listScrollY, m_lastListEnsureIndex);
+        ensureSelectionVisible(itemHeight, effectiveViewHeight, rowSpacing, m_listScrollY, m_lastListEnsureIndex);
         m_pendingListEnsure = false;
     }
 
@@ -1689,12 +1701,15 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
     const float clampedViewHeight = std::max(60.0f, viewHeight);
     // Account for Nuklear's internal padding - reduce effective height by one row
     const float effectiveViewHeight = clampedViewHeight - tileHeight;
+    const float rowSpacing = (m_ctx && m_ctx->style.window.spacing.y > 0.0f)
+                                 ? m_ctx->style.window.spacing.y
+                                 : 0.0f;
 
     // Check if we need to update scroll position for newly selected item
     bool needScrollUpdate = m_pendingThumbEnsure || (m_lastThumbEnsureIndex != m_selectedIndex);
     if (needScrollUpdate)
     {
-        ensureSelectionVisible(tileHeight, effectiveViewHeight, m_thumbnailScrollY, m_lastThumbEnsureIndex);
+        ensureSelectionVisible(tileHeight, effectiveViewHeight, rowSpacing, m_thumbnailScrollY, m_lastThumbEnsureIndex);
         m_pendingThumbEnsure = false;
     }
 
