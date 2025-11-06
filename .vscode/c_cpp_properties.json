@@ -5,7 +5,7 @@
             "includePath": [
                 "${workspaceFolder}/include",
                 "${workspaceFolder}/src",
-                "${workspaceFolder}/ports/tg5040/nuklear",
+                "${workspaceFolder}/ports/mac/nuklear-mac",
                 "${workspaceFolder}/ports/mac/mupdf/include/mupdf",
                 "/opt/homebrew/include/SDL2",
                 "/opt/homebrew/include"
@@ -25,7 +25,7 @@
                 "${workspaceFolder}/src",
                 "${workspaceFolder}/ports/tg5040/include",
                 "${workspaceFolder}/ports/tg5040/mupdf/include",
-                "${workspaceFolder}/ports/tg5040/nuklear",
+                "${workspaceFolder}/ports/tg5040/nuklear-tg5040",
                 "/usr/include/SDL2",
                 "/usr/include"
             ],
@@ -45,6 +45,7 @@
                 "${workspaceFolder}/include",
                 "${workspaceFolder}/src",
                 "${workspaceFolder}/ports/linux/mupdf/include",
+                "${workspaceFolder}/ports/linux/nuklear-linux",
                 "/usr/include/SDL2",
                 "/usr/include"
             ],

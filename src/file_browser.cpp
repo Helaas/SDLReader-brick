@@ -1093,8 +1093,8 @@ void FileBrowser::render()
     const float windowWidthF = static_cast<float>(windowWidth);
     const float windowHeightF = static_cast<float>(windowHeight);
 
-    if (nk_begin(m_ctx, "SDLReader###File Browser", nk_rect(0.0f, 0.0f, windowWidthF, windowHeightF),
-                 NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR))
+    if (nk_begin(m_ctx, "SDLReader", nk_rect(0.0f, 0.0f, windowWidthF, windowHeightF),
+                 NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_TITLE))
     {
         const std::string pathLabel = "Cur. Directory: " + m_currentPath;
         nk_layout_row_dynamic(m_ctx, 26.0f, 1);
@@ -1485,7 +1485,7 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
         return;
     }
 
-    const float itemHeight = 40.0f;
+    const float itemHeight = 24.0f; // Reduced from 40.0f for less vertical spacing
     const float clampedViewHeight = std::max(40.0f, viewHeight);
 
     if (m_lastListEnsureIndex != m_selectedIndex)
@@ -1504,15 +1504,50 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
             const FileEntry& entry = m_entries[i];
             std::string displayName = entry.isDirectory ? "[DIR] " + entry.name : entry.name;
 
+            // Create an invisible button for click detection
             struct nk_style_button backup = m_ctx->style.button;
-            if (isSelected)
+            
+            // Make button transparent and borderless to remove visual button effect
+            m_ctx->style.button.normal = nk_style_item_color(nk_rgba(0, 0, 0, 0));
+            m_ctx->style.button.hover = nk_style_item_color(nk_rgba(0, 0, 0, 0));
+            m_ctx->style.button.active = nk_style_item_color(nk_rgba(0, 0, 0, 0));
+            m_ctx->style.button.border = 0.0f;
+            m_ctx->style.button.padding = nk_vec2(4.0f, 2.0f);
+            m_ctx->style.button.text_alignment = NK_TEXT_LEFT;
+            
+            // Set text color - yellow for directories, white for files
+            if (entry.isDirectory)
             {
-                m_ctx->style.button.normal = nk_style_item_color(nk_rgb(70, 110, 200));
-                m_ctx->style.button.hover = nk_style_item_color(nk_rgb(90, 130, 220));
-                m_ctx->style.button.active = nk_style_item_color(nk_rgb(100, 140, 230));
-                m_ctx->style.button.text_normal = nk_rgb(255, 255, 255);
+                m_ctx->style.button.text_normal = nk_rgb(255, 220, 0);
+                m_ctx->style.button.text_hover = nk_rgb(255, 230, 50);
+                m_ctx->style.button.text_active = nk_rgb(255, 240, 100);
+            }
+            else
+            {
+                m_ctx->style.button.text_normal = nk_rgb(235, 235, 235);
                 m_ctx->style.button.text_hover = nk_rgb(255, 255, 255);
                 m_ctx->style.button.text_active = nk_rgb(255, 255, 255);
+            }
+            
+            // Highlight selected item with background color
+            if (isSelected)
+            {
+                struct nk_rect bounds = nk_widget_bounds(m_ctx);
+                nk_fill_rect(&m_ctx->current->buffer, bounds, 0.0f, nk_rgb(70, 110, 200));
+                
+                // Make selected text brighter
+                if (entry.isDirectory)
+                {
+                    m_ctx->style.button.text_normal = nk_rgb(255, 255, 150);
+                    m_ctx->style.button.text_hover = nk_rgb(255, 255, 150);
+                    m_ctx->style.button.text_active = nk_rgb(255, 255, 150);
+                }
+                else
+                {
+                    m_ctx->style.button.text_normal = nk_rgb(255, 255, 255);
+                    m_ctx->style.button.text_hover = nk_rgb(255, 255, 255);
+                    m_ctx->style.button.text_active = nk_rgb(255, 255, 255);
+                }
             }
 
             if (nk_button_label(m_ctx, displayName.c_str()))
@@ -1522,10 +1557,7 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
                 ensureSelectionVisible(itemHeight, clampedViewHeight, m_listScrollY, m_lastListEnsureIndex);
             }
 
-            if (isSelected)
-            {
-                m_ctx->style.button = backup;
-            }
+            m_ctx->style.button = backup;
         }
 
         nk_uint scrollX = 0;
