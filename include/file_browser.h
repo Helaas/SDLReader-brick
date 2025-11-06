@@ -115,6 +115,7 @@ private:
     bool m_dpadUpHeld;
     bool m_dpadDownHeld;
     Uint32 m_lastScrollTime;
+    bool m_waitingForInitialRepeat;
     static constexpr Uint32 SCROLL_INITIAL_DELAY_MS = 100; // Initial delay before repeat starts
     static constexpr Uint32 SCROLL_REPEAT_DELAY_MS = 50;   // Delay between repeats
 
@@ -128,6 +129,8 @@ private:
     float m_thumbnailScrollY{0.0f};
     int m_lastListEnsureIndex{-1};
     int m_lastThumbEnsureIndex{-1};
+    bool m_pendingListEnsure{false};
+    bool m_pendingThumbEnsure{false};
 
     struct ThumbnailJobResult
     {

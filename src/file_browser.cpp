@@ -71,13 +71,12 @@ std::string truncateToWidth(const std::string& text, float maxWidth)
         return text;
     }
 
-#ifdef TG5040_PLATFORM
     if (maxWidth <= 0.0f)
     {
         return text;
     }
 
-    const float approxCharWidth = 14.0f; // heuristic for TG5040 font sizing
+    const float approxCharWidth = 22.0f;
     size_t maxChars = static_cast<size_t>(std::floor(maxWidth / approxCharWidth));
     if (maxChars == 0)
     {
@@ -97,7 +96,8 @@ std::string truncateToWidth(const std::string& text, float maxWidth)
     std::string result = text.substr(0, maxChars - 3);
     result.append("...");
     return result;
-#endif
+
+    return text;
 }
 } // namespace
 
@@ -111,7 +111,7 @@ FileBrowser::FileBrowser()
       m_currentPath(m_defaultRoot),
       m_selectedIndex(0), m_selectedFile(), m_gameController(nullptr), m_gameControllerInstanceID(-1),
       m_thumbnailView(s_lastThumbnailView), m_gridColumns(1), m_lastWindowWidth(0), m_lastWindowHeight(0),
-      m_dpadUpHeld(false), m_dpadDownHeld(false), m_lastScrollTime(0)
+      m_dpadUpHeld(false), m_dpadDownHeld(false), m_lastScrollTime(0), m_waitingForInitialRepeat(false)
 {
     if (s_cachedThumbnailsValid)
     {
@@ -1081,10 +1081,10 @@ std::string FileBrowser::run()
         Uint32 currentTime = SDL_GetTicks();
         if ((m_dpadUpHeld || m_dpadDownHeld) && !m_entries.empty())
         {
-            // Calculate delay based on whether we're in initial hold or repeat phase
-            Uint32 delay = (m_lastScrollTime == 0) ? 0 : ((currentTime - m_lastScrollTime < SCROLL_INITIAL_DELAY_MS) ? SCROLL_INITIAL_DELAY_MS : SCROLL_REPEAT_DELAY_MS);
+            const Uint32 elapsed = (m_lastScrollTime <= currentTime) ? (currentTime - m_lastScrollTime) : 0;
+            const Uint32 targetDelay = m_waitingForInitialRepeat ? SCROLL_INITIAL_DELAY_MS : SCROLL_REPEAT_DELAY_MS;
 
-            if (m_lastScrollTime == 0 || (currentTime - m_lastScrollTime >= delay))
+            if (m_lastScrollTime == 0 || elapsed >= targetDelay)
             {
                 if (m_dpadUpHeld)
                 {
@@ -1096,6 +1096,7 @@ std::string FileBrowser::run()
                 }
 
                 m_lastScrollTime = currentTime;
+                m_waitingForInitialRepeat = false;
             }
         }
 
@@ -1169,12 +1170,17 @@ void FileBrowser::render()
     if (nk_begin(m_ctx, windowTitle.c_str(), nk_rect(0.0f, 0.0f, windowWidthF, windowHeightF),
                  NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_TITLE))
     {
-        nk_layout_row_dynamic(m_ctx, 20.0f, 1);
+        const float fontHeight = (m_ctx->style.font && m_ctx->style.font->height > 0.0f)
+                                     ? m_ctx->style.font->height
+                                     : 22.0f;
+        const float helpTextHeight = std::max(24.0f, fontHeight + 4.0f);
+        const float statusBarHeight = std::max(36.0f, fontHeight + 12.0f);
+        const float reservedHeight = 35.0f + helpTextHeight + statusBarHeight + 24.0f;
+        const float contentHeight = std::max(60.0f, windowHeightF - reservedHeight);
+
+        nk_layout_row_dynamic(m_ctx, helpTextHeight, 1);
         nk_label_colored(m_ctx, "D-Pad: Nav. | A: Select | B: Back | X: Toggle View | Menu: Quit",
                          NK_TEXT_LEFT, nk_rgb(180, 180, 180));
-
-        // Calculate content height accounting for: title bar (~35px), help text (20px), status bar (28px), padding (24px)
-        const float contentHeight = std::max(60.0f, windowHeightF - 107.0f);
 
         if (m_thumbnailView)
         {
@@ -1186,8 +1192,11 @@ void FileBrowser::render()
             m_gridColumns = 1;
         }
 
-        // Bottom status bar (no spacing before it) - increased height for larger font
-        nk_layout_row_dynamic(m_ctx, 28.0f, 1);
+        // Bottom status bar (no spacing before it) - height scales with current font
+        nk_layout_row_dynamic(m_ctx, statusBarHeight, 1);
+        const float statusTextPaddingY = std::max(2.0f, (statusBarHeight - fontHeight) * 0.25f);
+        const struct nk_vec2 statusTextPadding = nk_vec2(m_ctx->style.text.padding.x, statusTextPaddingY);
+        const nk_bool pushedStatusPadding = nk_style_push_vec2(m_ctx, &m_ctx->style.text.padding, statusTextPadding);
         if (m_entries.empty())
         {
             nk_label(m_ctx, "No files or directories found", NK_TEXT_LEFT);
@@ -1204,6 +1213,10 @@ void FileBrowser::render()
                           m_entries.size(), directoryCount, fileCount,
                           m_thumbnailView ? "Thumbnail" : "List");
             nk_label(m_ctx, statusBuffer, NK_TEXT_LEFT);
+        }
+        if (pushedStatusPadding)
+        {
+            nk_style_pop_vec2(m_ctx);
         }
     }
     nk_end(m_ctx);
@@ -1316,6 +1329,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
                 moveSelectionVertical(-1);
                 m_dpadUpHeld = true;
                 m_lastScrollTime = SDL_GetTicks();
+                m_waitingForInitialRepeat = true;
             }
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
@@ -1324,6 +1338,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
                 moveSelectionVertical(1);
                 m_dpadDownHeld = true;
                 m_lastScrollTime = SDL_GetTicks();
+                m_waitingForInitialRepeat = true;
             }
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
@@ -1366,10 +1381,12 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDL_CONTROLLER_BUTTON_DPAD_UP:
             m_dpadUpHeld = false;
             m_lastScrollTime = 0;
+            m_waitingForInitialRepeat = false;
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
             m_dpadDownHeld = false;
             m_lastScrollTime = 0;
+            m_waitingForInitialRepeat = false;
             break;
         default:
             break;
@@ -1554,14 +1571,15 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
     const float clampedViewHeight = std::max(40.0f, viewHeight);
 
     // Check if we need to update scroll position for newly selected item
-    bool needScrollUpdate = (m_lastListEnsureIndex != m_selectedIndex);
+    bool needScrollUpdate = m_pendingListEnsure || (m_lastListEnsureIndex != m_selectedIndex);
     if (needScrollUpdate)
     {
         ensureSelectionVisible(itemHeight, clampedViewHeight, m_listScrollY, m_lastListEnsureIndex);
+        m_pendingListEnsure = false;
     }
 
     nk_layout_row_dynamic(m_ctx, clampedViewHeight, 1);
-    
+
     if (nk_group_begin(m_ctx, "FileList", NK_WINDOW_BORDER | NK_WINDOW_SCROLL_AUTO_HIDE))
     {
         // Set the scroll position immediately after group begins if needed
@@ -1569,7 +1587,7 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
         {
             nk_group_set_scroll(m_ctx, "FileList", 0, static_cast<nk_uint>(m_listScrollY));
         }
-        
+
         nk_layout_row_dynamic(m_ctx, itemHeight, 1);
         for (size_t i = 0; i < m_entries.size(); ++i)
         {
@@ -1660,14 +1678,15 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
     const float clampedViewHeight = std::max(60.0f, viewHeight);
 
     // Check if we need to update scroll position for newly selected item
-    bool needScrollUpdate = (m_lastThumbEnsureIndex != m_selectedIndex);
+    bool needScrollUpdate = m_pendingThumbEnsure || (m_lastThumbEnsureIndex != m_selectedIndex);
     if (needScrollUpdate)
     {
         ensureSelectionVisible(tileHeight, clampedViewHeight, m_thumbnailScrollY, m_lastThumbEnsureIndex);
+        m_pendingThumbEnsure = false;
     }
 
     nk_layout_row_dynamic(m_ctx, clampedViewHeight, 1);
-    
+
     if (nk_group_begin(m_ctx, "ThumbnailGrid", NK_WINDOW_BORDER | NK_WINDOW_SCROLL_AUTO_HIDE))
     {
         // Set the scroll position immediately after group begins if needed
@@ -1675,7 +1694,7 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
         {
             nk_group_set_scroll(m_ctx, "ThumbnailGrid", 0, static_cast<nk_uint>(m_thumbnailScrollY));
         }
-        
+
         if (!m_entries.empty())
         {
             nk_layout_row_begin(m_ctx, NK_STATIC, tileHeight, columns);
@@ -1687,9 +1706,9 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
                 bool isSelected = (static_cast<int>(i) == m_selectedIndex);
 
                 std::string displayName = entry.name;
-#ifdef TG5040_PLATFORM
+
                 displayName = truncateToWidth(entry.name, tileWidth - 16.0f);
-#endif
+
                 if (entry.isDirectory)
                 {
                     displayName = "[DIR] " + displayName;
@@ -1749,4 +1768,6 @@ void FileBrowser::resetSelectionScrollTargets()
 {
     m_lastListEnsureIndex = -1;
     m_lastThumbEnsureIndex = -1;
+    m_pendingListEnsure = true;
+    m_pendingThumbEnsure = true;
 }
