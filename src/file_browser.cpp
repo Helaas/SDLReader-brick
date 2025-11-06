@@ -1,4 +1,5 @@
 #include "file_browser.h"
+#include "options_manager.h"
 #include "path_utils.h"
 
 #ifndef NK_INCLUDE_FIXED_TYPES
@@ -146,9 +147,85 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
         return false;
     }
 
+    // Setup font atlas and load a reliable UI font
     struct nk_font_atlas* atlas = nullptr;
     nk_sdl_font_stash_begin(&atlas);
+    struct nk_font* uiFont = nullptr;
+    constexpr float kUiFontSize = 22.0f;
+
+    if (atlas)
+    {
+        auto fontExists = [](const std::string& path) -> bool
+        {
+            if (path.empty())
+            {
+                return false;
+            }
+            std::error_code ec;
+            return std::filesystem::exists(path, ec) && !ec;
+        };
+
+        // Load available fonts from options manager
+        OptionsManager optionsManager;
+        const auto& availableFonts = optionsManager.getAvailableFonts();
+        for (const auto& fontInfo : availableFonts)
+        {
+            if (fontExists(fontInfo.filePath))
+            {
+                uiFont = nk_font_atlas_add_from_file(atlas, fontInfo.filePath.c_str(), kUiFontSize, nullptr);
+                if (uiFont)
+                {
+                    atlas->default_font = uiFont;
+                    std::cout << "FileBrowser: Loaded UI font from options list: " << fontInfo.displayName << std::endl;
+                    break;
+                }
+            }
+        }
+
+        // Try fallback fonts if no font from options list worked
+        if (!uiFont)
+        {
+            static const char* fallbackFonts[] = {
+                "fonts/Inter-Regular.ttf",
+                "fonts/Roboto-Regular.ttf",
+                "fonts/JetBrainsMono-Regular.ttf"};
+
+            for (const char* path : fallbackFonts)
+            {
+                if (fontExists(path))
+                {
+                    uiFont = nk_font_atlas_add_from_file(atlas, path, kUiFontSize, nullptr);
+                    if (uiFont)
+                    {
+                        atlas->default_font = uiFont;
+                        std::cout << "FileBrowser: Loaded fallback UI font: " << path << std::endl;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Use Nuklear default font as last resort
+        if (!uiFont)
+        {
+            uiFont = nk_font_atlas_add_default(atlas, kUiFontSize, nullptr);
+            if (uiFont)
+            {
+                atlas->default_font = uiFont;
+                std::cout << "FileBrowser: Loaded Nuklear default font for UI fallback" << std::endl;
+            }
+            else
+            {
+                std::cerr << "FileBrowser: Failed to load any UI font; interface text may be unavailable" << std::endl;
+            }
+        }
+    }
+
     nk_sdl_font_stash_end();
+    if (uiFont)
+    {
+        nk_style_set_font(m_ctx, &uiFont->handle);
+    }
 
     setupNuklearStyle();
 
@@ -297,9 +374,7 @@ bool FileBrowser::scanDirectory(const std::string& path)
     m_entries.clear();
     m_selectedIndex = 0;
     clearPendingThumbnails();
-#ifdef TG5040_PLATFORM
     resetSelectionScrollTargets();
-#endif
 
     bool reuseCachedThumbnails = s_cachedThumbnailsValid && pathsEqual(s_cachedDirectory, safePath);
     if (reuseCachedThumbnails)
@@ -876,9 +951,7 @@ void FileBrowser::toggleViewMode()
     m_gridColumns = 1;
     clampSelection();
     s_lastThumbnailView = m_thumbnailView;
-#ifdef TG5040_PLATFORM
     resetSelectionScrollTargets();
-#endif
 }
 
 void FileBrowser::moveSelectionVertical(int direction)
@@ -907,9 +980,8 @@ void FileBrowser::moveSelectionVertical(int direction)
         m_selectedIndex = (m_selectedIndex + direction + total) % total;
     }
 
-#ifdef TG5040_PLATFORM
+    // Reset scroll targets to trigger auto-scroll on next render
     resetSelectionScrollTargets();
-#endif
 }
 
 void FileBrowser::moveSelectionHorizontal(int direction)
@@ -933,9 +1005,8 @@ void FileBrowser::moveSelectionHorizontal(int direction)
         m_selectedIndex = newIndex;
     }
 
-#ifdef TG5040_PLATFORM
+    // Reset scroll targets to trigger auto-scroll on next render
     resetSelectionScrollTargets();
-#endif
 }
 
 void FileBrowser::clampSelection()
@@ -1093,21 +1164,17 @@ void FileBrowser::render()
     const float windowWidthF = static_cast<float>(windowWidth);
     const float windowHeightF = static_cast<float>(windowHeight);
 
-    if (nk_begin(m_ctx, "SDLReader", nk_rect(0.0f, 0.0f, windowWidthF, windowHeightF),
+    // Create title with current directory
+    std::string windowTitle = "SDLReader - " + m_currentPath;
+    if (nk_begin(m_ctx, windowTitle.c_str(), nk_rect(0.0f, 0.0f, windowWidthF, windowHeightF),
                  NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_TITLE))
     {
-        const std::string pathLabel = "Cur. Directory: " + m_currentPath;
-        nk_layout_row_dynamic(m_ctx, 26.0f, 1);
-        nk_label(m_ctx, pathLabel.c_str(), NK_TEXT_LEFT);
-
         nk_layout_row_dynamic(m_ctx, 20.0f, 1);
         nk_label_colored(m_ctx, "D-Pad: Nav. | A: Select | B: Back | X: Toggle View | Menu: Quit",
                          NK_TEXT_LEFT, nk_rgb(180, 180, 180));
 
-        nk_layout_row_dynamic(m_ctx, 6.0f, 1);
-        nk_spacing(m_ctx, 1);
-
-        const float contentHeight = std::max(60.0f, windowHeightF - 120.0f);
+        // Calculate content height accounting for: title bar (~35px), help text (20px), status bar (28px), padding (24px)
+        const float contentHeight = std::max(60.0f, windowHeightF - 107.0f);
 
         if (m_thumbnailView)
         {
@@ -1119,10 +1186,8 @@ void FileBrowser::render()
             m_gridColumns = 1;
         }
 
-        nk_layout_row_dynamic(m_ctx, 6.0f, 1);
-        nk_spacing(m_ctx, 1);
-
-        nk_layout_row_dynamic(m_ctx, 22.0f, 1);
+        // Bottom status bar (no spacing before it) - increased height for larger font
+        nk_layout_row_dynamic(m_ctx, 28.0f, 1);
         if (m_entries.empty())
         {
             nk_label(m_ctx, "No files or directories found", NK_TEXT_LEFT);
@@ -1488,15 +1553,23 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
     const float itemHeight = 24.0f; // Reduced from 40.0f for less vertical spacing
     const float clampedViewHeight = std::max(40.0f, viewHeight);
 
-    if (m_lastListEnsureIndex != m_selectedIndex)
+    // Check if we need to update scroll position for newly selected item
+    bool needScrollUpdate = (m_lastListEnsureIndex != m_selectedIndex);
+    if (needScrollUpdate)
     {
         ensureSelectionVisible(itemHeight, clampedViewHeight, m_listScrollY, m_lastListEnsureIndex);
     }
 
     nk_layout_row_dynamic(m_ctx, clampedViewHeight, 1);
-    nk_group_set_scroll(m_ctx, "FileList", 0, static_cast<nk_uint>(m_listScrollY));
+    
     if (nk_group_begin(m_ctx, "FileList", NK_WINDOW_BORDER | NK_WINDOW_SCROLL_AUTO_HIDE))
     {
+        // Set the scroll position immediately after group begins if needed
+        if (needScrollUpdate)
+        {
+            nk_group_set_scroll(m_ctx, "FileList", 0, static_cast<nk_uint>(m_listScrollY));
+        }
+        
         nk_layout_row_dynamic(m_ctx, itemHeight, 1);
         for (size_t i = 0; i < m_entries.size(); ++i)
         {
@@ -1506,7 +1579,7 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
 
             // Create an invisible button for click detection
             struct nk_style_button backup = m_ctx->style.button;
-            
+
             // Make button transparent and borderless to remove visual button effect
             m_ctx->style.button.normal = nk_style_item_color(nk_rgba(0, 0, 0, 0));
             m_ctx->style.button.hover = nk_style_item_color(nk_rgba(0, 0, 0, 0));
@@ -1514,7 +1587,7 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
             m_ctx->style.button.border = 0.0f;
             m_ctx->style.button.padding = nk_vec2(4.0f, 2.0f);
             m_ctx->style.button.text_alignment = NK_TEXT_LEFT;
-            
+
             // Set text color - yellow for directories, white for files
             if (entry.isDirectory)
             {
@@ -1528,13 +1601,13 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
                 m_ctx->style.button.text_hover = nk_rgb(255, 255, 255);
                 m_ctx->style.button.text_active = nk_rgb(255, 255, 255);
             }
-            
+
             // Highlight selected item with background color
             if (isSelected)
             {
                 struct nk_rect bounds = nk_widget_bounds(m_ctx);
                 nk_fill_rect(&m_ctx->current->buffer, bounds, 0.0f, nk_rgb(70, 110, 200));
-                
+
                 // Make selected text brighter
                 if (entry.isDirectory)
                 {
@@ -1554,16 +1627,21 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
             {
                 m_selectedIndex = static_cast<int>(i);
                 m_selectedFile.clear();
-                ensureSelectionVisible(itemHeight, clampedViewHeight, m_listScrollY, m_lastListEnsureIndex);
+                // Trigger scroll update on next frame
+                resetSelectionScrollTargets();
             }
 
             m_ctx->style.button = backup;
         }
 
-        nk_uint scrollX = 0;
-        nk_uint scrollY = 0;
-        nk_group_get_scroll(m_ctx, "FileList", &scrollX, &scrollY);
-        m_listScrollY = static_cast<float>(scrollY);
+        // Only read back scroll position if we didn't just set it
+        if (!needScrollUpdate)
+        {
+            nk_uint scrollX = 0;
+            nk_uint scrollY = 0;
+            nk_group_get_scroll(m_ctx, "FileList", &scrollX, &scrollY);
+            m_listScrollY = static_cast<float>(scrollY);
+        }
         nk_group_end(m_ctx);
     }
 }
@@ -1581,15 +1659,23 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
     int columns = std::max(1, windowWidth / static_cast<int>(tileWidth + 12.0f));
     const float clampedViewHeight = std::max(60.0f, viewHeight);
 
-    if (m_lastThumbEnsureIndex != m_selectedIndex)
+    // Check if we need to update scroll position for newly selected item
+    bool needScrollUpdate = (m_lastThumbEnsureIndex != m_selectedIndex);
+    if (needScrollUpdate)
     {
         ensureSelectionVisible(tileHeight, clampedViewHeight, m_thumbnailScrollY, m_lastThumbEnsureIndex);
     }
 
     nk_layout_row_dynamic(m_ctx, clampedViewHeight, 1);
-    nk_group_set_scroll(m_ctx, "ThumbnailGrid", 0, static_cast<nk_uint>(m_thumbnailScrollY));
+    
     if (nk_group_begin(m_ctx, "ThumbnailGrid", NK_WINDOW_BORDER | NK_WINDOW_SCROLL_AUTO_HIDE))
     {
+        // Set the scroll position immediately after group begins if needed
+        if (needScrollUpdate)
+        {
+            nk_group_set_scroll(m_ctx, "ThumbnailGrid", 0, static_cast<nk_uint>(m_thumbnailScrollY));
+        }
+        
         if (!m_entries.empty())
         {
             nk_layout_row_begin(m_ctx, NK_STATIC, tileHeight, columns);
@@ -1635,7 +1721,8 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
                 {
                     m_selectedIndex = static_cast<int>(i);
                     m_selectedFile.clear();
-                    ensureSelectionVisible(tileHeight, clampedViewHeight, m_thumbnailScrollY, m_lastThumbEnsureIndex);
+                    // Trigger scroll update on next frame
+                    resetSelectionScrollTargets();
                 }
 
                 if (isSelected)
@@ -1646,10 +1733,14 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
             nk_layout_row_end(m_ctx);
         }
 
-        nk_uint scrollX = 0;
-        nk_uint scrollY = 0;
-        nk_group_get_scroll(m_ctx, "ThumbnailGrid", &scrollX, &scrollY);
-        m_thumbnailScrollY = static_cast<float>(scrollY);
+        // Only read back scroll position if we didn't just set it
+        if (!needScrollUpdate)
+        {
+            nk_uint scrollX = 0;
+            nk_uint scrollY = 0;
+            nk_group_get_scroll(m_ctx, "ThumbnailGrid", &scrollX, &scrollY);
+            m_thumbnailScrollY = static_cast<float>(scrollY);
+        }
         nk_group_end(m_ctx);
     }
 }
