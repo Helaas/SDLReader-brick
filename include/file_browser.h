@@ -173,7 +173,7 @@ private:
     void renderListViewNuklear(float viewHeight, int windowWidth);
     void renderThumbnailViewNuklear(float viewHeight, int windowWidth);
     void ensureSelectionVisible(float itemHeight, float viewHeight, float itemSpacing,
-                                float& scrollY, int& lastEnsureIndex);
+                                float& scrollY, int& lastEnsureIndex, int targetIndex, int totalItems);
     void resetSelectionScrollTargets();
 
     /**

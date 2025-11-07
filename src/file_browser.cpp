@@ -963,18 +963,25 @@ void FileBrowser::moveSelectionVertical(int direction)
 
     if (m_thumbnailView && m_gridColumns > 0)
     {
-        int newIndex = m_selectedIndex + direction * m_gridColumns;
-        if (newIndex < 0)
+        const int totalEntries = static_cast<int>(m_entries.size());
+        const int totalRows = (totalEntries + m_gridColumns - 1) / m_gridColumns;
+        const int clampedIndex = std::clamp(m_selectedIndex, 0, totalEntries - 1);
+        const int currentRow = std::clamp(clampedIndex / m_gridColumns, 0, std::max(0, totalRows - 1));
+        const int currentCol = clampedIndex % m_gridColumns;
+
+        int nextRow = std::clamp(currentRow + direction, 0, std::max(0, totalRows - 1));
+        int rowStart = nextRow * m_gridColumns;
+        int rowEnd = std::min(rowStart + m_gridColumns - 1, totalEntries - 1);
+
+        int nextIndex = rowStart + currentCol;
+        if (nextIndex > rowEnd)
         {
-            newIndex = 0;
+            nextIndex = rowEnd;
         }
-        else if (newIndex >= static_cast<int>(m_entries.size()))
-        {
-            newIndex = static_cast<int>(m_entries.size()) - 1;
-        }
-        m_selectedIndex = newIndex;
+        nextIndex = std::clamp(nextIndex, 0, totalEntries - 1);
+        m_selectedIndex = nextIndex;
     }
-    else
+    else if (!m_entries.empty())
     {
         const int total = static_cast<int>(m_entries.size());
         m_selectedIndex = (m_selectedIndex + direction + total) % total;
@@ -993,16 +1000,12 @@ void FileBrowser::moveSelectionHorizontal(int direction)
 
     if (m_thumbnailView && m_gridColumns > 0)
     {
-        int newIndex = m_selectedIndex + direction;
-        if (newIndex < 0)
-        {
-            newIndex = 0;
-        }
-        else if (newIndex >= static_cast<int>(m_entries.size()))
-        {
-            newIndex = static_cast<int>(m_entries.size()) - 1;
-        }
-        m_selectedIndex = newIndex;
+        const int totalEntries = static_cast<int>(m_entries.size());
+        const int clampedIndex = std::clamp(m_selectedIndex, 0, totalEntries - 1);
+        const int rowStart = (clampedIndex / m_gridColumns) * m_gridColumns;
+        const int rowEnd = std::min(rowStart + m_gridColumns - 1, totalEntries - 1);
+        const int nextIndex = std::clamp(m_selectedIndex + direction, rowStart, rowEnd);
+        m_selectedIndex = std::clamp(nextIndex, 0, totalEntries - 1);
     }
 
     // Reset scroll targets to trigger auto-scroll on next render
@@ -1529,29 +1532,30 @@ void FileBrowser::setupNuklearStyle()
 }
 
 void FileBrowser::ensureSelectionVisible(float itemHeight, float viewHeight, float itemSpacing,
-                                         float& scrollY, int& lastEnsureIndex)
+                                         float& scrollY, int& lastEnsureIndex, int targetIndex, int totalItems)
 {
-    if (m_selectedIndex < 0 || m_entries.empty())
+    if (targetIndex < 0 || totalItems <= 0)
     {
         return;
     }
 
-    const int totalEntries = static_cast<int>(m_entries.size());
+    targetIndex = std::min(targetIndex, totalItems - 1);
+
     const float clampedItemHeight = std::max(0.0f, itemHeight);
     const float spacing = std::max(0.0f, itemSpacing);
     const float clampedViewHeight = std::max(viewHeight, clampedItemHeight);
     const float stride = clampedItemHeight + spacing;
 
     const float totalHeight =
-        clampedItemHeight * static_cast<float>(totalEntries) + spacing * static_cast<float>(std::max(0, totalEntries - 1));
+        clampedItemHeight * static_cast<float>(totalItems) + spacing * static_cast<float>(std::max(0, totalItems - 1));
     if (totalHeight <= clampedViewHeight)
     {
         scrollY = 0.0f;
-        lastEnsureIndex = m_selectedIndex;
+        lastEnsureIndex = targetIndex;
         return;
     }
 
-    const float targetTop = stride * static_cast<float>(m_selectedIndex);
+    const float targetTop = stride * static_cast<float>(targetIndex);
     const float targetBottom = targetTop + clampedItemHeight;
 
     // Calculate the visible range
@@ -1573,7 +1577,7 @@ void FileBrowser::ensureSelectionVisible(float itemHeight, float viewHeight, flo
 
     const float maxScroll = std::max(0.0f, totalHeight - clampedViewHeight);
     scrollY = std::clamp(scrollY, 0.0f, maxScroll);
-    lastEnsureIndex = m_selectedIndex;
+    lastEnsureIndex = targetIndex;
 }
 
 void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
@@ -1593,11 +1597,19 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
                                  ? m_ctx->style.window.spacing.y
                                  : 0.0f;
 
+    const int totalItems = static_cast<int>(m_entries.size());
+    const int clampedSelectedIndex = (totalItems > 0)
+                                         ? std::clamp(m_selectedIndex, 0, totalItems - 1)
+                                         : -1;
     // Check if we need to update scroll position for newly selected item
-    bool needScrollUpdate = m_pendingListEnsure || (m_lastListEnsureIndex != m_selectedIndex);
+    bool needScrollUpdate = m_pendingListEnsure || (m_lastListEnsureIndex != clampedSelectedIndex);
     if (needScrollUpdate)
     {
-        ensureSelectionVisible(itemHeight, effectiveViewHeight, rowSpacing, m_listScrollY, m_lastListEnsureIndex);
+        if (clampedSelectedIndex >= 0)
+        {
+            ensureSelectionVisible(itemHeight, effectiveViewHeight, rowSpacing, m_listScrollY,
+                                   m_lastListEnsureIndex, clampedSelectedIndex, totalItems);
+        }
         m_pendingListEnsure = false;
     }
 
@@ -1676,7 +1688,7 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
         }
 
         // Only read back scroll position if we didn't just set it
-        if (!needScrollUpdate)
+        if (!needScrollUpdate && totalItems > 0)
         {
             nk_uint scrollX = 0;
             nk_uint scrollY = 0;
@@ -1689,27 +1701,64 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
 
 void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
 {
-    if (!m_ctx)
+    if (!m_ctx || !m_ctx->current || !m_ctx->current->layout)
     {
         return;
     }
 
+    struct nk_window* win = m_ctx->current;
+
     const float baseThumb = static_cast<float>(THUMBNAIL_MAX_DIM);
-    const float tileWidth = baseThumb + 24.0f;
-    const float tileHeight = baseThumb + 48.0f;
-    int columns = std::max(1, windowWidth / static_cast<int>(tileWidth + 12.0f));
-    const float clampedViewHeight = std::max(60.0f, viewHeight);
-    // Account for Nuklear's internal padding - reduce effective height by one row
+    const float labelHeight = 40.0f;
+    const float tilePadding = 12.0f;
+    const float maxBorderThickness = 4.0f;
+    const float thumbnailAreaHeight = baseThumb;
+    const float tileHeight = thumbnailAreaHeight + labelHeight + 2.0f * (tilePadding + maxBorderThickness);
+
+    const float spacingX = (m_ctx->style.window.spacing.x > 0.0f) ? m_ctx->style.window.spacing.x : 0.0f;
+    const float paddingX = m_ctx->style.window.padding.x * 2.0f;
+    const float usableWidth = std::max(0.0f, static_cast<float>(windowWidth) - paddingX);
+    const float preferredTileWidth = baseThumb + 64.0f;
+    const int desiredColumns = 4;
+    const int maxColumnsFit = std::max(1, static_cast<int>((usableWidth + spacingX) / (preferredTileWidth + spacingX)));
+    int columns = (maxColumnsFit >= desiredColumns) ? desiredColumns : maxColumnsFit;
+    columns = std::max(1, columns);
+    float totalWidthForTiles = usableWidth - spacingX * static_cast<float>(columns - 1);
+    if (totalWidthForTiles <= 0.0f)
+    {
+        totalWidthForTiles = usableWidth;
+    }
+    float tileWidth = totalWidthForTiles / static_cast<float>(columns);
+    tileWidth = std::max(1.0f, tileWidth);
+
+    const struct nk_user_font* font = m_ctx->style.font;
+    if (!font)
+    {
+        return;
+    }
+
+    m_gridColumns = std::max(1, columns);
+    const float clampedViewHeight = std::max(tileHeight + 20.0f, viewHeight);
     const float effectiveViewHeight = clampedViewHeight - tileHeight;
     const float rowSpacing = (m_ctx && m_ctx->style.window.spacing.y > 0.0f)
                                  ? m_ctx->style.window.spacing.y
                                  : 0.0f;
 
-    // Check if we need to update scroll position for newly selected item
-    bool needScrollUpdate = m_pendingThumbEnsure || (m_lastThumbEnsureIndex != m_selectedIndex);
+    const int totalEntries = static_cast<int>(m_entries.size());
+    const int totalRows = (m_gridColumns > 0)
+                              ? (totalEntries + m_gridColumns - 1) / m_gridColumns
+                              : 0;
+    const int currentRow = (totalEntries > 0 && m_gridColumns > 0)
+                               ? std::clamp(m_selectedIndex, 0, totalEntries - 1) / m_gridColumns
+                               : -1;
+    bool needScrollUpdate = m_pendingThumbEnsure || (m_lastThumbEnsureIndex != currentRow);
     if (needScrollUpdate)
     {
-        ensureSelectionVisible(tileHeight, effectiveViewHeight, rowSpacing, m_thumbnailScrollY, m_lastThumbEnsureIndex);
+        if (currentRow >= 0 && totalRows > 0)
+        {
+            ensureSelectionVisible(tileHeight, effectiveViewHeight, rowSpacing, m_thumbnailScrollY,
+                                   m_lastThumbEnsureIndex, currentRow, totalRows);
+        }
         m_pendingThumbEnsure = false;
     }
 
@@ -1717,7 +1766,6 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
 
     if (nk_group_begin(m_ctx, "ThumbnailGrid", NK_WINDOW_BORDER | NK_WINDOW_SCROLL_AUTO_HIDE))
     {
-        // Set the scroll position immediately after group begins if needed
         if (needScrollUpdate)
         {
             nk_group_set_scroll(m_ctx, "ThumbnailGrid", 0, static_cast<nk_uint>(m_thumbnailScrollY));
@@ -1725,63 +1773,144 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
 
         if (!m_entries.empty())
         {
+            auto centerRect = [](const struct nk_rect& area, int texWidth, int texHeight) -> struct nk_rect
+            {
+                struct nk_rect rect = area;
+                if (texWidth <= 0 || texHeight <= 0 || area.w <= 0.0f || area.h <= 0.0f)
+                {
+                    return rect;
+                }
+                const float aspect = static_cast<float>(texWidth) / static_cast<float>(texHeight);
+                const float areaAspect = area.w / area.h;
+                if (areaAspect > aspect)
+                {
+                    rect.h = area.h;
+                    rect.w = rect.h * aspect;
+                }
+                else
+                {
+                    rect.w = area.w;
+                    rect.h = rect.w / aspect;
+                }
+                rect.x = area.x + (area.w - rect.w) * 0.5f;
+                rect.y = area.y + (area.h - rect.h) * 0.5f;
+                return rect;
+            };
+
             nk_layout_row_begin(m_ctx, NK_STATIC, tileHeight, columns);
             for (size_t i = 0; i < m_entries.size(); ++i)
             {
                 nk_layout_row_push(m_ctx, tileWidth);
+
+                struct nk_rect tileBounds = nk_widget_bounds(m_ctx);
+                struct nk_style_button tileButtonStyle = m_ctx->style.button;
+                m_ctx->style.button.normal = nk_style_item_color(nk_rgba(0, 0, 0, 0));
+                m_ctx->style.button.hover = nk_style_item_color(nk_rgba(0, 0, 0, 0));
+                m_ctx->style.button.active = nk_style_item_color(nk_rgba(0, 0, 0, 0));
+                m_ctx->style.button.border = 0.0f;
+                m_ctx->style.button.rounding = 0.0f;
+                m_ctx->style.button.text_normal = nk_rgba(0, 0, 0, 0);
+                m_ctx->style.button.text_hover = nk_rgba(0, 0, 0, 0);
+                m_ctx->style.button.text_active = nk_rgba(0, 0, 0, 0);
+                m_ctx->style.button.padding = nk_vec2(0.0f, 0.0f);
+
+                nk_bool pressed = nk_button_label(m_ctx, "");
+                const bool hovered = nk_widget_is_hovered(m_ctx) != 0;
+                m_ctx->style.button = tileButtonStyle;
                 const FileEntry& entry = m_entries[i];
                 ThumbnailData& thumb = getOrCreateThumbnail(entry);
-                bool isSelected = (static_cast<int>(i) == m_selectedIndex);
-
-                std::string displayName = entry.name;
-
-                displayName = truncateToWidth(entry.name, tileWidth - 16.0f);
-
-                if (entry.isDirectory)
-                {
-                    displayName = "[DIR] " + displayName;
-                }
-
-                struct nk_style_button backup = m_ctx->style.button;
-                if (isSelected)
-                {
-                    m_ctx->style.button.normal = nk_style_item_color(nk_rgb(70, 110, 200));
-                    m_ctx->style.button.hover = nk_style_item_color(nk_rgb(90, 130, 220));
-                    m_ctx->style.button.active = nk_style_item_color(nk_rgb(100, 140, 230));
-                    m_ctx->style.button.text_normal = nk_rgb(255, 255, 255);
-                    m_ctx->style.button.text_hover = nk_rgb(255, 255, 255);
-                    m_ctx->style.button.text_active = nk_rgb(255, 255, 255);
-                }
-
-                nk_bool pressed = nk_false;
-                if (thumb.texture)
-                {
-                    struct nk_image img = nk_image_ptr(static_cast<void*>(thumb.texture.get()));
-                    pressed = nk_button_image_label(m_ctx, img, displayName.c_str(), NK_TEXT_CENTERED);
-                }
-                else
-                {
-                    pressed = nk_button_label(m_ctx, displayName.c_str());
-                }
+                const bool isSelected = (static_cast<int>(i) == m_selectedIndex);
 
                 if (pressed)
                 {
                     m_selectedIndex = static_cast<int>(i);
                     m_selectedFile.clear();
-                    // Trigger scroll update on next frame
                     resetSelectionScrollTargets();
                 }
 
+                const float borderThickness = isSelected ? 4.0f : 2.0f;
+                const nk_color borderColor = isSelected
+                                                 ? nk_rgb(255, 210, 0)
+                                                 : (hovered ? nk_rgb(120, 145, 200) : nk_rgb(70, 80, 95));
+                const nk_color panelColor = isSelected
+                                                ? nk_rgba(45, 55, 78, 255)
+                                                : (hovered ? nk_rgba(40, 42, 50, 255) : nk_rgba(34, 36, 42, 255));
+
+                struct nk_rect borderRect = tileBounds;
+                borderRect.x += 1.0f;
+                borderRect.y += 1.0f;
+                borderRect.w = std::max(0.0f, borderRect.w - 2.0f);
+                borderRect.h = std::max(0.0f, borderRect.h - 2.0f);
+
+                nk_fill_rect(&win->buffer, borderRect, 8.0f, nk_rgba(15, 16, 20, 255));
+                nk_stroke_rect(&win->buffer, borderRect, 8.0f, borderThickness, borderColor);
+
+                struct nk_rect innerRect = borderRect;
+                innerRect.x += borderThickness;
+                innerRect.y += borderThickness;
+                innerRect.w = std::max(0.0f, innerRect.w - borderThickness * 2.0f);
+                innerRect.h = std::max(0.0f, innerRect.h - borderThickness * 2.0f);
+                nk_fill_rect(&win->buffer, innerRect, 6.0f, panelColor);
+
+                struct nk_rect contentRect = innerRect;
+                contentRect.x += tilePadding;
+                contentRect.y += tilePadding;
+                contentRect.w = std::max(0.0f, contentRect.w - tilePadding * 2.0f);
+                contentRect.h = std::max(0.0f, contentRect.h - tilePadding * 2.0f);
+
+                const float textAreaHeight = labelHeight;
+                const float availableThumbHeight = std::max(24.0f, contentRect.h - textAreaHeight);
+                struct nk_rect thumbRect = contentRect;
+                thumbRect.h = availableThumbHeight;
+
+                if (thumb.texture && thumb.width > 0 && thumb.height > 0)
+                {
+                    const struct nk_rect imageRect = centerRect(thumbRect, thumb.width, thumb.height);
+                    struct nk_image img = nk_image_ptr(static_cast<void*>(thumb.texture.get()));
+                    nk_draw_image(&win->buffer, imageRect, &img, nk_rgb(255, 255, 255));
+                }
+                else
+                {
+                    nk_color placeholderColor = entry.isDirectory ? nk_rgba(90, 80, 55, 255) : nk_rgba(55, 60, 68, 255);
+                    nk_fill_rect(&win->buffer, thumbRect, 4.0f, placeholderColor);
+
+                    std::string placeholderText = thumb.pending ? "Loading..." : (entry.isDirectory ? "Folder" : "No preview");
+                    struct nk_rect placeholderTextRect = thumbRect;
+                    placeholderTextRect.y += thumbRect.h * 0.5f - 12.0f;
+                    placeholderTextRect.h = 24.0f;
+                    nk_draw_text(&win->buffer, placeholderTextRect, placeholderText.c_str(),
+                                 static_cast<int>(placeholderText.size()), font,
+                                 nk_rgba(0, 0, 0, 0), nk_rgb(220, 220, 220));
+                }
+
+                struct nk_rect labelRect = contentRect;
+                labelRect.y = contentRect.y + availableThumbHeight + 4.0f;
+                labelRect.h = textAreaHeight - 4.0f;
+                labelRect.h = std::max(0.0f, labelRect.h);
+
+                std::string displayName = entry.name;
+                if (displayName.empty())
+                {
+                    displayName = entry.isDirectory ? "Folder" : "File";
+                }
+                if (entry.isDirectory && !displayName.empty())
+                {
+                    displayName.push_back('/');
+                }
+                displayName = truncateToWidth(displayName, labelRect.w);
+
+                nk_color textColor = entry.isDirectory ? nk_rgb(255, 230, 160) : nk_rgb(235, 235, 235);
                 if (isSelected)
                 {
-                    m_ctx->style.button = backup;
+                    textColor = nk_rgb(255, 255, 255);
                 }
+                nk_draw_text(&win->buffer, labelRect, displayName.c_str(), static_cast<int>(displayName.size()),
+                             font, nk_rgba(0, 0, 0, 0), textColor);
             }
             nk_layout_row_end(m_ctx);
         }
 
-        // Only read back scroll position if we didn't just set it
-        if (!needScrollUpdate)
+        if (!needScrollUpdate && totalEntries > 0)
         {
             nk_uint scrollX = 0;
             nk_uint scrollY = 0;
