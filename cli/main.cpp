@@ -29,6 +29,15 @@ int main(int argc, char* argv[])
     SDL_Renderer* renderer = nullptr;
     int returnCode = 0;
 
+#ifdef TG5040_PLATFORM
+    constexpr int kDefaultWindowWidth = 800;
+    constexpr int kDefaultWindowHeight = 600;
+#else
+    // Desktop builds start at 2x the TG5040's 4:3 layout so the thumbnail grid
+    constexpr int kDefaultWindowWidth = 1280;
+    constexpr int kDefaultWindowHeight = 960;
+#endif
+
     // Check for --browse flag
     bool browseMode = false;
     std::string documentPath;
@@ -71,8 +80,8 @@ int main(int argc, char* argv[])
         "SDLReader C++",
         SDL_WINDOWPOS_UNDEFINED,
         SDL_WINDOWPOS_UNDEFINED,
-        800,
-        600,
+        kDefaultWindowWidth,
+        kDefaultWindowHeight,
         SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     if (!window)
     {
