@@ -41,6 +41,7 @@
 #include <dirent.h>
 #include <filesystem>
 #include <iostream>
+#include <optional>
 #include <sys/stat.h>
 #include <utility>
 #include <vector>
@@ -437,6 +438,7 @@ bool FileBrowser::scanDirectory(const std::string& path)
         return false;
     }
 
+    std::optional<FileEntry> parentEntry;
     std::vector<FileEntry> directories;
     std::vector<FileEntry> files;
 
@@ -503,7 +505,14 @@ bool FileBrowser::scanDirectory(const std::string& path)
         {
             if (S_ISDIR(statbuf.st_mode))
             {
-                directories.emplace_back(name, fullPath, true, isParentLink);
+                if (isParentLink)
+                {
+                    parentEntry = FileEntry(name, fullPath, true, true);
+                }
+                else
+                {
+                    directories.emplace_back(name, fullPath, true, false);
+                }
             }
             else if (S_ISREG(statbuf.st_mode) && isSupportedFile(name))
             {
@@ -525,18 +534,13 @@ bool FileBrowser::scanDirectory(const std::string& path)
     };
 
     std::sort(directories.begin(), directories.end(), caseInsensitiveCompare);
-    auto parentIt = std::find_if(directories.begin(), directories.end(),
-                                 [](const FileEntry& entry)
-                                 { return entry.isParentLink; });
-    if (parentIt != directories.end())
-    {
-        FileEntry parentEntry = *parentIt;
-        directories.erase(parentIt);
-        directories.insert(directories.begin(), parentEntry);
-    }
     std::sort(files.begin(), files.end(), caseInsensitiveCompare);
 
     // Combine: directories first, then files
+    if (parentEntry.has_value())
+    {
+        m_entries.push_back(*parentEntry);
+    }
     m_entries.insert(m_entries.end(), directories.begin(), directories.end());
     m_entries.insert(m_entries.end(), files.begin(), files.end());
 
@@ -1741,7 +1745,7 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
             std::string displayName;
             if (entry.isDirectory)
             {
-                displayName = isParentLink ? "[UP ] " + entry.name : "[DIR] " + entry.name;
+                displayName = isParentLink ? "[UP] " + entry.name : "[DIR] " + entry.name;
             }
             else
             {
@@ -1845,8 +1849,9 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
     const float spacingX = (m_ctx->style.window.spacing.x > 0.0f) ? m_ctx->style.window.spacing.x : 0.0f;
     const float paddingX = m_ctx->style.window.padding.x * 2.0f;
     const float scrollbarWidth = (m_ctx->style.window.scrollbar_size.x > 0.0f) ? m_ctx->style.window.scrollbar_size.x : 16.0f;
-    const float usableWidth = std::max(0.0f, static_cast<float>(windowWidth) - paddingX - scrollbarWidth);
-    const float preferredTileWidth = baseThumb + 64.0f;
+    const float extraScrollbarPadding = scrollbarWidth + spacingX + 12.0f;
+    const float usableWidth = std::max(0.0f, static_cast<float>(windowWidth) - paddingX - extraScrollbarPadding);
+    const float preferredTileWidth = baseThumb + 48.0f;
     const int desiredColumns = 4;
     const int maxColumnsFit = std::max(1, static_cast<int>((usableWidth + spacingX) / (preferredTileWidth + spacingX)));
     int columns = (maxColumnsFit >= desiredColumns) ? desiredColumns : maxColumnsFit;
@@ -1857,7 +1862,7 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
         totalWidthForTiles = usableWidth;
     }
     float tileWidth = totalWidthForTiles / static_cast<float>(columns);
-    tileWidth = std::max(100.0f, tileWidth);
+    tileWidth = std::max(96.0f, tileWidth - 1.0f);
 
     const struct nk_user_font* font = m_ctx->style.font;
     if (!font)
@@ -1943,10 +1948,13 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
                              font, nk_rgba(0, 0, 0, 0), color);
             };
 
-            nk_layout_row_begin(m_ctx, NK_STATIC, tileHeight, columns);
             for (size_t i = 0; i < m_entries.size(); ++i)
             {
-                nk_layout_row_push(m_ctx, tileWidth);
+                // Start a new row at the beginning and after every 'columns' items  
+                if ((i % columns) == 0)
+                {
+                    nk_layout_row_dynamic(m_ctx, tileHeight, columns);
+                }
 
                 struct nk_style_button tileButtonStyle = m_ctx->style.button;
                 m_ctx->style.button.normal = nk_style_item_color(nk_rgba(0, 0, 0, 0));
@@ -1959,9 +1967,9 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
                 m_ctx->style.button.text_active = nk_rgba(0, 0, 0, 0);
                 m_ctx->style.button.padding = nk_vec2(0.0f, 0.0f);
 
-                nk_bool pressed = nk_button_label(m_ctx, "");
                 struct nk_rect tileBounds = nk_widget_bounds(m_ctx);
                 const bool hovered = nk_widget_is_hovered(m_ctx) != 0;
+                nk_bool pressed = nk_button_label(m_ctx, "");
                 m_ctx->style.button = tileButtonStyle;
 
                 const FileEntry& entry = m_entries[i];
@@ -2085,7 +2093,7 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
                 }
                 if (isParentLink)
                 {
-                    displayName = ".. (Up)";
+                    displayName = "[UP]..";
                 }
                 else if (entry.isDirectory && !displayName.empty())
                 {
@@ -2104,7 +2112,6 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
                 }
                 drawCenteredText(labelRect, displayName, textColor);
             }
-            nk_layout_row_end(m_ctx);
         }
 
         if (!needScrollUpdate && totalEntries > 0)
