@@ -58,9 +58,10 @@ private:
         std::string name;
         std::string fullPath;
         bool isDirectory;
+        bool isParentLink;
 
-        FileEntry(const std::string& n, const std::string& p, bool dir)
-            : name(n), fullPath(p), isDirectory(dir)
+        FileEntry(const std::string& n, const std::string& p, bool dir, bool parentLink = false)
+            : name(n), fullPath(p), isDirectory(dir), isParentLink(parentLink)
         {
         }
     };

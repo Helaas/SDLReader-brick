@@ -64,7 +64,7 @@ bool pathsEqual(const std::string& lhs, const std::string& rhs)
     return normalizePath(lhs) == normalizePath(rhs);
 }
 
-std::string truncateToWidth(const std::string& text, float maxWidth)
+std::string truncateToWidth(const std::string& text, float maxWidth, const nk_user_font* font = nullptr)
 {
     if (text.empty())
     {
@@ -76,7 +76,42 @@ std::string truncateToWidth(const std::string& text, float maxWidth)
         return text;
     }
 
-    const float approxCharWidth = 22.0f;
+    if (font)
+    {
+        const char* ellipsis = "...";
+        const float ellipsisWidth = font->width(font->userdata, font->height, ellipsis, 3);
+        if (ellipsisWidth >= maxWidth)
+        {
+            return "...";
+        }
+
+        if (font->width(font->userdata, font->height, text.c_str(), static_cast<int>(text.size())) <= maxWidth)
+        {
+            return text;
+        }
+
+        std::string result;
+        result.reserve(text.size());
+        for (char ch : text)
+        {
+            result.push_back(ch);
+            float predictedWidth = font->width(font->userdata, font->height, result.c_str(),
+                                               static_cast<int>(result.size()));
+            if (predictedWidth + ellipsisWidth > maxWidth)
+            {
+                result.pop_back();
+                break;
+            }
+        }
+        if (result.empty())
+        {
+            return "...";
+        }
+        result.append("...");
+        return result;
+    }
+
+    const float approxCharWidth = 10.0f;
     size_t maxChars = static_cast<size_t>(std::floor(maxWidth / approxCharWidth));
     if (maxChars == 0)
     {
@@ -409,6 +444,7 @@ bool FileBrowser::scanDirectory(const std::string& path)
     while ((entry = readdir(dir)) != nullptr)
     {
         std::string name = entry->d_name;
+        const bool isParentLink = (name == "..");
 
         // Skip current directory
         if (name == ".")
@@ -422,7 +458,7 @@ bool FileBrowser::scanDirectory(const std::string& path)
             continue;
         }
 
-        if (name == "..")
+        if (isParentLink)
         {
             std::filesystem::path normalizedSafe = normalizePath(safePath);
             if (m_lockToDefaultRoot && pathsEqual(safePath, m_defaultRoot))
@@ -438,7 +474,7 @@ bool FileBrowser::scanDirectory(const std::string& path)
 
         std::string fullPath;
 
-        if (name == "..")
+        if (isParentLink)
         {
             std::filesystem::path normalizedSafe = normalizePath(safePath);
             std::filesystem::path parent = normalizedSafe.parent_path();
@@ -467,7 +503,7 @@ bool FileBrowser::scanDirectory(const std::string& path)
         {
             if (S_ISDIR(statbuf.st_mode))
             {
-                directories.emplace_back(name, fullPath, true);
+                directories.emplace_back(name, fullPath, true, isParentLink);
             }
             else if (S_ISREG(statbuf.st_mode) && isSupportedFile(name))
             {
@@ -489,6 +525,15 @@ bool FileBrowser::scanDirectory(const std::string& path)
     };
 
     std::sort(directories.begin(), directories.end(), caseInsensitiveCompare);
+    auto parentIt = std::find_if(directories.begin(), directories.end(),
+                                 [](const FileEntry& entry)
+                                 { return entry.isParentLink; });
+    if (parentIt != directories.end())
+    {
+        FileEntry parentEntry = *parentIt;
+        directories.erase(parentIt);
+        directories.insert(directories.begin(), parentEntry);
+    }
     std::sort(files.begin(), files.end(), caseInsensitiveCompare);
 
     // Combine: directories first, then files
@@ -851,7 +896,7 @@ void FileBrowser::enqueueThumbnailJob(const FileEntry& entry)
         }
     }
 
-    m_thumbnailJobs.emplace_back(entry.name, entry.fullPath, entry.isDirectory);
+    m_thumbnailJobs.emplace_back(entry.name, entry.fullPath, entry.isDirectory, entry.isParentLink);
     if (cacheIt != m_thumbnailCache.end())
     {
         cacheIt->second.pending = true;
@@ -906,7 +951,7 @@ void FileBrowser::thumbnailWorkerLoop()
 {
     for (;;)
     {
-        FileEntry job("", "", false);
+        FileEntry job("", "", false, false);
         {
             std::unique_lock<std::mutex> lock(m_thumbnailMutex);
             m_thumbnailCv.wait(lock, [this]()
@@ -964,22 +1009,37 @@ void FileBrowser::moveSelectionVertical(int direction)
     if (m_thumbnailView && m_gridColumns > 0)
     {
         const int totalEntries = static_cast<int>(m_entries.size());
-        const int totalRows = (totalEntries + m_gridColumns - 1) / m_gridColumns;
-        const int clampedIndex = std::clamp(m_selectedIndex, 0, totalEntries - 1);
-        const int currentRow = std::clamp(clampedIndex / m_gridColumns, 0, std::max(0, totalRows - 1));
-        const int currentCol = clampedIndex % m_gridColumns;
-
-        int nextRow = std::clamp(currentRow + direction, 0, std::max(0, totalRows - 1));
-        int rowStart = nextRow * m_gridColumns;
-        int rowEnd = std::min(rowStart + m_gridColumns - 1, totalEntries - 1);
-
-        int nextIndex = rowStart + currentCol;
-        if (nextIndex > rowEnd)
+        const int columns = std::max(1, m_gridColumns);
+        if (totalEntries == 0)
         {
-            nextIndex = rowEnd;
+            m_selectedIndex = 0;
         }
-        nextIndex = std::clamp(nextIndex, 0, totalEntries - 1);
-        m_selectedIndex = nextIndex;
+        else
+        {
+            const int totalRows = (totalEntries + columns - 1) / columns;
+            const int clampedIndex = std::clamp(m_selectedIndex, 0, totalEntries - 1);
+            const int currentRow = std::clamp(clampedIndex / columns, 0, std::max(0, totalRows - 1));
+            const int currentCol = clampedIndex % columns;
+
+            int nextRow = currentRow + direction;
+            if (nextRow < 0)
+            {
+                nextRow = totalRows - 1;
+            }
+            else if (nextRow >= totalRows)
+            {
+                nextRow = 0;
+            }
+
+            int rowStart = nextRow * columns;
+            int rowEnd = std::min(rowStart + columns - 1, totalEntries - 1);
+            int nextIndex = rowStart + currentCol;
+            if (nextIndex > rowEnd)
+            {
+                nextIndex = rowEnd;
+            }
+            m_selectedIndex = std::clamp(nextIndex, 0, totalEntries - 1);
+        }
     }
     else if (!m_entries.empty())
     {
@@ -1001,11 +1061,60 @@ void FileBrowser::moveSelectionHorizontal(int direction)
     if (m_thumbnailView && m_gridColumns > 0)
     {
         const int totalEntries = static_cast<int>(m_entries.size());
+        const int columns = std::max(1, m_gridColumns);
+        if (totalEntries == 0)
+        {
+            return;
+        }
+
+        const int totalRows = (totalEntries + columns - 1) / columns;
         const int clampedIndex = std::clamp(m_selectedIndex, 0, totalEntries - 1);
-        const int rowStart = (clampedIndex / m_gridColumns) * m_gridColumns;
-        const int rowEnd = std::min(rowStart + m_gridColumns - 1, totalEntries - 1);
-        const int nextIndex = std::clamp(m_selectedIndex + direction, rowStart, rowEnd);
-        m_selectedIndex = std::clamp(nextIndex, 0, totalEntries - 1);
+        const int row = clampedIndex / columns;
+        const int rowStart = row * columns;
+        const int rowEnd = std::min(rowStart + columns - 1, totalEntries - 1);
+
+        if (direction > 0)
+        {
+            if (clampedIndex >= rowEnd)
+            {
+                int nextRow = row + 1;
+                if (nextRow >= totalRows)
+                {
+                    m_selectedIndex = 0;
+                }
+                else
+                {
+                    m_selectedIndex = nextRow * columns;
+                }
+            }
+            else
+            {
+                m_selectedIndex = std::min(clampedIndex + 1, totalEntries - 1);
+            }
+        }
+        else if (direction < 0)
+        {
+            if (clampedIndex <= rowStart)
+            {
+                int prevRow = row - 1;
+                if (prevRow < 0)
+                {
+                    int lastRowStart = (totalRows - 1) * columns;
+                    int lastRowEnd = std::min(lastRowStart + columns - 1, totalEntries - 1);
+                    m_selectedIndex = lastRowEnd;
+                }
+                else
+                {
+                    int prevRowStart = prevRow * columns;
+                    int prevRowEnd = std::min(prevRowStart + columns - 1, totalEntries - 1);
+                    m_selectedIndex = prevRowEnd;
+                }
+            }
+            else
+            {
+                m_selectedIndex = std::max(clampedIndex - 1, 0);
+            }
+        }
     }
 
     // Reset scroll targets to trigger auto-scroll on next render
@@ -1628,7 +1737,16 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
         {
             bool isSelected = (static_cast<int>(i) == m_selectedIndex);
             const FileEntry& entry = m_entries[i];
-            std::string displayName = entry.isDirectory ? "[DIR] " + entry.name : entry.name;
+            const bool isParentLink = entry.isDirectory && entry.isParentLink;
+            std::string displayName;
+            if (entry.isDirectory)
+            {
+                displayName = isParentLink ? "[UP ] " + entry.name : "[DIR] " + entry.name;
+            }
+            else
+            {
+                displayName = entry.name;
+            }
 
             // Create an invisible button for click detection
             struct nk_style_button backup = m_ctx->style.button;
@@ -1644,9 +1762,18 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
             // Set text color - yellow for directories, white for files
             if (entry.isDirectory)
             {
-                m_ctx->style.button.text_normal = nk_rgb(255, 220, 0);
-                m_ctx->style.button.text_hover = nk_rgb(255, 230, 50);
-                m_ctx->style.button.text_active = nk_rgb(255, 240, 100);
+                if (isParentLink)
+                {
+                    m_ctx->style.button.text_normal = nk_rgb(255, 200, 150);
+                    m_ctx->style.button.text_hover = nk_rgb(255, 210, 170);
+                    m_ctx->style.button.text_active = nk_rgb(255, 220, 190);
+                }
+                else
+                {
+                    m_ctx->style.button.text_normal = nk_rgb(255, 220, 0);
+                    m_ctx->style.button.text_hover = nk_rgb(255, 230, 50);
+                    m_ctx->style.button.text_active = nk_rgb(255, 240, 100);
+                }
             }
             else
             {
@@ -1717,7 +1844,8 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
 
     const float spacingX = (m_ctx->style.window.spacing.x > 0.0f) ? m_ctx->style.window.spacing.x : 0.0f;
     const float paddingX = m_ctx->style.window.padding.x * 2.0f;
-    const float usableWidth = std::max(0.0f, static_cast<float>(windowWidth) - paddingX);
+    const float scrollbarWidth = (m_ctx->style.window.scrollbar_size.x > 0.0f) ? m_ctx->style.window.scrollbar_size.x : 16.0f;
+    const float usableWidth = std::max(0.0f, static_cast<float>(windowWidth) - paddingX - scrollbarWidth);
     const float preferredTileWidth = baseThumb + 64.0f;
     const int desiredColumns = 4;
     const int maxColumnsFit = std::max(1, static_cast<int>((usableWidth + spacingX) / (preferredTileWidth + spacingX)));
@@ -1729,7 +1857,7 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
         totalWidthForTiles = usableWidth;
     }
     float tileWidth = totalWidthForTiles / static_cast<float>(columns);
-    tileWidth = std::max(1.0f, tileWidth);
+    tileWidth = std::max(100.0f, tileWidth);
 
     const struct nk_user_font* font = m_ctx->style.font;
     if (!font)
@@ -1797,12 +1925,29 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
                 return rect;
             };
 
+            auto drawCenteredText = [&](const struct nk_rect& bounds, const std::string& text, nk_color color)
+            {
+                if (!font || text.empty())
+                {
+                    return;
+                }
+                const float measuredWidth = font->width(font->userdata, font->height, text.c_str(),
+                                                        static_cast<int>(text.size()));
+                struct nk_rect textRect = bounds;
+                const float clampedWidth = std::min(bounds.w, measuredWidth);
+                textRect.w = clampedWidth;
+                textRect.x = bounds.x + std::max(0.0f, (bounds.w - clampedWidth) * 0.5f);
+                textRect.y = bounds.y + std::max(0.0f, (bounds.h - font->height) * 0.5f);
+                textRect.h = font->height;
+                nk_draw_text(&win->buffer, textRect, text.c_str(), static_cast<int>(text.size()),
+                             font, nk_rgba(0, 0, 0, 0), color);
+            };
+
             nk_layout_row_begin(m_ctx, NK_STATIC, tileHeight, columns);
             for (size_t i = 0; i < m_entries.size(); ++i)
             {
                 nk_layout_row_push(m_ctx, tileWidth);
 
-                struct nk_rect tileBounds = nk_widget_bounds(m_ctx);
                 struct nk_style_button tileButtonStyle = m_ctx->style.button;
                 m_ctx->style.button.normal = nk_style_item_color(nk_rgba(0, 0, 0, 0));
                 m_ctx->style.button.hover = nk_style_item_color(nk_rgba(0, 0, 0, 0));
@@ -1815,11 +1960,15 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
                 m_ctx->style.button.padding = nk_vec2(0.0f, 0.0f);
 
                 nk_bool pressed = nk_button_label(m_ctx, "");
+                struct nk_rect tileBounds = nk_widget_bounds(m_ctx);
                 const bool hovered = nk_widget_is_hovered(m_ctx) != 0;
                 m_ctx->style.button = tileButtonStyle;
+
                 const FileEntry& entry = m_entries[i];
                 ThumbnailData& thumb = getOrCreateThumbnail(entry);
                 const bool isSelected = (static_cast<int>(i) == m_selectedIndex);
+                const bool isParentLink = entry.isDirectory && entry.isParentLink;
+                const bool isRegularDirectory = entry.isDirectory && !entry.isParentLink;
 
                 if (pressed)
                 {
@@ -1829,12 +1978,19 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
                 }
 
                 const float borderThickness = isSelected ? 4.0f : 2.0f;
-                const nk_color borderColor = isSelected
-                                                 ? nk_rgb(255, 210, 0)
-                                                 : (hovered ? nk_rgb(120, 145, 200) : nk_rgb(70, 80, 95));
-                const nk_color panelColor = isSelected
-                                                ? nk_rgba(45, 55, 78, 255)
-                                                : (hovered ? nk_rgba(40, 42, 50, 255) : nk_rgba(34, 36, 42, 255));
+                const nk_color baseBorderColor = isParentLink ? nk_rgb(255, 170, 120)
+                                                              : (isRegularDirectory ? nk_rgb(215, 190, 100) : nk_rgb(70, 80, 95));
+                const nk_color hoverBorderColor = isParentLink ? nk_rgb(255, 190, 140)
+                                                               : (isRegularDirectory ? nk_rgb(235, 210, 130) : nk_rgb(120, 145, 200));
+                const nk_color basePanelColor = isParentLink ? nk_rgba(60, 48, 40, 255)
+                                                             : (isRegularDirectory ? nk_rgba(45, 48, 58, 255) : nk_rgba(34, 36, 42, 255));
+                const nk_color hoverPanelColor = isParentLink ? nk_rgba(72, 58, 50, 255)
+                                                              : (isRegularDirectory ? nk_rgba(52, 56, 66, 255) : nk_rgba(40, 42, 50, 255));
+
+                const nk_color borderColor = isSelected ? nk_rgb(255, 210, 0)
+                                                        : (hovered ? hoverBorderColor : baseBorderColor);
+                const nk_color panelColor = isSelected ? nk_rgba(45, 55, 78, 255)
+                                                       : (hovered ? hoverPanelColor : basePanelColor);
 
                 struct nk_rect borderRect = tileBounds;
                 borderRect.x += 1.0f;
@@ -1858,6 +2014,18 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
                 contentRect.w = std::max(0.0f, contentRect.w - tilePadding * 2.0f);
                 contentRect.h = std::max(0.0f, contentRect.h - tilePadding * 2.0f);
 
+                if (entry.isDirectory)
+                {
+                    struct nk_rect badgeRect = innerRect;
+                    badgeRect.x += 8.0f;
+                    badgeRect.y += 8.0f;
+                    badgeRect.w = std::min(72.0f, innerRect.w - 16.0f);
+                    badgeRect.h = 24.0f;
+                    nk_color badgeColor = isParentLink ? nk_rgba(255, 160, 110, 220) : nk_rgba(255, 205, 80, 220);
+                    nk_fill_rect(&win->buffer, badgeRect, 4.0f, badgeColor);
+                    drawCenteredText(badgeRect, isParentLink ? "UP" : "DIR", nk_rgb(30, 30, 30));
+                }
+
                 const float textAreaHeight = labelHeight;
                 const float availableThumbHeight = std::max(24.0f, contentRect.h - textAreaHeight);
                 struct nk_rect thumbRect = contentRect;
@@ -1871,41 +2039,70 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
                 }
                 else
                 {
-                    nk_color placeholderColor = entry.isDirectory ? nk_rgba(90, 80, 55, 255) : nk_rgba(55, 60, 68, 255);
+                    nk_color placeholderColor;
+                    if (isParentLink)
+                    {
+                        placeholderColor = nk_rgba(90, 70, 55, 255);
+                    }
+                    else if (entry.isDirectory)
+                    {
+                        placeholderColor = nk_rgba(90, 80, 55, 255);
+                    }
+                    else
+                    {
+                        placeholderColor = nk_rgba(55, 60, 68, 255);
+                    }
                     nk_fill_rect(&win->buffer, thumbRect, 4.0f, placeholderColor);
 
-                    std::string placeholderText = thumb.pending ? "Loading..." : (entry.isDirectory ? "Folder" : "No preview");
-                    struct nk_rect placeholderTextRect = thumbRect;
-                    placeholderTextRect.y += thumbRect.h * 0.5f - 12.0f;
-                    placeholderTextRect.h = 24.0f;
-                    nk_draw_text(&win->buffer, placeholderTextRect, placeholderText.c_str(),
-                                 static_cast<int>(placeholderText.size()), font,
-                                 nk_rgba(0, 0, 0, 0), nk_rgb(220, 220, 220));
+                    std::string placeholderText;
+                    if (thumb.pending)
+                    {
+                        placeholderText = "Loading...";
+                    }
+                    else if (isParentLink)
+                    {
+                        placeholderText = "Parent";
+                    }
+                    else if (entry.isDirectory)
+                    {
+                        placeholderText = "Folder";
+                    }
+                    else
+                    {
+                        placeholderText = "No preview";
+                    }
+                    drawCenteredText(thumbRect, placeholderText, nk_rgb(220, 220, 220));
                 }
 
                 struct nk_rect labelRect = contentRect;
                 labelRect.y = contentRect.y + availableThumbHeight + 4.0f;
-                labelRect.h = textAreaHeight - 4.0f;
-                labelRect.h = std::max(0.0f, labelRect.h);
+                labelRect.h = std::max(0.0f, textAreaHeight - 4.0f);
 
                 std::string displayName = entry.name;
                 if (displayName.empty())
                 {
                     displayName = entry.isDirectory ? "Folder" : "File";
                 }
-                if (entry.isDirectory && !displayName.empty())
+                if (isParentLink)
+                {
+                    displayName = ".. (Up)";
+                }
+                else if (entry.isDirectory && !displayName.empty())
                 {
                     displayName.push_back('/');
                 }
-                displayName = truncateToWidth(displayName, labelRect.w);
+                displayName = truncateToWidth(displayName, labelRect.w, font);
 
                 nk_color textColor = entry.isDirectory ? nk_rgb(255, 230, 160) : nk_rgb(235, 235, 235);
+                if (isParentLink)
+                {
+                    textColor = nk_rgb(255, 205, 170);
+                }
                 if (isSelected)
                 {
                     textColor = nk_rgb(255, 255, 255);
                 }
-                nk_draw_text(&win->buffer, labelRect, displayName.c_str(), static_cast<int>(displayName.size()),
-                             font, nk_rgba(0, 0, 0, 0), textColor);
+                drawCenteredText(labelRect, displayName, textColor);
             }
             nk_layout_row_end(m_ctx);
         }
