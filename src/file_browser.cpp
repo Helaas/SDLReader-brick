@@ -1950,7 +1950,7 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
 
             for (size_t i = 0; i < m_entries.size(); ++i)
             {
-                // Start a new row at the beginning and after every 'columns' items  
+                // Start a new row at the beginning and after every 'columns' items
                 if ((i % columns) == 0)
                 {
                     nk_layout_row_dynamic(m_ctx, tileHeight, columns);
