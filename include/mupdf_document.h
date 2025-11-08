@@ -196,6 +196,7 @@ private:
     uint8_t m_bgR = 255;
     uint8_t m_bgG = 255;
     uint8_t m_bgB = 255;
+    bool m_isPdfDocument = false;
 
     // Asynchronous current page rendering support
     std::thread m_asyncRenderThread;

@@ -1,8 +1,10 @@
 #include "mupdf_document.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <stdexcept>
 
@@ -66,6 +68,22 @@ bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
 
     // Store file path for potential reopening
     m_filePath = filePath;
+
+    // PDF pages should always render on a white canvas even in dark themes
+    m_isPdfDocument = false;
+    try
+    {
+        std::filesystem::path path(filePath);
+        std::string ext = path.extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(),
+                       [](unsigned char c)
+                       { return static_cast<char>(std::tolower(c)); });
+        m_isPdfDocument = (ext == ".pdf");
+    }
+    catch (...)
+    {
+        m_isPdfDocument = false;
+    }
 
     fz_context* ctx = nullptr;
     if (!reuseContexts || !m_ctx)
@@ -366,8 +384,12 @@ MuPdfDocument::ArgbBufferPtr MuPdfDocument::renderPageARGB(int pageNumber, int& 
             fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to allocate pixmap for page %d", pageNumber);
         }
 
-        // Clear pixmap with background color instead of white to avoid white lines in dark mode
-        unsigned char clearValue = (m_bgR + m_bgG + m_bgB) / 3; // Average for grayscale fill
+        // PDF content expects a white canvas; other formats can inherit themed backgrounds
+        unsigned char clearValue = 255;
+        if (!m_isPdfDocument)
+        {
+            clearValue = static_cast<unsigned char>((m_bgR + m_bgG + m_bgB) / 3);
+        }
         fz_clear_pixmap_with_value(ctx, pix, clearValue);
 
         dev = fz_new_draw_device(ctx, fz_identity, pix);
@@ -1097,8 +1119,12 @@ bool MuPdfDocument::renderPageARGBWithPrerenderContext(int pageNumber, int zoom,
             fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to allocate pixmap for page %d", pageNumber);
         }
 
-        // Clear pixmap with background color instead of white to avoid white lines in dark mode
-        unsigned char clearValue = (m_bgR + m_bgG + m_bgB) / 3; // Average for grayscale fill
+        // Match the primary render path: keep PDFs on a white canvas
+        unsigned char clearValue = 255;
+        if (!m_isPdfDocument)
+        {
+            clearValue = static_cast<unsigned char>((m_bgR + m_bgG + m_bgB) / 3);
+        }
         fz_clear_pixmap_with_value(ctx, pix, clearValue);
 
         dev = fz_new_draw_device(ctx, fz_identity, pix);
