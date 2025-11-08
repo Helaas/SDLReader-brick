@@ -2,9 +2,11 @@
 #define FILE_BROWSER_H
 
 #include <SDL.h>
+#include <cstddef>
 #include <condition_variable>
 #include <deque>
 #include <functional>
+#include <list>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -111,6 +113,9 @@ private:
 #endif
 
     std::unordered_map<std::string, ThumbnailData> m_thumbnailCache;
+    static constexpr size_t MAX_CACHED_THUMBNAILS = 100;
+    std::list<std::string> m_thumbnailUsage;
+    std::unordered_map<std::string, std::list<std::string>::iterator> m_thumbnailUsageLookup;
 
     // D-pad hold state for continuous scrolling
     bool m_dpadUpHeld;
@@ -212,11 +217,12 @@ private:
     void thumbnailWorkerLoop();
     void requestThumbnailShutdown();
     void clearPendingThumbnails();
+    void recordThumbnailUsage(const std::string& path);
+    void evictOldThumbnails();
+    void cancelThumbnailJobsForPath(const std::string& path);
+    void removeThumbnailEntry(const std::string& path);
 
     static bool s_lastThumbnailView;
-    static bool s_cachedThumbnailsValid;
-    static std::string s_cachedDirectory;
-    static std::unordered_map<std::string, ThumbnailData> s_cachedThumbnails;
 };
 
 #endif // FILE_BROWSER_H

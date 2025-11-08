@@ -149,24 +149,12 @@ FileBrowser::FileBrowser()
       m_thumbnailView(s_lastThumbnailView), m_gridColumns(1), m_lastWindowWidth(0), m_lastWindowHeight(0),
       m_dpadUpHeld(false), m_dpadDownHeld(false), m_lastScrollTime(0), m_waitingForInitialRepeat(false)
 {
-    if (s_cachedThumbnailsValid)
-    {
-        for (auto& [path, data] : s_cachedThumbnails)
-        {
-            data.pending = false;
-        }
-        m_thumbnailCache = std::move(s_cachedThumbnails);
-        s_cachedThumbnailsValid = false;
-    }
 }
 
 FileBrowser::~FileBrowser()
 {
     cleanup(false);
     clearThumbnailCache();
-    s_cachedThumbnails.clear();
-    s_cachedThumbnailsValid = false;
-    s_cachedDirectory.clear();
     s_lastThumbnailView = m_thumbnailView;
 }
 
@@ -379,23 +367,13 @@ void FileBrowser::cleanup(bool preserveThumbnails)
     }
 
     stopThumbnailWorker();
-
-    if (preserveThumbnails && m_thumbnailView)
+    if (preserveThumbnails)
     {
         clearPendingThumbnails();
-        {
-            std::lock_guard<std::mutex> lock(m_thumbnailMutex);
-            s_cachedThumbnails = std::move(m_thumbnailCache);
-            s_cachedThumbnailsValid = true;
-            s_cachedDirectory = m_currentPath;
-        }
     }
     else
     {
         clearThumbnailCache();
-        s_cachedThumbnails.clear();
-        s_cachedThumbnailsValid = false;
-        s_cachedDirectory.clear();
     }
 
     s_lastThumbnailView = m_thumbnailView;
@@ -411,25 +389,6 @@ bool FileBrowser::scanDirectory(const std::string& path)
     m_selectedIndex = 0;
     clearPendingThumbnails();
     resetSelectionScrollTargets();
-
-    bool reuseCachedThumbnails = s_cachedThumbnailsValid && pathsEqual(s_cachedDirectory, safePath);
-    if (reuseCachedThumbnails)
-    {
-        m_thumbnailCache = std::move(s_cachedThumbnails);
-        s_cachedThumbnailsValid = false;
-        for (auto& [cachedPath, data] : m_thumbnailCache)
-        {
-            (void) cachedPath;
-            data.pending = false;
-        }
-    }
-    else
-    {
-        clearThumbnailCache();
-        s_cachedThumbnails.clear();
-        s_cachedThumbnailsValid = false;
-        s_cachedDirectory.clear();
-    }
 
     DIR* dir = opendir(safePath.c_str());
     if (!dir)
@@ -569,6 +528,8 @@ bool FileBrowser::isSupportedFile(const std::string& filename) const
 void FileBrowser::clearThumbnailCache()
 {
     m_thumbnailCache.clear();
+    m_thumbnailUsage.clear();
+    m_thumbnailUsageLookup.clear();
     std::lock_guard<std::mutex> lock(m_thumbnailMutex);
     m_thumbnailJobs.clear();
     m_thumbnailResults.clear();
@@ -644,6 +605,10 @@ FileBrowser::ThumbnailData& FileBrowser::getOrCreateThumbnail(const FileEntry& e
                 data.failed = true;
             }
         }
+        if (data.texture)
+        {
+            recordThumbnailUsage(entry.fullPath);
+        }
         return data;
     }
 
@@ -663,6 +628,11 @@ FileBrowser::ThumbnailData& FileBrowser::getOrCreateThumbnail(const FileEntry& e
                 data.failed = true;
             }
         }
+    }
+
+    if (data.texture)
+    {
+        recordThumbnailUsage(entry.fullPath);
     }
 
     return data;
@@ -852,6 +822,7 @@ void FileBrowser::requestThumbnailShutdown()
         m_thumbnailResults.clear();
     }
     m_thumbnailCv.notify_all();
+    clearPendingThumbnails();
 }
 
 void FileBrowser::clearPendingThumbnails()
@@ -863,6 +834,78 @@ void FileBrowser::clearPendingThumbnails()
     {
         (void) path;
         data.pending = false;
+    }
+}
+
+void FileBrowser::cancelThumbnailJobsForPath(const std::string& path)
+{
+    std::lock_guard<std::mutex> lock(m_thumbnailMutex);
+
+    for (auto jobIt = m_thumbnailJobs.begin(); jobIt != m_thumbnailJobs.end();)
+    {
+        if (jobIt->fullPath == path)
+        {
+            jobIt = m_thumbnailJobs.erase(jobIt);
+        }
+        else
+        {
+            ++jobIt;
+        }
+    }
+
+    for (auto resultIt = m_thumbnailResults.begin(); resultIt != m_thumbnailResults.end();)
+    {
+        if (resultIt->fullPath == path)
+        {
+            resultIt = m_thumbnailResults.erase(resultIt);
+        }
+        else
+        {
+            ++resultIt;
+        }
+    }
+}
+
+void FileBrowser::removeThumbnailEntry(const std::string& path)
+{
+    auto cacheIt = m_thumbnailCache.find(path);
+    if (cacheIt != m_thumbnailCache.end())
+    {
+        m_thumbnailCache.erase(cacheIt);
+    }
+
+    auto usageIt = m_thumbnailUsageLookup.find(path);
+    if (usageIt != m_thumbnailUsageLookup.end())
+    {
+        m_thumbnailUsage.erase(usageIt->second);
+        m_thumbnailUsageLookup.erase(usageIt);
+    }
+
+    cancelThumbnailJobsForPath(path);
+}
+
+void FileBrowser::recordThumbnailUsage(const std::string& path)
+{
+    auto usageIt = m_thumbnailUsageLookup.find(path);
+    if (usageIt != m_thumbnailUsageLookup.end())
+    {
+        m_thumbnailUsage.splice(m_thumbnailUsage.begin(), m_thumbnailUsage, usageIt->second);
+    }
+    else
+    {
+        m_thumbnailUsage.emplace_front(path);
+        m_thumbnailUsageLookup[path] = m_thumbnailUsage.begin();
+    }
+
+    evictOldThumbnails();
+}
+
+void FileBrowser::evictOldThumbnails()
+{
+    while (m_thumbnailUsage.size() > MAX_CACHED_THUMBNAILS)
+    {
+        const std::string victimPath = m_thumbnailUsage.back();
+        removeThumbnailEntry(victimPath);
     }
 }
 
@@ -948,6 +991,7 @@ void FileBrowser::pumpThumbnailResults()
         data.width = result.width;
         data.height = result.height;
         data.failed = false;
+        recordThumbnailUsage(result.fullPath);
     }
 }
 
@@ -1237,7 +1281,7 @@ std::string FileBrowser::run()
     }
 
     // Cleanup Nuklear immediately so it doesn't interfere with main app
-    bool preserveThumbnails = m_thumbnailView && !m_selectedFile.empty();
+    bool preserveThumbnails = !m_selectedFile.empty();
     cleanup(preserveThumbnails);
 
     // Flush any remaining SDL events to prevent stale input
@@ -1359,6 +1403,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
 {
     if (event.type == SDL_QUIT)
     {
+        requestThumbnailShutdown();
         m_running = false;
     }
 
@@ -1385,6 +1430,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         {
         case SDLK_ESCAPE:
         case SDLK_q:
+            requestThumbnailShutdown();
             m_running = false;
             break;
         case SDLK_UP:
@@ -1485,6 +1531,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDL_CONTROLLER_BUTTON_BACK:
         case SDL_CONTROLLER_BUTTON_START:
         case SDL_CONTROLLER_BUTTON_GUIDE:
+            requestThumbnailShutdown();
             m_running = false;
             break;
         default:
@@ -1595,20 +1642,13 @@ void FileBrowser::navigateInto()
     {
         // Select file and exit
         std::cout << "File selected: " << entry.fullPath << std::endl;
-        if (m_thumbnailView)
-        {
-            requestThumbnailShutdown();
-            clearPendingThumbnails();
-        }
+        requestThumbnailShutdown();
         m_selectedFile = entry.fullPath;
         m_running = false;
     }
 }
 
 bool FileBrowser::s_lastThumbnailView = false;
-bool FileBrowser::s_cachedThumbnailsValid = false;
-std::string FileBrowser::s_cachedDirectory;
-std::unordered_map<std::string, FileBrowser::ThumbnailData> FileBrowser::s_cachedThumbnails;
 
 void FileBrowser::setupNuklearStyle()
 {
