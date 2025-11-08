@@ -485,6 +485,8 @@ void GuiManager::renderFontMenu()
     if (!m_ctx)
         return;
 
+    m_pendingTooltips.clear();
+
     // Nuklear state debug disabled (was too spammy)
     // Uncomment below to debug Nuklear input state periodically
     /*
@@ -961,12 +963,17 @@ void GuiManager::renderFontMenu()
 
         // Highlight checkbox if focused
         struct nk_style_toggle originalToggleStyle = m_ctx->style.checkbox;
+        const struct nk_color focusBorderColor = nk_rgb(0, 190, 255);
+        const struct nk_color focusCursorColor = nk_rgb(0, 180, 255);
+        const struct nk_color focusBackground = nk_rgba(70, 75, 85, 255);
         if (m_mainScreenFocusIndex == WIDGET_EDGE_PROGRESS_CHECKBOX)
         {
-            m_ctx->style.checkbox.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.checkbox.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-            m_ctx->style.checkbox.cursor_normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.checkbox.cursor_hover = nk_style_item_color(nk_rgb(30, 142, 255));
+            m_ctx->style.checkbox.normal = nk_style_item_color(focusBackground);
+            m_ctx->style.checkbox.hover = nk_style_item_color(focusBackground);
+            m_ctx->style.checkbox.cursor_normal = nk_style_item_color(focusCursorColor);
+            m_ctx->style.checkbox.cursor_hover = nk_style_item_color(focusCursorColor);
+            m_ctx->style.checkbox.border = 2.0f;
+            m_ctx->style.checkbox.border_color = focusBorderColor;
         }
 
         nk_bool disableEdgeBar = m_tempConfig.disableEdgeProgressBar ? nk_true : nk_false;
@@ -1007,10 +1014,12 @@ void GuiManager::renderFontMenu()
         // Highlight checkbox if focused
         if (m_mainScreenFocusIndex == WIDGET_MINIMAP_CHECKBOX)
         {
-            m_ctx->style.checkbox.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.checkbox.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-            m_ctx->style.checkbox.cursor_normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.checkbox.cursor_hover = nk_style_item_color(nk_rgb(30, 142, 255));
+            m_ctx->style.checkbox.normal = nk_style_item_color(focusBackground);
+            m_ctx->style.checkbox.hover = nk_style_item_color(focusBackground);
+            m_ctx->style.checkbox.cursor_normal = nk_style_item_color(focusCursorColor);
+            m_ctx->style.checkbox.cursor_hover = nk_style_item_color(focusCursorColor);
+            m_ctx->style.checkbox.border = 2.0f;
+            m_ctx->style.checkbox.border_color = focusBorderColor;
         }
 
         nk_bool showMinimap = m_tempConfig.showDocumentMinimap ? nk_true : nk_false;
@@ -1250,6 +1259,7 @@ void GuiManager::renderFontMenu()
             }
             m_scrollToTopPending = false;
         }
+        renderPendingTooltips();
     }
     nk_end(m_ctx);
 }
@@ -1430,7 +1440,9 @@ void GuiManager::renderNumberPad()
 
         // Controller hints
         nk_layout_row_dynamic(m_ctx, 15, 1);
-        nk_label_colored(m_ctx, "Controller: D-Pad=Navigate, A=Select, B=Cancel, Start=Go", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+        nk_label_colored(m_ctx, "Controller: D-Pad=Navigate, A=Select", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+        nk_layout_row_dynamic(m_ctx, 15, 1);
+        nk_label_colored(m_ctx, "B=Cancel, Start=Go", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
     }
     nk_end(m_ctx);
 }
@@ -1751,32 +1763,61 @@ void GuiManager::showInfoTooltip(MainScreenWidget widget, const char* text)
     }
 
     struct nk_rect tooltipRect = nk_rect(tooltipX, tooltipY, tooltipW, tooltipH);
-    nk_fill_rect(canvas, tooltipRect, 4.0f, nk_rgba(35, 35, 38, 240));
-    nk_stroke_rect(canvas, tooltipRect, 4.0f, 1.0f, nk_rgb(0, 122, 255));
+    m_pendingTooltips.push_back(PendingTooltip{tooltipRect.x, tooltipRect.y, tooltipRect.w, tooltipRect.h, text, padding});
+}
 
-    struct nk_rect textRect = tooltipRect;
-    textRect.x += padding;
-    textRect.y += padding;
-    textRect.w -= padding * 2.0f;
-
-    float lineY = textRect.y;
-    const char* segmentStart = text;
-    for (const char* cursor = text; ; ++cursor)
+void GuiManager::renderPendingTooltips()
+{
+    if (!m_ctx || m_pendingTooltips.empty())
     {
-        if (*cursor == '\n' || *cursor == '\0')
+        return;
+    }
+
+    struct nk_command_buffer* canvas = nk_window_get_canvas(m_ctx);
+    const struct nk_user_font* font = m_ctx->style.font;
+    if (!canvas || !font)
+    {
+        m_pendingTooltips.clear();
+        return;
+    }
+
+    const struct nk_color background = nk_rgba(35, 35, 38, 240);
+    const struct nk_color border = nk_rgb(0, 122, 255);
+    const struct nk_color textColor = nk_rgb(230, 230, 230);
+
+    for (const PendingTooltip& tooltip : m_pendingTooltips)
+    {
+        struct nk_rect rect = nk_rect(tooltip.x, tooltip.y, tooltip.w, tooltip.h);
+        nk_fill_rect(canvas, rect, 4.0f, background);
+        nk_stroke_rect(canvas, rect, 4.0f, 1.0f, border);
+
+        struct nk_rect textRect = rect;
+        textRect.x += tooltip.padding;
+        textRect.y += tooltip.padding;
+        textRect.w -= tooltip.padding * 2.0f;
+
+        float lineY = textRect.y;
+        const char* data = tooltip.text.c_str();
+        const char* segmentStart = data;
+        for (const char* cursor = data;; ++cursor)
         {
-            struct nk_rect lineRect = textRect;
-            lineRect.y = lineY;
-            lineRect.h = font->height;
-            nk_draw_text(canvas, lineRect, segmentStart, static_cast<int>(cursor - segmentStart), font, nk_rgba(0, 0, 0, 0), nk_rgb(230, 230, 230));
-            lineY += font->height;
-            if (*cursor == '\0')
+            if (*cursor == '\n' || *cursor == '\0')
             {
-                break;
+                struct nk_rect lineRect = textRect;
+                lineRect.y = lineY;
+                lineRect.h = font->height;
+                nk_draw_text(canvas, lineRect, segmentStart, static_cast<int>(cursor - segmentStart), font, nk_rgba(0, 0, 0, 0), textColor);
+                lineY += font->height;
+                if (*cursor == '\0')
+                {
+                    break;
+                }
+                segmentStart = cursor + 1;
             }
-            segmentStart = cursor + 1;
         }
     }
+
+    m_pendingTooltips.clear();
 }
 
 void GuiManager::setupColorScheme()
@@ -1949,10 +1990,9 @@ bool GuiManager::handleKeyboardNavigation(const SDL_Event& event)
             {
                 scrollSettingsToTop();
             }
-            else
+            else if (!stepFocusVertical(-1))
             {
-                m_mainScreenFocusIndex = std::max(0, m_mainScreenFocusIndex - 1);
-                requestFocusScroll();
+                scrollSettingsToTop();
             }
             return true;
         case SDLK_DOWN:
@@ -1965,8 +2005,7 @@ bool GuiManager::handleKeyboardNavigation(const SDL_Event& event)
             }
             else
             {
-                m_mainScreenFocusIndex = std::min(WIDGET_COUNT - 1, m_mainScreenFocusIndex + 1);
-                requestFocusScroll();
+                stepFocusVertical(1);
             }
             return true;
         case SDLK_LEFT:
@@ -2189,6 +2228,37 @@ bool GuiManager::moveFocusInGroup(const MainScreenWidget* group, size_t count, i
     return false;
 }
 
+bool GuiManager::isInfoWidget(MainScreenWidget widget) const
+{
+    return widget == WIDGET_EDGE_PROGRESS_INFO_BUTTON || widget == WIDGET_MINIMAP_INFO_BUTTON;
+}
+
+bool GuiManager::stepFocusVertical(int direction)
+{
+    if (direction == 0)
+    {
+        return false;
+    }
+
+    int nextIndex = m_mainScreenFocusIndex;
+    while (true)
+    {
+        nextIndex += direction;
+        if (nextIndex < 0 || nextIndex >= WIDGET_COUNT)
+        {
+            return false;
+        }
+
+        MainScreenWidget candidate = static_cast<MainScreenWidget>(nextIndex);
+        if (!isInfoWidget(candidate))
+        {
+            m_mainScreenFocusIndex = nextIndex;
+            requestFocusScroll();
+            return true;
+        }
+    }
+}
+
 bool GuiManager::handleHorizontalNavigation(int direction)
 {
     static constexpr MainScreenWidget kEdgeInfoGroup[] = {
@@ -2336,10 +2406,9 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
                 {
                     scrollSettingsToTop();
                 }
-                else
+                else if (!stepFocusVertical(-1))
                 {
-                    m_mainScreenFocusIndex = std::max(0, m_mainScreenFocusIndex - 1);
-                    requestFocusScroll();
+                    scrollSettingsToTop();
                 }
                 return true;
             case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
@@ -2351,8 +2420,7 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
                 }
                 else
                 {
-                    m_mainScreenFocusIndex = std::min(WIDGET_COUNT - 1, m_mainScreenFocusIndex + 1);
-                    requestFocusScroll();
+                    stepFocusVertical(1);
                 }
                 return true;
             case SDL_CONTROLLER_BUTTON_DPAD_LEFT:

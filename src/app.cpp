@@ -430,33 +430,73 @@ void App::handleEvent(const SDL_Event& event)
         return;
     }
 
-    // Block ALL input events if the settings menu is visible, except ESC to close it
+    auto closeVisibleMenus = [this]()
+    {
+        if (m_guiManager)
+        {
+            if (m_guiManager->isFontMenuVisible())
+            {
+                m_guiManager->closeFontMenu();
+            }
+            if (m_guiManager->isNumberPadVisible())
+            {
+                m_guiManager->hideNumberPad();
+            }
+        }
+    };
+
+    // Block most input while menu overlays are visible, but allow key system controls
     if (m_guiManager && (m_guiManager->isFontMenuVisible() || m_guiManager->isNumberPadVisible()))
     {
-        // Always allow ESC and Q to close the menu
-        if (event.type == SDL_KEYDOWN &&
-            (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q))
+        if (event.type == SDL_KEYDOWN)
         {
-            if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q)
+            switch (event.key.keysym.sym)
+            {
+            case SDLK_ESCAPE:
+                closeVisibleMenus();
+                markDirty();
+                return;
+            case SDLK_q:
+                closeVisibleMenus();
+                markDirty();
+                m_running = false;
+                return;
+            case SDLK_m:
+                m_guiManager->toggleFontMenu();
+                markDirty();
+                return;
+            default:
+                break;
+            }
+        }
+        else if (event.type == SDL_QUIT)
+        {
+            closeVisibleMenus();
+            m_running = false;
+            return;
+        }
+        else if (event.type == SDL_CONTROLLERBUTTONDOWN ||
+                 event.type == SDL_CONTROLLERBUTTONUP ||
+                 event.type == SDL_JOYBUTTONDOWN ||
+                 event.type == SDL_JOYBUTTONUP)
+        {
+            InputActionData actionData = m_inputManager->processEvent(event);
+            if (actionData.action == InputAction::ToggleFontMenu)
             {
                 m_guiManager->toggleFontMenu();
                 markDirty();
+                return;
             }
-        }
-        // Always allow quit events
-        else if (event.type == SDL_QUIT)
-        {
-            m_running = false;
-        }
-        // Always allow GUIDE button to pass through (for quit)
-        else if (event.type == SDL_CONTROLLERBUTTONDOWN &&
-                 event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE)
-        {
-            // Process GUIDE button through InputManager to trigger quit
-            InputActionData actionData = m_inputManager->processEvent(event);
-            processInputAction(actionData);
+            if (actionData.action == InputAction::Quit)
+            {
+                closeVisibleMenus();
+                markDirty();
+                m_running = false;
+                return;
+            }
             return;
         }
+
         // Block everything else when menu or number pad is visible to prevent bleeding through
         return;
     }

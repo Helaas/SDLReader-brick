@@ -140,6 +140,16 @@ private:
         bool valid = false;
     };
 
+    struct PendingTooltip
+    {
+        float x = 0.0f;
+        float y = 0.0f;
+        float w = 0.0f;
+        float h = 0.0f;
+        std::string text;
+        float padding = 8.0f;
+    };
+
     int m_mainScreenFocusIndex = 0;
     bool m_fontDropdownOpen = false;
     int m_fontDropdownHighlightedIndex = 0;
@@ -158,6 +168,7 @@ private:
     std::array<WidgetBounds, WIDGET_COUNT> m_widgetBounds{};
     bool m_focusScrollPending = false;
     bool m_scrollToTopPending = false;
+    std::vector<PendingTooltip> m_pendingTooltips;
     float m_windowClipY = 0.0f;
     float m_windowClipHeight = 0.0f;
     static constexpr float kScrollPadding = 12.0f;
@@ -179,6 +190,9 @@ private:
     void showInfoTooltip(MainScreenWidget widget, const char* text);
     bool moveFocusInGroup(const MainScreenWidget* group, size_t count, int direction);
     bool handleHorizontalNavigation(int direction);
+    bool isInfoWidget(MainScreenWidget widget) const;
+    bool stepFocusVertical(int direction);
+    void renderPendingTooltips();
 };
 
 #endif // GUI_MANAGER_H
