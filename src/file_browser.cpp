@@ -179,6 +179,10 @@ public:
         fz_device* dev = nullptr;
         fz_pixmap* pix = nullptr;
         bool success = true;
+        fz_var(doc);
+        fz_var(page);
+        fz_var(dev);
+        fz_var(pix);
 
         fz_try(m_ctx)
         {
