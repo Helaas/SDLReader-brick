@@ -153,7 +153,7 @@ private:
         bool success{false};
     };
 
-    std::thread m_thumbnailThread;
+    std::vector<std::thread> m_thumbnailThreads;
     std::mutex m_thumbnailMutex;
     std::condition_variable m_thumbnailCv;
     std::deque<FileEntry> m_thumbnailJobs;

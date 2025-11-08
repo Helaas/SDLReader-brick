@@ -42,11 +42,12 @@
 #include <filesystem>
 #include <iostream>
 #include <optional>
+#include <stdexcept>
 #include <sys/stat.h>
 #include <utility>
 #include <vector>
 
-#include "mupdf_document.h"
+#include <mupdf/fitz.h>
 
 #ifdef TG5040_PLATFORM
 static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_B;
@@ -134,6 +135,145 @@ std::string truncateToWidth(const std::string& text, float maxWidth, const nk_us
     return result;
 
     return text;
+}
+} // namespace
+
+namespace
+{
+constexpr int kThumbnailWorkerCount = 2;
+
+class QuickThumbnailRenderer
+{
+public:
+    QuickThumbnailRenderer()
+    {
+        m_ctx = fz_new_context(nullptr, nullptr, 64 << 20);
+        if (!m_ctx)
+        {
+            throw std::runtime_error("Failed to create MuPDF context for thumbnails");
+        }
+        fz_register_document_handlers(m_ctx);
+#ifdef TG5040_PLATFORM
+        fz_set_aa_level(m_ctx, 2);
+        fz_set_text_aa_level(m_ctx, 2);
+        fz_set_graphics_aa_level(m_ctx, 1);
+#else
+        fz_set_aa_level(m_ctx, 4);
+        fz_set_text_aa_level(m_ctx, 4);
+        fz_set_graphics_aa_level(m_ctx, 2);
+#endif
+    }
+
+    ~QuickThumbnailRenderer()
+    {
+        if (m_ctx)
+        {
+            fz_drop_context(m_ctx);
+        }
+    }
+
+    bool renderFirstPage(const std::string& path, int maxDim, std::vector<uint32_t>& pixels, int& width, int& height)
+    {
+        fz_document* doc = nullptr;
+        fz_page* page = nullptr;
+        fz_device* dev = nullptr;
+        fz_pixmap* pix = nullptr;
+        bool success = true;
+
+        fz_try(m_ctx)
+        {
+            doc = fz_open_document(m_ctx, path.c_str());
+            page = fz_load_page(m_ctx, doc, 0);
+
+            fz_rect bounds = fz_bound_page(m_ctx, page);
+            float pageWidth = bounds.x1 - bounds.x0;
+            float pageHeight = bounds.y1 - bounds.y0;
+            float maxDimension = std::max(pageWidth, pageHeight);
+            float scale = (maxDimension > 0.0f) ? static_cast<float>(maxDim) / maxDimension : 1.0f;
+#ifdef TG5040_PLATFORM
+            scale = std::clamp(scale, 0.04f, 1.0f);
+#else
+            scale = std::clamp(scale, 0.05f, 1.5f);
+#endif
+
+            fz_matrix transform = fz_scale(scale, scale);
+            fz_rect transformed = bounds;
+            transformed = fz_transform_rect(transformed, transform);
+            fz_irect bbox = fz_round_rect(transformed);
+
+            pix = fz_new_pixmap_with_bbox(m_ctx, fz_device_rgb(m_ctx), bbox, nullptr, 1);
+            fz_clear_pixmap_with_value(m_ctx, pix, 0xFF);
+
+            dev = fz_new_draw_device(m_ctx, fz_identity, pix);
+            fz_run_page(m_ctx, page, dev, transform, nullptr);
+            fz_close_device(m_ctx, dev);
+            fz_drop_device(m_ctx, dev);
+            dev = nullptr;
+
+            width = std::max(1, bbox.x1 - bbox.x0);
+            height = std::max(1, bbox.y1 - bbox.y0);
+
+            pixels.resize(static_cast<size_t>(width) * static_cast<size_t>(height));
+            const unsigned char* samples = fz_pixmap_samples(m_ctx, pix);
+            int stride = fz_pixmap_stride(m_ctx, pix);
+
+            for (int y = 0; y < height; ++y)
+            {
+                const unsigned char* row = samples + static_cast<size_t>(y) * stride;
+                for (int x = 0; x < width; ++x)
+                {
+                    const unsigned char* src = row + static_cast<size_t>(x) * 4;
+                    uint32_t r = src[0];
+                    uint32_t g = src[1];
+                    uint32_t b = src[2];
+                    uint32_t a = src[3];
+                    pixels[static_cast<size_t>(y) * width + x] = (a << 24) | (r << 16) | (g << 8) | b;
+                }
+            }
+        }
+        fz_always(m_ctx)
+        {
+            if (dev)
+            {
+                fz_drop_device(m_ctx, dev);
+            }
+            if (pix)
+            {
+                fz_drop_pixmap(m_ctx, pix);
+            }
+            if (page)
+            {
+                fz_drop_page(m_ctx, page);
+            }
+            if (doc)
+            {
+                fz_drop_document(m_ctx, doc);
+            }
+        }
+        fz_catch(m_ctx)
+        {
+            success = false;
+        }
+
+        return success;
+    }
+
+private:
+    fz_context* m_ctx{nullptr};
+};
+
+bool renderQuickThumbnail(const std::string& path, int maxDim, std::vector<uint32_t>& pixels, int& width, int& height)
+{
+    try
+    {
+        thread_local QuickThumbnailRenderer renderer;
+        return renderer.renderFirstPage(path, maxDim, pixels, width, height);
+    }
+    catch (const std::exception& ex)
+    {
+        std::cerr << "Thumbnail renderer init failed for \"" << path << "\": " << ex.what() << std::endl;
+        return false;
+    }
 }
 } // namespace
 
@@ -698,53 +838,12 @@ bool FileBrowser::buildDirectoryThumbnailPixels(std::vector<uint32_t>& pixels, i
 
 bool FileBrowser::buildDocumentThumbnailPixels(const FileEntry& entry, std::vector<uint32_t>& pixels, int& width, int& height)
 {
-    try
+    if (!renderQuickThumbnail(entry.fullPath, THUMBNAIL_MAX_DIM, pixels, width, height))
     {
-        MuPdfDocument document;
-        document.setMaxRenderSize(THUMBNAIL_MAX_DIM * 4, THUMBNAIL_MAX_DIM * 4);
-        if (!document.open(entry.fullPath))
-        {
-            return false;
-        }
-
-        int pageCount = document.getPageCount();
-        if (pageCount <= 0)
-        {
-            document.close();
-            return false;
-        }
-
-        int nativeWidth = document.getPageWidthNative(0);
-        int nativeHeight = document.getPageHeightNative(0);
-        if (nativeWidth <= 0 || nativeHeight <= 0)
-        {
-            document.close();
-            return false;
-        }
-
-        int maxDimension = std::max(nativeWidth, nativeHeight);
-        float targetScale = static_cast<float>(THUMBNAIL_MAX_DIM) / static_cast<float>(std::max(1, maxDimension));
-        int zoom = static_cast<int>(std::round(targetScale * 100.0f));
-        zoom = std::clamp(zoom, 10, 200);
-
-        width = 0;
-        height = 0;
-        auto bufferPtr = document.renderPageARGB(0, width, height, zoom);
-        document.close();
-
-        if (!bufferPtr || bufferPtr->empty() || width <= 0 || height <= 0)
-        {
-            return false;
-        }
-
-        pixels.assign(bufferPtr->begin(), bufferPtr->end());
-        return true;
-    }
-    catch (const std::exception& ex)
-    {
-        std::cerr << "Thumbnail generation failed for \"" << entry.fullPath << "\": " << ex.what() << std::endl;
+        std::cerr << "Thumbnail generation failed for \"" << entry.fullPath << "\"" << std::endl;
         return false;
     }
+    return true;
 }
 
 bool FileBrowser::generateDirectoryThumbnail(const FileEntry& entry, ThumbnailData& data)
@@ -808,7 +907,12 @@ void FileBrowser::startThumbnailWorker()
 
     m_thumbnailThreadStop = false;
     m_thumbnailThreadRunning = true;
-    m_thumbnailThread = std::thread(&FileBrowser::thumbnailWorkerLoop, this);
+    m_thumbnailThreads.clear();
+    m_thumbnailThreads.reserve(kThumbnailWorkerCount);
+    for (int i = 0; i < kThumbnailWorkerCount; ++i)
+    {
+        m_thumbnailThreads.emplace_back(&FileBrowser::thumbnailWorkerLoop, this);
+    }
 }
 
 void FileBrowser::stopThumbnailWorker()
@@ -824,10 +928,14 @@ void FileBrowser::stopThumbnailWorker()
     }
     m_thumbnailCv.notify_all();
 
-    if (m_thumbnailThread.joinable())
+    for (auto& worker : m_thumbnailThreads)
     {
-        m_thumbnailThread.join();
+        if (worker.joinable())
+        {
+            worker.join();
+        }
     }
+    m_thumbnailThreads.clear();
 
     m_thumbnailThreadRunning = false;
     m_thumbnailThreadStop = false;
