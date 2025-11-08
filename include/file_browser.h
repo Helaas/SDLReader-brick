@@ -99,6 +99,8 @@ private:
     std::vector<FileEntry> m_entries;
     int m_selectedIndex;
     std::string m_selectedFile;
+    std::string m_restoreSelectionPath;
+    bool m_restoreSelectionPending{false};
     SDL_GameController* m_gameController;
     SDL_JoystickID m_gameControllerInstanceID;
 
@@ -122,6 +124,10 @@ private:
     bool m_dpadDownHeld;
     Uint32 m_lastScrollTime;
     bool m_waitingForInitialRepeat;
+    bool m_leftHeld{false};
+    bool m_rightHeld{false};
+    Uint32 m_lastHorizontalScrollTime{0};
+    bool m_waitingForInitialHorizontalRepeat{false};
     static constexpr Uint32 SCROLL_INITIAL_DELAY_MS = 100; // Initial delay before repeat starts
     static constexpr Uint32 SCROLL_REPEAT_DELAY_MS = 50;   // Delay between repeats
 
@@ -221,6 +227,7 @@ private:
     void evictOldThumbnails();
     void cancelThumbnailJobsForPath(const std::string& path);
     void removeThumbnailEntry(const std::string& path);
+    void tryRestoreSelection(const std::string& directoryPath);
 
     static bool s_lastThumbnailView;
 };

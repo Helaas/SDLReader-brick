@@ -147,7 +147,8 @@ FileBrowser::FileBrowser()
       m_currentPath(m_defaultRoot),
       m_selectedIndex(0), m_selectedFile(), m_gameController(nullptr), m_gameControllerInstanceID(-1),
       m_thumbnailView(s_lastThumbnailView), m_gridColumns(1), m_lastWindowWidth(0), m_lastWindowHeight(0),
-      m_dpadUpHeld(false), m_dpadDownHeld(false), m_lastScrollTime(0), m_waitingForInitialRepeat(false)
+      m_dpadUpHeld(false), m_dpadDownHeld(false), m_lastScrollTime(0), m_waitingForInitialRepeat(false),
+      m_leftHeld(false), m_rightHeld(false), m_lastHorizontalScrollTime(0), m_waitingForInitialHorizontalRepeat(false)
 {
 }
 
@@ -506,7 +507,43 @@ bool FileBrowser::scanDirectory(const std::string& path)
     std::cout << "scanDirectory: Found " << directories.size() << " directories and "
               << files.size() << " files (" << m_entries.size() << " total)" << std::endl;
 
+    tryRestoreSelection(safePath);
+
     return true;
+}
+
+void FileBrowser::tryRestoreSelection(const std::string& directoryPath)
+{
+    if (!m_restoreSelectionPending || m_restoreSelectionPath.empty() || m_entries.empty())
+    {
+        return;
+    }
+
+    const std::string normalizedDir = normalizePath(directoryPath).string();
+    std::filesystem::path targetPath = normalizePath(m_restoreSelectionPath);
+    std::filesystem::path targetDir = targetPath.parent_path();
+    if (targetDir.empty())
+    {
+        targetDir = targetPath.root_path();
+    }
+
+    if (targetDir.empty() || !pathsEqual(targetDir.string(), normalizedDir))
+    {
+        return;
+    }
+
+    const std::string resolvedTarget = targetPath.string();
+    for (size_t i = 0; i < m_entries.size(); ++i)
+    {
+        if (pathsEqual(m_entries[i].fullPath, resolvedTarget))
+        {
+            m_selectedIndex = static_cast<int>(i);
+            resetSelectionScrollTargets();
+            break;
+        }
+    }
+
+    m_restoreSelectionPending = false;
 }
 
 bool FileBrowser::isSupportedFile(const std::string& filename) const
@@ -1259,6 +1296,28 @@ std::string FileBrowser::run()
                 m_waitingForInitialRepeat = false;
             }
         }
+        if ((m_leftHeld || m_rightHeld) && !m_entries.empty())
+        {
+            const Uint32 elapsed = (m_lastHorizontalScrollTime <= currentTime)
+                                       ? (currentTime - m_lastHorizontalScrollTime)
+                                       : 0;
+            const Uint32 targetDelay = m_waitingForInitialHorizontalRepeat ? SCROLL_INITIAL_DELAY_MS : SCROLL_REPEAT_DELAY_MS;
+
+            if (m_lastHorizontalScrollTime == 0 || elapsed >= targetDelay)
+            {
+                if (m_leftHeld)
+                {
+                    moveSelectionHorizontal(-1);
+                }
+                else if (m_rightHeld)
+                {
+                    moveSelectionHorizontal(1);
+                }
+
+                m_lastHorizontalScrollTime = currentTime;
+                m_waitingForInitialHorizontalRepeat = false;
+            }
+        }
 
 #ifdef TG5040_PLATFORM
         if (m_inFakeSleep)
@@ -1434,16 +1493,40 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             m_running = false;
             break;
         case SDLK_UP:
-            moveSelectionVertical(-1);
+            if (!m_dpadUpHeld)
+            {
+                moveSelectionVertical(-1);
+                m_dpadUpHeld = true;
+                m_lastScrollTime = SDL_GetTicks();
+                m_waitingForInitialRepeat = true;
+            }
             break;
         case SDLK_DOWN:
-            moveSelectionVertical(1);
+            if (!m_dpadDownHeld)
+            {
+                moveSelectionVertical(1);
+                m_dpadDownHeld = true;
+                m_lastScrollTime = SDL_GetTicks();
+                m_waitingForInitialRepeat = true;
+            }
             break;
         case SDLK_LEFT:
-            moveSelectionHorizontal(-1);
+            if (!m_leftHeld)
+            {
+                moveSelectionHorizontal(-1);
+                m_leftHeld = true;
+                m_lastHorizontalScrollTime = SDL_GetTicks();
+                m_waitingForInitialHorizontalRepeat = true;
+            }
             break;
         case SDLK_RIGHT:
-            moveSelectionHorizontal(1);
+            if (!m_rightHeld)
+            {
+                moveSelectionHorizontal(1);
+                m_rightHeld = true;
+                m_lastHorizontalScrollTime = SDL_GetTicks();
+                m_waitingForInitialHorizontalRepeat = true;
+            }
             break;
         case SDLK_RETURN:
         case SDLK_SPACE:
@@ -1466,10 +1549,28 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDLK_UP:
             m_dpadUpHeld = false;
             m_lastScrollTime = 0;
+            m_waitingForInitialRepeat = false;
             break;
         case SDLK_DOWN:
             m_dpadDownHeld = false;
             m_lastScrollTime = 0;
+            m_waitingForInitialRepeat = false;
+            break;
+        case SDLK_LEFT:
+            m_leftHeld = false;
+            if (!m_rightHeld)
+            {
+                m_lastHorizontalScrollTime = 0;
+                m_waitingForInitialHorizontalRepeat = false;
+            }
+            break;
+        case SDLK_RIGHT:
+            m_rightHeld = false;
+            if (!m_leftHeld)
+            {
+                m_lastHorizontalScrollTime = 0;
+                m_waitingForInitialHorizontalRepeat = false;
+            }
             break;
         default:
             break;
@@ -1505,10 +1606,22 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             }
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-            moveSelectionHorizontal(-1);
+            if (!m_leftHeld)
+            {
+                moveSelectionHorizontal(-1);
+                m_leftHeld = true;
+                m_lastHorizontalScrollTime = SDL_GetTicks();
+                m_waitingForInitialHorizontalRepeat = true;
+            }
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-            moveSelectionHorizontal(1);
+            if (!m_rightHeld)
+            {
+                moveSelectionHorizontal(1);
+                m_rightHeld = true;
+                m_lastHorizontalScrollTime = SDL_GetTicks();
+                m_waitingForInitialHorizontalRepeat = true;
+            }
             break;
 #ifdef TG5040_PLATFORM
         case kAcceptButton:
@@ -1551,6 +1664,22 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             m_dpadDownHeld = false;
             m_lastScrollTime = 0;
             m_waitingForInitialRepeat = false;
+            break;
+        case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+            m_leftHeld = false;
+            if (!m_rightHeld)
+            {
+                m_lastHorizontalScrollTime = 0;
+                m_waitingForInitialHorizontalRepeat = false;
+            }
+            break;
+        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+            m_rightHeld = false;
+            if (!m_leftHeld)
+            {
+                m_lastHorizontalScrollTime = 0;
+                m_waitingForInitialHorizontalRepeat = false;
+            }
             break;
         default:
             break;
@@ -1643,6 +1772,8 @@ void FileBrowser::navigateInto()
         // Select file and exit
         std::cout << "File selected: " << entry.fullPath << std::endl;
         requestThumbnailShutdown();
+        m_restoreSelectionPath = normalizePath(entry.fullPath).string();
+        m_restoreSelectionPending = true;
         m_selectedFile = entry.fullPath;
         m_running = false;
     }
