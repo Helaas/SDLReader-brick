@@ -119,13 +119,15 @@ private:
         WIDGET_ZOOM_STEP_INPUT,
         WIDGET_ZOOM_STEP_SLIDER,
         WIDGET_EDGE_PROGRESS_CHECKBOX,
+        WIDGET_EDGE_PROGRESS_INFO_BUTTON,
         WIDGET_MINIMAP_CHECKBOX,
+        WIDGET_MINIMAP_INFO_BUTTON,
         WIDGET_PAGE_JUMP_INPUT,
         WIDGET_GO_BUTTON,
         WIDGET_NUMPAD_BUTTON,
         WIDGET_APPLY_BUTTON,
-        WIDGET_RESET_BUTTON,
         WIDGET_CLOSE_BUTTON,
+        WIDGET_RESET_BUTTON,
         WIDGET_COUNT
     };
 
@@ -155,6 +157,7 @@ private:
     std::vector<std::string> m_fontNames;
     std::array<WidgetBounds, WIDGET_COUNT> m_widgetBounds{};
     bool m_focusScrollPending = false;
+    bool m_scrollToTopPending = false;
     float m_windowClipY = 0.0f;
     float m_windowClipHeight = 0.0f;
     static constexpr float kScrollPadding = 12.0f;
@@ -172,6 +175,10 @@ private:
     void rememberWidgetBounds(MainScreenWidget widget);
     void requestFocusScroll();
     void scrollFocusedWidgetIntoView();
+    void scrollSettingsToTop();
+    void showInfoTooltip(MainScreenWidget widget, const char* text);
+    bool moveFocusInGroup(const MainScreenWidget* group, size_t count, int direction);
+    bool handleHorizontalNavigation(int direction);
 };
 
 #endif // GUI_MANAGER_H

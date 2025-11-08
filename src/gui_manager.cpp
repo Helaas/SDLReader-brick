@@ -411,24 +411,26 @@ bool GuiManager::isFontMenuVisible() const
 
 void GuiManager::toggleFontMenu()
 {
-    m_showFontMenu = !m_showFontMenu;
     if (m_showFontMenu)
     {
-        m_fontDropdownHighlightedIndex = m_selectedFontIndex;
-        m_styleDropdownHighlightedIndex = m_selectedStyleIndex;
-        requestFocusScroll();
+        closeFontMenu();
+        return;
     }
-    else
-    {
-        m_fontDropdownOpen = false;
-        m_fontDropdownSelectRequested = false;
-        m_fontDropdownCancelRequested = false;
-        m_styleDropdownOpen = false;
-        m_styleDropdownSelectRequested = false;
-        m_styleDropdownCancelRequested = false;
-        m_focusScrollPending = false;
-    }
-    std::cout << "Font menu " << (m_showFontMenu ? "opened" : "closed") << std::endl;
+
+    m_showFontMenu = true;
+    setCurrentFontConfig(m_currentConfig);
+    m_fontDropdownHighlightedIndex = m_selectedFontIndex;
+    m_styleDropdownHighlightedIndex = m_selectedStyleIndex;
+    m_fontDropdownOpen = false;
+    m_fontDropdownSelectRequested = false;
+    m_fontDropdownCancelRequested = false;
+    m_styleDropdownOpen = false;
+    m_styleDropdownSelectRequested = false;
+    m_styleDropdownCancelRequested = false;
+    m_mainScreenFocusIndex = WIDGET_FONT_DROPDOWN;
+    m_scrollToTopPending = true;
+    requestFocusScroll();
+    std::cout << "Font menu opened" << std::endl;
 }
 
 void GuiManager::setCurrentFontConfig(const FontConfig& config)
@@ -502,8 +504,8 @@ void GuiManager::renderFontMenu()
     // Center the window and make it appropriately sized
     float centerX = windowWidth * 0.5f;
     float centerY = windowHeight * 0.5f;
-    float windowW = 500.0f;
-    float windowH = 650.0f; // Increased height for new sections
+    float windowW = 650.0f;
+    float windowH = 845.0f; // 30% larger to fit more content
 
     // Create settings window with scrollbar support
     if (nk_begin(m_ctx, "Settings", nk_rect(centerX - windowW / 2, centerY - windowH / 2, windowW, windowH),
@@ -951,8 +953,11 @@ void GuiManager::renderFontMenu()
 
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
-        // Edge Progress Bar checkbox
-        nk_layout_row_dynamic(m_ctx, 25, 1);
+        // Edge Progress Bar checkbox + info button
+        nk_layout_row_template_begin(m_ctx, 25);
+        nk_layout_row_template_push_dynamic(m_ctx);
+        nk_layout_row_template_push_static(m_ctx, 32);
+        nk_layout_row_template_end(m_ctx);
 
         // Highlight checkbox if focused
         struct nk_style_toggle originalToggleStyle = m_ctx->style.checkbox;
@@ -971,18 +976,33 @@ void GuiManager::renderFontMenu()
         }
         rememberWidgetBounds(WIDGET_EDGE_PROGRESS_CHECKBOX);
 
-        if (nk_widget_is_hovered(m_ctx) || m_mainScreenFocusIndex == WIDGET_EDGE_PROGRESS_CHECKBOX)
-        {
-            nk_tooltip(m_ctx, "When enabled, panning at page edges changes pages instantly.\nWhen disabled, hold at edge for 300ms.");
-        }
-
         // Restore checkbox style
         m_ctx->style.checkbox = originalToggleStyle;
 
+        // Info button for edge progress description
+        struct nk_style_button infoButtonStyle = m_ctx->style.button;
+        if (m_mainScreenFocusIndex == WIDGET_EDGE_PROGRESS_INFO_BUTTON)
+        {
+            m_ctx->style.button.normal = nk_style_item_color(nk_rgb(70, 70, 75));
+            m_ctx->style.button.hover = nk_style_item_color(nk_rgb(90, 90, 95));
+            m_ctx->style.button.active = nk_style_item_color(nk_rgb(60, 60, 70));
+        }
+        nk_button_label(m_ctx, "(?)");
+        bool edgeInfoHovered = nk_widget_is_hovered(m_ctx);
+        rememberWidgetBounds(WIDGET_EDGE_PROGRESS_INFO_BUTTON);
+        if (m_mainScreenFocusIndex == WIDGET_EDGE_PROGRESS_INFO_BUTTON || edgeInfoHovered)
+        {
+            showInfoTooltip(WIDGET_EDGE_PROGRESS_INFO_BUTTON, "When enabled, panning at page edges changes pages instantly.\nWhen disabled, hold at the edge for 300ms.");
+        }
+        m_ctx->style.button = infoButtonStyle;
+
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
-        // Document Minimap checkbox
-        nk_layout_row_dynamic(m_ctx, 25, 1);
+        // Document Minimap checkbox + info button
+        nk_layout_row_template_begin(m_ctx, 25);
+        nk_layout_row_template_push_dynamic(m_ctx);
+        nk_layout_row_template_push_static(m_ctx, 32);
+        nk_layout_row_template_end(m_ctx);
 
         // Highlight checkbox if focused
         if (m_mainScreenFocusIndex == WIDGET_MINIMAP_CHECKBOX)
@@ -1000,13 +1020,25 @@ void GuiManager::renderFontMenu()
         }
         rememberWidgetBounds(WIDGET_MINIMAP_CHECKBOX);
 
-        if (nk_widget_is_hovered(m_ctx) || m_mainScreenFocusIndex == WIDGET_MINIMAP_CHECKBOX)
-        {
-            nk_tooltip(m_ctx, "Show a miniature page overlay when zoomed in to visualize which part is visible.");
-        }
-
         // Restore checkbox style
         m_ctx->style.checkbox = originalToggleStyle;
+
+        // Info button for minimap description
+        infoButtonStyle = m_ctx->style.button;
+        if (m_mainScreenFocusIndex == WIDGET_MINIMAP_INFO_BUTTON)
+        {
+            m_ctx->style.button.normal = nk_style_item_color(nk_rgb(70, 70, 75));
+            m_ctx->style.button.hover = nk_style_item_color(nk_rgb(90, 90, 95));
+            m_ctx->style.button.active = nk_style_item_color(nk_rgb(60, 60, 70));
+        }
+        nk_button_label(m_ctx, "(?)");
+        bool minimapInfoHovered = nk_widget_is_hovered(m_ctx);
+        rememberWidgetBounds(WIDGET_MINIMAP_INFO_BUTTON);
+        if (m_mainScreenFocusIndex == WIDGET_MINIMAP_INFO_BUTTON || minimapInfoHovered)
+        {
+            showInfoTooltip(WIDGET_MINIMAP_INFO_BUTTON, "Show a miniature page overlay when zoomed in to visualize which part is visible.");
+        }
+        m_ctx->style.button = infoButtonStyle;
 
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
@@ -1014,10 +1046,10 @@ void GuiManager::renderFontMenu()
         nk_label(m_ctx, "Jump to Page:", NK_TEXT_LEFT);
 
         // Page jump input and buttons
-        nk_layout_row_template_begin(m_ctx, 25);
-        nk_layout_row_template_push_static(m_ctx, 100);
-        nk_layout_row_template_push_static(m_ctx, 60);
-        nk_layout_row_template_push_static(m_ctx, 100);
+        nk_layout_row_template_begin(m_ctx, 30);
+        nk_layout_row_template_push_static(m_ctx, 160);
+        nk_layout_row_template_push_static(m_ctx, 90);
+        nk_layout_row_template_push_static(m_ctx, 160);
         nk_layout_row_template_end(m_ctx);
 
         // Highlight page jump input if focused
@@ -1116,12 +1148,12 @@ void GuiManager::renderFontMenu()
 
         bool hasValidFont = !fonts.empty() && m_selectedFontIndex >= 0 && m_selectedFontIndex < (int) fonts.size();
 
-        nk_layout_row_template_begin(m_ctx, 30);
-        nk_layout_row_template_push_static(m_ctx, 90);
+        nk_layout_row_template_begin(m_ctx, 35);
+        nk_layout_row_template_push_static(m_ctx, 120);
         nk_layout_row_template_push_static(m_ctx, 20);
-        nk_layout_row_template_push_static(m_ctx, 90);
+        nk_layout_row_template_push_static(m_ctx, 120);
         nk_layout_row_template_push_static(m_ctx, 20);
-        nk_layout_row_template_push_static(m_ctx, 110);
+        nk_layout_row_template_push_static(m_ctx, 150);
         nk_layout_row_template_end(m_ctx);
 
         // Apply button
@@ -1172,23 +1204,7 @@ void GuiManager::renderFontMenu()
         }
         if (nk_button_label(m_ctx, "Close"))
         {
-            m_showFontMenu = false;
-            m_fontDropdownOpen = false;
-            m_fontDropdownSelectRequested = false;
-            m_fontDropdownCancelRequested = false;
-            // Reset temp config to current config
-            m_tempConfig = m_currentConfig;
-            m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
-            m_fontDropdownHighlightedIndex = m_selectedFontIndex;
-
-            // Reset input fields
-            snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
-            snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_currentConfig.zoomStep);
-
-            if (m_closeCallback)
-            {
-                m_closeCallback();
-            }
+            closeFontMenu();
         }
         rememberWidgetBounds(WIDGET_CLOSE_BUTTON);
         m_ctx->style.button = originalButtonStyle;
@@ -1207,7 +1223,9 @@ void GuiManager::renderFontMenu()
             // Reset to default config
             m_tempConfig = FontConfig();
             m_selectedFontIndex = 0;
+            m_selectedStyleIndex = 0;
             m_fontDropdownHighlightedIndex = m_selectedFontIndex;
+            m_styleDropdownHighlightedIndex = m_selectedStyleIndex;
 
             // Reset input fields to defaults
             strcpy(m_fontSizeInput, "12");
@@ -1220,6 +1238,17 @@ void GuiManager::renderFontMenu()
         if (m_focusScrollPending)
         {
             scrollFocusedWidgetIntoView();
+        }
+        if (m_scrollToTopPending)
+        {
+            nk_uint scrollX = 0;
+            nk_uint scrollY = 0;
+            nk_window_get_scroll(m_ctx, &scrollX, &scrollY);
+            if (scrollY != 0)
+            {
+                nk_window_set_scroll(m_ctx, scrollX, 0);
+            }
+            m_scrollToTopPending = false;
         }
     }
     nk_end(m_ctx);
@@ -1236,8 +1265,8 @@ void GuiManager::renderNumberPad()
     // Center the number pad window
     float centerX = windowWidth * 0.5f;
     float centerY = windowHeight * 0.5f;
-    float windowW = 300.0f;
-    float windowH = 400.0f;
+    float windowW = 390.0f;
+    float windowH = 520.0f;
 
     if (nk_begin(m_ctx, "Number Pad", nk_rect(centerX - windowW / 2, centerY - windowH / 2, windowW, windowH),
                  NK_WINDOW_BORDER | NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR))
@@ -1652,6 +1681,104 @@ void GuiManager::scrollFocusedWidgetIntoView()
     m_focusScrollPending = false;
 }
 
+void GuiManager::scrollSettingsToTop()
+{
+    if (!m_showFontMenu)
+    {
+        return;
+    }
+    m_scrollToTopPending = true;
+}
+
+void GuiManager::showInfoTooltip(MainScreenWidget widget, const char* text)
+{
+    if (!m_ctx || !text || widget < 0 || widget >= WIDGET_COUNT)
+    {
+        return;
+    }
+
+    const WidgetBounds& bounds = m_widgetBounds[widget];
+    if (!bounds.valid)
+    {
+        return;
+    }
+
+    struct nk_command_buffer* canvas = nk_window_get_canvas(m_ctx);
+    const struct nk_user_font* font = m_ctx->style.font;
+    if (!canvas || !font || !font->width)
+    {
+        return;
+    }
+
+    float padding = 8.0f;
+    float maxLineWidth = 0.0f;
+    int lineCount = 1;
+    const char* lineStart = text;
+    for (const char* cursor = text; ; ++cursor)
+    {
+        if (*cursor == '\n' || *cursor == '\0')
+        {
+            float width = font->width(font->userdata, font->height, lineStart, cursor - lineStart);
+            maxLineWidth = std::max(maxLineWidth, width);
+            if (*cursor == '\0')
+            {
+                break;
+            }
+            lineCount++;
+            lineStart = cursor + 1;
+        }
+    }
+
+    float tooltipW = std::max(200.0f, maxLineWidth + padding * 2.0f);
+    float tooltipH = lineCount * font->height + padding * 2.0f;
+
+    struct nk_rect windowBounds = nk_window_get_bounds(m_ctx);
+    float tooltipX = bounds.x + bounds.w + 10.0f;
+    if (tooltipX + tooltipW > windowBounds.x + windowBounds.w - 10.0f)
+    {
+        tooltipX = std::max(windowBounds.x + 10.0f, bounds.x - tooltipW - 10.0f);
+    }
+    float tooltipY = bounds.y - 6.0f;
+    float minY = windowBounds.y + m_ctx->style.font->height + 4.0f;
+    if (tooltipY < minY)
+    {
+        tooltipY = minY;
+    }
+    float maxY = windowBounds.y + windowBounds.h - tooltipH - 10.0f;
+    if (tooltipY > maxY)
+    {
+        tooltipY = maxY;
+    }
+
+    struct nk_rect tooltipRect = nk_rect(tooltipX, tooltipY, tooltipW, tooltipH);
+    nk_fill_rect(canvas, tooltipRect, 4.0f, nk_rgba(35, 35, 38, 240));
+    nk_stroke_rect(canvas, tooltipRect, 4.0f, 1.0f, nk_rgb(0, 122, 255));
+
+    struct nk_rect textRect = tooltipRect;
+    textRect.x += padding;
+    textRect.y += padding;
+    textRect.w -= padding * 2.0f;
+
+    float lineY = textRect.y;
+    const char* segmentStart = text;
+    for (const char* cursor = text; ; ++cursor)
+    {
+        if (*cursor == '\n' || *cursor == '\0')
+        {
+            struct nk_rect lineRect = textRect;
+            lineRect.y = lineY;
+            lineRect.h = font->height;
+            nk_draw_text(canvas, lineRect, segmentStart, static_cast<int>(cursor - segmentStart), font, nk_rgba(0, 0, 0, 0), nk_rgb(230, 230, 230));
+            lineY += font->height;
+            if (*cursor == '\0')
+            {
+                break;
+            }
+            segmentStart = cursor + 1;
+        }
+    }
+}
+
 void GuiManager::setupColorScheme()
 {
     if (!m_ctx)
@@ -1818,21 +1945,43 @@ bool GuiManager::handleKeyboardNavigation(const SDL_Event& event)
         {
         case SDLK_UP:
             // Navigate up - move to previous widget (same as numpad logic)
-            m_mainScreenFocusIndex = (m_mainScreenFocusIndex - 1 + WIDGET_COUNT) % WIDGET_COUNT;
-            requestFocusScroll();
+            if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
+            {
+                scrollSettingsToTop();
+            }
+            else
+            {
+                m_mainScreenFocusIndex = std::max(0, m_mainScreenFocusIndex - 1);
+                requestFocusScroll();
+            }
             return true;
         case SDLK_DOWN:
             // Navigate down - move to next widget (same as numpad logic)
-            m_mainScreenFocusIndex = (m_mainScreenFocusIndex + 1) % WIDGET_COUNT;
-            requestFocusScroll();
+            if (m_mainScreenFocusIndex == WIDGET_RESET_BUTTON)
+            {
+                m_mainScreenFocusIndex = WIDGET_FONT_DROPDOWN;
+                requestFocusScroll();
+                scrollSettingsToTop();
+            }
+            else
+            {
+                m_mainScreenFocusIndex = std::min(WIDGET_COUNT - 1, m_mainScreenFocusIndex + 1);
+                requestFocusScroll();
+            }
             return true;
         case SDLK_LEFT:
             // Navigate left - adjust widget value if applicable
-            adjustFocusedWidget(-1);
+            if (!handleHorizontalNavigation(-1))
+            {
+                adjustFocusedWidget(-1);
+            }
             return true;
         case SDLK_RIGHT:
             // Navigate right - adjust widget value if applicable
-            adjustFocusedWidget(1);
+            if (!handleHorizontalNavigation(1))
+            {
+                adjustFocusedWidget(1);
+            }
             return true;
         case SDLK_TAB:
             if (event.key.keysym.mod & KMOD_SHIFT)
@@ -1860,23 +2009,7 @@ bool GuiManager::handleKeyboardNavigation(const SDL_Event& event)
 
             if (m_showFontMenu)
             {
-                m_showFontMenu = false;
-                m_fontDropdownOpen = false;
-                m_fontDropdownSelectRequested = false;
-                m_fontDropdownCancelRequested = false;
-                // Reset temp config to current config
-                m_tempConfig = m_currentConfig;
-                m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
-                m_fontDropdownHighlightedIndex = m_selectedFontIndex;
-
-                // Reset input fields
-                snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
-                snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_currentConfig.zoomStep);
-
-                if (m_closeCallback)
-                {
-                    m_closeCallback();
-                }
+                closeFontMenu();
             }
             else if (m_showNumberPad)
             {
@@ -1997,61 +2130,99 @@ void GuiManager::activateFocusedWidget()
         showNumberPad();
         break;
     case WIDGET_APPLY_BUTTON:
-        // Apply settings
-        if (m_fontApplyCallback)
+    {
+        const auto& fonts = m_optionsManager.getAvailableFonts();
+        bool hasValidFont = !fonts.empty() && m_selectedFontIndex >= 0 && m_selectedFontIndex < (int) fonts.size();
+        if (hasValidFont && m_fontApplyCallback)
         {
-            m_fontApplyCallback(m_tempConfig);
             m_currentConfig = m_tempConfig;
+            m_optionsManager.saveConfig(m_currentConfig);
+            m_fontApplyCallback(m_currentConfig);
         }
         break;
+    }
     case WIDGET_RESET_BUTTON:
         // Reset to defaults
         m_tempConfig = FontConfig();
         m_selectedFontIndex = 0;
         m_selectedStyleIndex = 0;
+        m_fontDropdownHighlightedIndex = m_selectedFontIndex;
+        m_styleDropdownHighlightedIndex = m_selectedStyleIndex;
         snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_tempConfig.fontSize);
         snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_tempConfig.zoomStep);
+        strcpy(m_pageJumpInput, "1");
         break;
     case WIDGET_CLOSE_BUTTON:
     {
         // Close menu
-        m_showFontMenu = false;
-        m_fontDropdownOpen = false;
-        m_fontDropdownSelectRequested = false;
-        m_fontDropdownCancelRequested = false;
-        m_styleDropdownOpen = false;
-        m_styleDropdownSelectRequested = false;
-        m_styleDropdownCancelRequested = false;
-        m_focusScrollPending = false;
-        m_tempConfig = m_currentConfig;
-        m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
-        m_fontDropdownHighlightedIndex = m_selectedFontIndex;
-
-        // Update reading style index
-        auto allStyles = OptionsManager::getAllReadingStyles();
-        m_selectedStyleIndex = 0;
-        for (size_t i = 0; i < allStyles.size(); i++)
-        {
-            if (allStyles[i] == m_currentConfig.readingStyle)
-            {
-                m_selectedStyleIndex = static_cast<int>(i);
-                break;
-            }
-        }
-        m_styleDropdownHighlightedIndex = m_selectedStyleIndex;
-
-        snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
-        snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_currentConfig.zoomStep);
-        if (m_closeCallback)
-        {
-            m_closeCallback();
-        }
+        closeFontMenu();
         break;
     }
     default:
         // Other widgets don't have simple activation
         break;
     }
+}
+
+bool GuiManager::moveFocusInGroup(const MainScreenWidget* group, size_t count, int direction)
+{
+    if (!group || count == 0 || direction == 0)
+    {
+        return false;
+    }
+
+    MainScreenWidget current = static_cast<MainScreenWidget>(m_mainScreenFocusIndex);
+    for (size_t i = 0; i < count; ++i)
+    {
+        if (group[i] == current)
+        {
+            int nextIndex = static_cast<int>(i) + direction;
+            if (nextIndex < 0 || nextIndex >= static_cast<int>(count))
+            {
+                return false;
+            }
+            m_mainScreenFocusIndex = group[nextIndex];
+            requestFocusScroll();
+            return true;
+        }
+    }
+    return false;
+}
+
+bool GuiManager::handleHorizontalNavigation(int direction)
+{
+    static constexpr MainScreenWidget kEdgeInfoGroup[] = {
+        WIDGET_EDGE_PROGRESS_CHECKBOX,
+        WIDGET_EDGE_PROGRESS_INFO_BUTTON};
+    static constexpr MainScreenWidget kMinimapInfoGroup[] = {
+        WIDGET_MINIMAP_CHECKBOX,
+        WIDGET_MINIMAP_INFO_BUTTON};
+    static constexpr MainScreenWidget kPageJumpGroup[] = {
+        WIDGET_PAGE_JUMP_INPUT,
+        WIDGET_GO_BUTTON,
+        WIDGET_NUMPAD_BUTTON};
+    static constexpr MainScreenWidget kActionButtonGroup[] = {
+        WIDGET_APPLY_BUTTON,
+        WIDGET_CLOSE_BUTTON,
+        WIDGET_RESET_BUTTON};
+
+    if (moveFocusInGroup(kEdgeInfoGroup, sizeof(kEdgeInfoGroup) / sizeof(kEdgeInfoGroup[0]), direction))
+    {
+        return true;
+    }
+    if (moveFocusInGroup(kMinimapInfoGroup, sizeof(kMinimapInfoGroup) / sizeof(kMinimapInfoGroup[0]), direction))
+    {
+        return true;
+    }
+    if (moveFocusInGroup(kPageJumpGroup, sizeof(kPageJumpGroup) / sizeof(kPageJumpGroup[0]), direction))
+    {
+        return true;
+    }
+    if (moveFocusInGroup(kActionButtonGroup, sizeof(kActionButtonGroup) / sizeof(kActionButtonGroup[0]), direction))
+    {
+        return true;
+    }
+    return false;
 }
 
 bool GuiManager::handleControllerInput(const SDL_Event& event)
@@ -2161,20 +2332,40 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
             switch (event.cbutton.button)
             {
             case SDL_CONTROLLER_BUTTON_DPAD_UP:
-                // Navigate up - move to previous widget
-                m_mainScreenFocusIndex = (m_mainScreenFocusIndex - 1 + WIDGET_COUNT) % WIDGET_COUNT;
-                requestFocusScroll();
+                if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
+                {
+                    scrollSettingsToTop();
+                }
+                else
+                {
+                    m_mainScreenFocusIndex = std::max(0, m_mainScreenFocusIndex - 1);
+                    requestFocusScroll();
+                }
                 return true;
             case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-                // Navigate down - move to next widget
-                m_mainScreenFocusIndex = (m_mainScreenFocusIndex + 1) % WIDGET_COUNT;
-                requestFocusScroll();
+                if (m_mainScreenFocusIndex == WIDGET_RESET_BUTTON)
+                {
+                    m_mainScreenFocusIndex = WIDGET_FONT_DROPDOWN;
+                    requestFocusScroll();
+                    scrollSettingsToTop();
+                }
+                else
+                {
+                    m_mainScreenFocusIndex = std::min(WIDGET_COUNT - 1, m_mainScreenFocusIndex + 1);
+                    requestFocusScroll();
+                }
                 return true;
             case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-                adjustFocusedWidget(-1);
+                if (!handleHorizontalNavigation(-1))
+                {
+                    adjustFocusedWidget(-1);
+                }
                 return true;
             case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-                adjustFocusedWidget(1);
+                if (!handleHorizontalNavigation(1))
+                {
+                    adjustFocusedWidget(1);
+                }
                 return true;
             case kAcceptButton:
                 activateFocusedWidget();
@@ -2191,23 +2382,7 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
 
             if (m_showFontMenu)
             {
-                m_showFontMenu = false;
-                m_fontDropdownOpen = false;
-                m_fontDropdownSelectRequested = false;
-                m_fontDropdownCancelRequested = false;
-                // Reset temp config to current config
-                m_tempConfig = m_currentConfig;
-                m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
-                m_fontDropdownHighlightedIndex = m_selectedFontIndex;
-
-                // Reset input fields
-                snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
-                snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_currentConfig.zoomStep);
-
-                if (m_closeCallback)
-                {
-                    m_closeCallback();
-                }
+                closeFontMenu();
                 return true;
             }
             return false;
@@ -2336,11 +2511,15 @@ void GuiManager::closeFontMenu()
 
     snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
     snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_currentConfig.zoomStep);
+    m_scrollToTopPending = false;
+    m_focusScrollPending = false;
 
     if (m_closeCallback)
     {
         m_closeCallback();
     }
+
+    std::cout << "Font menu closed" << std::endl;
 }
 
 void GuiManager::closeNumberPad()
