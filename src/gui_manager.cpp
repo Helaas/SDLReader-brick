@@ -25,9 +25,13 @@
 #ifdef TG5040_PLATFORM
 static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_B;
 static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_A;
+static constexpr SDL_GameControllerButton kApplySettingsButton = SDL_CONTROLLER_BUTTON_X; // Physical Y
+static constexpr SDL_GameControllerButton kResetSettingsButton = SDL_CONTROLLER_BUTTON_Y; // Physical X
 #else
 static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_A;
 static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_B;
+static constexpr SDL_GameControllerButton kApplySettingsButton = SDL_CONTROLLER_BUTTON_Y;
+static constexpr SDL_GameControllerButton kResetSettingsButton = SDL_CONTROLLER_BUTTON_X;
 #endif
 
 namespace
@@ -210,7 +214,7 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
     struct nk_font_atlas* atlas = nullptr;
     nk_sdl_font_stash_begin(&atlas);
     struct nk_font* uiFont = nullptr;
-    constexpr float kUiFontSize = 22.0f;
+    constexpr float kUiFontSize = 24.0f; // 20% larger for better readability
 
     if (atlas)
     {
@@ -488,7 +492,6 @@ void GuiManager::renderFontMenu()
     m_pendingTooltips.clear();
 
     // Nuklear state debug disabled (was too spammy)
-    // Uncomment below to debug Nuklear input state periodically
     /*
     static int debugCounter = 0;
     if (debugCounter++ % 60 == 0)
@@ -506,8 +509,8 @@ void GuiManager::renderFontMenu()
     // Center the window and make it appropriately sized
     float centerX = windowWidth * 0.5f;
     float centerY = windowHeight * 0.5f;
-    float windowW = 650.0f;
-    float windowH = 845.0f; // 30% larger to fit more content
+    float windowW = 680.0f;
+    float windowH = 880.0f;
 
     // Create settings window with scrollbar support
     if (nk_begin(m_ctx, "Settings", nk_rect(centerX - windowW / 2, centerY - windowH / 2, windowW, windowH),
@@ -1158,11 +1161,11 @@ void GuiManager::renderFontMenu()
         bool hasValidFont = !fonts.empty() && m_selectedFontIndex >= 0 && m_selectedFontIndex < (int) fonts.size();
 
         nk_layout_row_template_begin(m_ctx, 35);
-        nk_layout_row_template_push_static(m_ctx, 120);
+        nk_layout_row_template_push_static(m_ctx, 120); // Apply button width
         nk_layout_row_template_push_static(m_ctx, 20);
-        nk_layout_row_template_push_static(m_ctx, 120);
+        nk_layout_row_template_push_static(m_ctx, 120); // Close button width
         nk_layout_row_template_push_static(m_ctx, 20);
-        nk_layout_row_template_push_static(m_ctx, 150);
+        nk_layout_row_template_push_static(m_ctx, 190); // Reset to default button width
         nk_layout_row_template_end(m_ctx);
 
         // Apply button
@@ -1726,7 +1729,7 @@ void GuiManager::showInfoTooltip(MainScreenWidget widget, const char* text)
     float maxLineWidth = 0.0f;
     int lineCount = 1;
     const char* lineStart = text;
-    for (const char* cursor = text; ; ++cursor)
+    for (const char* cursor = text;; ++cursor)
     {
         if (*cursor == '\n' || *cursor == '\0')
         {
@@ -2454,8 +2457,8 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
                 return true;
             }
             return false;
-        case SDL_CONTROLLER_BUTTON_Y:
-            // Apply current settings (like Y for confirm/apply)
+        case kApplySettingsButton:
+            // Apply current settings (Y on desktop, swapped with X on TG5040)
             if (m_showFontMenu)
             {
                 const auto& fonts = m_optionsManager.getAvailableFonts();
@@ -2475,8 +2478,8 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
                 return true;
             }
             return false;
-        case SDL_CONTROLLER_BUTTON_X:
-            // Reset to defaults
+        case kResetSettingsButton:
+            // Reset to defaults (X on desktop, swapped with Y on TG5040)
             if (m_showFontMenu)
             {
                 m_tempConfig = FontConfig();

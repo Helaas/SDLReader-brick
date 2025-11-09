@@ -54,6 +54,12 @@ static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_
 static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_A;
 #endif
 
+#ifdef TG5040_PLATFORM
+static constexpr SDL_GameControllerButton kToggleViewButton = SDL_CONTROLLER_BUTTON_Y;
+#else
+static constexpr SDL_GameControllerButton kToggleViewButton = SDL_CONTROLLER_BUTTON_X;
+#endif
+
 namespace
 {
 std::filesystem::path normalizePath(const std::string& path)
@@ -320,7 +326,7 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
     struct nk_font_atlas* atlas = nullptr;
     nk_sdl_font_stash_begin(&atlas);
     struct nk_font* uiFont = nullptr;
-    constexpr float kUiFontSize = 22.0f;
+    constexpr float kUiFontSize = 24.0f;
 
     if (atlas)
     {
@@ -1750,7 +1756,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             navigateUp();
             break;
 #endif
-        case SDL_CONTROLLER_BUTTON_X:
+        case kToggleViewButton:
             toggleViewMode();
             break;
         case SDL_CONTROLLER_BUTTON_BACK:
