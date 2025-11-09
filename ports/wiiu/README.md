@@ -17,10 +17,14 @@ SDLReader is a document reader that compiles and runs on macOS, TG5040, and Wii 
 
 ## Quick Start
 
+**Note on auto-detected builds**: The top-level `Makefile` now auto-selects macOS, Linux, or TG5040 targets based on your host. Wii U builds still require an explicit target, so remember to pass `wiiu` (or `PLATFORM=wiiu`) when invoking `make` from the project root.
+
 ### From Project Root
 ```bash
 # Build for Wii U (requires devkitPro environment)
 make wiiu
+# or
+make PLATFORM=wiiu
 ```
 
 ### From This Directory

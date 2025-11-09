@@ -46,6 +46,8 @@ The build process now automatically downloads and compiles MuPDF 1.26.7 with CBR
 
 From the project root directory:
 ```bash
+make             # auto-detects Linux and selects the linux target
+# or explicitly
 make linux
 ```
 

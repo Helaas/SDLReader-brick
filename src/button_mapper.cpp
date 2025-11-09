@@ -42,11 +42,11 @@ void ButtonMapper::initializePlatformMappings()
     // - Physical "A" button (bottom) -> SDL reports as BUTTON_A
     // - Physical "B" button (right) -> SDL reports as BUTTON_B
 
-    m_buttonMap[SDL_CONTROLLER_BUTTON_A] = LogicalButton::Accept;    // A (bottom) -> Accept
-    m_buttonMap[SDL_CONTROLLER_BUTTON_B] = LogicalButton::Cancel;    // B (right) -> Cancel
-    m_buttonMap[SDL_CONTROLLER_BUTTON_X] = LogicalButton::Alternate; // X (left)
-    m_buttonMap[SDL_CONTROLLER_BUTTON_Y] = LogicalButton::Special;   // Y (top)
-    m_buttonMap[SDL_CONTROLLER_BUTTON_START] = LogicalButton::Menu;  // Desktop: Start opens menu
+    m_buttonMap[SDL_CONTROLLER_BUTTON_A] = LogicalButton::Accept;               // A (bottom) -> Accept
+    m_buttonMap[SDL_CONTROLLER_BUTTON_B] = LogicalButton::Cancel;               // B (right) -> Cancel
+    m_buttonMap[SDL_CONTROLLER_BUTTON_X] = LogicalButton::Alternate;            // X (left)
+    m_buttonMap[SDL_CONTROLLER_BUTTON_Y] = LogicalButton::Special;              // Y (top)
+    m_buttonMap[SDL_CONTROLLER_BUTTON_START] = LogicalButton::MirrorHorizontal; // Desktop: Start opens menu
 
     // Desktop-specific: Share/Capture button opens menu (SDL 2.0.14+)
     // Note: On macOS, the Share button may be intercepted by the system

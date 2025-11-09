@@ -2,7 +2,24 @@
 
 AVAILABLE_PLATFORMS := tg5040 mac wiiu linux
 DEFAULT_PLATFORM := tg5040
-PLATFORM ?= $(DEFAULT_PLATFORM)
+UNAME_S := $(shell uname -s 2>/dev/null || echo Unknown)
+IN_DOCKER := $(shell if [ -f /.dockerenv ]; then echo 1; elif [ -f /proc/1/cgroup ] && grep -qE '(docker|kubepods|containerd|podman)' /proc/1/cgroup; then echo 1; else echo 0; fi)
+
+ifeq ($(origin PLATFORM), undefined)
+  ifeq ($(IN_DOCKER),1)
+    PLATFORM := tg5040
+  else
+    ifeq ($(UNAME_S),Darwin)
+      PLATFORM := mac
+    else
+      ifeq ($(UNAME_S),Linux)
+        PLATFORM := linux
+      else
+        PLATFORM := $(DEFAULT_PLATFORM)
+      endif
+    endif
+  endif
+endif
 
 .PHONY: all clean clean-local help list-platforms export-tg5040 $(AVAILABLE_PLATFORMS)
 
@@ -51,7 +68,7 @@ list-platforms:
 help:
 	@echo "SDLReader Build System"
 	@echo "Usage:"
-	@echo "  make            - Build for tg5040 (default)"
+	@echo "  make            - Build for your current platform (Docker->tg5040, macOS->mac, Linux->linux)"
 	@echo "  make tg5040     - Build for TG5040"
 	@echo "  make export-tg5040 - Build and export TG5040 bundle"
 	@echo "  make mac        - Build for macOS"

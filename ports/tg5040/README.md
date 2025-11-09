@@ -26,6 +26,8 @@ Based on the [Trimui toolchain Docker image](https://git.crowdedwood.com/trimui-
 
 ## Quick Start
 
+**Auto-detected builds**: The top-level `Makefile` now notices when it runs inside this Docker environment (or any container that exposes `/.dockerenv`) and defaults to the TG5040 target. Plain `make` inside the container will therefore build the TG5040 port. When building from the host, continue to use `make tg5040` (or `make PLATFORM=tg5040`) to opt in explicitly.
+
 ### Using Docker Compose (Recommended)
 ```bash
 cd ports/tg5040
@@ -38,7 +40,7 @@ docker-compose exec dev bash
 
 # Build the application (inside container)
 cd /root/workspace
-make tg5040
+make            # auto-selects the TG5040 target when run in the container
 ```
 
 ### Using Docker Makefile
@@ -50,13 +52,15 @@ make -f Makefile.docker shell
 
 # Build the application (inside container)
 cd /root/workspace
-make tg5040
+make            # auto-selects the TG5040 target when run in the container
 ```
 
 ### Direct Build (with toolchain installed)
 ```bash
-# From project root
+# From project root (outside Docker)
 make tg5040
+# or
+make PLATFORM=tg5040
 
 # Build and export TG5040 bundle
 make export-tg5040
