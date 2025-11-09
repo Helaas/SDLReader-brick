@@ -510,7 +510,7 @@ void GuiManager::renderFontMenu()
     float centerX = windowWidth * 0.5f;
     float centerY = windowHeight * 0.5f;
     float windowW = 680.0f;
-    float windowH = 880.0f;
+    float windowH = 750.0f;
 
     // Create settings window with scrollbar support
     if (nk_begin(m_ctx, "Settings", nk_rect(centerX - windowW / 2, centerY - windowH / 2, windowW, windowH),
@@ -528,6 +528,13 @@ void GuiManager::renderFontMenu()
         {
             bounds.valid = false;
         }
+
+        // Controller hints at the top of the window for quick reference
+        nk_layout_row_dynamic(m_ctx, 20, 1);
+        nk_label_colored(m_ctx, "Controller: D-Pad=Navigate, A=Select, B=Close/Unfocus, Y=Apply, X=Reset", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+        nk_layout_row_dynamic(m_ctx, 20, 1);
+        nk_label_colored(m_ctx, "L/R Shoulder=Tab Between Fields, Start=NumberPad", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+        nk_layout_row_dynamic(m_ctx, 10, 1);
 
         // Store original styles for highlighting focused widgets
         struct nk_style_button originalButtonStyle = m_ctx->style.button;
@@ -1141,13 +1148,7 @@ void GuiManager::renderFontMenu()
             nk_label_colored(m_ctx, "Invalid page number", NK_TEXT_LEFT, nk_rgb(255, 100, 100));
         }
 
-        nk_layout_row_dynamic(m_ctx, 15, 1); // Spacing
-
-        // === CONTROLLER HINTS ===
-        nk_layout_row_dynamic(m_ctx, 20, 1);
-        nk_label_colored(m_ctx, "Controller: D-Pad=Navigate, A=Select, B=Close/Unfocus, Y=Apply, X=Reset", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
-        nk_layout_row_dynamic(m_ctx, 20, 1);
-        nk_label_colored(m_ctx, "L/R Shoulder=Tab Between Fields, Start=NumberPad", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+        nk_layout_row_dynamic(m_ctx, 15, 1); // Spacing before action buttons
 
         // === BUTTONS SECTION ===
         // Separator line
@@ -1287,6 +1288,13 @@ void GuiManager::renderNumberPad()
         nk_layout_row_dynamic(m_ctx, 20, 1);
         nk_label(m_ctx, "Enter Page Number:", NK_TEXT_CENTERED);
 
+        // Control hints at the top of the number pad
+        nk_layout_row_dynamic(m_ctx, 18, 1);
+        nk_label_colored(m_ctx, "D-Pad/Arrow Keys=Navigate, A/Enter=Select", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+        nk_layout_row_dynamic(m_ctx, 18, 1);
+        nk_label_colored(m_ctx, "B/Esc/Q=Cancel, Start=Go", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+        nk_layout_row_dynamic(m_ctx, 6, 1);
+
         // Separator line
         nk_layout_row_dynamic(m_ctx, 1, 1);
         struct nk_rect bounds = nk_widget_bounds(m_ctx);
@@ -1396,9 +1404,12 @@ void GuiManager::renderNumberPad()
         }
         if (nk_button_label(m_ctx, "Go"))
         {
-            if (validPage && m_pageJumpCallback)
+            if (validPage)
             {
-                m_pageJumpCallback(targetPage - 1); // Convert to 0-based
+                if (m_pageJumpCallback)
+                {
+                    m_pageJumpCallback(targetPage - 1); // Convert to 0-based
+                }
                 hideNumberPad();
             }
         }
@@ -1441,11 +1452,6 @@ void GuiManager::renderNumberPad()
             nk_label_colored(m_ctx, "Invalid page number", NK_TEXT_CENTERED, nk_rgb(255, 100, 100));
         }
 
-        // Controller hints
-        nk_layout_row_dynamic(m_ctx, 15, 1);
-        nk_label_colored(m_ctx, "Controller: D-Pad=Navigate, A=Select", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
-        nk_layout_row_dynamic(m_ctx, 15, 1);
-        nk_label_colored(m_ctx, "B=Cancel, Start=Go", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
     }
     nk_end(m_ctx);
 }
@@ -1457,18 +1463,86 @@ bool GuiManager::handleNumberPadInput(const SDL_Event& event)
         return false;
     }
 
+    static const char* const kNumberPadGrid[4][3] = {
+        {"7", "8", "9"},
+        {"4", "5", "6"},
+        {"1", "2", "3"},
+        {"Clear", "0", "Back"}};
+
+    auto normalizeSelection = [this]()
+    {
+        if (m_numberPadSelectedRow == 4)
+        {
+            m_numberPadSelectedCol = std::clamp(m_numberPadSelectedCol, 0, 1);
+        }
+        else
+        {
+            if (m_numberPadSelectedCol < 0 || m_numberPadSelectedCol > 2)
+            {
+                m_numberPadSelectedCol = ((m_numberPadSelectedCol % 3) + 3) % 3;
+            }
+        }
+    };
+
+    auto applyGoAction = [this]() -> bool
+    {
+        int targetPage = strlen(m_pageJumpInput) > 0 ? std::atoi(m_pageJumpInput) : 0;
+        if (targetPage >= 1 && targetPage <= m_pageCount)
+        {
+            if (m_pageJumpCallback)
+            {
+                m_pageJumpCallback(targetPage - 1);
+            }
+            hideNumberPad();
+            return true;
+        }
+        return false;
+    };
+
+    auto activateSelection = [this, &applyGoAction]()
+    {
+        if (m_numberPadSelectedRow == 4)
+        {
+            if (m_numberPadSelectedCol == 0)
+            {
+                applyGoAction();
+            }
+            else
+            {
+                hideNumberPad();
+            }
+            return;
+        }
+
+        const char* buttonText = kNumberPadGrid[m_numberPadSelectedRow][m_numberPadSelectedCol];
+        if (strcmp(buttonText, "Clear") == 0)
+        {
+            strcpy(m_pageJumpInput, "");
+        }
+        else if (strcmp(buttonText, "Back") == 0)
+        {
+            int len = strlen(m_pageJumpInput);
+            if (len > 0)
+            {
+                m_pageJumpInput[len - 1] = '\0';
+            }
+        }
+        else
+        {
+            int len = strlen(m_pageJumpInput);
+            if (len < (int) sizeof(m_pageJumpInput) - 1)
+            {
+                m_pageJumpInput[len] = buttonText[0];
+                m_pageJumpInput[len + 1] = '\0';
+            }
+        }
+    };
+
     if (event.type == SDL_JOYBUTTONDOWN)
     {
         if (event.jbutton.button == 10)
         {
-            if (m_showNumberPad)
-            {
-                hideNumberPad();
-            }
-            else if (m_showFontMenu)
-            {
-                closeFontMenu();
-            }
+            hideNumberPad();
             return true;
         }
     }
@@ -1487,9 +1561,11 @@ bool GuiManager::handleNumberPadInput(const SDL_Event& event)
         {
         case SDL_CONTROLLER_BUTTON_DPAD_UP:
             m_numberPadSelectedRow = (m_numberPadSelectedRow - 1 + 5) % 5; // 5 rows (4 number rows + 1 action row)
+            normalizeSelection();
             return true;
         case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
             m_numberPadSelectedRow = (m_numberPadSelectedRow + 1) % 5;
+            normalizeSelection();
             return true;
         case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
             if (m_numberPadSelectedRow == 4)
@@ -1512,73 +1588,70 @@ bool GuiManager::handleNumberPadInput(const SDL_Event& event)
             }
             return true;
         case kAcceptButton:
-        {
-            // Handle selected button press
-            if (m_numberPadSelectedRow == 4)
-            { // Action row
-                if (m_numberPadSelectedCol == 0)
-                { // Go
-                    int targetPage = strlen(m_pageJumpInput) > 0 ? std::atoi(m_pageJumpInput) : 0;
-                    if (targetPage >= 1 && targetPage <= m_pageCount && m_pageJumpCallback)
-                    {
-                        m_pageJumpCallback(targetPage - 1);
-                        hideNumberPad();
-                    }
-                }
-                else
-                { // Cancel
-                    hideNumberPad();
-                }
-            }
-            else
-            {
-                // Number grid
-                const char* numberGrid[4][3] = {
-                    {"7", "8", "9"},
-                    {"4", "5", "6"},
-                    {"1", "2", "3"},
-                    {"Clear", "0", "Back"}};
-
-                const char* buttonText = numberGrid[m_numberPadSelectedRow][m_numberPadSelectedCol];
-
-                if (strcmp(buttonText, "Clear") == 0)
-                {
-                    strcpy(m_pageJumpInput, "");
-                }
-                else if (strcmp(buttonText, "Back") == 0)
-                {
-                    int len = strlen(m_pageJumpInput);
-                    if (len > 0)
-                    {
-                        m_pageJumpInput[len - 1] = '\0';
-                    }
-                }
-                else
-                {
-                    int len = strlen(m_pageJumpInput);
-                    if (len < (int) sizeof(m_pageJumpInput) - 1)
-                    {
-                        m_pageJumpInput[len] = buttonText[0];
-                        m_pageJumpInput[len + 1] = '\0';
-                    }
-                }
-            }
+            activateSelection();
             return true;
-        }
         case kCancelButton:
             hideNumberPad();
             return true;
         case SDL_CONTROLLER_BUTTON_START:
             // Go to page if valid
             {
-                int targetPage = strlen(m_pageJumpInput) > 0 ? std::atoi(m_pageJumpInput) : 0;
-                if (targetPage >= 1 && targetPage <= m_pageCount && m_pageJumpCallback)
-                {
-                    m_pageJumpCallback(targetPage - 1);
-                    hideNumberPad();
-                }
+                applyGoAction();
                 return true;
             }
+        default:
+            break;
+        }
+    }
+
+    if (event.type == SDL_KEYDOWN)
+    {
+        Uint32 currentTime = SDL_GetTicks();
+        if (currentTime - m_lastButtonPressTime < BUTTON_DEBOUNCE_MS)
+        {
+            return true;
+        }
+        m_lastButtonPressTime = currentTime;
+
+        switch (event.key.keysym.sym)
+        {
+        case SDLK_UP:
+            m_numberPadSelectedRow = (m_numberPadSelectedRow - 1 + 5) % 5;
+            normalizeSelection();
+            return true;
+        case SDLK_DOWN:
+            m_numberPadSelectedRow = (m_numberPadSelectedRow + 1) % 5;
+            normalizeSelection();
+            return true;
+        case SDLK_LEFT:
+            if (m_numberPadSelectedRow == 4)
+            {
+                m_numberPadSelectedCol = (m_numberPadSelectedCol - 1 + 2) % 2;
+            }
+            else
+            {
+                m_numberPadSelectedCol = (m_numberPadSelectedCol - 1 + 3) % 3;
+            }
+            return true;
+        case SDLK_RIGHT:
+            if (m_numberPadSelectedRow == 4)
+            {
+                m_numberPadSelectedCol = (m_numberPadSelectedCol + 1) % 2;
+            }
+            else
+            {
+                m_numberPadSelectedCol = (m_numberPadSelectedCol + 1) % 3;
+            }
+            return true;
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER:
+        case SDLK_SPACE:
+            activateSelection();
+            return true;
+        case SDLK_ESCAPE:
+        case SDLK_q:
+            hideNumberPad();
+            return true;
         default:
             break;
         }
@@ -2045,17 +2118,18 @@ bool GuiManager::handleKeyboardNavigation(const SDL_Event& event)
             activateFocusedWidget();
             return true;
         case SDLK_ESCAPE:
-            // Handle escape to close menu (same as controller B button behavior)
+        case SDLK_q:
+            // Handle escape/quit to close the active UI window
             nk_input_key(m_ctx, NK_KEY_TEXT_END, 1);
             nk_input_key(m_ctx, NK_KEY_TEXT_END, 0);
 
-            if (m_showFontMenu)
-            {
-                closeFontMenu();
-            }
-            else if (m_showNumberPad)
+            if (m_showNumberPad)
             {
                 hideNumberPad();
+            }
+            else if (m_showFontMenu)
+            {
+                closeFontMenu();
             }
             return true;
         default:
@@ -2596,6 +2670,21 @@ void GuiManager::closeFontMenu()
 void GuiManager::closeNumberPad()
 {
     hideNumberPad();
+}
+
+bool GuiManager::closeTopUIWindow()
+{
+    if (m_showNumberPad)
+    {
+        hideNumberPad();
+        return true;
+    }
+    if (m_showFontMenu)
+    {
+        closeFontMenu();
+        return true;
+    }
+    return false;
 }
 
 bool GuiManager::closeAllUIWindows()

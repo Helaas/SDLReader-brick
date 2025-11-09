@@ -430,19 +430,13 @@ void App::handleEvent(const SDL_Event& event)
         return;
     }
 
-    auto closeVisibleMenus = [this]()
+    auto closeVisibleMenus = [this]() -> bool
     {
         if (m_guiManager)
         {
-            if (m_guiManager->isFontMenuVisible())
-            {
-                m_guiManager->closeFontMenu();
-            }
-            if (m_guiManager->isNumberPadVisible())
-            {
-                m_guiManager->hideNumberPad();
-            }
+            return m_guiManager->closeTopUIWindow();
         }
+        return false;
     };
 
     // Block most input while menu overlays are visible, but allow key system controls
@@ -453,14 +447,26 @@ void App::handleEvent(const SDL_Event& event)
             switch (event.key.keysym.sym)
             {
             case SDLK_ESCAPE:
-                closeVisibleMenus();
-                markDirty();
-                return;
+            {
+                bool closed = closeVisibleMenus();
+                if (closed)
+                {
+                    markDirty();
+                    return;
+                }
+                break;
+            }
             case SDLK_q:
-                closeVisibleMenus();
-                markDirty();
+            {
+                bool closed = closeVisibleMenus();
+                if (closed)
+                {
+                    markDirty();
+                    return;
+                }
                 m_running = false;
                 return;
+            }
             case SDLK_m:
                 m_guiManager->toggleFontMenu();
                 markDirty();
@@ -471,7 +477,12 @@ void App::handleEvent(const SDL_Event& event)
         }
         else if (event.type == SDL_QUIT)
         {
-            closeVisibleMenus();
+            bool closed = closeVisibleMenus();
+            if (closed)
+            {
+                markDirty();
+                return;
+            }
             m_running = false;
             return;
         }
@@ -489,9 +500,15 @@ void App::handleEvent(const SDL_Event& event)
             }
             if (actionData.action == InputAction::Quit)
             {
-                closeVisibleMenus();
-                markDirty();
-                m_running = false;
+                bool closed = closeVisibleMenus();
+                if (closed)
+                {
+                    markDirty();
+                }
+                else
+                {
+                    m_running = false;
+                }
                 return;
             }
             return;

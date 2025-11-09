@@ -70,6 +70,7 @@ public:
 
     void closeFontMenu();
     void closeNumberPad();
+    bool closeTopUIWindow();
     bool closeAllUIWindows();
 
     void setButtonMapper(const ButtonMapper* mapper)
