@@ -531,9 +531,9 @@ void GuiManager::renderFontMenu()
 
         // Controller hints at the top of the window for quick reference
         nk_layout_row_dynamic(m_ctx, 20, 1);
-        nk_label_colored(m_ctx, "Controller: D-Pad=Navigate, A=Select, B=Close/Unfocus, Y=Apply, X=Reset", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+        nk_label_colored(m_ctx, "Controls: D-Pad=Navigate, A=Select, B=Close", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
         nk_layout_row_dynamic(m_ctx, 20, 1);
-        nk_label_colored(m_ctx, "L/R Shoulder=Tab Between Fields, Start=NumberPad", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+        nk_label_colored(m_ctx, "              Y=Apply, X=Reset, Menu=Cancel", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
         nk_layout_row_dynamic(m_ctx, 10, 1);
 
         // Store original styles for highlighting focused widgets
@@ -1055,7 +1055,9 @@ void GuiManager::renderFontMenu()
         rememberWidgetBounds(WIDGET_MINIMAP_INFO_BUTTON);
         if (m_mainScreenFocusIndex == WIDGET_MINIMAP_INFO_BUTTON || minimapInfoHovered)
         {
-            showInfoTooltip(WIDGET_MINIMAP_INFO_BUTTON, "Show a miniature page overlay when zoomed in to visualize which part is visible.");
+            showInfoTooltip(WIDGET_MINIMAP_INFO_BUTTON,
+                            "Show a miniature page overlay when zoomed in\n"
+                            "to visualize which part is visible.");
         }
         m_ctx->style.button = infoButtonStyle;
 
@@ -1451,7 +1453,6 @@ void GuiManager::renderNumberPad()
             nk_layout_row_dynamic(m_ctx, 20, 1);
             nk_label_colored(m_ctx, "Invalid page number", NK_TEXT_CENTERED, nk_rgb(255, 100, 100));
         }
-
     }
     nk_end(m_ctx);
 }
