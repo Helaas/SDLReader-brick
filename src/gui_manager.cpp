@@ -26,12 +26,10 @@
 static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_B;
 static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_A;
 static constexpr SDL_GameControllerButton kApplySettingsButton = SDL_CONTROLLER_BUTTON_X; // Physical Y
-static constexpr SDL_GameControllerButton kResetSettingsButton = SDL_CONTROLLER_BUTTON_Y; // Physical X
 #else
 static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_A;
 static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_B;
 static constexpr SDL_GameControllerButton kApplySettingsButton = SDL_CONTROLLER_BUTTON_Y;
-static constexpr SDL_GameControllerButton kResetSettingsButton = SDL_CONTROLLER_BUTTON_X;
 #endif
 
 namespace
@@ -533,7 +531,7 @@ void GuiManager::renderFontMenu()
         nk_layout_row_dynamic(m_ctx, 20, 1);
         nk_label_colored(m_ctx, "Controls: D-Pad=Navigate, A=Select, B=Close", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
         nk_layout_row_dynamic(m_ctx, 20, 1);
-        nk_label_colored(m_ctx, "              Y=Apply, X=Reset, Menu=Cancel", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+        nk_label_colored(m_ctx, "Y=Apply, Menu=Cancel", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
         nk_layout_row_dynamic(m_ctx, 10, 1);
 
         // Store original styles for highlighting focused widgets
@@ -2062,10 +2060,11 @@ bool GuiManager::handleKeyboardNavigation(const SDL_Event& event)
         switch (event.key.keysym.sym)
         {
         case SDLK_UP:
-            // Navigate up - move to previous widget (same as numpad logic)
+            // Navigate up - wrap from top to bottom
             if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
             {
-                scrollSettingsToTop();
+                m_mainScreenFocusIndex = WIDGET_APPLY_BUTTON;
+                requestFocusScroll();
             }
             else if (!stepFocusVertical(-1))
             {
@@ -2482,7 +2481,8 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
             case SDL_CONTROLLER_BUTTON_DPAD_UP:
                 if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
                 {
-                    scrollSettingsToTop();
+                    m_mainScreenFocusIndex = WIDGET_APPLY_BUTTON;
+                    requestFocusScroll();
                 }
                 else if (!stepFocusVertical(-1))
                 {
@@ -2550,20 +2550,6 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
                     // Call callback to apply changes
                     m_fontApplyCallback(m_currentConfig);
                 }
-                return true;
-            }
-            return false;
-        case kResetSettingsButton:
-            // Reset to defaults (X on desktop, swapped with Y on TG5040)
-            if (m_showFontMenu)
-            {
-                m_tempConfig = FontConfig();
-                m_selectedFontIndex = 0;
-
-                // Reset input fields to defaults
-                strcpy(m_fontSizeInput, "12");
-                strcpy(m_zoomStepInput, "10");
-                strcpy(m_pageJumpInput, "1");
                 return true;
             }
             return false;
