@@ -384,6 +384,46 @@ void GuiManager::render()
         return;
     }
 
+    // Handle continuous navigation when keys/buttons are held
+    if (m_showFontMenu && (m_upHeld || m_downHeld))
+    {
+        Uint32 currentTime = SDL_GetTicks();
+        const Uint32 elapsed = (m_lastNavigationTime <= currentTime) ? (currentTime - m_lastNavigationTime) : 0;
+        const Uint32 targetDelay = m_waitingForInitialNavigationRepeat ? NAV_INITIAL_DELAY_MS : NAV_REPEAT_DELAY_MS;
+
+        if (m_lastNavigationTime == 0 || elapsed >= targetDelay)
+        {
+            if (m_upHeld)
+            {
+                if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
+                {
+                    m_mainScreenFocusIndex = WIDGET_RESET_BUTTON;
+                }
+                else
+                {
+                    stepFocusVertical(-1);
+                }
+                requestFocusScroll();
+            }
+            else if (m_downHeld)
+            {
+                if (m_mainScreenFocusIndex == WIDGET_RESET_BUTTON)
+                {
+                    m_mainScreenFocusIndex = WIDGET_FONT_DROPDOWN;
+                    scrollSettingsToTop();
+                }
+                else
+                {
+                    stepFocusVertical(1);
+                }
+                requestFocusScroll();
+            }
+
+            m_lastNavigationTime = currentTime;
+            m_waitingForInitialNavigationRepeat = false;
+        }
+    }
+
     // End input processing before rendering
     endFrame();
 
@@ -2070,6 +2110,12 @@ bool GuiManager::handleKeyboardNavigation(const SDL_Event& event)
             {
                 scrollSettingsToTop();
             }
+            if (!m_upHeld)
+            {
+                m_upHeld = true;
+                m_lastNavigationTime = SDL_GetTicks();
+                m_waitingForInitialNavigationRepeat = true;
+            }
             return true;
         case SDLK_DOWN:
             // Navigate down - move to next widget (same as numpad logic)
@@ -2082,6 +2128,12 @@ bool GuiManager::handleKeyboardNavigation(const SDL_Event& event)
             else
             {
                 stepFocusVertical(1);
+            }
+            if (!m_downHeld)
+            {
+                m_downHeld = true;
+                m_lastNavigationTime = SDL_GetTicks();
+                m_waitingForInitialNavigationRepeat = true;
             }
             return true;
         case SDLK_LEFT:
@@ -2131,6 +2183,26 @@ bool GuiManager::handleKeyboardNavigation(const SDL_Event& event)
             {
                 closeFontMenu();
             }
+            return true;
+        default:
+            break;
+        }
+    }
+
+    // Handle key release events for hold state
+    if (event.type == SDL_KEYUP)
+    {
+        switch (event.key.keysym.sym)
+        {
+        case SDLK_UP:
+            m_upHeld = false;
+            m_lastNavigationTime = 0;
+            m_waitingForInitialNavigationRepeat = false;
+            return true;
+        case SDLK_DOWN:
+            m_downHeld = false;
+            m_lastNavigationTime = 0;
+            m_waitingForInitialNavigationRepeat = false;
             return true;
         default:
             break;
@@ -2488,6 +2560,12 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
                 {
                     scrollSettingsToTop();
                 }
+                if (!m_upHeld)
+                {
+                    m_upHeld = true;
+                    m_lastNavigationTime = SDL_GetTicks();
+                    m_waitingForInitialNavigationRepeat = true;
+                }
                 return true;
             case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
                 if (m_mainScreenFocusIndex == WIDGET_RESET_BUTTON)
@@ -2499,6 +2577,12 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
                 else
                 {
                     stepFocusVertical(1);
+                }
+                if (!m_downHeld)
+                {
+                    m_downHeld = true;
+                    m_lastNavigationTime = SDL_GetTicks();
+                    m_waitingForInitialNavigationRepeat = true;
                 }
                 return true;
             case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
@@ -2585,9 +2669,15 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
         {
         case SDL_CONTROLLER_BUTTON_DPAD_UP:
             nk_input_key(m_ctx, NK_KEY_UP, 0);
+            m_upHeld = false;
+            m_lastNavigationTime = 0;
+            m_waitingForInitialNavigationRepeat = false;
             return true;
         case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
             nk_input_key(m_ctx, NK_KEY_DOWN, 0);
+            m_downHeld = false;
+            m_lastNavigationTime = 0;
+            m_waitingForInitialNavigationRepeat = false;
             return true;
         case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
             nk_input_key(m_ctx, NK_KEY_LEFT, 0);
