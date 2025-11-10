@@ -1035,7 +1035,8 @@ void GuiManager::renderFontMenu()
         m_ctx->style.checkbox = originalToggleStyle;
 
         // Info button for edge progress description - render as text glyph with no button chrome
-        auto configureInfoGlyphStyle = [&](struct nk_style_button& style, bool focused) {
+        auto configureInfoGlyphStyle = [&](struct nk_style_button& style, bool focused)
+        {
             style.normal = nk_style_item_color(nk_rgba(0, 0, 0, 0));
             style.hover = style.normal;
             style.active = style.normal;
@@ -1335,9 +1336,9 @@ void GuiManager::renderNumberPad()
 
         // Control hints at the top of the number pad
         nk_layout_row_dynamic(m_ctx, 18, 1);
-        nk_label_colored(m_ctx, "D-Pad/Arrow Keys=Navigate, A/Enter=Select", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+        nk_label_colored(m_ctx, "D-Pad=Navigate, A=Select", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
         nk_layout_row_dynamic(m_ctx, 18, 1);
-        nk_label_colored(m_ctx, "B/Esc/Q=Cancel, Start=Go", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+        nk_label_colored(m_ctx, "B/Quit=Cancel, Menu=Go", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
         nk_layout_row_dynamic(m_ctx, 6, 1);
 
         // Separator line
