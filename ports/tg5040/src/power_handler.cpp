@@ -390,19 +390,32 @@ bool PowerHandler::requestSleep()
 
 void PowerHandler::requestShutdown()
 {
+    //  Manual shutdown sequence (NextUI-style)
     std::cout << "Attempting to shutdown device..." << std::endl;
 
-    // Method 1: NextUI-style shutdown script
-    if (access("/mnt/SDCARD/System/bin/shutdown", X_OK) == 0)
+    // Display shutdown message on GUI
+    if (m_errorCallback)
     {
-        std::cout << "Using NextUI shutdown script" << std::endl;
-        system("/mnt/SDCARD/System/bin/shutdown");
-        return;
+        m_errorCallback("Shutting down...");
     }
 
-    // Method 2: Standard poweroff command
-    std::cout << "Using poweroff command" << std::endl;
-    system("poweroff");
+    // Give the GUI time to render the shutdown message
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    // Clean up temporary files and sync
+    system("rm -f /tmp/nextui_exec && sync");
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    // Signal poweroff
+    system("touch /tmp/poweroff");
+    sync();
+
+    // Keep the message on screen for a moment
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    // Kill the application
+    std::cout << "Exiting application..." << std::endl;
+    std::exit(0);
 }
 
 bool PowerHandler::reopenDevice()
