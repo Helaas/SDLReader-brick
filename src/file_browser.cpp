@@ -1912,6 +1912,7 @@ void FileBrowser::setupNuklearStyle()
     style->window.border_color = nk_rgb(70, 70, 80);
     style->window.border = 1.0f;
     style->window.background = nk_rgba(26, 26, 30, 240);
+    style->window.scrollbar_size = nk_vec2(18.0f, 18.0f);
 
     style->text.color = nk_rgb(235, 235, 235);
 
@@ -1923,12 +1924,19 @@ void FileBrowser::setupNuklearStyle()
     style->button.text_hover = nk_rgb(255, 255, 255);
     style->button.text_active = nk_rgb(255, 255, 255);
 
-    style->scrollv.normal = nk_style_item_color(nk_rgba(60, 60, 70, 200));
-    style->scrollv.hover = nk_style_item_color(nk_rgba(70, 70, 80, 220));
-    style->scrollv.active = nk_style_item_color(nk_rgba(80, 80, 90, 255));
-    style->scrollv.cursor_normal = nk_style_item_color(nk_rgba(100, 100, 110, 220));
-    style->scrollv.cursor_hover = nk_style_item_color(nk_rgba(110, 110, 120, 230));
-    style->scrollv.cursor_active = nk_style_item_color(nk_rgba(120, 120, 130, 255));
+    style->scrollv.normal = nk_style_item_color(nk_rgba(80, 86, 104, 235));
+    style->scrollv.hover = nk_style_item_color(nk_rgba(94, 102, 123, 245));
+    style->scrollv.active = nk_style_item_color(nk_rgba(110, 120, 142, 255));
+    style->scrollv.border = 1.0f;
+    style->scrollv.rounding = 4.0f;
+    style->scrollv.border_color = nk_rgba(15, 15, 18, 255);
+    style->scrollv.cursor_normal = nk_style_item_color(nk_rgba(196, 208, 230, 255));
+    style->scrollv.cursor_hover = nk_style_item_color(nk_rgba(214, 224, 242, 255));
+    style->scrollv.cursor_active = nk_style_item_color(nk_rgba(228, 236, 251, 255));
+    style->scrollv.border_cursor = 1.0f;
+    style->scrollv.rounding_cursor = 4.0f;
+    style->scrollv.cursor_border_color = nk_rgba(10, 10, 12, 255);
+    style->scrollv.padding = nk_vec2(2.0f, 2.0f);
 
     style->scrollh = style->scrollv;
 }

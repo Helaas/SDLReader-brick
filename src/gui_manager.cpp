@@ -797,7 +797,7 @@ void GuiManager::renderFontMenu()
 
         // Informational notice
         nk_layout_row_dynamic(m_ctx, 35, 1);
-        nk_label_colored_wrap(m_ctx, "Choose a color theme for comfortable reading. Applies to EPUB/MOBI only.", nk_rgb(102, 178, 255));
+        nk_label_colored_wrap(m_ctx, "Select theme for comfortable reading. Applies to EPUB/MOBI only.", nk_rgb(102, 178, 255));
 
         nk_layout_row_dynamic(m_ctx, 20, 1);
         nk_label(m_ctx, "Color Theme:", NK_TEXT_LEFT);
@@ -1966,10 +1966,10 @@ void GuiManager::setupColorScheme()
     table[NK_COLOR_CHART] = nk_rgba(60, 60, 65, 246);
     table[NK_COLOR_CHART_COLOR] = nk_rgb(0, 122, 255);
     table[NK_COLOR_CHART_COLOR_HIGHLIGHT] = nk_rgb(30, 142, 255);
-    table[NK_COLOR_SCROLLBAR] = nk_rgba(50, 50, 55, 240);
-    table[NK_COLOR_SCROLLBAR_CURSOR] = nk_rgba(70, 70, 75, 246);
-    table[NK_COLOR_SCROLLBAR_CURSOR_HOVER] = nk_rgba(80, 80, 85, 252);
-    table[NK_COLOR_SCROLLBAR_CURSOR_ACTIVE] = nk_rgba(60, 60, 65, 252);
+    table[NK_COLOR_SCROLLBAR] = nk_rgba(80, 86, 104, 235);
+    table[NK_COLOR_SCROLLBAR_CURSOR] = nk_rgba(196, 208, 230, 255);
+    table[NK_COLOR_SCROLLBAR_CURSOR_HOVER] = nk_rgba(214, 224, 242, 255);
+    table[NK_COLOR_SCROLLBAR_CURSOR_ACTIVE] = nk_rgba(228, 236, 251, 255);
     table[NK_COLOR_TAB_HEADER] = nk_rgba(50, 50, 55, 252);
 
     nk_style_from_table(m_ctx, table);
@@ -1994,6 +1994,24 @@ void GuiManager::setupColorScheme()
     m_ctx->style.combo.rounding = 3.0f;
     m_ctx->style.combo.border = 1.0f;
     m_ctx->style.combo.border_color = nk_rgb(80, 80, 85);
+
+    // Scrollbar styling consistent with file browser theme
+    m_ctx->style.window.scrollbar_size = nk_vec2(18.0f, 18.0f);
+    struct nk_style_scrollbar* scrollStyle = &m_ctx->style.scrollv;
+    scrollStyle->normal = nk_style_item_color(nk_rgba(80, 86, 104, 235));
+    scrollStyle->hover = nk_style_item_color(nk_rgba(94, 102, 123, 245));
+    scrollStyle->active = nk_style_item_color(nk_rgba(110, 120, 142, 255));
+    scrollStyle->border = 1.0f;
+    scrollStyle->rounding = 4.0f;
+    scrollStyle->border_color = nk_rgba(15, 15, 18, 255);
+    scrollStyle->cursor_normal = nk_style_item_color(nk_rgba(196, 208, 230, 255));
+    scrollStyle->cursor_hover = nk_style_item_color(nk_rgba(214, 224, 242, 255));
+    scrollStyle->cursor_active = nk_style_item_color(nk_rgba(228, 236, 251, 255));
+    scrollStyle->border_cursor = 1.0f;
+    scrollStyle->rounding_cursor = 4.0f;
+    scrollStyle->cursor_border_color = nk_rgba(10, 10, 12, 255);
+    scrollStyle->padding = nk_vec2(2.0f, 2.0f);
+    m_ctx->style.scrollh = *scrollStyle;
 }
 
 bool GuiManager::handleKeyboardNavigation(const SDL_Event& event)
