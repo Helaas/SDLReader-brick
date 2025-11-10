@@ -1516,7 +1516,7 @@ void FileBrowser::render()
         const float contentHeight = std::max(60.0f, windowHeightF - reservedHeight);
 
         nk_layout_row_dynamic(m_ctx, helpTextHeight, 1);
-        nk_label_colored(m_ctx, "D-Pad: Nav. | A: Select | B: Back | X: Toggle View | Menu: Quit",
+        nk_label_colored(m_ctx, "D-Pad: Navigate | A: Select | B: Back | X: Toggle View | Menu: Quit",
                          NK_TEXT_LEFT, nk_rgb(180, 180, 180));
 
         if (m_thumbnailView)

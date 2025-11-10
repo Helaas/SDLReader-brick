@@ -569,9 +569,7 @@ void GuiManager::renderFontMenu()
 
         // Controller hints at the top of the window for quick reference
         nk_layout_row_dynamic(m_ctx, 20, 1);
-        nk_label_colored(m_ctx, "Controls: D-Pad=Navigate, A=Select, B=Close", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
-        nk_layout_row_dynamic(m_ctx, 20, 1);
-        nk_label_colored(m_ctx, "Y=Apply, Menu=Cancel", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+        nk_label_colored(m_ctx, "D-Pad: Navigate | A: Select | B: Close | Y: Apply | Menu: Cancel", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
         nk_layout_row_dynamic(m_ctx, 10, 1);
 
         // Store original styles for highlighting focused widgets
@@ -584,6 +582,8 @@ void GuiManager::renderFontMenu()
         // === FONT SETTINGS SECTION ===
         nk_layout_row_dynamic(m_ctx, 25, 1);
         nk_label(m_ctx, "Font Settings", NK_TEXT_LEFT);
+        nk_layout_row_dynamic(m_ctx, 35, 1);
+        nk_label_colored_wrap(m_ctx, "Font controls for EPUB/MOBI. Other formats use embedded fonts.", nk_rgb(102, 178, 255));
 
         // Separator line
         nk_layout_row_dynamic(m_ctx, 1, 1);
@@ -1331,15 +1331,14 @@ void GuiManager::renderNumberPad()
     if (nk_begin(m_ctx, "Number Pad", nk_rect(centerX - windowW / 2, centerY - windowH / 2, windowW, windowH),
                  NK_WINDOW_BORDER | NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR))
     {
+        nk_layout_row_dynamic(m_ctx, 18, 1);
+        nk_label_colored(m_ctx, "D-Pad: Navigate | A: Select", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+        nk_layout_row_dynamic(m_ctx, 18, 1);
+        nk_label_colored(m_ctx, "B: Quit | Menu: Go", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+        nk_layout_row_dynamic(m_ctx, 6, 1);
+
         nk_layout_row_dynamic(m_ctx, 20, 1);
         nk_label(m_ctx, "Enter Page Number:", NK_TEXT_CENTERED);
-
-        // Control hints at the top of the number pad
-        nk_layout_row_dynamic(m_ctx, 18, 1);
-        nk_label_colored(m_ctx, "D-Pad=Navigate, A=Select", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
-        nk_layout_row_dynamic(m_ctx, 18, 1);
-        nk_label_colored(m_ctx, "B/Quit=Cancel, Menu=Go", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
-        nk_layout_row_dynamic(m_ctx, 6, 1);
 
         // Separator line
         nk_layout_row_dynamic(m_ctx, 1, 1);
