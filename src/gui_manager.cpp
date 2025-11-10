@@ -1034,22 +1034,33 @@ void GuiManager::renderFontMenu()
         // Restore checkbox style
         m_ctx->style.checkbox = originalToggleStyle;
 
-        // Info button for edge progress description
-        struct nk_style_button infoButtonStyle = m_ctx->style.button;
-        if (m_mainScreenFocusIndex == WIDGET_EDGE_PROGRESS_INFO_BUTTON)
-        {
-            m_ctx->style.button.normal = nk_style_item_color(nk_rgb(70, 70, 75));
-            m_ctx->style.button.hover = nk_style_item_color(nk_rgb(90, 90, 95));
-            m_ctx->style.button.active = nk_style_item_color(nk_rgb(60, 60, 70));
-        }
-        nk_button_label(m_ctx, "(?)");
+        // Info button for edge progress description - render as text glyph with no button chrome
+        auto configureInfoGlyphStyle = [&](struct nk_style_button& style, bool focused) {
+            style.normal = nk_style_item_color(nk_rgba(0, 0, 0, 0));
+            style.hover = style.normal;
+            style.active = style.normal;
+            style.border = 0.0f;
+            style.rounding = 0.0f;
+            style.padding = nk_vec2(0.0f, 0.0f);
+            style.text_normal = nk_rgba(180, 200, 255, 255);
+            style.text_hover = nk_rgba(210, 225, 255, 255);
+            style.text_active = nk_rgba(235, 240, 255, 255);
+            if (focused)
+            {
+                style.text_normal = nk_rgb(0, 220, 255);
+                style.text_hover = nk_rgb(0, 235, 255);
+                style.text_active = nk_rgb(0, 250, 255);
+            }
+        };
+        struct nk_style_button edgeInfoStyle = m_ctx->style.button;
+        configureInfoGlyphStyle(edgeInfoStyle, m_mainScreenFocusIndex == WIDGET_EDGE_PROGRESS_INFO_BUTTON);
+        nk_button_label_styled(m_ctx, &edgeInfoStyle, "(?)");
         bool edgeInfoHovered = nk_widget_is_hovered(m_ctx);
         rememberWidgetBounds(WIDGET_EDGE_PROGRESS_INFO_BUTTON);
         if (m_mainScreenFocusIndex == WIDGET_EDGE_PROGRESS_INFO_BUTTON || edgeInfoHovered)
         {
             showInfoTooltip(WIDGET_EDGE_PROGRESS_INFO_BUTTON, "When enabled, panning at page edges changes pages instantly.\nWhen disabled, hold at the edge for 300ms.");
         }
-        m_ctx->style.button = infoButtonStyle;
 
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
@@ -1080,15 +1091,10 @@ void GuiManager::renderFontMenu()
         // Restore checkbox style
         m_ctx->style.checkbox = originalToggleStyle;
 
-        // Info button for minimap description
-        infoButtonStyle = m_ctx->style.button;
-        if (m_mainScreenFocusIndex == WIDGET_MINIMAP_INFO_BUTTON)
-        {
-            m_ctx->style.button.normal = nk_style_item_color(nk_rgb(70, 70, 75));
-            m_ctx->style.button.hover = nk_style_item_color(nk_rgb(90, 90, 95));
-            m_ctx->style.button.active = nk_style_item_color(nk_rgb(60, 60, 70));
-        }
-        nk_button_label(m_ctx, "(?)");
+        // Info button for minimap description uses same glyph styling
+        struct nk_style_button minimapInfoStyle = m_ctx->style.button;
+        configureInfoGlyphStyle(minimapInfoStyle, m_mainScreenFocusIndex == WIDGET_MINIMAP_INFO_BUTTON);
+        nk_button_label_styled(m_ctx, &minimapInfoStyle, "(?)");
         bool minimapInfoHovered = nk_widget_is_hovered(m_ctx);
         rememberWidgetBounds(WIDGET_MINIMAP_INFO_BUTTON);
         if (m_mainScreenFocusIndex == WIDGET_MINIMAP_INFO_BUTTON || minimapInfoHovered)
@@ -1097,7 +1103,6 @@ void GuiManager::renderFontMenu()
                             "Show a miniature page overlay when zoomed in\n"
                             "to visualize which part is visible.");
         }
-        m_ctx->style.button = infoButtonStyle;
 
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
