@@ -46,13 +46,17 @@ private:
 
     static constexpr int POWER_KEY_CODE = 116;
     static constexpr const char* DEVICE_PATH = "/dev/input/event1";
+    static constexpr const char* PLATFORM_SUSPEND_PATH_PRIMARY = "/mnt/SDCARD/SYSTEM/bin/suspend";
+    static constexpr const char* PLATFORM_SUSPEND_PATH_SECONDARY = "/mnt/SDCARD/System/bin/suspend";
     static constexpr auto SHORT_PRESS_MAX = std::chrono::milliseconds(2000);
+    static constexpr auto POST_RESUME_IGNORE_DURATION = std::chrono::milliseconds(500);
 
     std::thread m_thread;
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_in_fake_sleep{false};
     int m_device_fd{-1};
     std::chrono::steady_clock::time_point m_fake_sleep_start_time;
+    std::chrono::steady_clock::time_point m_resume_ignore_until;
     ErrorCallback m_errorCallback;
     SleepModeCallback m_sleepModeCallback;
     PreSleepCallback m_preSleepCallback;
