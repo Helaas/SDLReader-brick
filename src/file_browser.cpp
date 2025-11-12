@@ -430,12 +430,8 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
                                      { pushPowerMessageEvent(message); });
 
     // Register sleep mode callback for fake sleep functionality
-        m_powerHandler->setSleepModeCallback([this](bool enterFakeSleep)
-                                             {
-        m_inFakeSleep = enterFakeSleep;
-        if (enterFakeSleep) {
-        } else {
-        } });
+    m_powerHandler->setSleepModeCallback([this](bool enterFakeSleep)
+                                         { m_inFakeSleep = enterFakeSleep; });
 
     // Register pre-sleep callback - file browser has no UI windows to close
     m_powerHandler->setPreSleepCallback([this]() -> bool
