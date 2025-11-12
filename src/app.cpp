@@ -7,6 +7,7 @@
 #include "text_renderer.h"
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
+#include "power_events.h"
 #endif
 
 #include <algorithm>
@@ -29,9 +30,23 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     // Initialize power handler
     m_powerHandler = std::make_unique<PowerHandler>();
 
+    m_powerMessageEventType = getPowerMessageEventType();
+
     // Register error callback for displaying GUI messages
     m_powerHandler->setErrorCallback([this](const std::string& message)
-                                     { showErrorMessage(message); });
+                                     {
+        SDL_Event event;
+        SDL_zero(event);
+        event.type = m_powerMessageEventType;
+        event.user.code = 0;
+        event.user.data1 = new std::string(message);
+        event.user.data2 = nullptr;
+        if (SDL_PushEvent(&event) < 0)
+        {
+            delete static_cast<std::string*>(event.user.data1);
+            std::cerr << "App: Failed to push power message event: " << SDL_GetError() << std::endl;
+        }
+    });
 
     // Register sleep mode callback for fake sleep functionality
     m_powerHandler->setSleepModeCallback([this](bool enterFakeSleep)
@@ -289,6 +304,13 @@ void App::run()
 
         while (SDL_PollEvent(&event) != 0)
         {
+#ifdef TG5040_PLATFORM
+            if (m_powerMessageEventType != 0 && event.type == m_powerMessageEventType)
+            {
+                handlePowerMessageEvent(event);
+                continue;
+            }
+#endif
             // In fake sleep mode, ignore all SDL events (power button is handled by PowerHandler)
             if (!m_inFakeSleep)
             {
@@ -413,6 +435,24 @@ void App::run()
         }
     }
 }
+
+#ifdef TG5040_PLATFORM
+void App::handlePowerMessageEvent(const SDL_Event& event)
+{
+    std::unique_ptr<std::string> message(static_cast<std::string*>(event.user.data1));
+    if (!message)
+    {
+        return;
+    }
+
+    if (m_guiManager && m_guiManager->closeAllUIWindows())
+    {
+        markDirty();
+    }
+
+    showErrorMessage(*message);
+}
+#endif
 
 void App::handleEvent(const SDL_Event& event)
 {

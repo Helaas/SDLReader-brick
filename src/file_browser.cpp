@@ -29,6 +29,7 @@
 #include "demo/sdl_renderer/nuklear_sdl_renderer.h"
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
+#include "power_events.h"
 #endif
 
 #include <algorithm>
@@ -408,9 +409,29 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
     // Initialize power handler
     m_powerHandler = std::make_unique<PowerHandler>();
 
+    m_powerMessageEventType = getPowerMessageEventType();
+    auto pushPowerMessageEvent = [this](const std::string& message)
+    {
+        SDL_Event event;
+        SDL_zero(event);
+        event.type = m_powerMessageEventType;
+        event.user.code = 0;
+        event.user.data1 = new std::string(message);
+        event.user.data2 = nullptr;
+        if (SDL_PushEvent(&event) < 0)
+        {
+            delete static_cast<std::string*>(event.user.data1);
+            std::cerr << "FileBrowser: Failed to push power message event: " << SDL_GetError() << std::endl;
+        }
+    };
+
+    // Display shutdown and power-related messages in the browser UI
+    m_powerHandler->setErrorCallback([pushPowerMessageEvent](const std::string& message)
+                                     { pushPowerMessageEvent(message); });
+
     // Register sleep mode callback for fake sleep functionality
-    m_powerHandler->setSleepModeCallback([this](bool enterFakeSleep)
-                                         {
+        m_powerHandler->setSleepModeCallback([this](bool enterFakeSleep)
+                                             {
         m_inFakeSleep = enterFakeSleep;
         if (enterFakeSleep) {
         } else {
@@ -1367,6 +1388,15 @@ std::string FileBrowser::run()
         while (SDL_PollEvent(&event))
         {
 #ifdef TG5040_PLATFORM
+            if (m_powerMessageEventType != 0 && event.type == m_powerMessageEventType)
+            {
+                std::unique_ptr<std::string> message(static_cast<std::string*>(event.user.data1));
+                if (message)
+                {
+                    showPowerMessage(*message);
+                }
+                continue;
+            }
             // In fake sleep mode, ignore all SDL events (power button is handled by PowerHandler)
             if (!m_inFakeSleep)
             {
@@ -1467,6 +1497,12 @@ std::string FileBrowser::run()
     while (SDL_PollEvent(&event))
     {
         flushedEvents++;
+        if (m_powerMessageEventType != 0 && event.type == m_powerMessageEventType)
+        {
+            delete static_cast<std::string*>(event.user.data1);
+            continue;
+        }
+
         if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP)
         {
             std::cout << "Flushed controller event: type=" << event.type
@@ -1556,6 +1592,10 @@ void FileBrowser::render()
         {
             nk_style_pop_vec2(m_ctx);
         }
+
+#ifdef TG5040_PLATFORM
+        renderPowerMessageOverlay(windowWidthF, windowHeightF);
+#endif
     }
     nk_end(m_ctx);
 
@@ -1575,6 +1615,64 @@ void FileBrowser::renderThumbnailView(int windowWidth, int windowHeight)
     (void) windowWidth;
     (void) windowHeight;
 }
+
+#ifdef TG5040_PLATFORM
+void FileBrowser::showPowerMessage(const std::string& message)
+{
+    m_powerMessage = message;
+    m_powerMessageStart = SDL_GetTicks();
+}
+
+void FileBrowser::renderPowerMessageOverlay(float windowWidth, float windowHeight)
+{
+    if (!m_ctx)
+    {
+        return;
+    }
+
+    if (m_powerMessage.empty())
+    {
+        return;
+    }
+
+    const Uint32 now = SDL_GetTicks();
+    const std::string messageCopy = m_powerMessage;
+    if ((now - m_powerMessageStart) >= POWER_MESSAGE_DURATION_MS)
+    {
+        m_powerMessage.clear();
+        return;
+    }
+
+    struct nk_command_buffer* canvas = nk_window_get_canvas(m_ctx);
+    if (!canvas || !m_ctx->style.font)
+    {
+        return;
+    }
+
+    const float overlayWidth = std::min(windowWidth * 0.85f, windowWidth - 60.0f);
+    const float overlayHeight = std::max(110.0f, (m_ctx->style.font->height * 2.5f) + 30.0f);
+    const float overlayX = (windowWidth - overlayWidth) * 0.5f;
+    const float overlayY = (windowHeight - overlayHeight) * 0.5f;
+    const struct nk_rect overlayRect = nk_rect(overlayX, overlayY, overlayWidth, overlayHeight);
+
+    const struct nk_color bgColor = nk_rgba(180, 0, 0, 220);
+    const struct nk_color borderColor = nk_rgba(255, 255, 255, 255);
+    const struct nk_color textColor = nk_rgba(255, 255, 255, 255);
+
+    nk_fill_rect(canvas, overlayRect, 6.0f, bgColor);
+    nk_stroke_rect(canvas, overlayRect, 6.0f, 2.0f, borderColor);
+
+    const struct nk_user_font* font = m_ctx->style.font;
+    const float textAreaWidth = overlayRect.w - 40.0f;
+    const struct nk_rect textRect = nk_rect(overlayRect.x + 20.0f,
+                                            overlayRect.y + (overlayRect.h - font->height) * 0.5f,
+                                            textAreaWidth,
+                                            font->height);
+
+    nk_draw_text(canvas, textRect, messageCopy.c_str(), static_cast<int>(messageCopy.size()), font,
+                 nk_rgba(0, 0, 0, 0), textColor);
+}
+#endif
 
 void FileBrowser::handleEvent(const SDL_Event& event)
 {

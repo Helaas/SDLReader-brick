@@ -134,6 +134,10 @@ private:
 #ifdef TG5040_PLATFORM
     std::unique_ptr<PowerHandler> m_powerHandler;
     bool m_inFakeSleep{false};
+    static constexpr Uint32 POWER_MESSAGE_DURATION_MS = 4000;
+    std::string m_powerMessage;
+    Uint32 m_powerMessageStart{0};
+    Uint32 m_powerMessageEventType{0};
 #endif
 
     // Scroll tracking for Nuklear list/thumbnail views (used by all platforms)
@@ -184,6 +188,10 @@ private:
     void setupNuklearStyle();
     void renderListViewNuklear(float viewHeight, int windowWidth);
     void renderThumbnailViewNuklear(float viewHeight, int windowWidth);
+#ifdef TG5040_PLATFORM
+    void showPowerMessage(const std::string& message);
+    void renderPowerMessageOverlay(float windowWidth, float windowHeight);
+#endif
     void ensureSelectionVisible(float itemHeight, float viewHeight, float itemSpacing,
                                 float& scrollY, int& lastEnsureIndex, int targetIndex, int totalItems);
     void resetSelectionScrollTargets();

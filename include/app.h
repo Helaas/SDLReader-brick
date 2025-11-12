@@ -107,6 +107,9 @@ private:
 
     // Event Handling
     void handleEvent(const SDL_Event& event);
+#ifdef TG5040_PLATFORM
+    void handlePowerMessageEvent(const SDL_Event& event);
+#endif
     void processInputAction(const InputActionData& actionData);
     void updateInputState(const SDL_Event& event);
 
@@ -184,6 +187,7 @@ private:
 
 #ifdef TG5040_PLATFORM
     std::unique_ptr<PowerHandler> m_powerHandler;
+    Uint32 m_powerMessageEventType{0};
 #endif
 
     // Per-frame panning when D-pad is held
