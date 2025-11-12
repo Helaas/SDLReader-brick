@@ -135,21 +135,10 @@ void PowerHandler::threadMain()
 void PowerHandler::handlePowerButtonEvent(const input_event& ev, std::chrono::steady_clock::time_point& press_time)
 {
     auto now = std::chrono::steady_clock::now();
-    std::cout << "PowerHandler: handlePowerButtonEvent type=" << ev.type << " code=" << ev.code
-              << " value=" << ev.value << " in_fake_sleep=" << (m_in_fake_sleep.load() ? "true" : "false")
-              << " resume_ignore_active="
-              << ((m_resume_ignore_until != std::chrono::steady_clock::time_point{} &&
-                   now < m_resume_ignore_until)
-                      ? "true"
-                      : "false")
-              << std::endl;
-
     if (m_resume_ignore_until != std::chrono::steady_clock::time_point{} &&
         now < m_resume_ignore_until)
     {
         // Ignore any button activity immediately after resuming from a real sleep.
-        std::cout << "PowerHandler: Ignoring event during resume window (type=" << ev.type
-                  << ", code=" << ev.code << ", value=" << ev.value << ")" << std::endl;
         if (ev.value == 0)
         {
             press_time = std::chrono::steady_clock::time_point{};
@@ -158,7 +147,6 @@ void PowerHandler::handlePowerButtonEvent(const input_event& ev, std::chrono::st
     }
     else if (m_resume_ignore_until != std::chrono::steady_clock::time_point{} && now >= m_resume_ignore_until)
     {
-        std::cout << "PowerHandler: Resume ignore window expired; processing button events normally" << std::endl;
         m_resume_ignore_until = std::chrono::steady_clock::time_point{};
     }
 
@@ -171,7 +159,6 @@ void PowerHandler::handlePowerButtonEvent(const input_event& ev, std::chrono::st
             std::cout << "Waking from fake sleep mode" << std::endl;
             exitFakeSleep();
             press_time = std::chrono::steady_clock::time_point{}; // Don't register this as a new press
-            std::cout << "PowerHandler: Cleared press tracking after exiting fake sleep" << std::endl;
         }
         else
         {
@@ -238,17 +225,11 @@ void PowerHandler::attemptSleep()
         // Ignore power button events briefly after resume so the wake button release
         // does not immediately trigger another suspend request.
         m_resume_ignore_until = std::chrono::steady_clock::now() + POST_RESUME_IGNORE_DURATION;
-        std::cout << "PowerHandler: Ignoring power button events until "
-                  << std::chrono::duration_cast<std::chrono::milliseconds>(
-                         m_resume_ignore_until.time_since_epoch())
-                         .count()
-                  << " ms (steady_clock) after resume" << std::endl;
 
         // Give the input subsystem a moment to deliver the wake button release
         // signal before we flush the queue, otherwise the release event may land
         // after flushEvents() and be treated as a new short press.
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        std::cout << "PowerHandler: Post-resume delay elapsed; flushing events now" << std::endl;
         flushEvents(); // Flush events after waking
     }
     else
