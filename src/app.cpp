@@ -269,15 +269,13 @@ App::~App()
     m_inputManager.reset();
 
     std::cout.flush();
-    m_optionsManager.reset();
-
-    std::cout.flush();
     m_guiManager.reset();
 
     std::cout.flush();
     m_document.reset();
 
     std::cout.flush();
+    m_optionsManager.reset();
 }
 
 void App::run()

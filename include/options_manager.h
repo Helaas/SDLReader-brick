@@ -64,7 +64,7 @@ class OptionsManager
 {
 public:
     OptionsManager();
-    ~OptionsManager() = default;
+    ~OptionsManager();
 
     /**
      * @brief Scan the fonts directory for available fonts

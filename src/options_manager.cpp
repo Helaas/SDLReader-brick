@@ -1,10 +1,14 @@
 #include "options_manager.h"
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <map>
+#include <mutex>
 #include <sstream>
 
 // MuPDF includes for font loading
@@ -143,8 +147,11 @@ FontConfig jsonToConfig(const std::string& json)
     return config;
 }
 
-// Global pointer to OptionsManager instance for the callback
-OptionsManager* g_optionsManagerInstance = nullptr;
+// Track active OptionsManager instances so MuPDF's custom loader never sees
+// dangling pointers when temporary managers go out of scope.
+std::atomic<OptionsManager*> g_activeOptionsManager{nullptr};
+std::mutex g_optionsManagerMutex;
+std::vector<OptionsManager*> g_optionsManagerStack;
 
 /**
  * @brief Custom font loader callback for MuPDF
@@ -153,7 +160,8 @@ OptionsManager* g_optionsManagerInstance = nullptr;
 fz_font* customFontLoader(fz_context* ctx, const char* name, int bold, int italic, int needs_exact_metrics)
 {
     (void) needs_exact_metrics; // Suppress unused parameter warning
-    if (!g_optionsManagerInstance || !name)
+    OptionsManager* manager = g_activeOptionsManager.load(std::memory_order_acquire);
+    if (!manager || !name)
     {
         return nullptr;
     }
@@ -162,7 +170,7 @@ fz_font* customFontLoader(fz_context* ctx, const char* name, int bold, int itali
               << " (bold=" << bold << ", italic=" << italic << ")" << std::endl;
 
     // Use the public method to get the font path
-    std::string fontPath = g_optionsManagerInstance->getFontPathByName(name);
+    std::string fontPath = manager->getFontPathByName(name);
     if (!fontPath.empty())
     {
         std::cout << "Loading custom font: " << fontPath << std::endl;
@@ -192,11 +200,32 @@ fz_font* customFontLoader(fz_context* ctx, const char* name, int bold, int itali
 
 OptionsManager::OptionsManager()
 {
-    // Set global instance for callback
-    g_optionsManagerInstance = this;
-
+    {
+        std::lock_guard<std::mutex> lock(g_optionsManagerMutex);
+        g_optionsManagerStack.push_back(this);
+        g_activeOptionsManager.store(this, std::memory_order_release);
+    }
     // Constructor - scan fonts on creation
     scanFonts();
+}
+
+OptionsManager::~OptionsManager()
+{
+    std::lock_guard<std::mutex> lock(g_optionsManagerMutex);
+    auto it = std::find(g_optionsManagerStack.begin(), g_optionsManagerStack.end(), this);
+    if (it == g_optionsManagerStack.end())
+    {
+        return;
+    }
+
+    bool removingTop = (std::next(it) == g_optionsManagerStack.end());
+    g_optionsManagerStack.erase(it);
+
+    if (removingTop)
+    {
+        OptionsManager* newTop = g_optionsManagerStack.empty() ? nullptr : g_optionsManagerStack.back();
+        g_activeOptionsManager.store(newTop, std::memory_order_release);
+    }
 }
 
 void OptionsManager::scanFonts(const std::string& fontsDir)
