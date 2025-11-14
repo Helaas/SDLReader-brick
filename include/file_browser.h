@@ -128,8 +128,8 @@ private:
     bool m_rightHeld{false};
     Uint32 m_lastHorizontalScrollTime{0};
     bool m_waitingForInitialHorizontalRepeat{false};
-    static constexpr Uint32 SCROLL_INITIAL_DELAY_MS = 100; // Initial delay before repeat starts
-    static constexpr Uint32 SCROLL_REPEAT_DELAY_MS = 50;   // Delay between repeats
+    static constexpr Uint32 SCROLL_INITIAL_DELAY_MS = 100;     // Initial delay before repeat starts
+    static constexpr Uint32 SCROLL_REPEAT_DELAY_MS = 50;       // Delay between repeats
     static constexpr Uint32 THUMBNAIL_SCROLL_DELAY_FACTOR = 2; // Slow down thumbnail view repeat speed
 
 #ifdef TG5040_PLATFORM

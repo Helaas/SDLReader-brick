@@ -1259,13 +1259,6 @@ void FileBrowser::moveSelectionVertical(int direction)
                 nextIndex = rowEnd;
             }
             m_selectedIndex = std::clamp(nextIndex, 0, totalEntries - 1);
-            
-            if (currentRow != nextRow)
-            {
-                std::cout << "moveSelectionVertical: rowChanged from " << currentRow 
-                          << " to " << nextRow << " (index " << m_selectedIndex 
-                          << ", direction " << direction << ")\n";
-            }
         }
     }
     else if (!m_entries.empty())
@@ -1349,13 +1342,11 @@ void FileBrowser::moveSelectionHorizontal(int direction)
         int newRow = newIndex / columns;
         rowChanged = newRow != row;
         m_selectedIndex = newIndex;
-        
+
         // Only reset scroll targets if we moved to a different row
         // This prevents unnecessary scroll updates when moving within the same row
         if (rowChanged)
         {
-            std::cout << "moveSelectionHorizontal: rowChanged from " << row << " to " << newRow 
-                      << " (index " << m_selectedIndex << ", direction " << direction << ")" << std::endl;
             resetSelectionScrollTargets();
         }
     }
@@ -2314,41 +2305,30 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
     const int currentRow = (totalEntries > 0 && m_gridColumns > 0)
                                ? std::clamp(m_selectedIndex, 0, totalEntries - 1) / m_gridColumns
                                : -1;
-    
+
     // Only update scroll if pending flag is set (from resetSelectionScrollTargets)
     // Don't update just because currentRow changed - that can happen due to layout changes
     bool needScrollUpdate = m_pendingThumbEnsure;
-    
-    std::cout << "renderThumbnailView: selectedIndex=" << m_selectedIndex 
-              << " currentRow=" << currentRow << " totalRows=" << totalRows 
-              << " gridColumns=" << m_gridColumns
-              << " needScrollUpdate=" << needScrollUpdate 
-              << " pendingThumbEnsure=" << m_pendingThumbEnsure
-              << " lastThumbEnsureIndex=" << m_lastThumbEnsureIndex
-              << " thumbnailScrollY=" << m_thumbnailScrollY << std::endl;
-    
-    bool needsScroll = false;  // Track if we actually need to change scroll
-    
+
+    bool needsScroll = false; // Track if we actually need to change scroll
+
     if (needScrollUpdate)
     {
         if (currentRow >= 0 && totalRows > 0)
         {
-            std::cout << "  Calling ensureSelectionVisible with currentRow=" << currentRow 
-                      << " totalRows=" << totalRows << std::endl;
-            
             // Calculate scroll position based on row layout
             const float stride = tileHeight + rowSpacing;
-            const float totalHeight = tileHeight * static_cast<float>(totalRows) + 
-                                    rowSpacing * static_cast<float>(std::max(0, totalRows - 1));
-            
+            const float totalHeight = tileHeight * static_cast<float>(totalRows) +
+                                      rowSpacing * static_cast<float>(std::max(0, totalRows - 1));
+
             // Only scroll if content is larger than view
             if (totalHeight > effectiveViewHeight)
             {
                 const float rowTop = stride * static_cast<float>(currentRow);
                 const float rowBottom = rowTop + tileHeight;
-                
+
                 float desiredScrollY = m_thumbnailScrollY;
-                
+
                 // Check if row is above visible area
                 if (rowTop < m_thumbnailScrollY)
                 {
@@ -2361,18 +2341,11 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
                     desiredScrollY = rowBottom - effectiveViewHeight;
                     needsScroll = true;
                 }
-                
+
                 // Clamp to valid range
                 const float maxScroll = std::max(0.0f, totalHeight - effectiveViewHeight);
                 desiredScrollY = std::clamp(desiredScrollY, 0.0f, maxScroll);
-                
-                std::cout << "  Calculated scroll: rowTop=" << rowTop << " rowBottom=" << rowBottom
-                          << " effectiveViewHeight=" << effectiveViewHeight
-                          << " totalHeight=" << totalHeight
-                          << " maxScroll=" << maxScroll
-                          << " desiredScrollY=" << desiredScrollY
-                          << " needsScroll=" << needsScroll << std::endl;
-                
+
                 // Only update scroll if the row is not already fully visible
                 if (needsScroll)
                 {
@@ -2383,7 +2356,7 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
             {
                 m_thumbnailScrollY = 0.0f;
             }
-            
+
             m_lastThumbEnsureIndex = currentRow;
         }
         m_pendingThumbEnsure = false;
@@ -2396,13 +2369,11 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
     {
         if (needsScroll)
         {
-            std::cout << "  Setting scroll to: " << static_cast<nk_uint>(m_thumbnailScrollY) << std::endl;
             nk_group_set_scroll(m_ctx, "ThumbnailGrid", 0, static_cast<nk_uint>(m_thumbnailScrollY));
-            
+
             // Check what Nuklear actually set it to
             nk_uint checkX = 0, checkY = 0;
             nk_group_get_scroll(m_ctx, "ThumbnailGrid", &checkX, &checkY);
-            std::cout << "  Nuklear reports scroll is now: " << checkY << std::endl;
             // Keep cached scroll in sync so we don't try to scroll back to an already visible row.
             m_thumbnailScrollY = static_cast<float>(checkY);
         }
@@ -2621,7 +2592,6 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
         // This prevents visual "bounce" when Nuklear clamps our scroll to valid range
         if (m_scrollJustSet)
         {
-            std::cout << "  Skipping scroll readback this frame (just set)" << std::endl;
             m_scrollJustSet = false;
         }
         nk_group_end(m_ctx);
