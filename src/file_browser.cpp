@@ -2292,8 +2292,11 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
 
     m_gridColumns = std::max(1, columns);
     const float clampedViewHeight = std::max(tileHeight + 20.0f, viewHeight);
-    // Use the full view height for scroll math so bottom rows don't oscillate when selected.
-    const float effectiveViewHeight = clampedViewHeight;
+    const float verticalPadding = (m_ctx->style.window.padding.y > 0.0f)
+                                      ? m_ctx->style.window.padding.y * 2.0f
+                                      : 0.0f;
+    // Subtract the surrounding padding so the last tile remains fully visible when scrolled to the bottom.
+    const float effectiveViewHeight = std::max(tileHeight, clampedViewHeight - verticalPadding);
     const float rowSpacing = (m_ctx && m_ctx->style.window.spacing.y > 0.0f)
                                  ? m_ctx->style.window.spacing.y
                                  : 0.0f;
