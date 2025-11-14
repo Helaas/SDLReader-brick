@@ -1278,6 +1278,8 @@ void FileBrowser::moveSelectionHorizontal(int direction)
         return;
     }
 
+    bool rowChanged = false;
+
     if (m_thumbnailView && m_gridColumns > 0)
     {
         const int totalEntries = static_cast<int>(m_entries.size());
@@ -1292,6 +1294,7 @@ void FileBrowser::moveSelectionHorizontal(int direction)
         const int row = clampedIndex / columns;
         const int rowStart = row * columns;
         const int rowEnd = std::min(rowStart + columns - 1, totalEntries - 1);
+        int newIndex = clampedIndex;
 
         if (direction > 0)
         {
@@ -1300,16 +1303,16 @@ void FileBrowser::moveSelectionHorizontal(int direction)
                 int nextRow = row + 1;
                 if (nextRow >= totalRows)
                 {
-                    m_selectedIndex = 0;
+                    newIndex = 0;
                 }
                 else
                 {
-                    m_selectedIndex = nextRow * columns;
+                    newIndex = nextRow * columns;
                 }
             }
             else
             {
-                m_selectedIndex = std::min(clampedIndex + 1, totalEntries - 1);
+                newIndex = std::min(clampedIndex + 1, totalEntries - 1);
             }
         }
         else if (direction < 0)
@@ -1321,24 +1324,30 @@ void FileBrowser::moveSelectionHorizontal(int direction)
                 {
                     int lastRowStart = (totalRows - 1) * columns;
                     int lastRowEnd = std::min(lastRowStart + columns - 1, totalEntries - 1);
-                    m_selectedIndex = lastRowEnd;
+                    newIndex = lastRowEnd;
                 }
                 else
                 {
                     int prevRowStart = prevRow * columns;
                     int prevRowEnd = std::min(prevRowStart + columns - 1, totalEntries - 1);
-                    m_selectedIndex = prevRowEnd;
+                    newIndex = prevRowEnd;
                 }
             }
             else
             {
-                m_selectedIndex = std::max(clampedIndex - 1, 0);
+                newIndex = std::max(clampedIndex - 1, 0);
             }
         }
+
+        rowChanged = (newIndex / columns) != row;
+        m_selectedIndex = newIndex;
     }
 
-    // Reset scroll targets to trigger auto-scroll on next render
-    resetSelectionScrollTargets();
+    // Reset scroll targets only if the selection jumped to a different row
+    if (!m_thumbnailView || rowChanged)
+    {
+        resetSelectionScrollTargets();
+    }
 }
 
 void FileBrowser::clampSelection()
