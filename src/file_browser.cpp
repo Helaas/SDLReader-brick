@@ -1493,11 +1493,13 @@ std::string FileBrowser::run()
     while (SDL_PollEvent(&event))
     {
         flushedEvents++;
+#ifdef TG5040_PLATFORM
         if (m_powerMessageEventType != 0 && event.type == m_powerMessageEventType)
         {
             delete static_cast<std::string*>(event.user.data1);
             continue;
         }
+#endif
 
         if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP)
         {
