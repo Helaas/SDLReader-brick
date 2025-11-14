@@ -1432,7 +1432,12 @@ std::string FileBrowser::run()
         if ((m_dpadUpHeld || m_dpadDownHeld) && !m_entries.empty())
         {
             const Uint32 elapsed = (m_lastScrollTime <= currentTime) ? (currentTime - m_lastScrollTime) : 0;
-            const Uint32 targetDelay = m_waitingForInitialRepeat ? SCROLL_INITIAL_DELAY_MS : SCROLL_REPEAT_DELAY_MS;
+            Uint32 baseDelay = m_waitingForInitialRepeat ? SCROLL_INITIAL_DELAY_MS : SCROLL_REPEAT_DELAY_MS;
+            if (m_thumbnailView)
+            {
+                baseDelay *= THUMBNAIL_SCROLL_DELAY_FACTOR;
+            }
+            const Uint32 targetDelay = baseDelay;
 
             if (m_lastScrollTime == 0 || elapsed >= targetDelay)
             {
@@ -1454,7 +1459,13 @@ std::string FileBrowser::run()
             const Uint32 elapsed = (m_lastHorizontalScrollTime <= currentTime)
                                        ? (currentTime - m_lastHorizontalScrollTime)
                                        : 0;
-            const Uint32 targetDelay = m_waitingForInitialHorizontalRepeat ? SCROLL_INITIAL_DELAY_MS : SCROLL_REPEAT_DELAY_MS;
+            Uint32 baseDelay =
+                m_waitingForInitialHorizontalRepeat ? SCROLL_INITIAL_DELAY_MS : SCROLL_REPEAT_DELAY_MS;
+            if (m_thumbnailView)
+            {
+                baseDelay *= THUMBNAIL_SCROLL_DELAY_FACTOR;
+            }
+            const Uint32 targetDelay = baseDelay;
 
             if (m_lastHorizontalScrollTime == 0 || elapsed >= targetDelay)
             {
