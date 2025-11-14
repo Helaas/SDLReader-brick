@@ -148,6 +148,7 @@ private:
     int m_lastThumbEnsureIndex{-1};
     bool m_pendingListEnsure{false};
     bool m_pendingThumbEnsure{false};
+    bool m_scrollJustSet{false}; // Track when we just set scroll to avoid reading stale values
 
     struct ThumbnailJobResult
     {

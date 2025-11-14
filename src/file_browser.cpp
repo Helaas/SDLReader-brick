@@ -1259,6 +1259,13 @@ void FileBrowser::moveSelectionVertical(int direction)
                 nextIndex = rowEnd;
             }
             m_selectedIndex = std::clamp(nextIndex, 0, totalEntries - 1);
+            
+            if (currentRow != nextRow)
+            {
+                std::cout << "moveSelectionVertical: rowChanged from " << currentRow 
+                          << " to " << nextRow << " (index " << m_selectedIndex 
+                          << ", direction " << direction << ")\n";
+            }
         }
     }
     else if (!m_entries.empty())
@@ -1339,13 +1346,22 @@ void FileBrowser::moveSelectionHorizontal(int direction)
             }
         }
 
-        rowChanged = (newIndex / columns) != row;
+        int newRow = newIndex / columns;
+        rowChanged = newRow != row;
         m_selectedIndex = newIndex;
+        
+        // Only reset scroll targets if we moved to a different row
+        // This prevents unnecessary scroll updates when moving within the same row
+        if (rowChanged)
+        {
+            std::cout << "moveSelectionHorizontal: rowChanged from " << row << " to " << newRow 
+                      << " (index " << m_selectedIndex << ", direction " << direction << ")" << std::endl;
+            resetSelectionScrollTargets();
+        }
     }
-
-    // Reset scroll targets only if the selection jumped to a different row
-    if (!m_thumbnailView || rowChanged)
+    else
     {
+        // In list view, always reset scroll targets
         resetSelectionScrollTargets();
     }
 }
@@ -2285,7 +2301,8 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
 
     m_gridColumns = std::max(1, columns);
     const float clampedViewHeight = std::max(tileHeight + 20.0f, viewHeight);
-    const float effectiveViewHeight = clampedViewHeight - tileHeight;
+    // Use the full view height for scroll math so bottom rows don't oscillate when selected.
+    const float effectiveViewHeight = clampedViewHeight;
     const float rowSpacing = (m_ctx && m_ctx->style.window.spacing.y > 0.0f)
                                  ? m_ctx->style.window.spacing.y
                                  : 0.0f;
@@ -2297,24 +2314,97 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
     const int currentRow = (totalEntries > 0 && m_gridColumns > 0)
                                ? std::clamp(m_selectedIndex, 0, totalEntries - 1) / m_gridColumns
                                : -1;
-    bool needScrollUpdate = m_pendingThumbEnsure || (m_lastThumbEnsureIndex != currentRow);
+    
+    // Only update scroll if pending flag is set (from resetSelectionScrollTargets)
+    // Don't update just because currentRow changed - that can happen due to layout changes
+    bool needScrollUpdate = m_pendingThumbEnsure;
+    
+    std::cout << "renderThumbnailView: selectedIndex=" << m_selectedIndex 
+              << " currentRow=" << currentRow << " totalRows=" << totalRows 
+              << " gridColumns=" << m_gridColumns
+              << " needScrollUpdate=" << needScrollUpdate 
+              << " pendingThumbEnsure=" << m_pendingThumbEnsure
+              << " lastThumbEnsureIndex=" << m_lastThumbEnsureIndex
+              << " thumbnailScrollY=" << m_thumbnailScrollY << std::endl;
+    
+    bool needsScroll = false;  // Track if we actually need to change scroll
+    
     if (needScrollUpdate)
     {
         if (currentRow >= 0 && totalRows > 0)
         {
-            ensureSelectionVisible(tileHeight, effectiveViewHeight, rowSpacing, m_thumbnailScrollY,
-                                   m_lastThumbEnsureIndex, currentRow, totalRows);
+            std::cout << "  Calling ensureSelectionVisible with currentRow=" << currentRow 
+                      << " totalRows=" << totalRows << std::endl;
+            
+            // Calculate scroll position based on row layout
+            const float stride = tileHeight + rowSpacing;
+            const float totalHeight = tileHeight * static_cast<float>(totalRows) + 
+                                    rowSpacing * static_cast<float>(std::max(0, totalRows - 1));
+            
+            // Only scroll if content is larger than view
+            if (totalHeight > effectiveViewHeight)
+            {
+                const float rowTop = stride * static_cast<float>(currentRow);
+                const float rowBottom = rowTop + tileHeight;
+                
+                float desiredScrollY = m_thumbnailScrollY;
+                
+                // Check if row is above visible area
+                if (rowTop < m_thumbnailScrollY)
+                {
+                    desiredScrollY = rowTop;
+                    needsScroll = true;
+                }
+                // Check if row is below visible area
+                else if (rowBottom > m_thumbnailScrollY + effectiveViewHeight)
+                {
+                    desiredScrollY = rowBottom - effectiveViewHeight;
+                    needsScroll = true;
+                }
+                
+                // Clamp to valid range
+                const float maxScroll = std::max(0.0f, totalHeight - effectiveViewHeight);
+                desiredScrollY = std::clamp(desiredScrollY, 0.0f, maxScroll);
+                
+                std::cout << "  Calculated scroll: rowTop=" << rowTop << " rowBottom=" << rowBottom
+                          << " effectiveViewHeight=" << effectiveViewHeight
+                          << " totalHeight=" << totalHeight
+                          << " maxScroll=" << maxScroll
+                          << " desiredScrollY=" << desiredScrollY
+                          << " needsScroll=" << needsScroll << std::endl;
+                
+                // Only update scroll if the row is not already fully visible
+                if (needsScroll)
+                {
+                    m_thumbnailScrollY = desiredScrollY;
+                }
+            }
+            else
+            {
+                m_thumbnailScrollY = 0.0f;
+            }
+            
+            m_lastThumbEnsureIndex = currentRow;
         }
         m_pendingThumbEnsure = false;
+        m_scrollJustSet = needsScroll; // Only mark if we actually changed scroll
     }
 
     nk_layout_row_dynamic(m_ctx, clampedViewHeight, 1);
 
     if (nk_group_begin(m_ctx, "ThumbnailGrid", NK_WINDOW_BORDER | NK_WINDOW_SCROLL_AUTO_HIDE))
     {
-        if (needScrollUpdate)
+        if (needsScroll)
         {
+            std::cout << "  Setting scroll to: " << static_cast<nk_uint>(m_thumbnailScrollY) << std::endl;
             nk_group_set_scroll(m_ctx, "ThumbnailGrid", 0, static_cast<nk_uint>(m_thumbnailScrollY));
+            
+            // Check what Nuklear actually set it to
+            nk_uint checkX = 0, checkY = 0;
+            nk_group_get_scroll(m_ctx, "ThumbnailGrid", &checkX, &checkY);
+            std::cout << "  Nuklear reports scroll is now: " << checkY << std::endl;
+            // Keep cached scroll in sync so we don't try to scroll back to an already visible row.
+            m_thumbnailScrollY = static_cast<float>(checkY);
         }
 
         if (!m_entries.empty())
@@ -2527,12 +2617,12 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
             }
         }
 
-        if (!needScrollUpdate && totalEntries > 0)
+        // Don't read back scroll after programmatic setting - let Nuklear handle clamping
+        // This prevents visual "bounce" when Nuklear clamps our scroll to valid range
+        if (m_scrollJustSet)
         {
-            nk_uint scrollX = 0;
-            nk_uint scrollY = 0;
-            nk_group_get_scroll(m_ctx, "ThumbnailGrid", &scrollX, &scrollY);
-            m_thumbnailScrollY = static_cast<float>(scrollY);
+            std::cout << "  Skipping scroll readback this frame (just set)" << std::endl;
+            m_scrollJustSet = false;
         }
         nk_group_end(m_ctx);
     }
