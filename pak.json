@@ -7,7 +7,7 @@
     "repo_url": "https://github.com/Helaas/SDLReader-brick",
     "release_filename": "SDLReader.pak.zip",
     "changelog": {
-        "v2.1.0": "Settings persist after app updates, configurable document minimap, a faster Nuklear-based file browser, smoother high-zoom rendering, improved controller-friendly menus, and more robust TG5040 power handling.",
+        "v2.1.0": "Settings persist after app updates, configurable document minimap, thumbnails in file browser (X button), smoother high-zoom rendering, improved controller-friendly menus, and more robust TG5040 power handling.",
         "v2.0.1": "UI improvements with smart text contrast, continuous D-pad scrolling in file browser, and edge progress bar can now be disabled.",
         "v2.0.0": "Major rework with ImGui UI overlay, controller-ready file browser, runtime font & theme picker, reading history, and expanded TG5040 bundle tooling.",
         "v1.1.0": "Support for WebP images in CBZ/CBR archives and EPUB/MOBI files, improving compatibility with modern comics and e-books.",
