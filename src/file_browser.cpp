@@ -328,7 +328,7 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
     struct nk_font_atlas* atlas = nullptr;
     nk_sdl_font_stash_begin(&atlas);
     struct nk_font* uiFont = nullptr;
-    constexpr float kUiFontSize = 26.0f;
+    constexpr float kUiFontSize = 28.0f;
 
     if (atlas)
     {
@@ -2197,12 +2197,122 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
             return ext;
         };
 
+        enum class EntryCategory
+        {
+            ParentDirectory,
+            Directory,
+            Pdf,
+            Comic,
+            Epub,
+            Mobi,
+            Other
+        };
+
+        auto classifyEntry = [](const FileEntry& entry) -> EntryCategory
+        {
+            if (entry.isDirectory)
+            {
+                return entry.isParentLink ? EntryCategory::ParentDirectory : EntryCategory::Directory;
+            }
+
+            std::string lower = entry.name;
+            std::transform(lower.begin(), lower.end(), lower.begin(),
+                           [](unsigned char ch)
+                           { return static_cast<char>(std::tolower(ch)); });
+
+            const size_t dotPos = lower.find_last_of('.');
+            if (dotPos == std::string::npos)
+            {
+                return EntryCategory::Other;
+            }
+
+            const std::string ext = lower.substr(dotPos);
+            if (ext == ".pdf")
+            {
+                return EntryCategory::Pdf;
+            }
+            if (ext == ".cbz" || ext == ".cbr" || ext == ".rar" || ext == ".zip")
+            {
+                return EntryCategory::Comic;
+            }
+            if (ext == ".epub")
+            {
+                return EntryCategory::Epub;
+            }
+            if (ext == ".mobi")
+            {
+                return EntryCategory::Mobi;
+            }
+            return EntryCategory::Other;
+        };
+
+        struct EntryStyleColors
+        {
+            nk_color accent;
+            nk_color glyphPrimary;
+            nk_color glyphSecondary;
+            nk_color badgeBg;
+            nk_color badgeText;
+        };
+
+        auto styleForCategory = [](EntryCategory category) -> EntryStyleColors
+        {
+            switch (category)
+            {
+            case EntryCategory::ParentDirectory:
+                return {nk_rgb(255, 185, 135),
+                        nk_rgba(255, 205, 165, 255),
+                        nk_rgba(255, 225, 195, 255),
+                        nk_rgba(255, 205, 170, 255),
+                        nk_rgb(90, 55, 30)};
+            case EntryCategory::Directory:
+                return {nk_rgb(255, 210, 90),
+                        nk_rgba(255, 200, 90, 255),
+                        nk_rgba(255, 230, 150, 255),
+                        nk_rgba(255, 210, 110, 255),
+                        nk_rgb(60, 40, 20)};
+            case EntryCategory::Pdf:
+                return {nk_rgb(220, 85, 70),
+                        nk_rgba(200, 70, 70, 255),
+                        nk_rgba(255, 180, 150, 255),
+                        nk_rgba(210, 70, 60, 255),
+                        nk_rgb(255, 245, 245)};
+            case EntryCategory::Comic:
+                return {nk_rgb(175, 120, 255),
+                        nk_rgba(135, 100, 220, 255),
+                        nk_rgba(225, 205, 255, 255),
+                        nk_rgba(170, 130, 245, 255),
+                        nk_rgb(250, 250, 255)};
+            case EntryCategory::Epub:
+                return {nk_rgb(105, 200, 140),
+                        nk_rgba(85, 150, 110, 255),
+                        nk_rgba(175, 225, 185, 255),
+                        nk_rgba(115, 195, 145, 255),
+                        nk_rgb(30, 45, 30)};
+            case EntryCategory::Mobi:
+                return {nk_rgb(95, 185, 200),
+                        nk_rgba(80, 150, 165, 255),
+                        nk_rgba(190, 230, 235, 255),
+                        nk_rgba(100, 190, 205, 255),
+                        nk_rgb(25, 45, 55)};
+            case EntryCategory::Other:
+            default:
+                return {nk_rgb(90, 140, 255),
+                        nk_rgba(120, 150, 210, 255),
+                        nk_rgba(210, 225, 255, 255),
+                        nk_rgba(88, 120, 200, 255),
+                        nk_rgb(235, 240, 255)};
+            }
+        };
+
         for (size_t i = 0; i < m_entries.size(); ++i)
         {
             bool isSelected = (static_cast<int>(i) == m_selectedIndex);
             const FileEntry& entry = m_entries[i];
             const bool isParentLink = entry.isDirectory && entry.isParentLink;
             const bool evenRow = ((i % 2) == 0);
+            const EntryCategory entryCategory = classifyEntry(entry);
+            const EntryStyleColors entryColors = styleForCategory(entryCategory);
 
             std::string displayName = entry.name;
             if (displayName.empty())
@@ -2257,9 +2367,7 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
                 isSelected = true;
             }
 
-            const nk_color accentColor = isParentLink
-                                             ? nk_rgb(255, 185, 135)
-                                             : (entry.isDirectory ? nk_rgb(255, 210, 90) : nk_rgb(90, 140, 255));
+            const nk_color accentColor = entryColors.accent;
             struct nk_rect accent = background;
             accent.w = 4.0f;
             nk_fill_rect(canvas, accent, 2.0f, accentColor);
@@ -2276,19 +2384,16 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
                 struct nk_rect tabRect = iconRect;
                 tabRect.h *= 0.35f;
                 tabRect.w *= 0.65f;
-                nk_fill_rect(canvas, tabRect, 2.0f,
-                             isParentLink ? nk_rgba(255, 210, 170, 255) : nk_rgba(255, 230, 150, 255));
+                nk_fill_rect(canvas, tabRect, 2.0f, entryColors.glyphSecondary);
 
                 struct nk_rect bodyRect = iconRect;
                 bodyRect.y += tabRect.h * 0.4f;
                 bodyRect.h = iconRect.h - tabRect.h * 0.3f;
-                nk_fill_rect(canvas, bodyRect, 3.5f, nk_rgba(255, 200, 90, 255));
+                nk_fill_rect(canvas, bodyRect, 3.5f, entryColors.glyphPrimary);
             }
             else
             {
-                nk_color docColor = nk_rgba(120, 150, 210, 255);
-                nk_color foldColor = nk_rgba(210, 225, 255, 255);
-                nk_fill_rect(canvas, iconRect, 3.5f, docColor);
+                nk_fill_rect(canvas, iconRect, 3.5f, entryColors.glyphPrimary);
 
                 const float fold = iconRect.w * 0.32f;
                 const float foldX = iconRect.x + iconRect.w - fold;
@@ -2296,7 +2401,7 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
                                  foldX, iconRect.y,
                                  iconRect.x + iconRect.w, iconRect.y + fold,
                                  iconRect.x + iconRect.w, iconRect.y,
-                                 foldColor);
+                                 entryColors.glyphSecondary);
                 nk_stroke_line(canvas,
                                foldX, iconRect.y,
                                iconRect.x + iconRect.w, iconRect.y + fold, 1.0f, nk_rgba(255, 255, 255, 80));
@@ -2362,13 +2467,8 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
 
             if (showBadge)
             {
-                nk_color badgeBg = entry.isDirectory ? nk_rgba(255, 210, 110, 255) : nk_rgba(88, 120, 200, 255);
-                nk_color badgeTextColor = entry.isDirectory ? nk_rgb(60, 40, 20) : nk_rgb(235, 240, 255);
-                if (isSelected && !entry.isDirectory)
-                {
-                    badgeBg = nk_rgba(255, 255, 255, 40);
-                    badgeTextColor = nk_rgb(255, 255, 255);
-                }
+                nk_color badgeBg = entryColors.badgeBg;
+                nk_color badgeTextColor = entryColors.badgeText;
 
                 nk_fill_rect(canvas, badgeRect, badgeRect.h * 0.5f, badgeBg);
 
@@ -2455,8 +2555,8 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
     // Don't update just because currentRow changed - that can happen due to layout changes
     bool needScrollUpdate = m_pendingThumbEnsure;
 
-    bool needsScroll = false;         // Track if we actually need to change scroll
-    bool shouldApplyScroll = false;   // Track when we have to push cached scroll into Nuklear
+    bool needsScroll = false;       // Track if we actually need to change scroll
+    bool shouldApplyScroll = false; // Track when we have to push cached scroll into Nuklear
 
     if (needScrollUpdate)
     {
