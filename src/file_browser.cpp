@@ -2313,7 +2313,8 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
     // Don't update just because currentRow changed - that can happen due to layout changes
     bool needScrollUpdate = m_pendingThumbEnsure;
 
-    bool needsScroll = false; // Track if we actually need to change scroll
+    bool needsScroll = false;         // Track if we actually need to change scroll
+    bool shouldApplyScroll = false;   // Track when we have to push cached scroll into Nuklear
 
     if (needScrollUpdate)
     {
@@ -2361,16 +2362,19 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
             }
 
             m_lastThumbEnsureIndex = currentRow;
+            shouldApplyScroll = true;
         }
         m_pendingThumbEnsure = false;
-        m_scrollJustSet = needsScroll; // Only mark if we actually changed scroll
+        // When we restored selection after opening a document Nuklear's scroll state is fresh,
+        // so we still need to reapply whatever value we think is current even if it already
+        // contains the row. shouldApplyScroll keeps track of that requirement.
     }
 
     nk_layout_row_dynamic(m_ctx, clampedViewHeight, 1);
 
     if (nk_group_begin(m_ctx, "ThumbnailGrid", NK_WINDOW_BORDER | NK_WINDOW_SCROLL_AUTO_HIDE))
     {
-        if (needsScroll)
+        if (shouldApplyScroll)
         {
             nk_group_set_scroll(m_ctx, "ThumbnailGrid", 0, static_cast<nk_uint>(m_thumbnailScrollY));
 
@@ -2379,6 +2383,7 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
             nk_group_get_scroll(m_ctx, "ThumbnailGrid", &checkX, &checkY);
             // Keep cached scroll in sync so we don't try to scroll back to an already visible row.
             m_thumbnailScrollY = static_cast<float>(checkY);
+            m_scrollJustSet = true;
         }
 
         if (!m_entries.empty())
@@ -2596,6 +2601,13 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
         if (m_scrollJustSet)
         {
             m_scrollJustSet = false;
+        }
+        else
+        {
+            nk_uint scrollX = 0;
+            nk_uint scrollY = 0;
+            nk_group_get_scroll(m_ctx, "ThumbnailGrid", &scrollX, &scrollY);
+            m_thumbnailScrollY = static_cast<float>(scrollY);
         }
         nk_group_end(m_ctx);
     }
