@@ -1574,7 +1574,8 @@ void FileBrowser::render()
                                      : 22.0f;
         const float helpTextHeight = std::max(24.0f, fontHeight + 4.0f);
         const float statusBarHeight = std::max(40.0f, fontHeight + 16.0f);
-        const float reservedHeight = 35.0f + helpTextHeight + statusBarHeight + 24.0f;
+        const float statusBottomPadding = std::max(12.0f, m_ctx->style.window.padding.y);
+        const float reservedHeight = 35.0f + helpTextHeight + statusBarHeight + 24.0f + statusBottomPadding;
         const float contentHeight = std::max(60.0f, windowHeightF - reservedHeight);
 
         nk_layout_row_dynamic(m_ctx, helpTextHeight, 1);
@@ -1618,6 +1619,9 @@ void FileBrowser::render()
         {
             nk_style_pop_vec2(m_ctx);
         }
+
+        nk_layout_row_dynamic(m_ctx, statusBottomPadding, 1);
+        nk_spacing(m_ctx, 1);
 
 #ifdef TG5040_PLATFORM
         renderPowerMessageOverlay(windowWidthF, windowHeightF);
