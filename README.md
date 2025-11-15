@@ -15,18 +15,25 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 
 ## Features
 * View PDF documents, comic book archives (CBZ/ZIP & CBR/RAR), EPUB books, and MOBI e-books.
-* Built-in heads-up display with page, zoom, edge-turn, minimap, and error indicators.
-* Integrated file browser (`--browse`) with controller support, persistent last directory, asynchronous thumbnail grid (toggle with **X**), and TG5040-friendly layout powered by Nuklear.
-* Custom font picker with live preview, reading style themes, and MuPDF-backed CSS injection.
+* Built-in heads-up display with page, zoom, edge-turn, minimap, and error indicators — now including an optional **Document Minimap Overlay** that mirrors your zoomed-in viewport (toggleable in the font/reading style panel).
+* Integrated Nuklear-powered file browser (`--browse`) with:
+  - Controller support
+  - Persistent last directory
+  - Asynchronous multi-threaded thumbnail grid (toggle with **X**)
+  - Color-coded tile badges for file types
+  - Smarter auto-scroll and restore behavior for faster navigation
+  - TG5040-friendly layout
+* **Stateful Home Directory Usage**: runtime assets (config, fonts list, and `reading_history.json`) now live under `$SDL_READER_STATE_DIR` (default `$HOME`) so settings persist across firmware/app updates and can be redirected per device.
+* Custom font picker with reading style themes, MuPDF-backed CSS injection, controller-friendly navigation, hold-to-scroll, inline tooltips, info glyphs, and persistent highlights.
 * On-screen number pad for page jumps when navigating with a controller.
 * Automatic reading history tracking with resume-on-open for the last 50 documents.
-* Page navigation (next/previous page) with **Smart Edge Navigation**: When zoomed ≥ 100% & at a page edge, hold D-pad for 300ms to flip pages with a progress indicator.
+* Page navigation (next/previous page) with **Smart Edge Navigation**: when zoomed ≥100% & at a page edge, holding the D-pad for 300 ms flips pages with a progress indicator.
 * Quick page jumping (±10 pages) and arbitrary page entry.
-* Zoom in/out, fit-to-width, and full reset controls.
-* Page rotation (90° increments) and mirroring (horizontal/vertical).
-* Smooth scrolling within pages (if zoomed in or page is larger than the viewport).
+* Zoom in/out, fit-to-width, high-maximum zoom levels, optimized downsampling paths, and improved caching for smoother zoom/pan performance (notably on TG5040).
+* Page rotation (90° increments) and horizontal/vertical mirroring.
+* Smooth scrolling within pages (if zoomed in or if the page is larger than the viewport).
 * Toggle fullscreen mode (desktop platforms).
-* TG5040-specific power button integration with fake sleep fallback.
+* TG5040-specific power button integration with a dedicated handler, fake sleep fallback, resume cleanup, and on-screen messaging for console-like behavior.
 
 ## Supported Document Types
 * **PDF** (`.pdf`)
@@ -211,6 +218,7 @@ SDL Reader uses a `config.json` file (stored under `$SDL_READER_STATE_DIR`, defa
 - **lastBrowseDirectory**: Directory the file browser should open by default when launched with `--browse`
 - **disableEdgeProgressBar**: When `true`, panning at page edges changes pages instantly without the 300ms delay and progress bar. When `false` (default), the edge nudge progress bar is shown.
 - **showDocumentMinimap**: Toggle the zoomed-in minimap overlay; set to `false` to hide it.
+- **State directory override**: Set `SDL_READER_STATE_DIR` to relocate `config.json`, `reading_history.json`, and other runtime assets. Defaults to your `$HOME` directory.
 - **Environment override**: Set `SDL_READER_DEFAULT_DIR` to control the starting directory for the browser. If unset, the reader defaults to `$HOME`.
 
 | `readingStyle` | Theme          | Background | Text Color |
@@ -411,8 +419,8 @@ SDLReader-brick/
     │   ├── Dockerfile            # TG5040 toolchain image
     │   ├── export_bundle.sh      # Bundle export script
     │   ├── make_bundle2.sh       # Library dependency bundler
-  │   ├── pak/                  # Distribution bundle (created by export)
-  │   │   ├── bin/              # Executables (sdl_reader_cli + optional utilities)
+    │   ├── pak/                  # Distribution bundle (created by export)
+    │   │   ├── bin/              # Executables (sdl_reader_cli + optional utilities)
     │   │   ├── lib/              # Shared libraries and dependencies
     │   │   ├── fonts/            # Font files
     │   │   ├── res/              # Other resources (if any)
