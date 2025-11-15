@@ -33,6 +33,7 @@
 #endif
 
 #include <algorithm>
+#include <cctype>
 #include <cerrno>
 #include <cfloat>
 #include <cmath>
@@ -327,7 +328,7 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
     struct nk_font_atlas* atlas = nullptr;
     nk_sdl_font_stash_begin(&atlas);
     struct nk_font* uiFont = nullptr;
-    constexpr float kUiFontSize = 24.0f;
+    constexpr float kUiFontSize = 26.0f;
 
     if (atlas)
     {
@@ -2122,8 +2123,15 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
         return;
     }
 
-    const float itemHeight = 24.0f; // Reduced from 40.0f for less vertical spacing
-    const float clampedViewHeight = std::max(40.0f, viewHeight);
+    const struct nk_user_font* font = m_ctx->style.font;
+    if (!font)
+    {
+        return;
+    }
+
+    const float baseItemHeight = font->height + 14.0f;
+    const float itemHeight = std::max(40.0f, baseItemHeight);
+    const float clampedViewHeight = std::max(itemHeight, viewHeight);
     // Account for Nuklear's internal padding and borders - reduce effective height
     const float effectiveViewHeight = clampedViewHeight - itemHeight;
     const float rowSpacing = (m_ctx && m_ctx->style.window.spacing.y > 0.0f)
@@ -2157,85 +2165,219 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
         }
 
         nk_layout_row_dynamic(m_ctx, itemHeight, 1);
+
+        struct nk_command_buffer* canvas = &m_ctx->current->buffer;
+        if (!canvas)
+        {
+            nk_group_end(m_ctx);
+            return;
+        }
+
+        auto buildBadgeText = [](const FileEntry& entry) -> std::string
+        {
+            if (entry.isDirectory)
+            {
+                return entry.isParentLink ? "UP" : "DIR";
+            }
+
+            const size_t dotPos = entry.name.find_last_of('.');
+            if (dotPos == std::string::npos || dotPos + 1 >= entry.name.size())
+            {
+                return "FILE";
+            }
+
+            std::string ext = entry.name.substr(dotPos + 1);
+            if (ext.size() > 4)
+            {
+                ext.resize(4);
+            }
+            std::transform(ext.begin(), ext.end(), ext.begin(),
+                           [](unsigned char ch)
+                           { return static_cast<char>(std::toupper(ch)); });
+            return ext;
+        };
+
         for (size_t i = 0; i < m_entries.size(); ++i)
         {
             bool isSelected = (static_cast<int>(i) == m_selectedIndex);
             const FileEntry& entry = m_entries[i];
             const bool isParentLink = entry.isDirectory && entry.isParentLink;
-            std::string displayName;
-            if (entry.isDirectory)
+            const bool evenRow = ((i % 2) == 0);
+
+            std::string displayName = entry.name;
+            if (displayName.empty())
             {
-                displayName = isParentLink ? "[UP] " + entry.name : "[DIR] " + entry.name;
+                displayName = entry.isDirectory ? "Folder" : "File";
             }
-            else
+            if (isParentLink)
             {
-                displayName = entry.name;
+                displayName = "Parent directory";
+            }
+            else if (entry.isDirectory && displayName.back() != '/')
+            {
+                displayName.push_back('/');
             }
 
-            // Create an invisible button for click detection
             struct nk_style_button backup = m_ctx->style.button;
-
-            // Make button transparent and borderless to remove visual button effect
             m_ctx->style.button.normal = nk_style_item_color(nk_rgba(0, 0, 0, 0));
             m_ctx->style.button.hover = nk_style_item_color(nk_rgba(0, 0, 0, 0));
             m_ctx->style.button.active = nk_style_item_color(nk_rgba(0, 0, 0, 0));
             m_ctx->style.button.border = 0.0f;
-            m_ctx->style.button.padding = nk_vec2(4.0f, 2.0f);
+            m_ctx->style.button.padding = nk_vec2(0.0f, 0.0f);
             m_ctx->style.button.text_alignment = NK_TEXT_LEFT;
 
-            // Set text color - yellow for directories, white for files
-            if (entry.isDirectory)
-            {
-                if (isParentLink)
-                {
-                    m_ctx->style.button.text_normal = nk_rgb(255, 200, 150);
-                    m_ctx->style.button.text_hover = nk_rgb(255, 210, 170);
-                    m_ctx->style.button.text_active = nk_rgb(255, 220, 190);
-                }
-                else
-                {
-                    m_ctx->style.button.text_normal = nk_rgb(255, 220, 0);
-                    m_ctx->style.button.text_hover = nk_rgb(255, 230, 50);
-                    m_ctx->style.button.text_active = nk_rgb(255, 240, 100);
-                }
-            }
-            else
-            {
-                m_ctx->style.button.text_normal = nk_rgb(235, 235, 235);
-                m_ctx->style.button.text_hover = nk_rgb(255, 255, 255);
-                m_ctx->style.button.text_active = nk_rgb(255, 255, 255);
-            }
+            struct nk_rect rowBounds = nk_widget_bounds(m_ctx);
+            struct nk_rect background = rowBounds;
+            background.x += 6.0f;
+            background.y += 2.0f;
+            background.w = std::max(0.0f, background.w - 12.0f);
+            background.h = std::max(0.0f, background.h - 4.0f);
 
-            // Highlight selected item with background color
-            if (isSelected)
-            {
-                struct nk_rect bounds = nk_widget_bounds(m_ctx);
-                nk_fill_rect(&m_ctx->current->buffer, bounds, 0.0f, nk_rgb(70, 110, 200));
+            const nk_color evenColor = nk_rgba(44, 46, 58, 255);
+            const nk_color oddColor = nk_rgba(38, 40, 52, 255);
+            const nk_color hoverColor = nk_rgba(56, 64, 86, 255);
+            const nk_color selectedColor = nk_rgba(74, 100, 168, 255);
 
-                // Make selected text brighter
-                if (entry.isDirectory)
-                {
-                    m_ctx->style.button.text_normal = nk_rgb(255, 255, 150);
-                    m_ctx->style.button.text_hover = nk_rgb(255, 255, 150);
-                    m_ctx->style.button.text_active = nk_rgb(255, 255, 150);
-                }
-                else
-                {
-                    m_ctx->style.button.text_normal = nk_rgb(255, 255, 255);
-                    m_ctx->style.button.text_hover = nk_rgb(255, 255, 255);
-                    m_ctx->style.button.text_active = nk_rgb(255, 255, 255);
-                }
-            }
+            nk_fill_rect(canvas, background, 6.0f, isSelected ? selectedColor : (evenRow ? evenColor : oddColor));
 
-            if (nk_button_label(m_ctx, displayName.c_str()))
+            nk_bool pressed = nk_button_label(m_ctx, "");
+            const bool hovered = nk_widget_is_hovered(m_ctx) != 0;
+            if (hovered && !isSelected)
             {
-                m_selectedIndex = static_cast<int>(i);
-                m_selectedFile.clear();
-                // Trigger scroll update on next frame
-                resetSelectionScrollTargets();
+                nk_fill_rect(canvas, background, 6.0f, hoverColor);
             }
 
             m_ctx->style.button = backup;
+
+            if (pressed)
+            {
+                m_selectedIndex = static_cast<int>(i);
+                m_selectedFile.clear();
+                resetSelectionScrollTargets();
+                isSelected = true;
+            }
+
+            const nk_color accentColor = isParentLink
+                                             ? nk_rgb(255, 185, 135)
+                                             : (entry.isDirectory ? nk_rgb(255, 210, 90) : nk_rgb(90, 140, 255));
+            struct nk_rect accent = background;
+            accent.w = 4.0f;
+            nk_fill_rect(canvas, accent, 2.0f, accentColor);
+
+            const float iconSize = std::max(18.0f, itemHeight * 0.45f);
+            struct nk_rect iconRect = background;
+            iconRect.x += accent.w + 12.0f;
+            iconRect.y = background.y + (background.h - iconSize) * 0.5f;
+            iconRect.w = iconSize;
+            iconRect.h = iconSize;
+
+            if (entry.isDirectory)
+            {
+                struct nk_rect tabRect = iconRect;
+                tabRect.h *= 0.35f;
+                tabRect.w *= 0.65f;
+                nk_fill_rect(canvas, tabRect, 2.0f,
+                             isParentLink ? nk_rgba(255, 210, 170, 255) : nk_rgba(255, 230, 150, 255));
+
+                struct nk_rect bodyRect = iconRect;
+                bodyRect.y += tabRect.h * 0.4f;
+                bodyRect.h = iconRect.h - tabRect.h * 0.3f;
+                nk_fill_rect(canvas, bodyRect, 3.5f, nk_rgba(255, 200, 90, 255));
+            }
+            else
+            {
+                nk_color docColor = nk_rgba(120, 150, 210, 255);
+                nk_color foldColor = nk_rgba(210, 225, 255, 255);
+                nk_fill_rect(canvas, iconRect, 3.5f, docColor);
+
+                const float fold = iconRect.w * 0.32f;
+                const float foldX = iconRect.x + iconRect.w - fold;
+                nk_fill_triangle(canvas,
+                                 foldX, iconRect.y,
+                                 iconRect.x + iconRect.w, iconRect.y + fold,
+                                 iconRect.x + iconRect.w, iconRect.y,
+                                 foldColor);
+                nk_stroke_line(canvas,
+                               foldX, iconRect.y,
+                               iconRect.x + iconRect.w, iconRect.y + fold, 1.0f, nk_rgba(255, 255, 255, 80));
+            }
+
+            const float textStart = iconRect.x + iconRect.w + 12.0f;
+            const float contentRight = background.x + background.w - 12.0f;
+
+            std::string badgeText = buildBadgeText(entry);
+            float badgeWidth = 0.0f;
+            float badgeHeight = font->height + 4.0f;
+            struct nk_rect badgeRect = {0, 0, 0, 0};
+            bool showBadge = !badgeText.empty();
+            if (showBadge)
+            {
+                const float badgeTextWidth =
+                    font->width(font->userdata, font->height, badgeText.c_str(), static_cast<int>(badgeText.size()));
+                badgeWidth = badgeTextWidth + 20.0f;
+                badgeHeight = std::min(badgeHeight, background.h - 4.0f);
+
+                const float availableWidth = contentRight - textStart;
+                if (availableWidth > 180.0f)
+                {
+                    badgeRect.w = badgeWidth;
+                    badgeRect.h = badgeHeight;
+                    badgeRect.x = contentRight - badgeRect.w;
+                    badgeRect.y = background.y + (background.h - badgeRect.h) * 0.5f;
+                }
+                else
+                {
+                    showBadge = false;
+                }
+            }
+
+            const float textRight = showBadge ? (badgeRect.x - 12.0f) : contentRight;
+            const float maxTextWidth = std::max(0.0f, textRight - textStart);
+
+            if (maxTextWidth > 0.0f)
+            {
+                std::string truncatedName = truncateToWidth(displayName, maxTextWidth, font);
+                nk_color textColor;
+                if (isSelected)
+                {
+                    textColor = nk_rgb(255, 255, 255);
+                }
+                else if (entry.isDirectory)
+                {
+                    textColor = isParentLink ? nk_rgb(255, 220, 185) : nk_rgb(255, 233, 180);
+                }
+                else
+                {
+                    textColor = nk_rgb(230, 235, 255);
+                }
+
+                struct nk_rect textRect;
+                textRect.x = textStart;
+                textRect.w = maxTextWidth;
+                textRect.h = font->height;
+                textRect.y = background.y + (background.h - textRect.h) * 0.5f;
+                nk_draw_text(canvas, textRect, truncatedName.c_str(), static_cast<int>(truncatedName.size()), font,
+                             nk_rgba(0, 0, 0, 0), textColor);
+            }
+
+            if (showBadge)
+            {
+                nk_color badgeBg = entry.isDirectory ? nk_rgba(255, 210, 110, 255) : nk_rgba(88, 120, 200, 255);
+                nk_color badgeTextColor = entry.isDirectory ? nk_rgb(60, 40, 20) : nk_rgb(235, 240, 255);
+                if (isSelected && !entry.isDirectory)
+                {
+                    badgeBg = nk_rgba(255, 255, 255, 40);
+                    badgeTextColor = nk_rgb(255, 255, 255);
+                }
+
+                nk_fill_rect(canvas, badgeRect, badgeRect.h * 0.5f, badgeBg);
+
+                struct nk_rect badgeTextRect = badgeRect;
+                badgeTextRect.x += 10.0f;
+                badgeTextRect.w = badgeRect.w - 20.0f;
+                nk_draw_text(canvas, badgeTextRect, badgeText.c_str(), static_cast<int>(badgeText.size()), font,
+                             nk_rgba(0, 0, 0, 0), badgeTextColor);
+            }
         }
 
         // Only read back scroll position if we didn't just set it
