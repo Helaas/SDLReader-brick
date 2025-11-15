@@ -34,6 +34,21 @@ static constexpr SDL_GameControllerButton kApplySettingsButton = SDL_CONTROLLER_
 
 namespace
 {
+static nk_color accentColor()
+{
+    return nk_rgb(74, 100, 168);
+}
+
+static nk_color accentHoverColor()
+{
+    return nk_rgb(90, 120, 190);
+}
+
+static nk_color accentActiveColor()
+{
+    return nk_rgb(60, 85, 145);
+}
+
 static nk_bool nk_combo_begin_label_controller(struct nk_context* ctx, const char* selected, struct nk_vec2 size, bool force_open)
 {
     if (!ctx || !selected || !ctx->current || !ctx->current->layout)
@@ -583,7 +598,7 @@ void GuiManager::renderFontMenu()
         nk_layout_row_dynamic(m_ctx, 25, 1);
         nk_label(m_ctx, "Font Settings", NK_TEXT_LEFT);
         nk_layout_row_dynamic(m_ctx, 35, 1);
-        nk_label_colored_wrap(m_ctx, "Font controls for EPUB/MOBI. Other formats use embedded fonts.", nk_rgb(102, 178, 255));
+        nk_label_colored_wrap(m_ctx, "Font controls for EPUB/MOBI. Other formats use embedded fonts.", nk_rgba(180, 200, 255, 255));
 
         // Separator line
         nk_layout_row_dynamic(m_ctx, 1, 1);
@@ -616,12 +631,12 @@ void GuiManager::renderFontMenu()
             // Highlight font dropdown if focused
             if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
             {
-                m_ctx->style.combo.button.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-                m_ctx->style.combo.button.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-                m_ctx->style.combo.button.active = nk_style_item_color(nk_rgb(0, 102, 235));
-                m_ctx->style.combo.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-                m_ctx->style.combo.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-                m_ctx->style.combo.active = nk_style_item_color(nk_rgb(0, 102, 235));
+                m_ctx->style.combo.button.normal = nk_style_item_color(accentColor());
+                m_ctx->style.combo.button.hover = nk_style_item_color(accentHoverColor());
+                m_ctx->style.combo.button.active = nk_style_item_color(accentActiveColor());
+                m_ctx->style.combo.normal = nk_style_item_color(accentColor());
+                m_ctx->style.combo.hover = nk_style_item_color(accentHoverColor());
+                m_ctx->style.combo.active = nk_style_item_color(accentActiveColor());
             }
             const char* currentFont = fonts[m_selectedFontIndex].displayName.c_str();
 
@@ -643,9 +658,9 @@ void GuiManager::renderFontMenu()
                     bool isHighlighted = m_fontDropdownOpen && (m_fontDropdownHighlightedIndex == static_cast<int>(i));
                     if (isHighlighted)
                     {
-                        m_ctx->style.selectable.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-                        m_ctx->style.selectable.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-                        m_ctx->style.selectable.pressed = nk_style_item_color(nk_rgb(0, 102, 235));
+                        m_ctx->style.selectable.normal = nk_style_item_color(accentColor());
+                        m_ctx->style.selectable.hover = nk_style_item_color(accentHoverColor());
+                        m_ctx->style.selectable.pressed = nk_style_item_color(accentActiveColor());
                         m_ctx->style.selectable.text_normal = nk_rgb(255, 255, 255);
                         m_ctx->style.selectable.text_hover = nk_rgb(255, 255, 255);
                         m_ctx->style.selectable.text_pressed = nk_rgb(255, 255, 255);
@@ -720,9 +735,9 @@ void GuiManager::renderFontMenu()
             // Highlight font size input if focused
             if (m_mainScreenFocusIndex == WIDGET_FONT_SIZE_INPUT)
             {
-                m_ctx->style.edit.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-                m_ctx->style.edit.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-                m_ctx->style.edit.active = nk_style_item_color(nk_rgb(0, 102, 235));
+                m_ctx->style.edit.normal = nk_style_item_color(accentColor());
+                m_ctx->style.edit.hover = nk_style_item_color(accentHoverColor());
+                m_ctx->style.edit.active = nk_style_item_color(accentActiveColor());
             }
 
             int editFlags = nk_edit_string_zero_terminated(m_ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_SELECTABLE,
@@ -764,12 +779,12 @@ void GuiManager::renderFontMenu()
             // Highlight font size slider if focused
             if (m_mainScreenFocusIndex == WIDGET_FONT_SIZE_SLIDER)
             {
-                m_ctx->style.slider.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-                m_ctx->style.slider.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-                m_ctx->style.slider.active = nk_style_item_color(nk_rgb(0, 102, 235));
-                m_ctx->style.slider.cursor_normal = nk_style_item_color(nk_rgb(0, 122, 255));
-                m_ctx->style.slider.cursor_hover = nk_style_item_color(nk_rgb(30, 142, 255));
-                m_ctx->style.slider.cursor_active = nk_style_item_color(nk_rgb(0, 102, 235));
+                m_ctx->style.slider.normal = nk_style_item_color(accentColor());
+                m_ctx->style.slider.hover = nk_style_item_color(accentHoverColor());
+                m_ctx->style.slider.active = nk_style_item_color(accentActiveColor());
+                m_ctx->style.slider.cursor_normal = nk_style_item_color(accentColor());
+                m_ctx->style.slider.cursor_hover = nk_style_item_color(accentHoverColor());
+                m_ctx->style.slider.cursor_active = nk_style_item_color(accentActiveColor());
             }
             float fontSize = static_cast<float>(m_tempConfig.fontSize);
             if (nk_slider_float(m_ctx, 8.0f, &fontSize, 72.0f, 1.0f))
@@ -797,7 +812,7 @@ void GuiManager::renderFontMenu()
 
         // Informational notice
         nk_layout_row_dynamic(m_ctx, 35, 1);
-        nk_label_colored_wrap(m_ctx, "Select theme for comfortable reading. Applies to EPUB/MOBI only.", nk_rgb(102, 178, 255));
+        nk_label_colored_wrap(m_ctx, "Select theme for comfortable reading. Applies to EPUB/MOBI only.", nk_rgba(180, 200, 255, 255));
 
         nk_layout_row_dynamic(m_ctx, 20, 1);
         nk_label(m_ctx, "Color Theme:", NK_TEXT_LEFT);
@@ -817,12 +832,12 @@ void GuiManager::renderFontMenu()
         // Highlight reading style dropdown if focused
         if (m_mainScreenFocusIndex == WIDGET_READING_STYLE_DROPDOWN)
         {
-            m_ctx->style.combo.button.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.combo.button.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-            m_ctx->style.combo.button.active = nk_style_item_color(nk_rgb(0, 102, 235));
-            m_ctx->style.combo.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.combo.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-            m_ctx->style.combo.active = nk_style_item_color(nk_rgb(0, 102, 235));
+            m_ctx->style.combo.button.normal = nk_style_item_color(accentColor());
+            m_ctx->style.combo.button.hover = nk_style_item_color(accentHoverColor());
+            m_ctx->style.combo.button.active = nk_style_item_color(accentActiveColor());
+            m_ctx->style.combo.normal = nk_style_item_color(accentColor());
+            m_ctx->style.combo.hover = nk_style_item_color(accentHoverColor());
+            m_ctx->style.combo.active = nk_style_item_color(accentActiveColor());
         }
 
         const char* currentStyle = OptionsManager::getReadingStyleName(allStyles[m_selectedStyleIndex]);
@@ -845,9 +860,9 @@ void GuiManager::renderFontMenu()
                 bool isHighlighted = m_styleDropdownOpen && (m_styleDropdownHighlightedIndex == static_cast<int>(i));
                 if (isHighlighted)
                 {
-                    m_ctx->style.selectable.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-                    m_ctx->style.selectable.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-                    m_ctx->style.selectable.pressed = nk_style_item_color(nk_rgb(0, 102, 235));
+                    m_ctx->style.selectable.normal = nk_style_item_color(accentColor());
+                    m_ctx->style.selectable.hover = nk_style_item_color(accentHoverColor());
+                    m_ctx->style.selectable.pressed = nk_style_item_color(accentActiveColor());
                     m_ctx->style.selectable.text_normal = nk_rgb(255, 255, 255);
                     m_ctx->style.selectable.text_hover = nk_rgb(255, 255, 255);
                     m_ctx->style.selectable.text_pressed = nk_rgb(255, 255, 255);
@@ -929,9 +944,9 @@ void GuiManager::renderFontMenu()
         // Highlight zoom step input if focused
         if (m_mainScreenFocusIndex == WIDGET_ZOOM_STEP_INPUT)
         {
-            m_ctx->style.edit.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.edit.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-            m_ctx->style.edit.active = nk_style_item_color(nk_rgb(0, 102, 235));
+            m_ctx->style.edit.normal = nk_style_item_color(accentColor());
+            m_ctx->style.edit.hover = nk_style_item_color(accentHoverColor());
+            m_ctx->style.edit.active = nk_style_item_color(accentActiveColor());
         }
 
         int zoomEditFlags = nk_edit_string_zero_terminated(m_ctx, NK_EDIT_FIELD | NK_EDIT_SIG_ENTER | NK_EDIT_SELECTABLE,
@@ -964,12 +979,12 @@ void GuiManager::renderFontMenu()
         // Highlight zoom step slider if focused
         if (m_mainScreenFocusIndex == WIDGET_ZOOM_STEP_SLIDER)
         {
-            m_ctx->style.slider.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.slider.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-            m_ctx->style.slider.active = nk_style_item_color(nk_rgb(0, 102, 235));
-            m_ctx->style.slider.cursor_normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.slider.cursor_hover = nk_style_item_color(nk_rgb(30, 142, 255));
-            m_ctx->style.slider.cursor_active = nk_style_item_color(nk_rgb(0, 102, 235));
+            m_ctx->style.slider.normal = nk_style_item_color(accentColor());
+            m_ctx->style.slider.hover = nk_style_item_color(accentHoverColor());
+            m_ctx->style.slider.active = nk_style_item_color(accentActiveColor());
+            m_ctx->style.slider.cursor_normal = nk_style_item_color(accentColor());
+            m_ctx->style.slider.cursor_hover = nk_style_item_color(accentHoverColor());
+            m_ctx->style.slider.cursor_active = nk_style_item_color(accentActiveColor());
         }
 
         float zoomStep = static_cast<float>(m_tempConfig.zoomStep);
@@ -1120,9 +1135,9 @@ void GuiManager::renderFontMenu()
         // Highlight page jump input if focused
         if (m_mainScreenFocusIndex == WIDGET_PAGE_JUMP_INPUT)
         {
-            m_ctx->style.edit.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.edit.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-            m_ctx->style.edit.active = nk_style_item_color(nk_rgb(0, 102, 235));
+            m_ctx->style.edit.normal = nk_style_item_color(accentColor());
+            m_ctx->style.edit.hover = nk_style_item_color(accentHoverColor());
+            m_ctx->style.edit.active = nk_style_item_color(accentActiveColor());
         }
 
         nk_edit_string_zero_terminated(m_ctx, NK_EDIT_FIELD | NK_EDIT_SELECTABLE, m_pageJumpInput, sizeof(m_pageJumpInput), nk_filter_decimal);
@@ -1148,9 +1163,9 @@ void GuiManager::renderFontMenu()
         // Highlight Go button if focused
         if (m_mainScreenFocusIndex == WIDGET_GO_BUTTON)
         {
-            m_ctx->style.button.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.button.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-            m_ctx->style.button.active = nk_style_item_color(nk_rgb(0, 102, 235));
+            m_ctx->style.button.normal = nk_style_item_color(accentColor());
+            m_ctx->style.button.hover = nk_style_item_color(accentHoverColor());
+            m_ctx->style.button.active = nk_style_item_color(accentActiveColor());
         }
 
         if (nk_button_label(m_ctx, "Go"))
@@ -1172,9 +1187,9 @@ void GuiManager::renderFontMenu()
         // Highlight Number Pad button if focused
         if (m_mainScreenFocusIndex == WIDGET_NUMPAD_BUTTON)
         {
-            m_ctx->style.button.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.button.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-            m_ctx->style.button.active = nk_style_item_color(nk_rgb(0, 102, 235));
+            m_ctx->style.button.normal = nk_style_item_color(accentColor());
+            m_ctx->style.button.hover = nk_style_item_color(accentHoverColor());
+            m_ctx->style.button.active = nk_style_item_color(accentActiveColor());
         }
 
         // Number pad button
@@ -1224,9 +1239,9 @@ void GuiManager::renderFontMenu()
         // Highlight Apply button if focused
         if (m_mainScreenFocusIndex == WIDGET_APPLY_BUTTON)
         {
-            m_ctx->style.button.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.button.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-            m_ctx->style.button.active = nk_style_item_color(nk_rgb(0, 102, 235));
+            m_ctx->style.button.normal = nk_style_item_color(accentColor());
+            m_ctx->style.button.hover = nk_style_item_color(accentHoverColor());
+            m_ctx->style.button.active = nk_style_item_color(accentActiveColor());
         }
 
         if (nk_button_label(m_ctx, "Apply"))
@@ -1257,9 +1272,9 @@ void GuiManager::renderFontMenu()
         // Close button
         if (m_mainScreenFocusIndex == WIDGET_CLOSE_BUTTON)
         {
-            m_ctx->style.button.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.button.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-            m_ctx->style.button.active = nk_style_item_color(nk_rgb(0, 102, 235));
+            m_ctx->style.button.normal = nk_style_item_color(accentColor());
+            m_ctx->style.button.hover = nk_style_item_color(accentHoverColor());
+            m_ctx->style.button.active = nk_style_item_color(accentActiveColor());
         }
         if (nk_button_label(m_ctx, "Close"))
         {
@@ -1273,9 +1288,9 @@ void GuiManager::renderFontMenu()
         // Reset to Default button
         if (m_mainScreenFocusIndex == WIDGET_RESET_BUTTON)
         {
-            m_ctx->style.button.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.button.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-            m_ctx->style.button.active = nk_style_item_color(nk_rgb(0, 102, 235));
+            m_ctx->style.button.normal = nk_style_item_color(accentColor());
+            m_ctx->style.button.hover = nk_style_item_color(accentHoverColor());
+            m_ctx->style.button.active = nk_style_item_color(accentActiveColor());
         }
         if (nk_button_label(m_ctx, "Reset to Default"))
         {
@@ -1383,9 +1398,9 @@ void GuiManager::renderNumberPad()
                 struct nk_style_button oldStyle = m_ctx->style.button;
                 if (isSelected)
                 {
-                    m_ctx->style.button.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-                    m_ctx->style.button.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-                    m_ctx->style.button.active = nk_style_item_color(nk_rgb(0, 102, 235));
+                    m_ctx->style.button.normal = nk_style_item_color(nk_rgb(74, 100, 168));
+                    m_ctx->style.button.hover = nk_style_item_color(nk_rgb(90, 120, 190));
+                    m_ctx->style.button.active = nk_style_item_color(nk_rgb(60, 85, 145));
                 }
 
                 if (nk_button_label(m_ctx, buttonText))
@@ -1438,9 +1453,9 @@ void GuiManager::renderNumberPad()
         struct nk_style_button oldStyleGo = m_ctx->style.button;
         if (goSelected)
         {
-            m_ctx->style.button.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.button.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-            m_ctx->style.button.active = nk_style_item_color(nk_rgb(0, 102, 235));
+            m_ctx->style.button.normal = nk_style_item_color(nk_rgb(74, 100, 168));
+            m_ctx->style.button.hover = nk_style_item_color(nk_rgb(90, 120, 190));
+            m_ctx->style.button.active = nk_style_item_color(nk_rgb(60, 85, 145));
         }
 
         if (!validPage)
@@ -1473,9 +1488,9 @@ void GuiManager::renderNumberPad()
         bool cancelSelected = (m_numberPadSelectedRow == 4 && m_numberPadSelectedCol == 1);
         if (cancelSelected)
         {
-            m_ctx->style.button.normal = nk_style_item_color(nk_rgb(0, 122, 255));
-            m_ctx->style.button.hover = nk_style_item_color(nk_rgb(30, 142, 255));
-            m_ctx->style.button.active = nk_style_item_color(nk_rgb(0, 102, 235));
+            m_ctx->style.button.normal = nk_style_item_color(nk_rgb(74, 100, 168));
+            m_ctx->style.button.hover = nk_style_item_color(nk_rgb(90, 120, 190));
+            m_ctx->style.button.active = nk_style_item_color(nk_rgb(60, 85, 145));
         }
 
         // Cancel button
@@ -1902,7 +1917,7 @@ void GuiManager::renderPendingTooltips()
     }
 
     const struct nk_color background = nk_rgba(35, 35, 38, 240);
-    const struct nk_color border = nk_rgb(0, 122, 255);
+    const struct nk_color border = accentColor();
     const struct nk_color textColor = nk_rgb(230, 230, 230);
 
     for (const PendingTooltip& tooltip : m_pendingTooltips)
@@ -1957,20 +1972,20 @@ void GuiManager::setupColorScheme()
     table[NK_COLOR_BUTTON_ACTIVE] = nk_rgba(50, 50, 55, 255);
     table[NK_COLOR_TOGGLE] = nk_rgba(80, 80, 85, 246);
     table[NK_COLOR_TOGGLE_HOVER] = nk_rgba(90, 90, 95, 252);
-    table[NK_COLOR_TOGGLE_CURSOR] = nk_rgb(0, 122, 255);
+    table[NK_COLOR_TOGGLE_CURSOR] = accentColor();
     table[NK_COLOR_SELECT] = nk_rgba(40, 40, 43, 246);
-    table[NK_COLOR_SELECT_ACTIVE] = nk_rgb(0, 122, 255);
+    table[NK_COLOR_SELECT_ACTIVE] = accentColor();
     table[NK_COLOR_SLIDER] = nk_rgba(60, 60, 65, 246);
-    table[NK_COLOR_SLIDER_CURSOR] = nk_rgb(0, 122, 255);
-    table[NK_COLOR_SLIDER_CURSOR_HOVER] = nk_rgb(30, 142, 255);
-    table[NK_COLOR_SLIDER_CURSOR_ACTIVE] = nk_rgb(0, 102, 235);
+    table[NK_COLOR_SLIDER_CURSOR] = accentColor();
+    table[NK_COLOR_SLIDER_CURSOR_HOVER] = accentHoverColor();
+    table[NK_COLOR_SLIDER_CURSOR_ACTIVE] = accentActiveColor();
     table[NK_COLOR_PROPERTY] = nk_rgba(60, 60, 65, 246);
     table[NK_COLOR_EDIT] = nk_rgba(50, 50, 55, 246);
-    table[NK_COLOR_EDIT_CURSOR] = nk_rgb(0, 122, 255);
+    table[NK_COLOR_EDIT_CURSOR] = accentColor();
     table[NK_COLOR_COMBO] = nk_rgba(60, 60, 65, 246);
     table[NK_COLOR_CHART] = nk_rgba(60, 60, 65, 246);
-    table[NK_COLOR_CHART_COLOR] = nk_rgb(0, 122, 255);
-    table[NK_COLOR_CHART_COLOR_HIGHLIGHT] = nk_rgb(30, 142, 255);
+    table[NK_COLOR_CHART_COLOR] = accentColor();
+    table[NK_COLOR_CHART_COLOR_HIGHLIGHT] = accentHoverColor();
     table[NK_COLOR_SCROLLBAR] = nk_rgba(80, 86, 104, 235);
     table[NK_COLOR_SCROLLBAR_CURSOR] = nk_rgba(196, 208, 230, 255);
     table[NK_COLOR_SCROLLBAR_CURSOR_HOVER] = nk_rgba(214, 224, 242, 255);
@@ -1981,7 +1996,7 @@ void GuiManager::setupColorScheme()
 
     // Fine-tune some specific elements
     m_ctx->style.window.fixed_background = nk_style_item_color(nk_rgba(35, 35, 38, 244));
-    m_ctx->style.window.border_color = nk_rgb(0, 122, 255);
+    m_ctx->style.window.border_color = accentColor();
     m_ctx->style.window.border = 2.0f;
     m_ctx->style.window.rounding = 4.0f;
 
