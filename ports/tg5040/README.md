@@ -12,7 +12,7 @@ Based on the [Trimui toolchain Docker image](https://git.crowdedwood.com/trimui-
 - **Custom libarchive**: Builds minimal libarchive without ICU/XML dependencies for optimal bundle size
 - **Hardware Power Management**: NextUI-compatible power button handling
 - **Complete Bundle Export**: Creates self-contained distribution packages
-- **Integrated ImGui UI**: Controller-first file browser, font picker, reading-style themes, and on-screen number pad
+- **Integrated Nuklear UI**: Controller-first file browser, font picker, reading-style themes, and on-screen number pad
 - **Persistent Preferences**: Ships with curated fonts, `config.json` (user-managed), and automatic `reading_history.json` resume support
 
 ## Files in this directory
@@ -26,6 +26,8 @@ Based on the [Trimui toolchain Docker image](https://git.crowdedwood.com/trimui-
 
 ## Quick Start
 
+**Auto-detected builds**: The top-level `Makefile` now notices when it runs inside this Docker environment (or any container that exposes `/.dockerenv`) and defaults to the TG5040 target. Plain `make` inside the container will therefore build the TG5040 port. When building from the host, continue to use `make tg5040` (or `make PLATFORM=tg5040`) to opt in explicitly.
+
 ### Using Docker Compose (Recommended)
 ```bash
 cd ports/tg5040
@@ -38,7 +40,7 @@ docker-compose exec dev bash
 
 # Build the application (inside container)
 cd /root/workspace
-make tg5040
+make            # auto-selects the TG5040 target when run in the container
 ```
 
 ### Using Docker Makefile
@@ -50,13 +52,15 @@ make -f Makefile.docker shell
 
 # Build the application (inside container)
 cd /root/workspace
-make tg5040
+make            # auto-selects the TG5040 target when run in the container
 ```
 
 ### Direct Build (with toolchain installed)
 ```bash
-# From project root
+# From project root (outside Docker)
 make tg5040
+# or
+make PLATFORM=tg5040
 
 # Build and export TG5040 bundle
 make export-tg5040
@@ -87,8 +91,9 @@ The exported bundle (`ports/tg5040/pak/`) contains:
 When you run `make tg5040` or `make export-tg5040`, the build system applies several patches automatically:
 
 - `webp-upstream-697749.patch` (MuPDF) — shared with other platforms to backport WebP decoding fixes from KOReader.
-- `patches/imgui_impl_sdlrenderer_legacy.patch` — replaces the Dear ImGui SDL renderer backend with a legacy-friendly version that works on the TG5040's SDL 2.0.10 stack and adds caching optimizations for the low-power GPU.
-- `patches/imgui_swap_ab_buttons_tg5040.patch` — swaps the reported A/B buttons so Dear ImGui's activation/cancel affordances match the TrimUI Brick's physical layout.
+- `patches/nuklear_sdl_renderer_compat.patch` — Backports SDL renderer support from newer Nuklear versions to ensure compatibility with the TG5040's SDL 2.0.9 environment, enabling proper texture rendering and input handling.
+
+The TG5040 build uses the Nuklear UI framework with a custom SDL renderer backend optimized for the device's SDL 2.0.10 stack and low-power GPU.
 
 ### Bundle Features
 - **Self-contained**: Includes all dependencies and resources
@@ -109,7 +114,7 @@ After building the first time, unless a dependency of the image has changed, `ma
 - **Volume mapping**: The project root is mounted at `/root/workspace` inside the container
 - **Toolchain**: Located at `/opt/` inside the container
 
-Runtime settings (`config.json`) and reading progress (`reading_history.json`) are generated next to the executable. They are ignored by Git so you can modify them freely on the device or within the container.
+Runtime settings (`config.json`) and reading progress (`reading_history.json`) are generated inside the reader state directory (`$SDL_READER_STATE_DIR`, set by `launch.sh`). The launcher also sets `SDL_READER_DEFAULT_DIR=/mnt/SDCARD` so the browser never leaves the SD card root. Both files are ignored by Git so you can modify them freely on the device or within the container.
 
 ### Fonts & Reading Styles
 
@@ -122,7 +127,9 @@ Drop additional `.ttf` or `.otf` files into `ports/tg5040/pak/fonts/` (or the pr
 
 ## Platform-Specific Features
 The TG5040 build includes:
-- **ImGui UI Stack**: Built-in browser launched via `--browse`, font & reading-style menu, controller number pad, and persisted `reading_history.json`
+- **Nuklear UI Stack**: Built-in browser launched via `--browse`, font & reading-style menu, controller number pad, and persisted `reading_history.json`
+  - Toggle the new thumbnail grid with the **X** button for cover previews rendered asynchronously.
+  - Control the zoom minimap overlay via the `showDocumentMinimap` flag in `config.json`.
 - **Advanced Hardware Power Management**: NextUI-compatible power button handling
   - Power button monitoring via `/dev/input/event1`
   - Short press: Intelligent sleep with fake sleep fallback

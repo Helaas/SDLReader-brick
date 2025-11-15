@@ -1,21 +1,16 @@
 #include "app.h"
 #include "file_browser.h"
 #include "options_manager.h"
+#include "path_utils.h"
 #include "renderer.h"
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <cstring>
-#include <imgui.h>
 #include <iostream>
+#include <memory>
 
 void cleanupSDL(SDL_Window* window, SDL_Renderer* renderer)
 {
-    // Clean up ImGui context if it exists
-    if (ImGui::GetCurrentContext() != nullptr)
-    {
-        ImGui::DestroyContext();
-    }
-
     if (renderer)
     {
         SDL_DestroyRenderer(renderer);
@@ -33,6 +28,15 @@ int main(int argc, char* argv[])
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
     int returnCode = 0;
+
+#ifdef TG5040_PLATFORM
+    constexpr int kDefaultWindowWidth = 800;
+    constexpr int kDefaultWindowHeight = 600;
+#else
+    // Desktop builds start at 2x the TG5040's 4:3 layout so the thumbnail grid
+    constexpr int kDefaultWindowWidth = 1280;
+    constexpr int kDefaultWindowHeight = 960;
+#endif
 
     // Check for --browse flag
     bool browseMode = false;
@@ -76,8 +80,8 @@ int main(int argc, char* argv[])
         "SDLReader C++",
         SDL_WINDOWPOS_UNDEFINED,
         SDL_WINDOWPOS_UNDEFINED,
-        800,
-        600,
+        kDefaultWindowWidth,
+        kDefaultWindowHeight,
         SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     if (!window)
     {
@@ -98,6 +102,8 @@ int main(int argc, char* argv[])
     }
 
     // Main loop: If browse mode, keep returning to file browser after closing document
+    // Use unique_ptr to avoid stack overflow - FileBrowser has large members
+    auto browser = std::make_unique<FileBrowser>();
     bool continueRunning = true;
     while (continueRunning)
     {
@@ -112,16 +118,9 @@ int main(int argc, char* argv[])
             // Load config to get last browse directory
             OptionsManager optionsManager;
             FontConfig config = optionsManager.loadConfig();
-#ifdef TG5040_PLATFORM
-            std::string defaultPath = "/mnt/SDCARD";
-#else
-            const char* home = getenv("HOME");
-            std::string defaultPath = home ? home : "/";
-#endif
-            std::string startPath = config.lastBrowseDirectory.empty() ? defaultPath : config.lastBrowseDirectory;
+            std::string startPath = config.lastBrowseDirectory.empty() ? getDefaultLibraryRoot() : config.lastBrowseDirectory;
 
-            FileBrowser browser;
-            if (!browser.initialize(window, renderer, startPath))
+            if (!browser->initialize(window, renderer, startPath))
             {
                 std::cerr << "Failed to initialize file browser" << std::endl;
                 cleanupSDL(window, renderer);
@@ -129,10 +128,10 @@ int main(int argc, char* argv[])
             }
 
             // Run browser and get selected file (cleanup happens automatically inside run())
-            documentPath = browser.run();
+            documentPath = browser->run();
 
             // Save last browsed directory back to config
-            std::string lastDir = browser.getLastDirectory();
+            std::string lastDir = browser->getLastDirectory();
             if (!lastDir.empty())
             {
                 config.lastBrowseDirectory = lastDir;

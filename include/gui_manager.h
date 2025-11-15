@@ -4,270 +4,204 @@
 #include "button_mapper.h"
 #include "options_manager.h"
 #include <SDL.h>
+#include <array>
 #include <functional>
 #include <iostream>
 #include <string>
+#include <vector>
 
-// Forward declarations
-struct ImGuiContext;
-struct ImFont;
+struct nk_context;
 
-/**
- * @brief Manages Dear ImGui integration and font selection GUI
- */
 class GuiManager
 {
 public:
     GuiManager();
     ~GuiManager();
 
-    /**
-     * @brief Initialize ImGui with SDL
-     * @param window SDL window
-     * @param renderer SDL renderer
-     * @return true if successful
-     */
     bool initialize(SDL_Window* window, SDL_Renderer* renderer);
-
-    /**
-     * @brief Cleanup ImGui resources
-     */
     void cleanup();
 
-    /**
-     * @brief Handle SDL events for ImGui
-     * @param event SDL event
-     * @return true if event was handled by ImGui
-     */
     bool handleEvent(const SDL_Event& event);
-
-    /**
-     * @brief Start a new ImGui frame
-     */
     void newFrame();
-
-    /**
-     * @brief Render all ImGui windows and finish frame
-     */
     void render();
 
-    /**
-     * @brief Check if the font menu is currently visible
-     * @return true if font menu is visible
-     */
     bool isFontMenuVisible() const;
-
-    /**
-     * @brief Toggle the font menu visibility
-     */
-    void toggleFontMenu()
-    {
-        m_showFontMenu = !m_showFontMenu;
-        if (m_showFontMenu)
-        {
-            m_justOpenedFontMenu = true; // Set focus flag when opening
-        }
-        std::cout << "Font menu " << (m_showFontMenu ? "opened" : "closed") << std::endl;
-    }
-
-    /**
-     * @brief Check if the font menu is currently open
-     */
     bool isFontMenuOpen() const
     {
         return m_showFontMenu;
     }
+    void toggleFontMenu();
 
-    /**
-     * @brief Set callback for when font configuration changes
-     * @param callback Function to call when Apply is pressed
-     */
     void setFontApplyCallback(std::function<void(const FontConfig&)> callback)
     {
         m_fontApplyCallback = callback;
     }
-
-    /**
-     * @brief Set callback for when font menu is closed
-     * @param callback Function to call when Close is pressed
-     */
     void setFontCloseCallback(std::function<void()> callback)
     {
         m_closeCallback = callback;
     }
 
-    /**
-     * @brief Set the current font configuration (for initialization)
-     * @param config Current font config
-     */
     void setCurrentFontConfig(const FontConfig& config);
-
-    /**
-     * @brief Get the current font configuration
-     */
     const FontConfig& getCurrentFontConfig() const
     {
         return m_currentConfig;
     }
 
-    /**
-     * @brief Check if ImGui wants to capture mouse input
-     */
     bool wantsCaptureMouse() const;
-
-    /**
-     * @brief Check if ImGui wants to capture keyboard input
-     */
     bool wantsCaptureKeyboard() const;
 
-    /**
-     * @brief Set callback for when jump to page is requested
-     * @param callback Function to call when page jump is requested
-     */
     void setPageJumpCallback(std::function<void(int)> callback)
     {
         m_pageJumpCallback = callback;
     }
-
-    /**
-     * @brief Set the total page count for page jump validation
-     * @param pageCount Total number of pages in document
-     */
     void setPageCount(int pageCount)
     {
         m_pageCount = pageCount;
     }
-
-    /**
-     * @brief Set current page number for display in page jump
-     * @param currentPage Current page number (0-based)
-     */
     void setCurrentPage(int currentPage)
     {
         m_currentPage = currentPage;
     }
 
-    /**
-     * @brief Check if the number pad is currently visible
-     */
     bool isNumberPadVisible() const
     {
         return m_showNumberPad;
     }
 
-    /**
-     * @brief Close the font menu if it's open
-     */
-    void closeFontMenu()
+    void closeFontMenu();
+    void closeNumberPad();
+    bool closeTopUIWindow();
+    bool closeAllUIWindows();
+
+    void setButtonMapper(const ButtonMapper* mapper)
     {
-        if (m_showFontMenu)
-        {
-            m_showFontMenu = false;
-            // Reset temp config to current config
-            m_tempConfig = m_currentConfig;
-            m_selectedFontIndex = findFontIndex(m_currentConfig.fontName);
-        }
+        m_buttonMapper = mapper;
     }
 
-    /**
-     * @brief Close the number pad if it's open
-     */
-    void closeNumberPad()
-    {
-        if (m_showNumberPad)
-        {
-            m_showNumberPad = false;
-        }
-    }
-
-    /**
-     * @brief Close all UI windows (font menu and number pad)
-     * @return true if any window was closed, false if nothing was open
-     */
-    bool closeAllUIWindows()
-    {
-        bool anyClosed = m_showFontMenu || m_showNumberPad;
-        closeFontMenu();
-        closeNumberPad();
-        return anyClosed;
-    }
-
-    /**
-     * @brief Set button mapper for platform-specific button handling
-     * @param buttonMapper Button mapper instance
-     */
-    void setButtonMapper(const ButtonMapper* buttonMapper)
-    {
-        m_buttonMapper = buttonMapper;
-    }
+    void showNumberPad();
+    void hideNumberPad();
 
 private:
     bool m_initialized = false;
     bool m_showFontMenu = false;
-    SDL_Renderer* m_renderer = nullptr; // Store renderer for ImGui
+    SDL_Window* m_window = nullptr;
+    SDL_Renderer* m_renderer = nullptr;
+    nk_context* m_ctx = nullptr;
+
     OptionsManager m_optionsManager;
     FontConfig m_currentConfig;
-    FontConfig m_tempConfig;                      // Temporary config for UI editing
-    const ButtonMapper* m_buttonMapper = nullptr; // Platform-specific button mapper
+    FontConfig m_tempConfig;
 
-    // Page navigation
     int m_pageCount = 0;
     int m_currentPage = 0;
 
-    // Callbacks
     std::function<void(const FontConfig&)> m_fontApplyCallback;
     std::function<void()> m_closeCallback;
     std::function<void(int)> m_pageJumpCallback;
 
-    // UI state
     int m_selectedFontIndex = 0;
-    int m_selectedStyleIndex = 0;   // Selected reading style
-    char m_pageJumpInput[16] = "1"; // Page jump input
-    bool m_fontSizeChanged = false;
-    bool m_justOpenedFontMenu = false; // Flag to set focus on font dropdown when menu opens
+    int m_selectedStyleIndex = 0;
+    char m_fontSizeInput[16] = "12";
+    char m_zoomStepInput[16] = "10";
+    char m_pageJumpInput[16] = "1";
 
-    // On-screen number pad state
     bool m_showNumberPad = false;
-    int m_numberPadSelectedRow = 0; // Selected row in number pad (0-4)
-    int m_numberPadSelectedCol = 0; // Selected column in number pad (0-2)
+    int m_numberPadSelectedRow = 0;
+    int m_numberPadSelectedCol = 0;
 
-    // Debouncing for number pad input
+    const ButtonMapper* m_buttonMapper = nullptr;
+
+    enum MainScreenWidget
+    {
+        WIDGET_FONT_DROPDOWN = 0,
+        WIDGET_FONT_SIZE_INPUT,
+        WIDGET_FONT_SIZE_SLIDER,
+        WIDGET_READING_STYLE_DROPDOWN,
+        WIDGET_ZOOM_STEP_INPUT,
+        WIDGET_ZOOM_STEP_SLIDER,
+        WIDGET_EDGE_PROGRESS_CHECKBOX,
+        WIDGET_EDGE_PROGRESS_INFO_BUTTON,
+        WIDGET_MINIMAP_CHECKBOX,
+        WIDGET_MINIMAP_INFO_BUTTON,
+        WIDGET_PAGE_JUMP_INPUT,
+        WIDGET_GO_BUTTON,
+        WIDGET_NUMPAD_BUTTON,
+        WIDGET_APPLY_BUTTON,
+        WIDGET_CLOSE_BUTTON,
+        WIDGET_RESET_BUTTON,
+        WIDGET_COUNT
+    };
+
+    struct WidgetBounds
+    {
+        float x = 0.0f;
+        float y = 0.0f;
+        float w = 0.0f;
+        float h = 0.0f;
+        bool valid = false;
+    };
+
+    struct PendingTooltip
+    {
+        float x = 0.0f;
+        float y = 0.0f;
+        float w = 0.0f;
+        float h = 0.0f;
+        std::string text;
+        float padding = 8.0f;
+    };
+
+    int m_mainScreenFocusIndex = 0;
+    bool m_fontDropdownOpen = false;
+    int m_fontDropdownHighlightedIndex = 0;
+    bool m_fontDropdownSelectRequested = false;
+    bool m_fontDropdownCancelRequested = false;
+
+    bool m_styleDropdownOpen = false;
+    int m_styleDropdownHighlightedIndex = 0;
+    bool m_styleDropdownSelectRequested = false;
+    bool m_styleDropdownCancelRequested = false;
+
     Uint32 m_lastButtonPressTime = 0;
-    const Uint32 BUTTON_DEBOUNCE_MS = 100;
+    static constexpr Uint32 BUTTON_DEBOUNCE_MS = 100;
 
-    /**
-     * @brief Render the font selection menu
-     */
+    // Hold state for continuous navigation
+    bool m_upHeld = false;
+    bool m_downHeld = false;
+    Uint32 m_lastNavigationTime = 0;
+    bool m_waitingForInitialNavigationRepeat = false;
+    static constexpr Uint32 NAV_INITIAL_DELAY_MS = 100; // Initial delay before repeat starts
+    static constexpr Uint32 NAV_REPEAT_DELAY_MS = 50;   // Delay between repeats
+
+    std::vector<std::string> m_fontNames;
+    std::array<WidgetBounds, WIDGET_COUNT> m_widgetBounds{};
+    bool m_focusScrollPending = false;
+    bool m_scrollToTopPending = false;
+    std::vector<PendingTooltip> m_pendingTooltips;
+    float m_windowClipY = 0.0f;
+    float m_windowClipHeight = 0.0f;
+    static constexpr float kScrollPadding = 12.0f;
+
+    void endFrame();
+    void setupColorScheme();
     void renderFontMenu();
-
-    /**
-     * @brief Render the on-screen number pad
-     */
     void renderNumberPad();
-
-    /**
-     * @brief Handle controller input for number pad navigation
-     * @param event SDL event to process
-     * @return true if event was handled by number pad
-     */
     bool handleNumberPadInput(const SDL_Event& event);
-
-    /**
-     * @brief Show the on-screen number pad
-     */
-    void showNumberPad();
-
-    /**
-     * @brief Hide the on-screen number pad
-     */
-    void hideNumberPad();
-
-    /**
-     * @brief Find index of font in available fonts list
-     * @param fontName Display name to find
-     * @return Index or 0 if not found
-     */
+    bool handleKeyboardNavigation(const SDL_Event& event);
+    bool handleControllerInput(const SDL_Event& event);
+    void adjustFocusedWidget(int direction);
+    void activateFocusedWidget();
     int findFontIndex(const std::string& fontName) const;
+    void rememberWidgetBounds(MainScreenWidget widget);
+    void requestFocusScroll();
+    void scrollFocusedWidgetIntoView();
+    void scrollSettingsToTop();
+    void showInfoTooltip(MainScreenWidget widget, const char* text);
+    bool moveFocusInGroup(const MainScreenWidget* group, size_t count, int direction);
+    bool handleHorizontalNavigation(int direction);
+    bool isInfoWidget(MainScreenWidget widget) const;
+    bool stepFocusVertical(int direction);
+    void renderPendingTooltips();
 };
 
 #endif // GUI_MANAGER_H

@@ -3,6 +3,7 @@
 
 #include "document.h"
 #include "gui_manager.h"
+using GuiManagerType = GuiManager;
 #include "input_manager.h"
 #include "navigation_manager.h"
 #include "options_manager.h"
@@ -17,6 +18,7 @@
 
 #include <SDL.h>
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -105,6 +107,9 @@ private:
 
     // Event Handling
     void handleEvent(const SDL_Event& event);
+#ifdef TG5040_PLATFORM
+    void handlePowerMessageEvent(const SDL_Event& event);
+#endif
     void processInputAction(const InputActionData& actionData);
     void updateInputState(const SDL_Event& event);
 
@@ -138,7 +143,7 @@ private:
 
     // Core managers
     std::unique_ptr<Document> m_document;
-    std::unique_ptr<GuiManager> m_guiManager;
+    std::unique_ptr<GuiManagerType> m_guiManager;
     std::unique_ptr<OptionsManager> m_optionsManager;
     std::unique_ptr<ReadingHistoryManager> m_readingHistoryManager;
     std::unique_ptr<InputManager> m_inputManager;
@@ -182,6 +187,7 @@ private:
 
 #ifdef TG5040_PLATFORM
     std::unique_ptr<PowerHandler> m_powerHandler;
+    Uint32 m_powerMessageEventType{0};
 #endif
 
     // Per-frame panning when D-pad is held
@@ -196,6 +202,10 @@ private:
     void refreshCachedConfig()
     {
         m_cachedConfig = m_optionsManager->loadConfig();
+        if (m_renderManager)
+        {
+            m_renderManager->setShowMinimap(m_cachedConfig.showDocumentMinimap);
+        }
     }
 
     // Document path for reading history
@@ -225,6 +235,8 @@ private:
         if (m_renderManager)
             m_renderManager->updatePageDisplayTime();
     }
+
+    std::function<void(int)> makeSetCurrentPageCallback();
 };
 
 #endif // APP_H

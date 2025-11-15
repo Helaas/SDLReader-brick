@@ -3,6 +3,8 @@
 
 #include "document.h"
 #include <atomic>
+#include <condition_variable>
+#include <deque>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -11,6 +13,7 @@
 #include <string>
 #include <thread>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 /**
@@ -26,15 +29,20 @@
 class MuPdfDocument : public Document
 {
 public:
+    using ArgbBufferPtr = std::shared_ptr<const std::vector<uint32_t>>;
+
     MuPdfDocument();
     ~MuPdfDocument() override;
 
     std::vector<unsigned char> renderPage(int page, int& width, int& height, int scale) override;
-    std::vector<uint32_t> renderPageARGB(int page, int& width, int& height, int scale);
+    ArgbBufferPtr renderPageARGB(int page, int& width, int& height, int scale);
     int getPageWidthNative(int page) override;
     int getPageHeightNative(int page) override;
     int getPageWidthEffective(int page, int zoom);
     int getPageHeightEffective(int page, int zoom);
+    std::pair<int, int> getPageDimensionsEffective(int page, int zoom);
+    bool tryGetCachedPageARGB(int page, int scale, ArgbBufferPtr& buffer, int& width, int& height);
+    void requestPageRenderAsync(int page, int scale);
     bool open(const std::string& filePath) override;
     bool reopenWithCSS(const std::string& css); // Reopen document with new CSS
     int getPageCount() const override;
@@ -69,6 +77,14 @@ public:
     fz_context* getContext()
     {
         return m_ctx.get();
+    }
+
+    // Set background color for page rendering (default is white)
+    void setBackgroundColor(uint8_t r, uint8_t g, uint8_t b)
+    {
+        m_bgR = r;
+        m_bgG = g;
+        m_bgB = b;
     }
 
 private:
@@ -120,6 +136,30 @@ private:
         }
     };
 
+    struct DisplayListDeleter
+    {
+        fz_context* ctx;
+        DisplayListDeleter() noexcept : ctx(nullptr)
+        {
+        }
+        explicit DisplayListDeleter(fz_context* context) noexcept : ctx(context)
+        {
+        }
+        void operator()(fz_display_list* list) const
+        {
+            if (list)
+                fz_drop_display_list(ctx, list);
+        }
+    };
+
+    struct PageDisplayData
+    {
+        std::unique_ptr<fz_display_list, DisplayListDeleter> displayList;
+        fz_rect bounds{};
+    };
+
+    struct PageScaleInfo;
+
     std::unique_ptr<fz_context, ContextDeleter> m_ctx;
     std::unique_ptr<fz_document, DocumentDeleter> m_doc;
 
@@ -129,24 +169,55 @@ private:
     std::mutex m_prerenderMutex; // Protects prerender context operations
 
     std::map<std::pair<int, int>, std::tuple<std::vector<unsigned char>, int, int>> m_cache;
-    std::map<std::pair<int, int>, std::tuple<std::vector<uint32_t>, int, int>> m_argbCache;
+    std::map<std::pair<int, int>, std::tuple<ArgbBufferPtr, int, int>> m_argbCache;
+    std::map<std::pair<int, int>, std::pair<int, int>> m_dimensionCache;
     std::mutex m_cacheMutex;
     std::mutex m_renderMutex; // Protects MuPDF context operations
-    int m_maxWidth = 2560;    // Increased for better performance at high zoom levels
-    int m_maxHeight = 1920;   // Increased for better performance at high zoom levels
+    std::mutex m_pageDataMutex;
+    int m_maxWidth = 2560;  // Increased for better performance at high zoom levels
+    int m_maxHeight = 1920; // Increased for better performance at high zoom levels
     int m_pageCount = 0;
+    std::vector<PageDisplayData> m_pageDisplayData;
 
     // Background prerendering support
     std::thread m_prerenderThread;
     std::atomic<bool> m_prerenderActive{false};
     std::chrono::steady_clock::time_point m_lastPrerenderTime;
     static constexpr int PRERENDER_COOLDOWN_MS = 50; // Minimum time between prerendering operations
+    std::atomic<uint64_t> m_prerenderGeneration{0};
 
     // User CSS for styling documents
     std::string m_userCSS;
 
     // Store file path for reopening with new CSS
     std::string m_filePath;
+
+    // Background color for page rendering (default white)
+    uint8_t m_bgR = 255;
+    uint8_t m_bgG = 255;
+    uint8_t m_bgB = 255;
+    bool m_isPdfDocument = false;
+
+    // Asynchronous current page rendering support
+    std::thread m_asyncRenderThread;
+    std::mutex m_asyncRenderMutex;
+    std::condition_variable m_asyncRenderCv;
+    std::deque<std::pair<int, int>> m_asyncRenderQueue;
+    std::atomic<bool> m_asyncShutdown{false};
+    std::atomic<bool> m_asyncWorkerRunning{false};
+
+    // Helpers
+    void ensureDisplayList(int pageNumber);
+    PageScaleInfo computePageScaleInfoLocked(int pageNumber, int zoom);
+    void resetDisplayCache();
+    void joinAsyncRenderThread();
+    bool isPrerenderRequestStale(uint64_t generationToken) const;
+    void prerenderPageInternal(int pageNumber, int scale, uint64_t generationToken);
+    void prerenderAdjacentPagesInternal(int currentPage, int scale, uint64_t generationToken);
+    void asyncRenderWorker();
+    bool isRenderableQueued(const std::pair<int, int>& key);
+    bool renderPageARGBWithPrerenderContext(int pageNumber, int zoom, std::vector<uint32_t>& buffer,
+                                            int& width, int& height);
 };
 
 #endif // MUPDF_DOCUMENT_H

@@ -1,10 +1,14 @@
 #include "options_manager.h"
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <map>
+#include <mutex>
 #include <sstream>
 
 // MuPDF includes for font loading
@@ -29,6 +33,7 @@ std::string configToJson(const FontConfig& config)
     oss << "  \"zoomStep\": " << config.zoomStep << ",\n";
     oss << "  \"readingStyle\": " << static_cast<int>(config.readingStyle) << ",\n";
     oss << "  \"disableEdgeProgressBar\": " << (config.disableEdgeProgressBar ? "true" : "false") << ",\n";
+    oss << "  \"showDocumentMinimap\": " << (config.showDocumentMinimap ? "true" : "false") << ",\n";
     oss << "  \"lastBrowseDirectory\": \"" << config.lastBrowseDirectory << "\"\n";
     oss << "}";
     return oss.str();
@@ -125,22 +130,28 @@ FontConfig jsonToConfig(const std::string& json)
     config.zoomStep = findIntValue("zoomStep");
     config.readingStyle = static_cast<ReadingStyle>(findIntValue("readingStyle"));
     config.disableEdgeProgressBar = findBoolValue("disableEdgeProgressBar");
+    if (json.find("\"showDocumentMinimap\"") != std::string::npos)
+    {
+        config.showDocumentMinimap = findBoolValue("showDocumentMinimap");
+    }
+    else
+    {
+        config.showDocumentMinimap = true;
+    }
     config.lastBrowseDirectory = findStringValue("lastBrowseDirectory");
     if (config.lastBrowseDirectory.empty())
     {
-#ifdef TG5040_PLATFORM
-        config.lastBrowseDirectory = "/mnt/SDCARD";
-#else
-        const char* home = getenv("HOME");
-        config.lastBrowseDirectory = home ? home : "/";
-#endif
+        config.lastBrowseDirectory = getDefaultLibraryRoot();
     }
 
     return config;
 }
 
-// Global pointer to OptionsManager instance for the callback
-OptionsManager* g_optionsManagerInstance = nullptr;
+// Track active OptionsManager instances so MuPDF's custom loader never sees
+// dangling pointers when temporary managers go out of scope.
+std::atomic<OptionsManager*> g_activeOptionsManager{nullptr};
+std::mutex g_optionsManagerMutex;
+std::vector<OptionsManager*> g_optionsManagerStack;
 
 /**
  * @brief Custom font loader callback for MuPDF
@@ -149,7 +160,8 @@ OptionsManager* g_optionsManagerInstance = nullptr;
 fz_font* customFontLoader(fz_context* ctx, const char* name, int bold, int italic, int needs_exact_metrics)
 {
     (void) needs_exact_metrics; // Suppress unused parameter warning
-    if (!g_optionsManagerInstance || !name)
+    OptionsManager* manager = g_activeOptionsManager.load(std::memory_order_acquire);
+    if (!manager || !name)
     {
         return nullptr;
     }
@@ -158,7 +170,7 @@ fz_font* customFontLoader(fz_context* ctx, const char* name, int bold, int itali
               << " (bold=" << bold << ", italic=" << italic << ")" << std::endl;
 
     // Use the public method to get the font path
-    std::string fontPath = g_optionsManagerInstance->getFontPathByName(name);
+    std::string fontPath = manager->getFontPathByName(name);
     if (!fontPath.empty())
     {
         std::cout << "Loading custom font: " << fontPath << std::endl;
@@ -188,11 +200,32 @@ fz_font* customFontLoader(fz_context* ctx, const char* name, int bold, int itali
 
 OptionsManager::OptionsManager()
 {
-    // Set global instance for callback
-    g_optionsManagerInstance = this;
-
+    {
+        std::lock_guard<std::mutex> lock(g_optionsManagerMutex);
+        g_optionsManagerStack.push_back(this);
+        g_activeOptionsManager.store(this, std::memory_order_release);
+    }
     // Constructor - scan fonts on creation
     scanFonts();
+}
+
+OptionsManager::~OptionsManager()
+{
+    std::lock_guard<std::mutex> lock(g_optionsManagerMutex);
+    auto it = std::find(g_optionsManagerStack.begin(), g_optionsManagerStack.end(), this);
+    if (it == g_optionsManagerStack.end())
+    {
+        return;
+    }
+
+    bool removingTop = (std::next(it) == g_optionsManagerStack.end());
+    g_optionsManagerStack.erase(it);
+
+    if (removingTop)
+    {
+        OptionsManager* newTop = g_optionsManagerStack.empty() ? nullptr : g_optionsManagerStack.back();
+        g_activeOptionsManager.store(newTop, std::memory_order_release);
+    }
 }
 
 void OptionsManager::scanFonts(const std::string& fontsDir)
@@ -458,28 +491,28 @@ std::string OptionsManager::generateCSS(const FontConfig& config) const
     return css.str();
 }
 
-bool OptionsManager::saveConfig(const FontConfig& config, const std::string& configPath) const
+bool OptionsManager::saveConfig(const FontConfig& config, std::string configPath) const
 {
     try
     {
         // Create directory if it doesn't exist
-        std::filesystem::path path(configPath);
+        std::filesystem::path path = configPath.empty() ? getDefaultConfigPath() : std::filesystem::path(configPath);
         if (path.has_parent_path())
         {
             std::filesystem::create_directories(path.parent_path());
         }
 
-        std::ofstream file(configPath);
+        std::ofstream file(path);
         if (!file.is_open())
         {
-            std::cerr << "Failed to open config file for writing: " << configPath << std::endl;
+            std::cerr << "Failed to open config file for writing: " << path << std::endl;
             return false;
         }
 
         file << configToJson(config);
         file.close();
 
-        std::cout << "Font configuration saved to: " << configPath << std::endl;
+        std::cout << "Font configuration saved to: " << path << std::endl;
         return true;
     }
     catch (const std::exception& e)
@@ -489,22 +522,23 @@ bool OptionsManager::saveConfig(const FontConfig& config, const std::string& con
     }
 }
 
-FontConfig OptionsManager::loadConfig(const std::string& configPath) const
+FontConfig OptionsManager::loadConfig(std::string configPath) const
 {
     FontConfig defaultConfig;
 
     try
     {
-        if (!std::filesystem::exists(configPath))
+        std::filesystem::path path = configPath.empty() ? getDefaultConfigPath() : std::filesystem::path(configPath);
+        if (!std::filesystem::exists(path))
         {
-            std::cout << "Config file not found, using defaults: " << configPath << std::endl;
+            std::cout << "Config file not found, using defaults: " << path << std::endl;
             return defaultConfig;
         }
 
-        std::ifstream file(configPath);
+        std::ifstream file(path);
         if (!file.is_open())
         {
-            std::cerr << "Failed to open config file: " << configPath << std::endl;
+            std::cerr << "Failed to open config file: " << path << std::endl;
             return defaultConfig;
         }
 

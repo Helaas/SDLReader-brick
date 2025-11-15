@@ -10,7 +10,7 @@ This directory contains the Linux-specific build configuration for SDL Reader.
 - **WebP Image Support**: Supports WebP images in PDF documents and comic book archives
 - **Self-Contained MuPDF**: Automatically downloads and builds MuPDF 1.26.7 with libarchive and WebP support
 - **No System MuPDF Required**: No longer depends on system MuPDF packages
-- **ImGui Interface**: Desktop builds gain an ImGui-powered file browser, font & reading-style menu, and on-screen number pad
+- **Nuklear Interface**: Desktop builds gain a Nuklear-powered file browser, font & reading-style menu, and on-screen number pad
 
 ## Dependencies
 
@@ -46,6 +46,8 @@ The build process now automatically downloads and compiles MuPDF 1.26.7 with CBR
 
 From the project root directory:
 ```bash
+make             # auto-detects Linux and selects the linux target
+# or explicitly
 make linux
 ```
 
@@ -98,7 +100,7 @@ Run it from the project root with:
 ./bin/sdl_reader_cli --browse
 ```
 
-Launching with `--browse` opens the ImGui-driven file picker, auto-resumes your position using `reading_history.json`, and lets you tweak fonts/themes from a controller. Preferences are saved in `config.json` next to the executable.
+Launching with `--browse` opens the Nuklear-driven file picker, auto-resumes your position using `reading_history.json`, and lets you tweak fonts/themes from a controller. Preferences are saved in the reader state directory (`$SDL_READER_STATE_DIR`, defaulting to `$HOME/config.json`). Set `SDL_READER_DEFAULT_DIR` if you want the picker to start in a specific library folder. Press **X** to toggle the new thumbnail grid, and use the `showDocumentMinimap` flag in `config.json` to disable the zoom minimap if desired.
 
 ### Fonts & Reading Styles
 

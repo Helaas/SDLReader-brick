@@ -29,10 +29,27 @@ bool RenderManager::initialize()
     return m_renderer && m_textRenderer;
 }
 
+void RenderManager::clearLastRender(Document* document)
+{
+    // Clear the cached preview render
+    m_lastArgbValid = false;
+    m_lastArgbBuffer.reset();
+    m_lastArgbPage = -1;
+    m_lastArgbScale = -1;
+
+    // Clear MuPDF's render and dimension caches
+    if (auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(document))
+    {
+        muPdfDoc->clearCache();
+    }
+}
+
 void RenderManager::renderCurrentPage(Document* document, NavigationManager* navigationManager,
                                       ViewportManager* viewportManager, std::mutex& documentMutex,
                                       bool isDragging)
 {
+    (void) documentMutex; // Rendering now relies on per-document locking
+
     Uint32 renderStart = SDL_GetTicks();
 
     // Use the configured background color for document margins
@@ -41,69 +58,93 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
     int winW = m_renderer->getWindowWidth();
     int winH = m_renderer->getWindowHeight();
 
-    int srcW, srcH;
-    std::vector<uint32_t> argbData;
-    {
-        // Lock the document mutex to ensure thread-safe access
-        std::lock_guard<std::mutex> lock(documentMutex);
+    int srcW = 0;
+    int srcH = 0;
+    std::shared_ptr<const std::vector<uint32_t>> argbData;
+    bool usedPreview = false;
+    bool highResReady = false;
+    MuPdfDocument* muPdfDocPtr = dynamic_cast<MuPdfDocument*>(document);
+    int currentPage = navigationManager->getCurrentPage();
+    int currentScale = viewportManager->getCurrentScale();
 
-        // Try to use ARGB rendering for better performance
-        auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(document);
-        if (muPdfDoc)
+    m_previewActive = false;
+
+    if (muPdfDocPtr)
+    {
+        // Pass background color to MuPDF for proper rendering
+        muPdfDocPtr->setBackgroundColor(m_bgColorR, m_bgColorG, m_bgColorB);
+
+        try
         {
-            try
+            MuPdfDocument::ArgbBufferPtr cachedBuffer;
+            if (muPdfDocPtr->tryGetCachedPageARGB(currentPage, currentScale, cachedBuffer, srcW, srcH))
             {
-                argbData = muPdfDoc->renderPageARGB(navigationManager->getCurrentPage(), srcW, srcH, viewportManager->getCurrentScale());
+                // Exact scale is cached, use it immediately
+                argbData = cachedBuffer;
+                highResReady = static_cast<bool>(argbData);
             }
-            catch (const std::exception& e)
+            else if (m_lastArgbValid && m_lastArgbPage == currentPage && m_lastArgbBuffer)
             {
-                // Fallback to RGB rendering
-                std::vector<uint8_t> rgbData = document->renderPage(navigationManager->getCurrentPage(), srcW, srcH, viewportManager->getCurrentScale());
-                // Convert to ARGB manually
-                argbData.resize(srcW * srcH);
-                for (int i = 0; i < srcW * srcH; ++i)
-                {
-                    argbData[i] = rgb24_to_argb32(rgbData[i * 3], rgbData[i * 3 + 1], rgbData[i * 3 + 2]);
-                }
+                // No exact match, use last render as preview (only if same page!)
+                argbData = m_lastArgbBuffer;
+                srcW = m_lastArgbWidth;
+                srcH = m_lastArgbHeight;
+                usedPreview = true;
+            }
+            else
+            {
+                // No preview available (wrong page or first render), must render synchronously
+                // This is the slow path but necessary for page changes
+                argbData = muPdfDocPtr->renderPageARGB(currentPage, srcW, srcH, currentScale);
+                highResReady = static_cast<bool>(argbData);
             }
         }
-        else
+        catch (const std::exception&)
         {
-            // Fallback to RGB rendering for other document types
-            std::vector<uint8_t> rgbData = document->renderPage(navigationManager->getCurrentPage(), srcW, srcH, viewportManager->getCurrentScale());
-            // Convert to ARGB manually
-            argbData.resize(srcW * srcH);
+            std::vector<uint8_t> rgbData = document->renderPage(currentPage, srcW, srcH, currentScale);
+            auto converted = std::make_shared<std::vector<uint32_t>>(static_cast<size_t>(srcW) * static_cast<size_t>(srcH));
             for (int i = 0; i < srcW * srcH; ++i)
             {
-                argbData[i] = rgb24_to_argb32(rgbData[i * 3], rgbData[i * 3 + 1], rgbData[i * 3 + 2]);
+                (*converted)[static_cast<size_t>(i)] = rgb24_to_argb32(rgbData[i * 3], rgbData[i * 3 + 1], rgbData[i * 3 + 2]);
             }
+            argbData = converted;
+            highResReady = true;
         }
-    }
-
-    // Ensure page dimensions are updated BEFORE calculating positions
-    // This prevents warping when switching between pages with different aspect ratios
-    int newPageWidth, newPageHeight;
-
-    // displayed page size after rotation
-    if (viewportManager->getRotation() % 180 == 0)
-    {
-        newPageWidth = srcW;
-        newPageHeight = srcH;
     }
     else
     {
-        newPageWidth = srcH;
-        newPageHeight = srcW;
+        std::vector<uint8_t> rgbData = document->renderPage(currentPage, srcW, srcH, currentScale);
+        auto converted = std::make_shared<std::vector<uint32_t>>(static_cast<size_t>(srcW) * static_cast<size_t>(srcH));
+        for (int i = 0; i < srcW * srcH; ++i)
+        {
+            (*converted)[static_cast<size_t>(i)] = rgb24_to_argb32(rgbData[i * 3], rgbData[i * 3 + 1], rgbData[i * 3 + 2]);
+        }
+        argbData = converted;
+        highResReady = true;
     }
 
-    // Only update page dimensions if they've actually changed
-    // This provides more stable rendering during rapid input
-    if (viewportManager->getPageWidth() != newPageWidth || viewportManager->getPageHeight() != newPageHeight)
+    if (!argbData)
     {
-        viewportManager->setPageDimensions(newPageWidth, newPageHeight);
-        // Clamp scroll position when page dimensions change to prevent out-of-bounds rendering
-        viewportManager->clampScroll();
+        return;
     }
+
+    if (usedPreview && muPdfDocPtr)
+    {
+        m_previewActive = true;
+        if (!viewportManager->isZoomDebouncing())
+        {
+            muPdfDocPtr->requestPageRenderAsync(currentPage, currentScale);
+        }
+    }
+
+    if (highResReady)
+    {
+        storeLastRender(currentPage, currentScale, argbData, srcW, srcH);
+    }
+
+    // Don't update viewport dimensions based on render buffer size!
+    // The viewport should use the logical page size at the current scale,
+    // not the actual render buffer size (which may include headroom for zooming)
 
     int posX = (winW - viewportManager->getPageWidth()) / 2 + viewportManager->getScrollX();
 
@@ -122,10 +163,14 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
     }
     viewportManager->setForceTopAlignNextRender(false);
 
-    m_renderer->renderPageExARGB(argbData, srcW, srcH,
-                                 posX, posY, viewportManager->getPageWidth(), viewportManager->getPageHeight(),
+    SDL_Rect pageRect = {posX, posY, viewportManager->getPageWidth(), viewportManager->getPageHeight()};
+
+    m_renderer->renderPageExARGB(*argbData, srcW, srcH,
+                                 pageRect.x, pageRect.y, pageRect.w, pageRect.h,
                                  static_cast<double>(viewportManager->getRotation()),
-                                 viewportManager->currentFlipFlags());
+                                 viewportManager->currentFlipFlags(), argbData.get());
+
+    renderDocumentMinimap(argbData, srcW, srcH, pageRect, viewportManager, winW, winH);
 
     // Trigger prerendering of adjacent pages for faster page changes
     // Do this after the main render to avoid blocking the current page display
@@ -249,6 +294,152 @@ void RenderManager::renderZoomProcessingIndicator(ViewportManager* viewportManag
 
         // Restore font size
         m_textRenderer->setFontSize(100);
+    }
+}
+
+void RenderManager::renderDocumentMinimap(std::shared_ptr<const std::vector<uint32_t>> argbData, int srcWidth, int srcHeight,
+                                          const SDL_Rect& pageRect, ViewportManager* viewportManager,
+                                          int windowWidth, int windowHeight)
+{
+    if (!m_showMinimap)
+    {
+        return;
+    }
+
+    if (!argbData || argbData->empty() || srcWidth <= 0 || srcHeight <= 0 || pageRect.w <= 0 || pageRect.h <= 0)
+    {
+        return;
+    }
+
+    // Only show when the full page is not visible in the viewport
+    if (pageRect.w <= windowWidth && pageRect.h <= windowHeight)
+    {
+        return;
+    }
+
+    constexpr int MINIMAP_MARGIN = 16;
+    constexpr int MINIMAP_PADDING = 6;
+    constexpr int MINIMAP_MAX_WIDTH = 220;
+    constexpr int MINIMAP_MAX_HEIGHT = 160;
+
+    int availableWidth = std::max(1, windowWidth - MINIMAP_MARGIN * 2);
+    int availableHeight = std::max(1, windowHeight - MINIMAP_MARGIN * 2);
+    int maxWidth = std::min(MINIMAP_MAX_WIDTH, availableWidth);
+    int maxHeight = std::min(MINIMAP_MAX_HEIGHT, availableHeight);
+
+    if (maxWidth <= 0 || maxHeight <= 0)
+    {
+        return;
+    }
+
+    double scale = std::min({static_cast<double>(maxWidth) / static_cast<double>(pageRect.w),
+                             static_cast<double>(maxHeight) / static_cast<double>(pageRect.h),
+                             1.0});
+
+    if (scale <= 0.0)
+    {
+        return;
+    }
+
+    int minimapWidth = std::max(1, static_cast<int>(std::round(pageRect.w * scale)));
+    int minimapHeight = std::max(1, static_cast<int>(std::round(pageRect.h * scale)));
+
+    int outerWidth = minimapWidth + MINIMAP_PADDING * 2;
+    int outerHeight = minimapHeight + MINIMAP_PADDING * 2;
+
+    int outerX = windowWidth - outerWidth - MINIMAP_MARGIN;
+    int outerY = windowHeight - outerHeight - MINIMAP_MARGIN;
+
+    if (outerX < MINIMAP_MARGIN / 2)
+        outerX = MINIMAP_MARGIN / 2;
+    if (outerY < MINIMAP_MARGIN / 2)
+        outerY = MINIMAP_MARGIN / 2;
+
+    SDL_SetRenderDrawBlendMode(m_renderer->getSDLRenderer(), SDL_BLENDMODE_BLEND);
+
+    SDL_Rect backgroundRect = {outerX, outerY, outerWidth, outerHeight};
+    SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 0, 0, 0, 160);
+    SDL_RenderFillRect(m_renderer->getSDLRenderer(), &backgroundRect);
+
+    SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 255, 255, 255, 200);
+    SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &backgroundRect);
+
+    int contentX = outerX + MINIMAP_PADDING;
+    int contentY = outerY + MINIMAP_PADDING;
+
+    m_renderer->renderPageExARGB(*argbData, srcWidth, srcHeight,
+                                 contentX, contentY, minimapWidth, minimapHeight,
+                                 static_cast<double>(viewportManager->getRotation()),
+                                 viewportManager->currentFlipFlags(), argbData.get());
+
+    int pageLeft = pageRect.x;
+    int pageTop = pageRect.y;
+    int pageRight = pageRect.x + pageRect.w;
+    int pageBottom = pageRect.y + pageRect.h;
+
+    int visibleLeft = std::max(pageLeft, 0);
+    int visibleTop = std::max(pageTop, 0);
+    int visibleRight = std::min(pageRight, windowWidth);
+    int visibleBottom = std::min(pageBottom, windowHeight);
+
+    if (visibleRight <= visibleLeft || visibleBottom <= visibleTop)
+    {
+        return;
+    }
+
+    float normLeft = static_cast<float>(visibleLeft - pageLeft) / static_cast<float>(pageRect.w);
+    float normTop = static_cast<float>(visibleTop - pageTop) / static_cast<float>(pageRect.h);
+    float normRight = static_cast<float>(visibleRight - pageLeft) / static_cast<float>(pageRect.w);
+    float normBottom = static_cast<float>(visibleBottom - pageTop) / static_cast<float>(pageRect.h);
+
+    normLeft = std::clamp(normLeft, 0.0f, 1.0f);
+    normTop = std::clamp(normTop, 0.0f, 1.0f);
+    normRight = std::clamp(normRight, 0.0f, 1.0f);
+    normBottom = std::clamp(normBottom, 0.0f, 1.0f);
+
+    if (normRight <= normLeft || normBottom <= normTop)
+    {
+        return;
+    }
+
+    float viewLeft = contentX + normLeft * minimapWidth;
+    float viewTop = contentY + normTop * minimapHeight;
+    float viewRight = contentX + normRight * minimapWidth;
+    float viewBottom = contentY + normBottom * minimapHeight;
+
+    int viewX = static_cast<int>(std::floor(viewLeft));
+    int viewY = static_cast<int>(std::floor(viewTop));
+    int viewW = static_cast<int>(std::ceil(viewRight - viewLeft));
+    int viewH = static_cast<int>(std::ceil(viewBottom - viewTop));
+
+    viewW = std::max(2, std::min(viewW, minimapWidth));
+    viewH = std::max(2, std::min(viewH, minimapHeight));
+
+    if (viewX + viewW > contentX + minimapWidth)
+        viewW = contentX + minimapWidth - viewX;
+    if (viewY + viewH > contentY + minimapHeight)
+        viewH = contentY + minimapHeight - viewY;
+
+    if (viewW <= 0 || viewH <= 0)
+    {
+        return;
+    }
+
+    SDL_Rect viewRect = {viewX, viewY, viewW, viewH};
+    SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 30, 144, 255, 110);
+    SDL_RenderFillRect(m_renderer->getSDLRenderer(), &viewRect);
+
+    SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 0, 0, 0, 220);
+    SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &viewRect);
+
+    if (viewRect.w > 2 && viewRect.h > 2)
+    {
+        SDL_Rect innerRect = {viewRect.x + 1, viewRect.y + 1, viewRect.w - 2, viewRect.h - 2};
+        if (innerRect.w > 0 && innerRect.h > 0)
+        {
+            SDL_SetRenderDrawColor(m_renderer->getSDLRenderer(), 255, 255, 255, 230);
+            SDL_RenderDrawRect(m_renderer->getSDLRenderer(), &innerRect);
+        }
     }
 }
 
@@ -578,4 +769,14 @@ SDL_Color RenderManager::getContrastingTextColor() const
     {
         return {255, 255, 255, 255}; // White text
     }
+}
+
+void RenderManager::storeLastRender(int page, int scale, std::shared_ptr<const std::vector<uint32_t>> buffer, int width, int height)
+{
+    m_lastArgbBuffer = std::move(buffer);
+    m_lastArgbWidth = width;
+    m_lastArgbHeight = height;
+    m_lastArgbPage = page;
+    m_lastArgbScale = scale;
+    m_lastArgbValid = (m_lastArgbBuffer && !m_lastArgbBuffer->empty());
 }

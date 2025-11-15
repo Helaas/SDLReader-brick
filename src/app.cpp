@@ -1,6 +1,5 @@
 #include "app.h"
 #include "document.h"
-#include "gui_manager.h"
 #include "mupdf_document.h"
 #include "navigation_manager.h"
 #include "options_manager.h"
@@ -8,6 +7,7 @@
 #include "text_renderer.h"
 #ifdef TG5040_PLATFORM
 #include "power_handler.h"
+#include "power_events.h"
 #endif
 
 #include <algorithm>
@@ -30,9 +30,23 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     // Initialize power handler
     m_powerHandler = std::make_unique<PowerHandler>();
 
+    m_powerMessageEventType = getPowerMessageEventType();
+
     // Register error callback for displaying GUI messages
     m_powerHandler->setErrorCallback([this](const std::string& message)
-                                     { showErrorMessage(message); });
+                                     {
+        SDL_Event event;
+        SDL_zero(event);
+        event.type = m_powerMessageEventType;
+        event.user.code = 0;
+        event.user.data1 = new std::string(message);
+        event.user.data2 = nullptr;
+        if (SDL_PushEvent(&event) < 0)
+        {
+            delete static_cast<std::string*>(event.user.data1);
+            std::cerr << "App: Failed to push power message event: " << SDL_GetError() << std::endl;
+        }
+    });
 
     // Register sleep mode callback for fake sleep functionality
     m_powerHandler->setSleepModeCallback([this](bool enterFakeSleep)
@@ -173,7 +187,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     // (see earlier in constructor, before m_document->open() call)
 
     // Initialize GUI manager AFTER font manager
-    m_guiManager = std::make_unique<GuiManager>();
+    m_guiManager = std::make_unique<GuiManagerType>();
     if (!m_guiManager->initialize(window, renderer))
     {
         throw std::runtime_error("Failed to initialize GUI manager");
@@ -198,10 +212,10 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     m_guiManager->setPageJumpCallback([this](int pageNumber)
                                       {
         std::cout << "DEBUG: Page jump callback triggered to page " << (pageNumber + 1) << std::endl;
-        m_navigationManager->goToPage(pageNumber, m_document.get(), m_viewportManager.get(), m_guiManager.get(),
-                                     [this]() { markDirty(); },
-                                     [this]() { updateScaleDisplayTime(); },
-                                     [this]() { updatePageDisplayTime(); }); });
+        m_navigationManager->goToPage(pageNumber, m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(),
+                                      [this]() { markDirty(); },
+                                      [this]() { updateScaleDisplayTime(); },
+                                      [this]() { updatePageDisplayTime(); }); });
 
     // Initialize page information in GUI manager
     m_guiManager->setPageCount(m_navigationManager->getPageCount());
@@ -221,6 +235,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     uint8_t bgR, bgG, bgB;
     OptionsManager::getReadingStyleBackgroundColor(savedConfig.readingStyle, bgR, bgG, bgB);
     m_renderManager->setBackgroundColor(bgR, bgG, bgB);
+    m_renderManager->setShowMinimap(savedConfig.showDocumentMinimap);
 
     // Update ViewportManager with the proper renderer from RenderManager
     m_viewportManager->setRenderer(m_renderManager->getRenderer());
@@ -254,15 +269,13 @@ App::~App()
     m_inputManager.reset();
 
     std::cout.flush();
-    m_optionsManager.reset();
-
-    std::cout.flush();
     m_guiManager.reset();
 
     std::cout.flush();
     m_document.reset();
 
     std::cout.flush();
+    m_optionsManager.reset();
 }
 
 void App::run()
@@ -280,7 +293,7 @@ void App::run()
     SDL_Event event;
     while (m_running)
     {
-        // Always start ImGui frame at the beginning of each main loop iteration
+        // Always start GUI frame at the beginning of each main loop iteration
         // This ensures proper frame lifecycle management
         if (m_guiManager && !m_inFakeSleep)
         {
@@ -289,6 +302,13 @@ void App::run()
 
         while (SDL_PollEvent(&event) != 0)
         {
+#ifdef TG5040_PLATFORM
+            if (m_powerMessageEventType != 0 && event.type == m_powerMessageEventType)
+            {
+                handlePowerMessageEvent(event);
+                continue;
+            }
+#endif
             // In fake sleep mode, ignore all SDL events (power button is handled by PowerHandler)
             if (!m_inFakeSleep)
             {
@@ -313,10 +333,10 @@ void App::run()
             // Normal rendering - only render if something changed
             bool panningChanged = updateHeldPanning(dt);
 
-            // Check for settled zoom input and apply pending zoom through ViewportManager
-            if (!m_viewportManager->isZoomDebouncing())
+            // Apply pending zoom immediately for responsive feel
+            // Don't wait for debouncing - apply incrementally
+            if (m_viewportManager->hasPendingZoom())
             {
-                // Zoom input has settled, apply the final accumulated zoom
                 m_viewportManager->applyPendingZoom(m_document.get(), m_navigationManager->getCurrentPage());
                 markDirty();
             }
@@ -372,7 +392,7 @@ void App::run()
                     m_renderManager->renderUI(this, m_navigationManager.get(), m_viewportManager.get());
                 }
 
-                // Always render ImGui if we started a frame (which we always do when not in fake sleep)
+                // Always render GUI if we started a frame (which we always do when not in fake sleep)
                 if (m_guiManager)
                 {
                     m_guiManager->render();
@@ -392,7 +412,7 @@ void App::run()
             }
             else
             {
-                // Even if we don't render the main content, we must still finish the ImGui frame
+                // Even if we don't render the main content, we must still finish the GUI frame
                 // to maintain proper frame lifecycle
                 if (m_guiManager)
                 {
@@ -414,9 +434,27 @@ void App::run()
     }
 }
 
+#ifdef TG5040_PLATFORM
+void App::handlePowerMessageEvent(const SDL_Event& event)
+{
+    std::unique_ptr<std::string> message(static_cast<std::string*>(event.user.data1));
+    if (!message)
+    {
+        return;
+    }
+
+    if (m_guiManager && m_guiManager->closeAllUIWindows())
+    {
+        markDirty();
+    }
+
+    showErrorMessage(*message);
+}
+#endif
+
 void App::handleEvent(const SDL_Event& event)
 {
-    // Let ImGui handle the event first
+    // Let GUI handle the event first
     bool guiHandled = false;
     if (m_guiManager)
     {
@@ -430,33 +468,90 @@ void App::handleEvent(const SDL_Event& event)
         return;
     }
 
-    // Block ALL input events if the settings menu is visible, except ESC to close it
+    auto closeVisibleMenus = [this]() -> bool
+    {
+        if (m_guiManager)
+        {
+            return m_guiManager->closeTopUIWindow();
+        }
+        return false;
+    };
+
+    // Block most input while menu overlays are visible, but allow key system controls
     if (m_guiManager && (m_guiManager->isFontMenuVisible() || m_guiManager->isNumberPadVisible()))
     {
-        // Always allow ESC and Q to close the menu
-        if (event.type == SDL_KEYDOWN &&
-            (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q))
+        if (event.type == SDL_KEYDOWN)
         {
-            if (event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q)
+            switch (event.key.keysym.sym)
+            {
+            case SDLK_ESCAPE:
+            {
+                bool closed = closeVisibleMenus();
+                if (closed)
+                {
+                    markDirty();
+                    return;
+                }
+                break;
+            }
+            case SDLK_q:
+            {
+                bool closed = closeVisibleMenus();
+                if (closed)
+                {
+                    markDirty();
+                    return;
+                }
+                m_running = false;
+                return;
+            }
+            case SDLK_m:
+                m_guiManager->toggleFontMenu();
+                markDirty();
+                return;
+            default:
+                break;
+            }
+        }
+        else if (event.type == SDL_QUIT)
+        {
+            bool closed = closeVisibleMenus();
+            if (closed)
+            {
+                markDirty();
+                return;
+            }
+            m_running = false;
+            return;
+        }
+        else if (event.type == SDL_CONTROLLERBUTTONDOWN ||
+                 event.type == SDL_CONTROLLERBUTTONUP ||
+                 event.type == SDL_JOYBUTTONDOWN ||
+                 event.type == SDL_JOYBUTTONUP)
+        {
+            InputActionData actionData = m_inputManager->processEvent(event);
+            if (actionData.action == InputAction::ToggleFontMenu)
             {
                 m_guiManager->toggleFontMenu();
                 markDirty();
+                return;
             }
-        }
-        // Always allow quit events
-        else if (event.type == SDL_QUIT)
-        {
-            m_running = false;
-        }
-        // Always allow GUIDE button to pass through (for quit)
-        else if (event.type == SDL_CONTROLLERBUTTONDOWN &&
-                 event.cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE)
-        {
-            // Process GUIDE button through InputManager to trigger quit
-            InputActionData actionData = m_inputManager->processEvent(event);
-            processInputAction(actionData);
+            if (actionData.action == InputAction::Quit)
+            {
+                bool closed = closeVisibleMenus();
+                if (closed)
+                {
+                    markDirty();
+                }
+                else
+                {
+                    m_running = false;
+                }
+                return;
+            }
             return;
         }
+
         // Block everything else when menu or number pad is visible to prevent bleeding through
         return;
     }
@@ -488,7 +583,7 @@ void App::processInputAction(const InputActionData& actionData)
     case InputAction::GoToNextPage:
         if (!m_navigationManager->isInPageChangeCooldown())
         {
-            m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+            m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
                                               { markDirty(); }, [this]()
                                               { updateScaleDisplayTime(); }, [this]()
                                               {
@@ -500,7 +595,7 @@ void App::processInputAction(const InputActionData& actionData)
     case InputAction::GoToPreviousPage:
         if (!m_navigationManager->isInPageChangeCooldown())
         {
-            m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+            m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
                                                   { markDirty(); }, [this]()
                                                   { updateScaleDisplayTime(); }, [this]()
                                                   {
@@ -525,7 +620,7 @@ void App::processInputAction(const InputActionData& actionData)
         markDirty();
         break;
     case InputAction::GoToFirstPage:
-        m_navigationManager->goToPage(0, m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+        m_navigationManager->goToPage(0, m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
                                       { markDirty(); }, [this]()
                                       { updateScaleDisplayTime(); }, [this]()
                                       {
@@ -533,7 +628,7 @@ void App::processInputAction(const InputActionData& actionData)
                                           m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
         break;
     case InputAction::GoToLastPage:
-        m_navigationManager->goToPage(m_navigationManager->getPageCount() - 1, m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+        m_navigationManager->goToPage(m_navigationManager->getPageCount() - 1, m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
                                       { markDirty(); }, [this]()
                                       { updateScaleDisplayTime(); }, [this]()
                                       {
@@ -543,7 +638,7 @@ void App::processInputAction(const InputActionData& actionData)
     case InputAction::GoToPage:
         if (actionData.intValue >= 0 && actionData.intValue < m_navigationManager->getPageCount())
         {
-            m_navigationManager->goToPage(actionData.intValue, m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+            m_navigationManager->goToPage(actionData.intValue, m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
                                           { markDirty(); }, [this]()
                                           { updateScaleDisplayTime(); }, [this]()
                                           {
@@ -554,7 +649,7 @@ void App::processInputAction(const InputActionData& actionData)
     case InputAction::JumpPages:
         if (!m_navigationManager->isInPageChangeCooldown())
         {
-            m_navigationManager->jumpPages(actionData.intValue, m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+            m_navigationManager->jumpPages(actionData.intValue, m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
                                            { markDirty(); }, [this]()
                                            { updateScaleDisplayTime(); }, [this]()
                                            {
@@ -579,15 +674,18 @@ void App::processInputAction(const InputActionData& actionData)
         break;
     case InputAction::FitPageToWidth:
         m_viewportManager->fitPageToWidth(m_document.get(), m_navigationManager->getCurrentPage());
+        m_renderManager->clearLastRender(m_document.get()); // Clear preview cache to force re-render at new scale
         markDirty();
         break;
     case InputAction::FitPageToWindow:
         m_viewportManager->fitPageToWindow(m_document.get(), m_navigationManager->getCurrentPage());
+        m_renderManager->clearLastRender(m_document.get()); // Clear preview cache to force re-render at new scale
         markDirty();
         break;
     case InputAction::ResetPageView:
-        m_viewportManager->resetPageView(m_document.get());
-        m_navigationManager->setCurrentPage(0); // Reset to first page
+        m_navigationManager->setCurrentPage(0);                // Reset to first page FIRST
+        m_renderManager->clearLastRender(m_document.get());    // Clear any cached renders
+        m_viewportManager->resetPageView(m_document.get(), 0); // Now reset viewport for page 0
         markDirty();
         break;
     case InputAction::ToggleMirrorHorizontal:
@@ -687,7 +785,7 @@ void App::processInputAction(const InputActionData& actionData)
     case InputAction::ConfirmPageJumpInput:
         if (m_navigationManager->isPageJumpInputActive())
         {
-            m_navigationManager->confirmPageJumpInput(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+            m_navigationManager->confirmPageJumpInput(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
                                                       { markDirty(); }, [this]()
                                                       { updateScaleDisplayTime(); }, [this]()
                                                       { updatePageDisplayTime(); }, [this](const std::string& message)
@@ -942,9 +1040,21 @@ void App::updateInputState(const SDL_Event& event)
 
 void App::loadDocument()
 {
+    // Clear any cached renders from previous session/document
+    m_renderManager->clearLastRender(m_document.get());
+
     // Don't reset page to 0 if it's already been set (e.g., from reading history)
     // Just fit the current page to window
     m_viewportManager->fitPageToWindow(m_document.get(), m_navigationManager->getCurrentPage());
+
+    // Clear cache again after fitPageToWidth to ensure first render uses the correct scale
+    // This is necessary because fitPageToWidth changes the scale and maxRenderSize
+    m_renderManager->clearLastRender(m_document.get());
+
+    // Ensure we start from the top-left corner so the restored page is fully visible
+    // m_viewportManager->alignToTopOfCurrentPage();
+    // m_viewportManager->setScrollX(m_viewportManager->getMaxScrollX());
+    // m_viewportManager->clampScroll();
 }
 
 void App::applyPendingFontChange()
@@ -964,13 +1074,14 @@ void App::applyPendingFontChange()
     bool styleChanged = (m_pendingFontConfig.readingStyle != m_cachedConfig.readingStyle);
     bool zoomStepChanged = (m_pendingFontConfig.zoomStep != m_cachedConfig.zoomStep);
     bool edgeProgressBarChanged = (m_pendingFontConfig.disableEdgeProgressBar != m_cachedConfig.disableEdgeProgressBar);
+    bool minimapChanged = (m_pendingFontConfig.showDocumentMinimap != m_cachedConfig.showDocumentMinimap);
 
     if (!fontChanged && !sizeChanged && !styleChanged)
     {
         std::cout << "No font/size/style change detected - skipping document reopen" << std::endl;
 
         // Even if font/size/style didn't change, we still need to save other setting changes
-        if (zoomStepChanged || edgeProgressBarChanged)
+        if (zoomStepChanged || edgeProgressBarChanged || minimapChanged)
         {
             std::cout << "Zoom step or edge progress bar changed - saving config" << std::endl;
             m_optionsManager->saveConfig(m_pendingFontConfig);
@@ -979,6 +1090,10 @@ void App::applyPendingFontChange()
             if (zoomStepChanged)
             {
                 m_inputManager->setZoomStep(m_pendingFontConfig.zoomStep);
+            }
+            if (m_renderManager)
+            {
+                m_renderManager->setShowMinimap(m_cachedConfig.showDocumentMinimap);
             }
         }
 
@@ -1061,6 +1176,11 @@ void App::applyPendingFontChange()
 
                     // Refresh cached config after saving
                     refreshCachedConfig();
+
+                    if (m_renderManager)
+                    {
+                        m_renderManager->setShowMinimap(m_cachedConfig.showDocumentMinimap);
+                    }
 
                     // Update InputManager's zoom step with the new value
                     m_inputManager->setZoomStep(m_pendingFontConfig.zoomStep);
@@ -1388,7 +1508,7 @@ bool App::updateHeldPanning(float dt)
 
         if (!inCooldown && m_navigationManager->getCurrentPage() < m_navigationManager->getPageCount() - 1 && !m_navigationManager->isInPageChangeCooldown())
         {
-            m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+            m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
                                               { markDirty(); }, [this]()
                                               { updateScaleDisplayTime(); }, [this]()
                                               {
@@ -1411,7 +1531,7 @@ bool App::updateHeldPanning(float dt)
 
         if (!inCooldown && m_navigationManager->getCurrentPage() > 0 && !m_navigationManager->isInPageChangeCooldown())
         {
-            m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+            m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
                                                   { markDirty(); }, [this]()
                                                   { updateScaleDisplayTime(); }, [this]()
                                                   {
@@ -1530,7 +1650,7 @@ bool App::updateHeldPanning(float dt)
 
         if (!inCooldown && m_navigationManager->getCurrentPage() < m_navigationManager->getPageCount() - 1 && !m_navigationManager->isInPageChangeCooldown())
         {
-            m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+            m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
                                               { markDirty(); }, [this]()
                                               { updateScaleDisplayTime(); }, [this]()
                                               {
@@ -1554,7 +1674,7 @@ bool App::updateHeldPanning(float dt)
 
         if (!inCooldown && m_navigationManager->getCurrentPage() > 0 && !m_navigationManager->isInPageChangeCooldown())
         {
-            m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+            m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
                                                   { markDirty(); }, [this]()
                                                   { updateScaleDisplayTime(); }, [this]()
                                                   {
@@ -1602,7 +1722,7 @@ void App::handleDpadNudgeRight()
                 if (m_navigationManager->getCurrentPage() < m_navigationManager->getPageCount() - 1 && !m_navigationManager->isInPageChangeCooldown())
                 {
                     printf("DEBUG: Immediate page change via nudge (fit-to-width)\n");
-                    m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+                    m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
                                                       { markDirty(); }, [this]()
                                                       { updateScaleDisplayTime(); }, [this]()
                                                       {
@@ -1643,7 +1763,7 @@ void App::handleDpadNudgeLeft()
             {
                 if (m_navigationManager->getCurrentPage() > 0 && !m_navigationManager->isInPageChangeCooldown())
                 {
-                    m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+                    m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
                                                           { markDirty(); }, [this]()
                                                           { updateScaleDisplayTime(); }, [this]()
                                                           {
@@ -1680,7 +1800,7 @@ void App::handleDpadNudgeDown()
             {
                 if (m_navigationManager->getCurrentPage() < m_navigationManager->getPageCount() - 1 && !m_navigationManager->isInPageChangeCooldown())
                 {
-                    m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+                    m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
                                                       { markDirty(); }, [this]()
                                                       { updateScaleDisplayTime(); }, [this]()
                                                       {
@@ -1717,7 +1837,7 @@ void App::handleDpadNudgeUp()
             {
                 if (m_navigationManager->getCurrentPage() > 0 && !m_navigationManager->isInPageChangeCooldown())
                 {
-                    m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), m_guiManager.get(), [this]()
+                    m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
                                                           { markDirty(); }, [this]()
                                                           { updateScaleDisplayTime(); }, [this]()
                                                           {
@@ -1770,4 +1890,14 @@ void App::applyFontConfiguration(const FontConfig& config)
 
     // The actual document reopening will happen safely in the main loop
     // via applyPendingFontChange()
+}
+std::function<void(int)> App::makeSetCurrentPageCallback()
+{
+    return [this](int page)
+    {
+        if (m_guiManager)
+        {
+            m_guiManager->setCurrentPage(page);
+        }
+    };
 }

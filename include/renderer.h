@@ -30,7 +30,7 @@ public:
 
     void renderPageEx(const std::vector<uint8_t>& pixelData, int srcWidth, int srcHeight, int destX, int destY, int destWidth, int destHeight, double angleDeg, SDL_RendererFlip flip);
 
-    void renderPageExARGB(const std::vector<uint32_t>& argbData, int srcWidth, int srcHeight, int destX, int destY, int destWidth, int destHeight, double angleDeg, SDL_RendererFlip flip);
+    void renderPageExARGB(const std::vector<uint32_t>& argbData, int srcWidth, int srcHeight, int destX, int destY, int destWidth, int destHeight, double angleDeg, SDL_RendererFlip flip, const void* bufferToken = nullptr);
 
     int getWindowWidth() const;
     int getWindowHeight() const;
@@ -49,6 +49,9 @@ private:
     int m_currentTexWidth = 0;
     int m_currentTexHeight = 0;
     bool m_isFullscreen = false;
+    const void* m_lastBufferToken = nullptr;
+    int m_lastBufferWidth = 0;
+    int m_lastBufferHeight = 0;
 };
 
 #endif // RENDERER_H

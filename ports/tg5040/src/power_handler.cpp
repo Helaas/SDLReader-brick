@@ -135,6 +135,20 @@ void PowerHandler::threadMain()
 void PowerHandler::handlePowerButtonEvent(const input_event& ev, std::chrono::steady_clock::time_point& press_time)
 {
     auto now = std::chrono::steady_clock::now();
+    if (m_resume_ignore_until != std::chrono::steady_clock::time_point{} &&
+        now < m_resume_ignore_until)
+    {
+        // Ignore any button activity immediately after resuming from a real sleep.
+        if (ev.value == 0)
+        {
+            press_time = std::chrono::steady_clock::time_point{};
+        }
+        return;
+    }
+    else if (m_resume_ignore_until != std::chrono::steady_clock::time_point{} && now >= m_resume_ignore_until)
+    {
+        m_resume_ignore_until = std::chrono::steady_clock::time_point{};
+    }
 
     if (ev.value == 1)
     {
@@ -208,6 +222,14 @@ void PowerHandler::attemptSleep()
     {
         // Real sleep succeeded
         std::cout << "PowerHandler: Real sleep successful" << std::endl;
+        // Ignore power button events briefly after resume so the wake button release
+        // does not immediately trigger another suspend request.
+        m_resume_ignore_until = std::chrono::steady_clock::now() + POST_RESUME_IGNORE_DURATION;
+
+        // Give the input subsystem a moment to deliver the wake button release
+        // signal before we flush the queue, otherwise the release event may land
+        // after flushEvents() and be treated as a new short press.
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
         flushEvents(); // Flush events after waking
     }
     else
@@ -322,7 +344,38 @@ bool PowerHandler::requestSleep()
 {
     std::cout << "Attempting to suspend device..." << std::endl;
 
-    // Method 1: Direct system suspend (NextUI primary method)
+    auto tryPlatformSuspend = [](const char* path) -> bool
+    {
+        if (!path)
+        {
+            return false;
+        }
+
+        if (access(path, X_OK) == 0)
+        {
+            std::cout << "Using platform suspend script: " << path << std::endl;
+            int result = system(path);
+            if (result == 0)
+            {
+                std::cout << "Platform suspend successful" << std::endl;
+                return true;
+            }
+
+            std::cout << "Platform suspend script failed with result: " << result << std::endl;
+            return false;
+        }
+
+        std::cout << "Platform suspend script not available (" << path << " not executable)" << std::endl;
+        return false;
+    };
+
+    // Method 1: Platform suspend script (preferred to match NextUI behavior)
+    if (tryPlatformSuspend(PLATFORM_SUSPEND_PATH_PRIMARY) || tryPlatformSuspend(PLATFORM_SUSPEND_PATH_SECONDARY))
+    {
+        return true;
+    }
+
+    // Method 2: Direct system suspend
     if (access("/sys/power/state", W_OK) == 0)
     {
         std::cout << "Using direct system suspend" << std::endl;
@@ -340,26 +393,6 @@ bool PowerHandler::requestSleep()
     else
     {
         std::cout << "Direct system suspend not available (/sys/power/state not writable)" << std::endl;
-    }
-
-    // Method 2: Platform suspend script (NextUI secondary method)
-    if (access("/mnt/SDCARD/System/bin/suspend", X_OK) == 0)
-    {
-        std::cout << "Using platform suspend script" << std::endl;
-        int result = system("/mnt/SDCARD/System/bin/suspend");
-        if (result == 0)
-        {
-            std::cout << "Platform suspend successful" << std::endl;
-            return true;
-        }
-        else
-        {
-            std::cout << "Platform suspend script failed with result: " << result << std::endl;
-        }
-    }
-    else
-    {
-        std::cout << "Platform suspend script not available (/mnt/SDCARD/System/bin/suspend not executable)" << std::endl;
     }
 
     // Method 3: Try freeze mode as fallback
@@ -390,19 +423,32 @@ bool PowerHandler::requestSleep()
 
 void PowerHandler::requestShutdown()
 {
+    //  Manual shutdown sequence (NextUI-style)
     std::cout << "Attempting to shutdown device..." << std::endl;
 
-    // Method 1: NextUI-style shutdown script
-    if (access("/mnt/SDCARD/System/bin/shutdown", X_OK) == 0)
+    // Display shutdown message on GUI
+    if (m_errorCallback)
     {
-        std::cout << "Using NextUI shutdown script" << std::endl;
-        system("/mnt/SDCARD/System/bin/shutdown");
-        return;
+        m_errorCallback("Shutting down...");
     }
 
-    // Method 2: Standard poweroff command
-    std::cout << "Using poweroff command" << std::endl;
-    system("poweroff");
+    // Give the GUI time to render the shutdown message
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    // Clean up temporary files and sync
+    system("rm -f /tmp/nextui_exec && sync");
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    // Signal poweroff
+    system("touch /tmp/poweroff");
+    sync();
+
+    // Keep the message on screen for a moment
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    // Kill the application
+    std::cout << "Exiting application..." << std::endl;
+    std::exit(0);
 }
 
 bool PowerHandler::reopenDevice()

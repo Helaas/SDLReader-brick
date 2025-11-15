@@ -1,0 +1,713 @@
+diff --git a/demo/sdl_renderer/nuklear_sdl_renderer.h b/demo/sdl_renderer/nuklear_sdl_renderer.h
+index 25eaec3..62acc1f 100644
+--- a/demo/sdl_renderer/nuklear_sdl_renderer.h
++++ b/demo/sdl_renderer/nuklear_sdl_renderer.h
+@@ -43,6 +43,7 @@ NK_API void                 nk_sdl_handle_grab(void);
+  * ===============================================================
+  */
+ #ifdef NK_SDL_RENDERER_IMPLEMENTATION
++#include <math.h>
+ #include <string.h>
+ #include <stdlib.h>
+
+@@ -66,17 +67,415 @@ static struct nk_sdl {
+     struct nk_font_atlas atlas;
+     Uint64 time_of_last_frame;
+ } sdl;
++static SDL_bool nk_sdl_debug_logging = SDL_FALSE;
++
++#if SDL_VERSION_ATLEAST(2, 0, 18)
++static inline Uint64
++nk_sdl_get_ticks(void)
++{
++    return SDL_GetTicks64();
++}
++#else
++static inline Uint64
++nk_sdl_get_ticks(void)
++{
++    return (Uint64)SDL_GetTicks();
++}
++
++static inline float
++nk_sdl_minf(float a, float b)
++{
++    return (a < b) ? a : b;
++}
++
++static inline float
++nk_sdl_maxf(float a, float b)
++{
++    return (a > b) ? a : b;
++}
++
++static inline int
++nk_sdl_mini(int a, int b)
++{
++    return (a < b) ? a : b;
++}
++
++static inline int
++nk_sdl_maxi(int a, int b)
++{
++    return (a > b) ? a : b;
++}
++
++static inline float
++nk_sdl_clampf(float value, float min_value, float max_value)
++{
++    if (value < min_value)
++        return min_value;
++    if (value > max_value)
++        return max_value;
++    return value;
++}
++
++static inline SDL_bool
++nk_sdl_almost_equalf(float a, float b, float epsilon)
++{
++    return (SDL_bool)(fabsf(a - b) <= epsilon);
++}
++
++static inline Uint8
++nk_sdl_float_to_u8(float value)
++{
++    if (value <= 0.0f)
++        return 0;
++    if (value >= 255.0f)
++        return 255;
++    return (Uint8)(value + 0.5f);
++}
++
++static inline SDL_bool
++nk_sdl_vertex_colors_equal(const struct nk_sdl_vertex *a,
++                           const struct nk_sdl_vertex *b,
++                           const struct nk_sdl_vertex *c)
++{
++    return (SDL_bool)(
++        memcmp(a->col, b->col, sizeof(a->col)) == 0 &&
++        memcmp(a->col, c->col, sizeof(a->col)) == 0
++    );
++}
++
++static inline SDL_bool
++nk_sdl_triangle_has_uniform_uv(const struct nk_sdl_vertex *a,
++                               const struct nk_sdl_vertex *b,
++                               const struct nk_sdl_vertex *c)
++{
++    const float epsilon = 0.0001f;
++    return (SDL_bool)(
++        nk_sdl_almost_equalf(a->uv[0], b->uv[0], epsilon) &&
++        nk_sdl_almost_equalf(a->uv[0], c->uv[0], epsilon) &&
++        nk_sdl_almost_equalf(a->uv[1], b->uv[1], epsilon) &&
++        nk_sdl_almost_equalf(a->uv[1], c->uv[1], epsilon)
++    );
++}
++
++static SDL_bool
++nk_sdl_fill_triangle_solid_flat(SDL_Renderer *renderer,
++                                const struct nk_sdl_vertex *v0,
++                                const struct nk_sdl_vertex *v1,
++                                const struct nk_sdl_vertex *v2)
++{
++    const float epsilon = 0.0001f;
++    float min_y = nk_sdl_minf(nk_sdl_minf(v0->position[1], v1->position[1]), v2->position[1]);
++    float max_y = nk_sdl_maxf(nk_sdl_maxf(v0->position[1], v1->position[1]), v2->position[1]);
++    SDL_bool drew_pixels = SDL_FALSE;
++
++    if ((max_y - min_y) < epsilon)
++        return SDL_FALSE;
++
++    int y_start = (int)floorf(min_y);
++    int y_end = (int)ceilf(max_y) - 1;
++    if (y_start > y_end)
++        return SDL_FALSE;
++
++    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
++    SDL_SetRenderDrawColor(renderer, v0->col[0], v0->col[1], v0->col[2], v0->col[3]);
++
++    const struct nk_sdl_vertex *edges[3][2] = {
++        {v0, v1},
++        {v1, v2},
++        {v2, v0}
++    };
++
++    for (int y = y_start; y <= y_end; ++y) {
++        float scan_y = (float)y + 0.5f;
++        float x_intersections[3];
++        int count = 0;
++
++        for (int i = 0; i < 3; ++i) {
++            const struct nk_sdl_vertex *a = edges[i][0];
++            const struct nk_sdl_vertex *b = edges[i][1];
++            float a_y = a->position[1];
++            float b_y = b->position[1];
++            float min_edge_y = nk_sdl_minf(a_y, b_y);
++            float max_edge_y = nk_sdl_maxf(a_y, b_y);
++            float dy = max_edge_y - min_edge_y;
++
++            if (dy < epsilon)
++                continue;
++            if (scan_y < min_edge_y || scan_y >= max_edge_y)
++                continue;
++
++            float t = (scan_y - a_y) / (b_y - a_y);
++            float x = a->position[0] + t * (b->position[0] - a->position[0]);
++            x_intersections[count++] = x;
++            if (count == 3)
++                break;
++        }
++
++        if (count < 2)
++            continue;
++
++        float x_min = x_intersections[0];
++        float x_max = x_intersections[0];
++        for (int i = 1; i < count; ++i) {
++            if (x_intersections[i] < x_min)
++                x_min = x_intersections[i];
++            if (x_intersections[i] > x_max)
++                x_max = x_intersections[i];
++        }
++
++        int x0 = (int)ceilf(x_min);
++        int x1 = (int)floorf(x_max);
++        if (x0 <= x1) {
++            SDL_RenderDrawLine(renderer, x0, y, x1, y);
++            drew_pixels = SDL_TRUE;
++        }
++    }
++
++    return drew_pixels;
++}
++
++static void
++nk_sdl_fill_triangle_solid_gouraud(SDL_Renderer *renderer,
++                                   const struct nk_sdl_vertex *v0,
++                                   const struct nk_sdl_vertex *v1,
++                                   const struct nk_sdl_vertex *v2)
++{
++    float min_x = nk_sdl_minf(nk_sdl_minf(v0->position[0], v1->position[0]), v2->position[0]);
++    float max_x = nk_sdl_maxf(nk_sdl_maxf(v0->position[0], v1->position[0]), v2->position[0]);
++    float min_y = nk_sdl_minf(nk_sdl_minf(v0->position[1], v1->position[1]), v2->position[1]);
++    float max_y = nk_sdl_maxf(nk_sdl_maxf(v0->position[1], v1->position[1]), v2->position[1]);
++    int x0 = (int)floorf(min_x);
++    int x1 = (int)ceilf(max_x);
++    int y0 = (int)floorf(min_y);
++    int y1 = (int)ceilf(max_y);
++    float denom = (v1->position[1] - v2->position[1]) * (v0->position[0] - v2->position[0]) +
++    (v2->position[0] - v1->position[0]) * (v0->position[1] - v2->position[1]);
++    const float epsilon = 0.0001f;
++    float inv_denom;
++    SDL_bool uniform_color;
++    Uint8 last_r = 0, last_g = 0, last_b = 0, last_a = 0;
++    SDL_bool color_valid = SDL_FALSE;
++
++    if (fabsf(denom) < epsilon)
++        return;
++
++    inv_denom = 1.0f / denom;
++    uniform_color = nk_sdl_vertex_colors_equal(v0, v1, v2);
++
++    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
++
++    for (int y = y0; y < y1; ++y) {
++        float py = (float)y + 0.5f;
++        for (int x = x0; x < x1; ++x) {
++            float px = (float)x + 0.5f;
++            float w0 = ((v1->position[1] - v2->position[1]) * (px - v2->position[0]) +
++            (v2->position[0] - v1->position[0]) * (py - v2->position[1])) * inv_denom;
++            float w1 = ((v2->position[1] - v0->position[1]) * (px - v2->position[0]) +
++            (v0->position[0] - v2->position[0]) * (py - v2->position[1])) * inv_denom;
++            float w2 = 1.0f - w0 - w1;
++            Uint8 r, g, b, a;
++
++            if (w0 < -epsilon || w1 < -epsilon || w2 < -epsilon)
++                continue;
++
++            if (uniform_color) {
++                r = v0->col[0];
++                g = v0->col[1];
++                b = v0->col[2];
++                a = v0->col[3];
++            } else {
++                float fr = w0 * (float)v0->col[0] + w1 * (float)v1->col[0] + w2 * (float)v2->col[0];
++                float fg = w0 * (float)v0->col[1] + w1 * (float)v1->col[1] + w2 * (float)v2->col[1];
++                float fb = w0 * (float)v0->col[2] + w1 * (float)v1->col[2] + w2 * (float)v2->col[2];
++                float fa = w0 * (float)v0->col[3] + w1 * (float)v1->col[3] + w2 * (float)v2->col[3];
++                r = nk_sdl_float_to_u8(fr);
++                g = nk_sdl_float_to_u8(fg);
++                b = nk_sdl_float_to_u8(fb);
++                a = nk_sdl_float_to_u8(fa);
++            }
++
++            if (!color_valid || r != last_r || g != last_g || b != last_b || a != last_a) {
++                SDL_SetRenderDrawColor(renderer, r, g, b, a);
++                last_r = r;
++                last_g = g;
++                last_b = b;
++                last_a = a;
++                color_valid = SDL_TRUE;
++            }
++
++            SDL_RenderDrawPoint(renderer, x, y);
++        }
++    }
++}
++
++static void
++nk_sdl_fill_triangle_solid(SDL_Renderer *renderer,
++                           const struct nk_sdl_vertex *v0,
++                           const struct nk_sdl_vertex *v1,
++                           const struct nk_sdl_vertex *v2)
++{
++    if (nk_sdl_vertex_colors_equal(v0, v1, v2)) {
++        if (!nk_sdl_fill_triangle_solid_flat(renderer, v0, v1, v2))
++            nk_sdl_fill_triangle_solid_gouraud(renderer, v0, v1, v2);
++    } else {
++        nk_sdl_fill_triangle_solid_gouraud(renderer, v0, v1, v2);
++    }
++}
++#endif /* !SDL_VERSION_ATLEAST(2, 0, 18) */
++
++/* Render individual triangles using SDL_RenderGeometry (if available) or fallback */
++static void
++nk_sdl_render_geometry_raw_legacy(SDL_Renderer *renderer,
++                                  SDL_Texture *texture,
++                                  const void *vertices_base,
++                                  int vertex_stride,
++                                  const nk_draw_index *indices,
++                                  int elem_count)
++{
++    if (!renderer || !vertices_base || !indices || elem_count <= 0)
++        return;
++
++    #if SDL_VERSION_ATLEAST(2, 0, 18)
++    /* This should never be called on SDL >= 2.0.18, but just in case */
++    SDL_RenderGeometryRaw(renderer, texture,
++                          (const float*)((const nk_byte*)vertices_base + offsetof(struct nk_sdl_vertex, position)), vertex_stride,
++                          (const SDL_Color*)((const nk_byte*)vertices_base + offsetof(struct nk_sdl_vertex, col)), vertex_stride,
++                          (const float*)((const nk_byte*)vertices_base + offsetof(struct nk_sdl_vertex, uv)), vertex_stride,
++                          elem_count / 3,
++                          (void*)indices, elem_count, 2);
++    return;
++    #else
++    /* For SDL < 2.0.18, we MUST use SDL_RenderGeometry if available (2.0.10+) */
++    /* because quad-based rendering with min/max UVs is fundamentally broken */
++    const nk_byte *vertex_bytes = (const nk_byte*)vertices_base;
++
++    int tex_w = 0;
++    int tex_h = 0;
++    if (texture)
++    {
++        SDL_QueryTexture(texture, NULL, NULL, &tex_w, &tex_h);
++    }
++
++    /* Process triangles (3 indices at a time, not 6) */
++    const int indices_per_tri = 3;
++    int processed = 0;
++
++    while (processed + indices_per_tri <= elem_count)
++    {
++        const nk_draw_index *idx = indices + processed;
++
++        /* Get the 3 vertices for this triangle */
++        const struct nk_sdl_vertex *v0 = (const struct nk_sdl_vertex*)(vertex_bytes + vertex_stride * idx[0]);
++        const struct nk_sdl_vertex *v1 = (const struct nk_sdl_vertex*)(vertex_bytes + vertex_stride * idx[1]);
++        const struct nk_sdl_vertex *v2 = (const struct nk_sdl_vertex*)(vertex_bytes + vertex_stride * idx[2]);
++
++        /* Calculate bounding box for this triangle */
++        float min_x = v0->position[0];
++        float max_x = min_x;
++        float min_y = v0->position[1];
++        float max_y = min_y;
++
++        if (v1->position[0] < min_x) min_x = v1->position[0];
++        if (v1->position[0] > max_x) max_x = v1->position[0];
++        if (v1->position[1] < min_y) min_y = v1->position[1];
++        if (v1->position[1] > max_y) max_y = v1->position[1];
++
++        if (v2->position[0] < min_x) min_x = v2->position[0];
++        if (v2->position[0] > max_x) max_x = v2->position[0];
++        if (v2->position[1] < min_y) min_y = v2->position[1];
++        if (v2->position[1] > max_y) max_y = v2->position[1];
++
++        /* Check for degenerate triangles */
++        if ((max_x - min_x) <= 0.01f || (max_y - min_y) <= 0.01f)
++        {
++            processed += indices_per_tri;
++            continue;
++        }
++
++        /* For textured triangles, use a very simple approximation: */
++        /* Render as a rectangle using the triangle's bounding box and UV mapping */
++        if (texture && tex_w > 0 && tex_h > 0 &&
++            !nk_sdl_triangle_has_uniform_uv(v0, v1, v2))
++        {
++            /* Calculate UV extents */
++            float min_u = v0->uv[0];
++            float max_u = min_u;
++            float min_v = v0->uv[1];
++            float max_v = min_v;
++
++            if (v1->uv[0] < min_u) min_u = v1->uv[0];
++            if (v1->uv[0] > max_u) max_u = v1->uv[0];
++            if (v1->uv[1] < min_v) min_v = v1->uv[1];
++            if (v1->uv[1] > max_v) max_v = v1->uv[1];
++
++            if (v2->uv[0] < min_u) min_u = v2->uv[0];
++            if (v2->uv[0] > max_u) max_u = v2->uv[0];
++            if (v2->uv[1] < min_v) min_v = v2->uv[1];
++            if (v2->uv[1] > max_v) max_v = v2->uv[1];
++
++            /* Use proper rounding to avoid sub-pixel artifacts */
++            SDL_Rect dst;
++            dst.x = (int)roundf(min_x);
++            dst.y = (int)roundf(min_y);
++            dst.w = (int)roundf(max_x) - dst.x;
++            dst.h = (int)roundf(max_y) - dst.y;
++            if (dst.w < 1) dst.w = 1;
++            if (dst.h < 1) dst.h = 1;
++
++            SDL_Rect src;
++            src.x = (int)roundf(min_u * tex_w);
++            src.y = (int)roundf(min_v * tex_h);
++            src.w = (int)roundf(max_u * tex_w) - src.x;
++            src.h = (int)roundf(max_v * tex_h) - src.y;
++            if (src.w < 1) src.w = 1;
++            if (src.h < 1) src.h = 1;
++
++            /* Use first vertex color as approximation */
++            SDL_SetTextureColorMod(texture, v0->col[0], v0->col[1], v0->col[2]);
++            SDL_SetTextureAlphaMod(texture, v0->col[3]);
++            SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
++            SDL_RenderCopy(renderer, texture, &src, &dst);
++        }
++        else
++        {
++            /* For solid color triangles, rasterize the shape for accurate rendering */
++            nk_sdl_fill_triangle_solid(renderer, v0, v1, v2);
++        }
++
++        processed += indices_per_tri;
++    }
++    #endif /* !SDL_VERSION_ATLEAST(2, 0, 18) */
++}
+
+ NK_INTERN void
+ nk_sdl_device_upload_atlas(const void *image, int width, int height)
+ {
+     struct nk_sdl_device *dev = &sdl.ogl;
+
+-    SDL_Texture *g_SDLFontTexture = SDL_CreateTexture(sdl.renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, width, height);
++    SDL_Texture *g_SDLFontTexture = NULL;
++    #if !SDL_VERSION_ATLEAST(2, 0, 12)
++    const char *prev_scale_hint = SDL_GetHint(SDL_HINT_RENDER_SCALE_QUALITY);
++    char *prev_scale_copy = prev_scale_hint ? SDL_strdup(prev_scale_hint) : NULL;
++    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
++    #endif
++
++    g_SDLFontTexture = SDL_CreateTexture(sdl.renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, width, height);
+     if (g_SDLFontTexture == NULL) {
++        #if !SDL_VERSION_ATLEAST(2, 0, 12)
++        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, prev_scale_copy);
++        if (prev_scale_copy)
++            SDL_free(prev_scale_copy);
++        #endif
+         SDL_Log("error creating texture");
+         return;
+     }
++    #if SDL_VERSION_ATLEAST(2, 0, 12)
++    SDL_SetTextureScaleMode(g_SDLFontTexture, SDL_ScaleModeLinear);
++    #else
++    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, prev_scale_copy);
++    if (prev_scale_copy)
++        SDL_free(prev_scale_copy);
++    #endif
+     SDL_UpdateTexture(g_SDLFontTexture, NULL, image, 4 * width);
+     SDL_SetTextureBlendMode(g_SDLFontTexture, SDL_BLENDMODE_BLEND);
+     dev->font_tex = g_SDLFontTexture;
+@@ -90,14 +489,16 @@ nk_sdl_render(enum nk_anti_aliasing AA)
+
+     {
+         SDL_Rect saved_clip;
+-#ifdef NK_SDL_CLAMP_CLIP_RECT
++        #ifdef NK_SDL_CLAMP_CLIP_RECT
+         SDL_Rect viewport;
+-#endif
++        #endif
+         SDL_bool clipping_enabled;
+         int vs = sizeof(struct nk_sdl_vertex);
++        #if SDL_VERSION_ATLEAST(2, 0, 18)
+         size_t vp = offsetof(struct nk_sdl_vertex, position);
+         size_t vt = offsetof(struct nk_sdl_vertex, uv);
+         size_t vc = offsetof(struct nk_sdl_vertex, col);
++        #endif
+
+         /* convert from command queue into draw list and draw to screen */
+         const struct nk_draw_command *cmd;
+@@ -113,7 +514,7 @@ nk_sdl_render(enum nk_anti_aliasing AA)
+             {NK_VERTEX_LAYOUT_END}
+         };
+
+-        Uint64 now = SDL_GetTicks64();
++        Uint64 now = nk_sdl_get_ticks();
+         sdl.ctx.delta_time_seconds = (float)(now - sdl.time_of_last_frame) / 1000;
+         sdl.time_of_last_frame = now;
+
+@@ -139,9 +540,9 @@ nk_sdl_render(enum nk_anti_aliasing AA)
+
+         clipping_enabled = SDL_RenderIsClipEnabled(sdl.renderer);
+         SDL_RenderGetClipRect(sdl.renderer, &saved_clip);
+-#ifdef NK_SDL_CLAMP_CLIP_RECT
++        #ifdef NK_SDL_CLAMP_CLIP_RECT
+         SDL_RenderGetViewport(sdl.renderer, &viewport);
+-#endif
++        #endif
+
+         nk_draw_foreach(cmd, &sdl.ctx, &dev->cmds)
+         {
+@@ -153,7 +554,7 @@ nk_sdl_render(enum nk_anti_aliasing AA)
+                 r.y = cmd->clip_rect.y;
+                 r.w = cmd->clip_rect.w;
+                 r.h = cmd->clip_rect.h;
+-#ifdef NK_SDL_CLAMP_CLIP_RECT
++                #ifdef NK_SDL_CLAMP_CLIP_RECT
+                 if (r.x < 0) {
+                     r.w += r.x;
+                     r.x = 0;
+@@ -168,20 +569,29 @@ nk_sdl_render(enum nk_anti_aliasing AA)
+                 if (r.w > viewport.w) {
+                     r.w = viewport.w;
+                 }
+-#endif
++                #endif
+                 SDL_RenderSetClipRect(sdl.renderer, &r);
+             }
+
+             {
+                 const void *vertices = nk_buffer_memory_const(&vbuf);
+
++                #if SDL_VERSION_ATLEAST(2, 0, 18)
+                 SDL_RenderGeometryRaw(sdl.renderer,
+-                        (SDL_Texture *)cmd->texture.ptr,
+-                        (const float*)((const nk_byte*)vertices + vp), vs,
+-                        (const SDL_Color*)((const nk_byte*)vertices + vc), vs,
+-                        (const float*)((const nk_byte*)vertices + vt), vs,
+-                        (vbuf.needed / vs),
+-                        (void *) offset, cmd->elem_count, 2);
++                                      (SDL_Texture *)cmd->texture.ptr,
++                                      (const float*)((const nk_byte*)vertices + vp), vs,
++                                      (const SDL_Color*)((const nk_byte*)vertices + vc), vs,
++                                      (const float*)((const nk_byte*)vertices + vt), vs,
++                                      (vbuf.needed / vs),
++                                      (void *) offset, cmd->elem_count, 2);
++                #else
++                nk_sdl_render_geometry_raw_legacy(sdl.renderer,
++                                                  (SDL_Texture *)cmd->texture.ptr,
++                                                  vertices,
++                                                  vs,
++                                                  offset,
++                                                  cmd->elem_count);
++                #endif
+
+                 offset += cmd->elem_count;
+             }
+@@ -227,7 +637,7 @@ nk_sdl_clipboard_copy(nk_handle usr, const char *text, int len)
+ NK_API struct nk_context*
+ nk_sdl_init(SDL_Window *win, SDL_Renderer *renderer)
+ {
+-#ifndef NK_SDL_CLAMP_CLIP_RECT
++    #ifndef NK_SDL_CLAMP_CLIP_RECT
+     SDL_RendererInfo info;
+     SDL_version runtimeVer;
+
+@@ -245,10 +655,17 @@ nk_sdl_init(SDL_Window *win, SDL_Renderer *renderer)
+             SDL_MAJOR_VERSION, SDL_MINOR_VERSION, SDL_PATCHLEVEL
+         );
+     }
+-#endif
++    #endif
+     sdl.win = win;
+     sdl.renderer = renderer;
+-    sdl.time_of_last_frame = SDL_GetTicks64();
++    sdl.time_of_last_frame = nk_sdl_get_ticks();
++    {
++        const char *debug_env = SDL_getenv("NUKLEAR_LEGACY_DEBUG");
++        nk_sdl_debug_logging = (debug_env && debug_env[0] != '\0' && debug_env[0] != '0') ? SDL_TRUE : SDL_FALSE;
++    }
++    if (nk_sdl_debug_logging) {
++        printf("NK legacy renderer debug logging enabled\n");
++    }
+     nk_init_default(&sdl.ctx, 0);
+     sdl.ctx.clip.copy = nk_sdl_clipboard_copy;
+     sdl.ctx.clip.paste = nk_sdl_clipboard_paste;
+@@ -302,88 +719,92 @@ nk_sdl_handle_event(SDL_Event *evt)
+     {
+         case SDL_KEYUP: /* KEYUP & KEYDOWN share same routine */
+         case SDL_KEYDOWN:
++        {
++            int down = evt->type == SDL_KEYDOWN;
++            switch(evt->key.keysym.sym)
+             {
+-                int down = evt->type == SDL_KEYDOWN;
+-                switch(evt->key.keysym.sym)
+-                {
+-                    case SDLK_RSHIFT: /* RSHIFT & LSHIFT share same routine */
+-                    case SDLK_LSHIFT:    nk_input_key(ctx, NK_KEY_SHIFT, down); break;
+-                    case SDLK_DELETE:    nk_input_key(ctx, NK_KEY_DEL, down); break;
+-
+-                    case SDLK_KP_ENTER:
+-                    case SDLK_RETURN:    nk_input_key(ctx, NK_KEY_ENTER, down); break;
+-
+-                    case SDLK_TAB:       nk_input_key(ctx, NK_KEY_TAB, down); break;
+-                    case SDLK_BACKSPACE: nk_input_key(ctx, NK_KEY_BACKSPACE, down); break;
+-                    case SDLK_HOME:      nk_input_key(ctx, NK_KEY_TEXT_START, down);
+-                                         nk_input_key(ctx, NK_KEY_SCROLL_START, down); break;
+-                    case SDLK_END:       nk_input_key(ctx, NK_KEY_TEXT_END, down);
+-                                         nk_input_key(ctx, NK_KEY_SCROLL_END, down); break;
+-                    case SDLK_PAGEDOWN:  nk_input_key(ctx, NK_KEY_SCROLL_DOWN, down); break;
+-                    case SDLK_PAGEUP:    nk_input_key(ctx, NK_KEY_SCROLL_UP, down); break;
+-                    case SDLK_z:         nk_input_key(ctx, NK_KEY_TEXT_UNDO, down && ctrl_down); break;
+-                    case SDLK_r:         nk_input_key(ctx, NK_KEY_TEXT_REDO, down && ctrl_down); break;
+-                    case SDLK_c:         nk_input_key(ctx, NK_KEY_COPY, down && ctrl_down); break;
+-                    case SDLK_v:         nk_input_key(ctx, NK_KEY_PASTE, down && ctrl_down); break;
+-                    case SDLK_x:         nk_input_key(ctx, NK_KEY_CUT, down && ctrl_down); break;
+-                    case SDLK_b:         nk_input_key(ctx, NK_KEY_TEXT_LINE_START, down && ctrl_down); break;
+-                    case SDLK_e:         nk_input_key(ctx, NK_KEY_TEXT_LINE_END, down && ctrl_down); break;
+-                    case SDLK_UP:        nk_input_key(ctx, NK_KEY_UP, down); break;
+-                    case SDLK_DOWN:      nk_input_key(ctx, NK_KEY_DOWN, down); break;
+-                    case SDLK_a:
+-                        if (ctrl_down)
+-                            nk_input_key(ctx,NK_KEY_TEXT_SELECT_ALL, down);
+-                        break;
+-                    case SDLK_LEFT:
+-                        if (ctrl_down)
+-                            nk_input_key(ctx, NK_KEY_TEXT_WORD_LEFT, down);
+-                        else nk_input_key(ctx, NK_KEY_LEFT, down);
+-                        break;
+-                    case SDLK_RIGHT:
+-                        if (ctrl_down)
+-                            nk_input_key(ctx, NK_KEY_TEXT_WORD_RIGHT, down);
+-                        else nk_input_key(ctx, NK_KEY_RIGHT, down);
+-                        break;
+-                }
++                case SDLK_RSHIFT: /* RSHIFT & LSHIFT share same routine */
++                case SDLK_LSHIFT:    nk_input_key(ctx, NK_KEY_SHIFT, down); break;
++                case SDLK_DELETE:    nk_input_key(ctx, NK_KEY_DEL, down); break;
++
++                case SDLK_KP_ENTER:
++                case SDLK_RETURN:    nk_input_key(ctx, NK_KEY_ENTER, down); break;
++
++                case SDLK_TAB:       nk_input_key(ctx, NK_KEY_TAB, down); break;
++                case SDLK_BACKSPACE: nk_input_key(ctx, NK_KEY_BACKSPACE, down); break;
++                case SDLK_HOME:      nk_input_key(ctx, NK_KEY_TEXT_START, down);
++                nk_input_key(ctx, NK_KEY_SCROLL_START, down); break;
++                case SDLK_END:       nk_input_key(ctx, NK_KEY_TEXT_END, down);
++                nk_input_key(ctx, NK_KEY_SCROLL_END, down); break;
++                case SDLK_PAGEDOWN:  nk_input_key(ctx, NK_KEY_SCROLL_DOWN, down); break;
++                case SDLK_PAGEUP:    nk_input_key(ctx, NK_KEY_SCROLL_UP, down); break;
++                case SDLK_z:         nk_input_key(ctx, NK_KEY_TEXT_UNDO, down && ctrl_down); break;
++                case SDLK_r:         nk_input_key(ctx, NK_KEY_TEXT_REDO, down && ctrl_down); break;
++                case SDLK_c:         nk_input_key(ctx, NK_KEY_COPY, down && ctrl_down); break;
++                case SDLK_v:         nk_input_key(ctx, NK_KEY_PASTE, down && ctrl_down); break;
++                case SDLK_x:         nk_input_key(ctx, NK_KEY_CUT, down && ctrl_down); break;
++                case SDLK_b:         nk_input_key(ctx, NK_KEY_TEXT_LINE_START, down && ctrl_down); break;
++                case SDLK_e:         nk_input_key(ctx, NK_KEY_TEXT_LINE_END, down && ctrl_down); break;
++                case SDLK_UP:        nk_input_key(ctx, NK_KEY_UP, down); break;
++                case SDLK_DOWN:      nk_input_key(ctx, NK_KEY_DOWN, down); break;
++                case SDLK_a:
++                    if (ctrl_down)
++                        nk_input_key(ctx,NK_KEY_TEXT_SELECT_ALL, down);
++                break;
++                case SDLK_LEFT:
++                    if (ctrl_down)
++                        nk_input_key(ctx, NK_KEY_TEXT_WORD_LEFT, down);
++                else nk_input_key(ctx, NK_KEY_LEFT, down);
++                break;
++                case SDLK_RIGHT:
++                    if (ctrl_down)
++                        nk_input_key(ctx, NK_KEY_TEXT_WORD_RIGHT, down);
++                else nk_input_key(ctx, NK_KEY_RIGHT, down);
++                break;
+             }
+-            return 1;
++        }
++        return 1;
+
+-        case SDL_MOUSEBUTTONUP: /* MOUSEBUTTONUP & MOUSEBUTTONDOWN share same routine */
+-        case SDL_MOUSEBUTTONDOWN:
+-            {
+-                int down = evt->type == SDL_MOUSEBUTTONDOWN;
+-                const int x = evt->button.x, y = evt->button.y;
+-                switch(evt->button.button)
++                case SDL_MOUSEBUTTONUP: /* MOUSEBUTTONUP & MOUSEBUTTONDOWN share same routine */
++                case SDL_MOUSEBUTTONDOWN:
+                 {
+-                    case SDL_BUTTON_LEFT:
+-                        if (evt->button.clicks > 1)
+-                            nk_input_button(ctx, NK_BUTTON_DOUBLE, x, y, down);
++                    int down = evt->type == SDL_MOUSEBUTTONDOWN;
++                    const int x = evt->button.x, y = evt->button.y;
++                    switch(evt->button.button)
++                    {
++                        case SDL_BUTTON_LEFT:
++                            if (evt->button.clicks > 1)
++                                nk_input_button(ctx, NK_BUTTON_DOUBLE, x, y, down);
+                         nk_input_button(ctx, NK_BUTTON_LEFT, x, y, down); break;
+-                    case SDL_BUTTON_MIDDLE: nk_input_button(ctx, NK_BUTTON_MIDDLE, x, y, down); break;
+-                    case SDL_BUTTON_RIGHT:  nk_input_button(ctx, NK_BUTTON_RIGHT, x, y, down); break;
++                        case SDL_BUTTON_MIDDLE: nk_input_button(ctx, NK_BUTTON_MIDDLE, x, y, down); break;
++                        case SDL_BUTTON_RIGHT:  nk_input_button(ctx, NK_BUTTON_RIGHT, x, y, down); break;
++                    }
+                 }
+-            }
+-            return 1;
+-
+-        case SDL_MOUSEMOTION:
+-            if (ctx->input.mouse.grabbed) {
+-                int x = (int)ctx->input.mouse.prev.x, y = (int)ctx->input.mouse.prev.y;
+-                nk_input_motion(ctx, x + evt->motion.xrel, y + evt->motion.yrel);
+-            }
+-            else nk_input_motion(ctx, evt->motion.x, evt->motion.y);
+-            return 1;
+-
+-        case SDL_TEXTINPUT:
+-            {
+-                nk_glyph glyph;
+-                memcpy(glyph, evt->text.text, NK_UTF_SIZE);
+-                nk_input_glyph(ctx, glyph);
+-            }
+-            return 1;
+-
+-        case SDL_MOUSEWHEEL:
+-            nk_input_scroll(ctx,nk_vec2(evt->wheel.preciseX, evt->wheel.preciseY));
+-            return 1;
++                return 1;
++
++                        case SDL_MOUSEMOTION:
++                            if (ctx->input.mouse.grabbed) {
++                                int x = (int)ctx->input.mouse.prev.x, y = (int)ctx->input.mouse.prev.y;
++                                nk_input_motion(ctx, x + evt->motion.xrel, y + evt->motion.yrel);
++                            }
++                            else nk_input_motion(ctx, evt->motion.x, evt->motion.y);
++                            return 1;
++
++                        case SDL_TEXTINPUT:
++                        {
++                            nk_glyph glyph;
++                            memcpy(glyph, evt->text.text, NK_UTF_SIZE);
++                            nk_input_glyph(ctx, glyph);
++                        }
++                        return 1;
++
++                        case SDL_MOUSEWHEEL:
++                            #if SDL_VERSION_ATLEAST(2, 0, 18)
++                            nk_input_scroll(ctx, nk_vec2(evt->wheel.preciseX, evt->wheel.preciseY));
++                            #else
++                            nk_input_scroll(ctx, nk_vec2((float)evt->wheel.x, (float)evt->wheel.y));
++                            #endif
++                            return 1;
+     }
+     return 0;
+ }

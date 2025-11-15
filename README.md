@@ -15,18 +15,25 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 
 ## Features
 * View PDF documents, comic book archives (CBZ/ZIP & CBR/RAR), EPUB books, and MOBI e-books.
-* Built-in heads-up display with page, zoom, edge-turn, and error indicators.
-* Integrated file browser (`--browse`) with controller support, persistent last directory, and TG5040-friendly layout, powered by Dear ImGui.
-* Custom font picker with live preview, reading style themes, and MuPDF-backed CSS injection.
+* Built-in heads-up display with page, zoom, edge-turn, minimap, and error indicators — now including an optional **Document Minimap Overlay** that mirrors your zoomed-in viewport (toggleable in the font/reading style panel).
+* Integrated Nuklear-powered file browser (`--browse`) with:
+  - Controller support
+  - Persistent last directory
+  - Asynchronous multi-threaded thumbnail grid (toggle with **X**)
+  - Color-coded tile badges for file types
+  - Smarter auto-scroll and restore behavior for faster navigation
+  - TG5040-friendly layout
+* **Stateful Home Directory Usage**: runtime assets (config, fonts list, and `reading_history.json`) now live under `$SDL_READER_STATE_DIR` (default `$HOME`) so settings persist across firmware/app updates and can be redirected per device.
+* Custom font picker with reading style themes, MuPDF-backed CSS injection, controller-friendly navigation, hold-to-scroll, inline tooltips, info glyphs, and persistent highlights.
 * On-screen number pad for page jumps when navigating with a controller.
 * Automatic reading history tracking with resume-on-open for the last 50 documents.
-* Page navigation (next/previous page) with **Smart Edge Navigation**: When zoomed ≥ 100% & at a page edge, hold D-pad for 300ms to flip pages with a progress indicator.
+* Page navigation (next/previous page) with **Smart Edge Navigation**: when zoomed ≥100% & at a page edge, holding the D-pad for 300 ms flips pages with a progress indicator.
 * Quick page jumping (±10 pages) and arbitrary page entry.
-* Zoom in/out, fit-to-width, and full reset controls.
-* Page rotation (90° increments) and mirroring (horizontal/vertical).
-* Smooth scrolling within pages (if zoomed in or page is larger than the viewport).
+* Zoom in/out, fit-to-width, high-maximum zoom levels, optimized downsampling paths, and improved caching for smoother zoom/pan performance (notably on TG5040).
+* Page rotation (90° increments) and horizontal/vertical mirroring.
+* Smooth scrolling within pages (if zoomed in or if the page is larger than the viewport).
 * Toggle fullscreen mode (desktop platforms).
-* TG5040-specific power button integration with fake sleep fallback.
+* TG5040-specific power button integration with a dedicated handler, fake sleep fallback, resume cleanup, and on-screen messaging for console-like behavior.
 
 ## Supported Document Types
 * **PDF** (`.pdf`)
@@ -122,7 +129,7 @@ cd ports/linux && make install-deps
 
 ### Build-time Patches
 
-All `make` targets download MuPDF 1.26.7 and apply `webp-upstream-697749.patch` (sourced from KOReader) to enable modern WebP decoding and fix upstream regressions. Platform exports that embed Dear ImGui may apply additional patches—see each port README for details. In particular, the TG5040 build also patches the ImGui SDL renderer backend for legacy SDL compatibility and swaps the physical A/B buttons to match the TrimUI Brick layout.
+All `make` targets download MuPDF 1.26.7 and apply `webp-upstream-697749.patch` (sourced from KOReader) to enable modern WebP decoding and fix upstream regressions. Platform exports embed Nuklear for UI rendering. See each port README for platform-specific details.
 
 ## Platform-Specific Features
 
@@ -171,16 +178,21 @@ After building, you can either launch straight into a document or drop into the 
 ./bin/sdl_reader_cli --browse
 ```
 
-When using `--browse`, SDL Reader will remember the last directory you visited (stored in `config.json`) and automatically resume the last page you read for each document (stored in `reading_history.json`).
+When using `--browse`, SDL Reader will remember the last directory you visited (stored in `config.json`) and automatically resume the last page you read for each document (stored in `reading_history.json`). Both files live in the reader state directory (`$SDL_READER_STATE_DIR`, defaulting to `$HOME`).
+
+### File Browser Enhancements
+- Press `X` (or the controller `X` button) to toggle a high-performance thumbnail grid that previews covers and caches results in the background.
+- Thumbnails are generated asynchronously so scrolling stays responsive even on large folders.
+- The browser respects `SDL_READER_DEFAULT_DIR`; set this environment variable to confine browsing to a specific root directory.
 
 ## Configuration
 
-SDL Reader uses a `config.json` file for customizing font settings and display options.
+SDL Reader uses a `config.json` file (stored under `$SDL_READER_STATE_DIR`, defaulting to `$HOME/config.json`) for customizing font settings and display options.
 
 ### Setting up Configuration
 1. Copy the example configuration file:
    ```bash
-   cp config.json.example config.json
+   cp config.json.example "$HOME/config.json"
    ```
 
 2. Edit `config.json` to customize settings:
@@ -192,7 +204,8 @@ SDL Reader uses a `config.json` file for customizing font settings and display o
      "zoomStep": 10,
      "readingStyle": 0,
      "disableEdgeProgressBar": false,
-     "lastBrowseDirectory": "/mnt/SDCARD/Books"
+     "showDocumentMinimap": true,
+     "lastBrowseDirectory": "/path/to/library"
    }
    ```
 
@@ -204,6 +217,9 @@ SDL Reader uses a `config.json` file for customizing font settings and display o
 - **readingStyle**: Numeric identifier for the active reading theme (see table below)
 - **lastBrowseDirectory**: Directory the file browser should open by default when launched with `--browse`
 - **disableEdgeProgressBar**: When `true`, panning at page edges changes pages instantly without the 300ms delay and progress bar. When `false` (default), the edge nudge progress bar is shown.
+- **showDocumentMinimap**: Toggle the zoomed-in minimap overlay; set to `false` to hide it.
+- **State directory override**: Set `SDL_READER_STATE_DIR` to relocate `config.json`, `reading_history.json`, and other runtime assets. Defaults to your `$HOME` directory.
+- **Environment override**: Set `SDL_READER_DEFAULT_DIR` to control the starting directory for the browser. If unset, the reader defaults to `$HOME`.
 
 | `readingStyle` | Theme          | Background | Text Color |
 | :------------- | :------------- | :--------- | :--------- |
@@ -217,7 +233,7 @@ SDL Reader uses a `config.json` file for customizing font settings and display o
 
 All configuration values are saved automatically when you apply changes from the in-app font menu.
 
-**Note**: The `config.json` file is ignored by Git to allow personal customization without affecting the repository.
+**Note**: Runtime `config.json` files are stored outside the repository (in the reader state directory) and are ignored by Git so you can personalize settings without affecting the repo.
 
 **Adding new fonts:** Drop any `.ttf` or `.otf` files into the top-level `fonts/` directory (either on desktop or inside a TG5040 bundle). The Options → Font & Reading Style menu will automatically discover them, let you preview the typography, and persist your selection for EPUB/MOBI documents.
 
@@ -234,7 +250,7 @@ Full license texts are provided in [`fonts/LICENSES.md`](fonts/LICENSES.md). Kee
 
 ## Reading History
 
-SDL Reader keeps a lightweight `reading_history.json` file in the project root. Every time you change pages, the current document path and page number are persisted so the next launch resumes automatically. The history remembers the most recent 50 documents. Delete the file if you want to reset all progress.
+SDL Reader keeps a lightweight `reading_history.json` file in the reader state directory (`$SDL_READER_STATE_DIR`, defaulting to `$HOME/reading_history.json`). Every time you change pages, the current document path and page number are persisted so the next launch resumes automatically. The history remembers the most recent 50 documents. Delete the file if you want to reset all progress.
 
 ## TG5040 Deployment
 
@@ -256,7 +272,7 @@ The exported bundle at `ports/tg5040/pak/` contains:
 - **lib/**: All shared library dependencies with proper RPATH setup
 - **fonts/**: All bundled font files ready for the runtime picker
 - **res/**: Optional resources (e.g., documentation PDFs)
-- **launch.sh**: Main launcher script that boots straight into the ImGui file browser
+- **launch.sh**: Main launcher script that boots straight into the Nuklear file browser
 - **README.md / pak.json**: Copied for reference inside the bundle
 
 ### Deployment to Device
@@ -394,7 +410,7 @@ SDLReader-brick/
 ├── cli/                          # Command-line interface
 ├── fonts/                        # Font files (available to the font picker)
 ├── config.json.example           # Sample runtime configuration
-├── reading_history.json          # Auto-generated reading history cache
+├── reading_history.json          # Runtime cache (stored in the reader state directory)
 └── ports/                        # Platform-specific builds
     ├── tg5040/                   # TG5040 embedded device
     │   ├── Makefile              # TG5040 build configuration
@@ -403,8 +419,8 @@ SDLReader-brick/
     │   ├── Dockerfile            # TG5040 toolchain image
     │   ├── export_bundle.sh      # Bundle export script
     │   ├── make_bundle2.sh       # Library dependency bundler
-  │   ├── pak/                  # Distribution bundle (created by export)
-  │   │   ├── bin/              # Executables (sdl_reader_cli + optional utilities)
+    │   ├── pak/                  # Distribution bundle (created by export)
+    │   │   ├── bin/              # Executables (sdl_reader_cli + optional utilities)
     │   │   ├── lib/              # Shared libraries and dependencies
     │   │   ├── fonts/            # Font files
     │   │   ├── res/              # Other resources (if any)
@@ -447,7 +463,7 @@ Key architectural highlights:
 - [LoveRetro/NextUI](https://github.com/LoveRetro/NextUI), for creating an excellent OS for the TrimUI Brick.
 - <a href="https://github.com/josegonzalez" target="_blank" rel="noopener noreferrer"><img src="https://github.com/josegonzalez.png" alt="@josegonzalez" width="18" height="18" style="border-radius:50%"> josegonzalez</a>, for minui-list and countless other tools.
 - [UncleJunVIP/nextui-pak-store](https://github.com/UncleJunVIP/nextui-pak-store) for the Pak Store
-- [ocornut/imgui](https://github.com/ocornut/imgui), for the Dear ImGui UI framework powering the overlay, browser, and font menus.
+- [Immediate-Mode-UI/Nuklear](https://github.com/Immediate-Mode-UI/Nuklear), for the Nuklear UI framework powering the overlay, browser, and font menus.
 - [koreader/koreader](https://github.com/koreader/koreader), for the MuPDF WebP Patch.
 - [Claude.ai](https://claude.ai), for creating Sonnet 4. I’m not a C++ programmer, but Sonnet gave me a fighting chance at getting this done in a reasonable timeframe.
 

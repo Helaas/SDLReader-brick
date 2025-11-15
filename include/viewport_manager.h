@@ -4,6 +4,8 @@
 #include <SDL.h>
 #include <chrono>
 #include <memory>
+#include <utility>
+#include <unordered_map>
 
 // Forward declarations
 class Document;
@@ -123,6 +125,10 @@ public:
     void zoomTo(int scale, Document* document);
     void applyPendingZoom(Document* document, int currentPage);
     bool isZoomDebouncing() const;
+    bool hasPendingZoom() const
+    {
+        return m_pendingZoomDelta != 0;
+    }
 
     // Fit operations
     void fitPageToWindow(Document* document, int currentPage);
@@ -130,12 +136,12 @@ public:
 
     // Scroll operations
     void clampScroll();
-    void recenterScrollOnZoom(int oldScale, int newScale);
+    void recenterScrollOnZoom(int oldScrollX, int oldScrollY, int oldMaxScrollX, int oldMaxScrollY);
     void alignToTopOfCurrentPage();
 
     // Page change operations
     void onPageChangedKeepZoom(Document* document, int newPage);
-    void resetPageView(Document* document);
+    void resetPageView(Document* document, int pageNum);
 
     // Rotation and mirroring
     void rotateClockwise();
@@ -192,6 +198,11 @@ private:
     // Helper methods
     void updatePageDimensions(Document* document, int currentPage);
     bool isNextRenderLikelyExpensive(int lastRenderDuration) const;
+    std::pair<int, int> getNativePageSize(Document* document, int currentPage) const;
+    void invalidateNativeSizeCache();
+
+    mutable Document* m_nativeSizeCacheDoc{nullptr};
+    mutable std::unordered_map<int, std::pair<int, int>> m_nativeSizeCache;
 };
 
 #endif // VIEWPORT_MANAGER_H

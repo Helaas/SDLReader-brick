@@ -133,6 +133,18 @@ public:
         m_bgColorB = b;
     }
 
+    // Clear cached render and dimension cache (for document load/reset)
+    void clearLastRender(Document* document);
+
+    void setShowMinimap(bool enabled)
+    {
+        m_showMinimap = enabled;
+    }
+    bool isMinimapEnabled() const
+    {
+        return m_showMinimap;
+    }
+
 private:
     // Rendering resources
     std::unique_ptr<Renderer> m_renderer;
@@ -146,6 +158,16 @@ private:
     uint8_t m_bgColorG = 255;
     uint8_t m_bgColorB = 255;
 
+    // Cached render for rapid zoom previews
+    std::shared_ptr<const std::vector<uint32_t>> m_lastArgbBuffer;
+    int m_lastArgbWidth = 0;
+    int m_lastArgbHeight = 0;
+    int m_lastArgbPage = -1;
+    int m_lastArgbScale = 0;
+    bool m_lastArgbValid = false;
+    bool m_previewActive = false;
+    bool m_showMinimap = true;
+
     // UI rendering methods
     void renderPageInfo(NavigationManager* navigationManager, int windowWidth, int windowHeight);
     void renderScaleInfo(ViewportManager* viewportManager, int windowWidth, int windowHeight);
@@ -154,11 +176,15 @@ private:
     void renderPageJumpInput(NavigationManager* navigationManager, int windowWidth, int windowHeight);
     void renderEdgeTurnProgressIndicator(class App* app, NavigationManager* navigationManager,
                                          ViewportManager* viewportManager, int windowWidth, int windowHeight);
+    void renderDocumentMinimap(std::shared_ptr<const std::vector<uint32_t>> argbData, int srcWidth, int srcHeight,
+                               const SDL_Rect& pageRect, ViewportManager* viewportManager,
+                               int windowWidth, int windowHeight);
 
     // Helper methods
     uint32_t rgb24_to_argb32(uint8_t r, uint8_t g, uint8_t b);
     void renderProgressBar(int x, int y, int width, int height, float progress, SDL_Color bgColor, SDL_Color fillColor);
     SDL_Color getContrastingTextColor() const;
+    void storeLastRender(int page, int scale, std::shared_ptr<const std::vector<uint32_t>> buffer, int width, int height);
 };
 
 #endif // RENDER_MANAGER_H
