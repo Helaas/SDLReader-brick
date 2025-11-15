@@ -35,6 +35,18 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 * Toggle fullscreen mode (desktop platforms).
 * TG5040-specific power button integration with a dedicated handler, fake sleep fallback, resume cleanup, and on-screen messaging for console-like behavior.
 
+## Screenshots
+<table>
+  <tr>
+    <td><img src=".github/resources/Screenshot.2025-11-15-20-37-26.png" alt="File browser list view" width="360"></td>
+    <td><img src=".github/resources/Screenshot.2025-11-15-23-27-12.png" alt="Thumbnail grid with badges" width="360"></td>
+  </tr>
+  <tr>
+    <td><img src=".github/resources/Screenshot.2025-11-15-23-27-17.png" alt="Document minimap overlay" width="360"></td>
+    <td><img src=".github/resources/Screenshot.2025-11-15-23-40-52.png" alt="Font and theme picker" width="360"></td>
+  </tr>
+</table>
+
 ## Supported Document Types
 * **PDF** (`.pdf`)
 * **Comic Book Archive** (`.cbz`, `.cbr`, `.rar`, `.zip` containing images)
