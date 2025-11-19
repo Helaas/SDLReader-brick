@@ -1,6 +1,7 @@
 #include "file_browser.h"
 #include "options_manager.h"
 #include "path_utils.h"
+#include "mupdf_locking.h"
 
 #ifndef NK_INCLUDE_FIXED_TYPES
 #define NK_INCLUDE_FIXED_TYPES
@@ -155,7 +156,7 @@ class QuickThumbnailRenderer
 public:
     QuickThumbnailRenderer()
     {
-        m_ctx = fz_new_context(nullptr, nullptr, 64 << 20);
+        m_ctx = fz_new_context(nullptr, getSharedMuPdfLocks(), 64 << 20);
         if (!m_ctx)
         {
             throw std::runtime_error("Failed to create MuPDF context for thumbnails");

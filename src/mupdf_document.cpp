@@ -1,4 +1,5 @@
 #include "mupdf_document.h"
+#include "mupdf_locking.h"
 
 #include <algorithm>
 #include <cctype>
@@ -24,7 +25,7 @@ MuPdfDocument::MuPdfDocument()
     : Document()
 {
     // Initialize MuPDF context with limited store size to prevent corruption
-    m_ctx = std::unique_ptr<fz_context, ContextDeleter>(fz_new_context(nullptr, nullptr, 256 << 20)); // 256MB
+    m_ctx = std::unique_ptr<fz_context, ContextDeleter>(fz_new_context(nullptr, getSharedMuPdfLocks(), 256 << 20)); // 256MB
 }
 
 MuPdfDocument::~MuPdfDocument()
@@ -88,7 +89,7 @@ bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
     fz_context* ctx = nullptr;
     if (!reuseContexts || !m_ctx)
     {
-        ctx = fz_new_context(nullptr, nullptr, 256 << 20); // 256MB
+        ctx = fz_new_context(nullptr, getSharedMuPdfLocks(), 256 << 20); // 256MB
         if (!ctx)
         {
             std::cerr << "Cannot create MuPDF context\n";
@@ -121,7 +122,7 @@ bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
     fz_var(prerenderCtx);
     if (!reuseContexts || !m_prerenderCtx)
     {
-        prerenderCtx = fz_new_context(nullptr, nullptr, 256 << 20); // 256MB
+        prerenderCtx = fz_new_context(nullptr, getSharedMuPdfLocks(), 256 << 20); // 256MB
         if (!prerenderCtx)
         {
             std::cerr << "Cannot create prerender MuPDF context\n";
