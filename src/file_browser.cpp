@@ -1436,6 +1436,13 @@ std::string FileBrowser::run()
         }
 #endif
 
+        // If a file was chosen or the browser was asked to quit, exit immediately to
+        // preserve the selected path before Nuklear UI processing clears it.
+        if (!m_running)
+        {
+            break;
+        }
+
         // Handle continuous scrolling when D-pad is held
         Uint32 currentTime = SDL_GetTicks();
         if ((m_dpadUpHeld || m_dpadDownHeld) && !m_entries.empty())
@@ -2342,6 +2349,7 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
             m_ctx->style.button.text_alignment = NK_TEXT_LEFT;
 
             struct nk_rect rowBounds = nk_widget_bounds(m_ctx);
+            const bool hovered = nk_widget_is_hovered(m_ctx) != 0;
             struct nk_rect background = rowBounds;
             background.x += 6.0f;
             background.y += 2.0f;
@@ -2356,7 +2364,6 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
             nk_fill_rect(canvas, background, 6.0f, isSelected ? selectedColor : (evenRow ? evenColor : oddColor));
 
             nk_bool pressed = nk_button_label(m_ctx, "");
-            const bool hovered = nk_widget_is_hovered(m_ctx) != 0;
             if (hovered && !isSelected)
             {
                 nk_fill_rect(canvas, background, 6.0f, hoverColor);
