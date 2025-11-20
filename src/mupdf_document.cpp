@@ -416,6 +416,17 @@ MuPdfDocument::ArgbBufferPtr MuPdfDocument::renderPageARGB(int pageNumber, int& 
         const unsigned char* samples = fz_pixmap_samples(ctx, pix);
         int stride = fz_pixmap_stride(ctx, pix);
 
+        if (!samples || stride <= 0 || stride < width * 4)
+        {
+            if (pix)
+            {
+                fz_drop_pixmap(ctx, pix);
+                pix = nullptr;
+            }
+            fz_throw(ctx, FZ_ERROR_GENERIC, "Invalid pixmap data for page %d (samples=%p, stride=%d, width=%d)",
+                     pageNumber, static_cast<const void*>(samples), stride, width);
+        }
+
         for (int y = 0; y < height; ++y)
         {
             const unsigned char* srcRow = samples + static_cast<size_t>(y) * stride;
@@ -1144,6 +1155,22 @@ bool MuPdfDocument::renderPageARGBWithPrerenderContext(int pageNumber, int zoom,
         localBuffer.resize(static_cast<size_t>(width) * static_cast<size_t>(height));
         const unsigned char* samples = fz_pixmap_samples(ctx, pix);
         int stride = fz_pixmap_stride(ctx, pix);
+
+        if (!samples || stride <= 0 || stride < width * 4)
+        {
+            if (pix)
+            {
+                fz_drop_pixmap(ctx, pix);
+                pix = nullptr;
+            }
+            if (page)
+            {
+                fz_drop_page(ctx, page);
+                page = nullptr;
+            }
+            fz_throw(ctx, FZ_ERROR_GENERIC, "Invalid pixmap data for page %d (samples=%p, stride=%d, width=%d)",
+                     pageNumber, static_cast<const void*>(samples), stride, width);
+        }
 
         for (int y = 0; y < height; ++y)
         {

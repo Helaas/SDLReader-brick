@@ -42,6 +42,11 @@ OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS
 
 # Path to minimal libarchive static library
 LIBARCHIVE_MINIMAL := /usr/local/libarchive-minimal/lib/libarchive.a
+# Libarchive version (RAR5 support requires >= 3.4; we use 3.7.2)
+LIBARCHIVE_VERSION := 3.7.2
+LIBARCHIVE_SRC_DIR := libarchive-$(LIBARCHIVE_VERSION)
+LIBARCHIVE_TARBALL := libarchive-$(LIBARCHIVE_VERSION).tar.gz
+LIBARCHIVE_URL := https://www.libarchive.org/downloads/$(LIBARCHIVE_TARBALL)
 
 # Libraries (link order matters)
 # Using static libarchive to avoid bundling extra dependencies
@@ -128,12 +133,12 @@ $(LIBARCHIVE_MINIMAL):
 	@if [ ! -f "$(LIBARCHIVE_MINIMAL)" ]; then \
 		echo "Minimal libarchive not found, building from source..."; \
 		cd $(BASE_PATH) && \
-		if [ ! -d "libarchive-3.3.3" ]; then \
-			echo "Downloading libarchive 3.3.3..."; \
-			curl -L https://www.libarchive.org/downloads/libarchive-3.3.3.tar.gz | tar -xzf -; \
+		if [ ! -d "$(LIBARCHIVE_SRC_DIR)" ]; then \
+			echo "Downloading libarchive $(LIBARCHIVE_VERSION)..."; \
+			curl -L $(LIBARCHIVE_URL) | tar -xzf -; \
 		fi && \
-		cd libarchive-3.3.3 && \
-		echo "Configuring minimal libarchive build..."; \
+		cd $(LIBARCHIVE_SRC_DIR) && \
+		echo "Configuring minimal libarchive build (includes RAR5 support)..."; \
 		./configure --prefix=/usr/local/libarchive-minimal \
 			--disable-shared --enable-static \
 			--without-xml2 --without-expat \
