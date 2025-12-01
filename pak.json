@@ -19,7 +19,12 @@
         "v1.0.0": "Initial release with PDF, CBZ, and EPUB support, optimized for TrimUI Brick"
     },
     "screenshots": [
-        ".github/resources/tg5040%20controls.png"
+        ".github/resources/tg5040%20controls.png",
+        ".github/resources/smart%20pro%20controls.png",
+        ".github/resources/Screenshot.2025-11-15-20-37-26.png",
+        ".github/resources/Screenshot.2025-11-15-23-27-12.png",
+        ".github/resources/Screenshot.2025-11-15-23-27-17.png",
+        ".github/resources/Screenshot.2025-11-15-23-40-52.png"
     ],
     "platforms": [
         "tg5040"
