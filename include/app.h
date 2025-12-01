@@ -165,6 +165,8 @@ private:
     bool m_keyboardRightHeld{false};
     bool m_keyboardUpHeld{false};
     bool m_keyboardDownHeld{false};
+    Sint16 m_leftStickX{0};
+    Sint16 m_leftStickY{0};
 
     // Edge-turn timing for page changes at edges
     float m_edgeTurnHoldRight{0.0f};

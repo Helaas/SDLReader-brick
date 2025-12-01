@@ -1940,6 +1940,92 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         }
         break;
 
+    case SDL_CONTROLLERAXISMOTION:
+    {
+        if (event.caxis.axis == SDL_CONTROLLER_AXIS_LEFTX)
+        {
+            m_leftStickX = event.caxis.value;
+        }
+        else if (event.caxis.axis == SDL_CONTROLLER_AXIS_LEFTY)
+        {
+            m_leftStickY = event.caxis.value;
+        }
+        else
+        {
+            break;
+        }
+
+        const Sint16 AXIS_DEAD_ZONE = 8000;
+        const bool upActive = m_leftStickY < -AXIS_DEAD_ZONE;
+        const bool downActive = m_leftStickY > AXIS_DEAD_ZONE;
+        const bool leftActive = m_leftStickX < -AXIS_DEAD_ZONE;
+        const bool rightActive = m_leftStickX > AXIS_DEAD_ZONE;
+
+        if (upActive && !m_dpadUpHeld)
+        {
+            moveSelectionVertical(-1);
+            m_dpadUpHeld = true;
+            m_lastScrollTime = SDL_GetTicks();
+            m_waitingForInitialRepeat = true;
+        }
+        else if (!upActive && m_dpadUpHeld)
+        {
+            m_dpadUpHeld = false;
+            m_lastScrollTime = 0;
+            m_waitingForInitialRepeat = false;
+        }
+
+        if (downActive && !m_dpadDownHeld)
+        {
+            moveSelectionVertical(1);
+            m_dpadDownHeld = true;
+            m_lastScrollTime = SDL_GetTicks();
+            m_waitingForInitialRepeat = true;
+        }
+        else if (!downActive && m_dpadDownHeld)
+        {
+            m_dpadDownHeld = false;
+            m_lastScrollTime = 0;
+            m_waitingForInitialRepeat = false;
+        }
+
+        if (leftActive && !m_leftHeld)
+        {
+            moveSelectionHorizontal(-1);
+            m_leftHeld = true;
+            m_lastHorizontalScrollTime = SDL_GetTicks();
+            m_waitingForInitialHorizontalRepeat = true;
+        }
+        else if (!leftActive && m_leftHeld)
+        {
+            m_leftHeld = false;
+            if (!m_rightHeld)
+            {
+                m_lastHorizontalScrollTime = 0;
+                m_waitingForInitialHorizontalRepeat = false;
+            }
+        }
+
+        if (rightActive && !m_rightHeld)
+        {
+            moveSelectionHorizontal(1);
+            m_rightHeld = true;
+            m_lastHorizontalScrollTime = SDL_GetTicks();
+            m_waitingForInitialHorizontalRepeat = true;
+        }
+        else if (!rightActive && m_rightHeld)
+        {
+            m_rightHeld = false;
+            if (!m_leftHeld)
+            {
+                m_lastHorizontalScrollTime = 0;
+                m_waitingForInitialHorizontalRepeat = false;
+            }
+        }
+
+        break;
+    }
+
     default:
         break;
     }
@@ -2758,18 +2844,6 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
                 contentRect.w = std::max(0.0f, contentRect.w - tilePadding * 2.0f);
                 contentRect.h = std::max(0.0f, contentRect.h - tilePadding * 2.0f);
 
-                if (entry.isDirectory)
-                {
-                    struct nk_rect badgeRect = innerRect;
-                    badgeRect.x += 8.0f;
-                    badgeRect.y += 8.0f;
-                    badgeRect.w = std::min(72.0f, innerRect.w - 16.0f);
-                    badgeRect.h = 24.0f;
-                    nk_color badgeColor = isParentLink ? nk_rgba(255, 160, 110, 220) : nk_rgba(255, 205, 80, 220);
-                    nk_fill_rect(&win->buffer, badgeRect, 4.0f, badgeColor);
-                    drawCenteredText(badgeRect, isParentLink ? "UP" : "DIR", nk_rgb(30, 30, 30));
-                }
-
                 const float textAreaHeight = labelHeight;
                 const float availableThumbHeight = std::max(24.0f, contentRect.h - textAreaHeight);
                 struct nk_rect thumbRect = contentRect;
@@ -2816,6 +2890,21 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
                         placeholderText = "No preview";
                     }
                     drawCenteredText(thumbRect, placeholderText, nk_rgb(220, 220, 220));
+                }
+
+                if (entry.isDirectory)
+                {
+                    struct nk_rect badgeRect = thumbRect;
+                    badgeRect.x += 6.0f;
+                    badgeRect.y += 6.0f;
+                    badgeRect.w = std::max(0.0f, std::min(72.0f, thumbRect.w - 12.0f));
+                    badgeRect.h = std::max(0.0f, std::min(24.0f, thumbRect.h - 12.0f));
+                    if (badgeRect.w > 0.0f && badgeRect.h > 0.0f)
+                    {
+                        nk_color badgeColor = isParentLink ? nk_rgba(255, 160, 110, 220) : nk_rgba(255, 205, 80, 220);
+                        nk_fill_rect(&win->buffer, badgeRect, 4.0f, badgeColor);
+                        drawCenteredText(badgeRect, isParentLink ? "UP" : "DIR", nk_rgb(30, 30, 30));
+                    }
                 }
 
                 struct nk_rect labelRect = contentRect;

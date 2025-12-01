@@ -1,10 +1,10 @@
 # Font & Reading Style Menu
 
-This implementation adds a comprehensive font and reading-style menu to SDL Reader, allowing runtime customization of EPUB/MOBI typography, colors, and navigation aids across desktop and TG5040 builds.
+This implementation adds a comprehensive font and reading-style menu to SDL Reader, allowing runtime customization of EPUB/MOBI typography, colors, and navigation aids across desktop and TrimUI Brick/Smart Pro builds.
 
 ## Features
 
-- **Font Menu**: Press `M` (keyboard), `Start` (desktop controllers), or Menu button 10 (TG5040) to toggle the settings overlay
+- **Font Menu**: Press `M` (keyboard), `Start` (desktop controllers), or Menu button 10 (TrimUI Brick/Smart Pro) to toggle the settings overlay
 - **Font Discovery**: Automatically scans the `/fonts` directory for `.ttf` and `.otf` files (ships with Inter, JetBrains Mono, Noto Serif Condensed, Roboto) and exposes them in the Options → Font & Reading Style menu
 - **Reading Styles**: Built-in color themes (Default, Sepia, Dark, High Contrast, Paper Texture, Soft Gray, Night) applied via CSS
 - **Font Size Control**: Numeric input and slider for font size (8-72pt)
@@ -16,7 +16,7 @@ This implementation adds a comprehensive font and reading-style menu to SDL Read
 
 1. **Add Fonts**: Place your `.ttf` or `.otf` font files in the `fonts/` directory (optional—curated fonts ship in-tree) and they’ll appear in the Options → Font & Reading Style picker
 2. **Launch a Document**: Open a file directly or start the built-in browser with `./bin/sdl_reader_cli --browse`
-3. **Open the Menu**: Press `M` on keyboard, `Start` on desktop controllers, or the TG5040 Menu button (joystick button 10)
+3. **Open the Menu**: Press `M` on keyboard, `Start` on desktop controllers, or the TrimUI Brick/Smart Pro Menu button (joystick button 10)
 4. **Select Font**: Choose from the dropdown list of discovered fonts; the preview updates instantly
 5. **Pick a Reading Style**: Choose a theme for background/text colors; defaults to "Document Default"
 6. **Adjust Size & Zoom Step**: Use the numeric input or slider to set font size (8–72 pt) and tweak the zoom step

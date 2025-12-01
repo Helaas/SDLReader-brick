@@ -126,6 +126,8 @@ private:
     bool m_waitingForInitialRepeat;
     bool m_leftHeld{false};
     bool m_rightHeld{false};
+    Sint16 m_leftStickX{0};
+    Sint16 m_leftStickY{0};
     Uint32 m_lastHorizontalScrollTime{0};
     bool m_waitingForInitialHorizontalRepeat{false};
     static constexpr Uint32 SCROLL_INITIAL_DELAY_MS = 100;     // Initial delay before repeat starts

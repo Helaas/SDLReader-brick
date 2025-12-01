@@ -215,9 +215,25 @@ private:
     static constexpr Uint32 PAGE_CHANGE_COOLDOWN_MS = 200;
     static constexpr Uint32 SCROLL_TIMEOUT_MS = 100;
     static constexpr Uint32 PAGE_JUMP_TIMEOUT = 5000;
+    static constexpr Uint32 TRIGGER_COMBO_GRACE_MS = 150;
     static constexpr float EDGE_TURN_THRESHOLD = 1.5f;
     static constexpr float EDGE_TURN_COOLDOWN_TIME = 0.5f;
     static constexpr int DPAD_NUDGE_AMOUNT = 20;
+    static constexpr Sint16 TRIGGER_DEAD_ZONE = 4000;
+
+    // Shoulder/trigger combo tracking
+    bool m_leftShoulderHeld{false};
+    bool m_rightShoulderHeld{false};
+    bool m_leftTriggerActive{false};
+    bool m_rightTriggerActive{false};
+    bool m_shoulderComboLatched{false};
+    bool m_triggerComboLatched{false};
+    Uint32 m_leftTriggerActivatedAt{0};
+    Uint32 m_rightTriggerActivatedAt{0};
+
+    // Left stick state for D-pad style handling
+    Sint16 m_leftStickX{0};
+    Sint16 m_leftStickY{0};
 
     // Helper methods
     InputActionData processKeyDown(const SDL_Event& event);
@@ -229,6 +245,8 @@ private:
     void handlePageJumpInput(char c);
     void updateEdgeTurnTimers(float dt);
     bool checkEdgeTurnTrigger();
+    bool shouldTriggerCombo(bool leftActive, bool rightActive, bool& comboLatched);
+    void updateDpadFromAnalog(bool rightActive, bool leftActive, bool upActive, bool downActive);
 };
 
 #endif // INPUT_MANAGER_H

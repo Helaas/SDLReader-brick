@@ -418,6 +418,11 @@ void GuiManager::render()
                 {
                     stepFocusVertical(-1);
                 }
+                // Scroll to top when font dropdown is selected
+                if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
+                {
+                    scrollSettingsToTop();
+                }
                 requestFocusScroll();
             }
             else if (m_downHeld)
@@ -1783,6 +1788,10 @@ void GuiManager::scrollFocusedWidgetIntoView()
         return;
     }
 
+    nk_uint scrollX = 0;
+    nk_uint scrollY = 0;
+    nk_window_get_scroll(m_ctx, &scrollX, &scrollY);
+
     const WidgetBounds& bounds = m_widgetBounds[m_mainScreenFocusIndex];
     if (!bounds.valid)
     {
@@ -1793,10 +1802,6 @@ void GuiManager::scrollFocusedWidgetIntoView()
     struct nk_rect clip = nk_window_get_content_region(m_ctx);
     m_windowClipY = clip.y;
     m_windowClipHeight = clip.h;
-
-    nk_uint scrollX = 0;
-    nk_uint scrollY = 0;
-    nk_window_get_scroll(m_ctx, &scrollX, &scrollY);
 
     float clipTop = clip.y;
     float clipBottom = clip.y + clip.h;
@@ -2148,6 +2153,11 @@ bool GuiManager::handleKeyboardNavigation(const SDL_Event& event)
             {
                 scrollSettingsToTop();
             }
+            // Scroll to top when font dropdown is selected
+            if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
+            {
+                scrollSettingsToTop();
+            }
             if (!m_upHeld)
             {
                 m_upHeld = true;
@@ -2489,8 +2499,260 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
         return false; // Only handle controller input when GUI is visible
     }
 
+    auto handleDpadUpPress = [&]() -> bool
+    {
+        if (m_fontDropdownOpen)
+        {
+            const auto& fonts = m_optionsManager.getAvailableFonts();
+            int fontCount = static_cast<int>(fonts.size());
+            if (fontCount == 0)
+            {
+                m_fontDropdownHighlightedIndex = 0;
+            }
+
+            if (fontCount > 0)
+            {
+                m_fontDropdownHighlightedIndex = (m_fontDropdownHighlightedIndex - 1 + fontCount) % fontCount;
+                std::cout << "[DEBUG] Controller dropdown UP - highlight: " << m_fontDropdownHighlightedIndex << std::endl;
+            }
+            return true;
+        }
+
+        if (m_styleDropdownOpen)
+        {
+            auto allStyles = OptionsManager::getAllReadingStyles();
+            int styleCount = static_cast<int>(allStyles.size());
+            if (styleCount == 0)
+            {
+                m_styleDropdownHighlightedIndex = 0;
+            }
+
+            if (styleCount > 0)
+            {
+                m_styleDropdownHighlightedIndex = (m_styleDropdownHighlightedIndex - 1 + styleCount) % styleCount;
+                std::cout << "[DEBUG] Controller style dropdown UP - highlight: " << m_styleDropdownHighlightedIndex << std::endl;
+            }
+            return true;
+        }
+
+        if (m_showFontMenu)
+        {
+            if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
+            {
+                m_mainScreenFocusIndex = WIDGET_APPLY_BUTTON;
+                requestFocusScroll();
+            }
+            else if (!stepFocusVertical(-1))
+            {
+                scrollSettingsToTop();
+            }
+            // Scroll to top when font dropdown is selected
+            if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
+            {
+                scrollSettingsToTop();
+            }
+            if (!m_upHeld)
+            {
+                m_upHeld = true;
+                m_lastNavigationTime = SDL_GetTicks();
+                m_waitingForInitialNavigationRepeat = true;
+            }
+            return true;
+        }
+
+        return false;
+    };
+
+    auto handleDpadDownPress = [&]() -> bool
+    {
+        if (m_fontDropdownOpen)
+        {
+            const auto& fonts = m_optionsManager.getAvailableFonts();
+            int fontCount = static_cast<int>(fonts.size());
+            if (fontCount == 0)
+            {
+                m_fontDropdownHighlightedIndex = 0;
+            }
+
+            if (fontCount > 0)
+            {
+                m_fontDropdownHighlightedIndex = (m_fontDropdownHighlightedIndex + 1) % fontCount;
+                std::cout << "[DEBUG] Controller dropdown DOWN - highlight: " << m_fontDropdownHighlightedIndex << std::endl;
+            }
+            return true;
+        }
+
+        if (m_styleDropdownOpen)
+        {
+            auto allStyles = OptionsManager::getAllReadingStyles();
+            int styleCount = static_cast<int>(allStyles.size());
+            if (styleCount == 0)
+            {
+                m_styleDropdownHighlightedIndex = 0;
+            }
+
+            if (styleCount > 0)
+            {
+                m_styleDropdownHighlightedIndex = (m_styleDropdownHighlightedIndex + 1) % styleCount;
+                std::cout << "[DEBUG] Controller style dropdown DOWN - highlight: " << m_styleDropdownHighlightedIndex << std::endl;
+            }
+            return true;
+        }
+
+        if (m_showFontMenu)
+        {
+            if (m_mainScreenFocusIndex == WIDGET_RESET_BUTTON)
+            {
+                m_mainScreenFocusIndex = WIDGET_FONT_DROPDOWN;
+                requestFocusScroll();
+                scrollSettingsToTop();
+            }
+            else
+            {
+                stepFocusVertical(1);
+            }
+            if (!m_downHeld)
+            {
+                m_downHeld = true;
+                m_lastNavigationTime = SDL_GetTicks();
+                m_waitingForInitialNavigationRepeat = true;
+            }
+            return true;
+        }
+
+        return false;
+    };
+
+    auto handleDpadLeftPress = [&]() -> bool
+    {
+        if (m_fontDropdownOpen || m_styleDropdownOpen)
+        {
+            return true; // Ignore left/right while dropdowns are open
+        }
+
+        if (m_showFontMenu)
+        {
+            if (!handleHorizontalNavigation(-1))
+            {
+                adjustFocusedWidget(-1);
+            }
+            return true;
+        }
+
+        return false;
+    };
+
+    auto handleDpadRightPress = [&]() -> bool
+    {
+        if (m_fontDropdownOpen || m_styleDropdownOpen)
+        {
+            return true; // Ignore left/right while dropdowns are open
+        }
+
+        if (m_showFontMenu)
+        {
+            if (!handleHorizontalNavigation(1))
+            {
+                adjustFocusedWidget(1);
+            }
+            return true;
+        }
+
+        return false;
+    };
+
+    auto handleDpadUpRelease = [&]() -> bool
+    {
+        nk_input_key(m_ctx, NK_KEY_UP, 0);
+        m_upHeld = false;
+        m_lastNavigationTime = 0;
+        m_waitingForInitialNavigationRepeat = false;
+        return true;
+    };
+
+    auto handleDpadDownRelease = [&]() -> bool
+    {
+        nk_input_key(m_ctx, NK_KEY_DOWN, 0);
+        m_downHeld = false;
+        m_lastNavigationTime = 0;
+        m_waitingForInitialNavigationRepeat = false;
+        return true;
+    };
+
+    auto handleDpadLeftRelease = [&]() -> bool
+    {
+        nk_input_key(m_ctx, NK_KEY_LEFT, 0);
+        return true;
+    };
+
+    auto handleDpadRightRelease = [&]() -> bool
+    {
+        nk_input_key(m_ctx, NK_KEY_RIGHT, 0);
+        return true;
+    };
+
+    if (event.type == SDL_CONTROLLERAXISMOTION &&
+        (event.caxis.axis == SDL_CONTROLLER_AXIS_LEFTX || event.caxis.axis == SDL_CONTROLLER_AXIS_LEFTY))
+    {
+        if (event.caxis.axis == SDL_CONTROLLER_AXIS_LEFTX)
+        {
+            m_leftStickX = event.caxis.value;
+        }
+        else
+        {
+            m_leftStickY = event.caxis.value;
+        }
+
+        const Sint16 AXIS_DEAD_ZONE = 8000;
+        bool upActive = m_leftStickY < -AXIS_DEAD_ZONE;
+        bool downActive = m_leftStickY > AXIS_DEAD_ZONE;
+        bool leftActive = m_leftStickX < -AXIS_DEAD_ZONE;
+        bool rightActive = m_leftStickX > AXIS_DEAD_ZONE;
+
+        bool consumed = false;
+
+        if (upActive != m_leftStickUpActive)
+        {
+            m_leftStickUpActive = upActive;
+            consumed = (upActive ? handleDpadUpPress() : handleDpadUpRelease()) || consumed;
+        }
+        if (downActive != m_leftStickDownActive)
+        {
+            m_leftStickDownActive = downActive;
+            consumed = (downActive ? handleDpadDownPress() : handleDpadDownRelease()) || consumed;
+        }
+        if (leftActive != m_leftStickLeftActive)
+        {
+            m_leftStickLeftActive = leftActive;
+            consumed = (leftActive ? handleDpadLeftPress() : handleDpadLeftRelease()) || consumed;
+        }
+        if (rightActive != m_leftStickRightActive)
+        {
+            m_leftStickRightActive = rightActive;
+            consumed = (rightActive ? handleDpadRightPress() : handleDpadRightRelease()) || consumed;
+        }
+
+        return consumed;
+    }
+
     if (event.type == SDL_CONTROLLERBUTTONDOWN)
     {
+        if (event.cbutton.button == SDL_CONTROLLER_BUTTON_LEFTSHOULDER)
+        {
+            m_leftShoulderHeld = true;
+        }
+        else if (event.cbutton.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
+        {
+            m_rightShoulderHeld = true;
+        }
+
+        if (m_leftShoulderHeld && m_rightShoulderHeld && !m_shoulderComboLatched)
+        {
+            m_shoulderComboLatched = true;
+            closeTopUIWindow();
+            return true;
+        }
+
         // Simple time-based debouncing
         Uint32 currentTime = SDL_GetTicks();
         if (currentTime - m_lastButtonPressTime < BUTTON_DEBOUNCE_MS)
@@ -2501,33 +2763,15 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
 
         if (m_fontDropdownOpen)
         {
-            const auto& fonts = m_optionsManager.getAvailableFonts();
-            int fontCount = static_cast<int>(fonts.size());
-            if (fontCount == 0)
-            {
-                m_fontDropdownHighlightedIndex = 0;
-            }
-
             switch (event.cbutton.button)
             {
             case SDL_CONTROLLER_BUTTON_DPAD_UP:
-                if (fontCount > 0)
-                {
-                    m_fontDropdownHighlightedIndex = (m_fontDropdownHighlightedIndex - 1 + fontCount) % fontCount;
-                    std::cout << "[DEBUG] Controller dropdown UP - highlight: " << m_fontDropdownHighlightedIndex << std::endl;
-                }
-                return true;
+                return handleDpadUpPress();
             case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-                if (fontCount > 0)
-                {
-                    m_fontDropdownHighlightedIndex = (m_fontDropdownHighlightedIndex + 1) % fontCount;
-                    std::cout << "[DEBUG] Controller dropdown DOWN - highlight: " << m_fontDropdownHighlightedIndex << std::endl;
-                }
-                return true;
+                return handleDpadDownPress();
             case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
             case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-                // Ignore left/right while dropdown is open
-                return true;
+                return handleDpadLeftPress();
             case kAcceptButton:
                 std::cout << "[DEBUG] Controller A - confirm dropdown index " << m_fontDropdownHighlightedIndex << std::endl;
                 m_fontDropdownSelectRequested = true;
@@ -2543,33 +2787,15 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
 
         if (m_styleDropdownOpen)
         {
-            auto allStyles = OptionsManager::getAllReadingStyles();
-            int styleCount = static_cast<int>(allStyles.size());
-            if (styleCount == 0)
-            {
-                m_styleDropdownHighlightedIndex = 0;
-            }
-
             switch (event.cbutton.button)
             {
             case SDL_CONTROLLER_BUTTON_DPAD_UP:
-                if (styleCount > 0)
-                {
-                    m_styleDropdownHighlightedIndex = (m_styleDropdownHighlightedIndex - 1 + styleCount) % styleCount;
-                    std::cout << "[DEBUG] Controller style dropdown UP - highlight: " << m_styleDropdownHighlightedIndex << std::endl;
-                }
-                return true;
+                return handleDpadUpPress();
             case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-                if (styleCount > 0)
-                {
-                    m_styleDropdownHighlightedIndex = (m_styleDropdownHighlightedIndex + 1) % styleCount;
-                    std::cout << "[DEBUG] Controller style dropdown DOWN - highlight: " << m_styleDropdownHighlightedIndex << std::endl;
-                }
-                return true;
+                return handleDpadDownPress();
             case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
             case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-                // Ignore left/right while dropdown is open
-                return true;
+                return handleDpadLeftPress();
             case kAcceptButton:
                 std::cout << "[DEBUG] Controller A - confirm style dropdown index " << m_styleDropdownHighlightedIndex << std::endl;
                 m_styleDropdownSelectRequested = true;
@@ -2589,52 +2815,13 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
             switch (event.cbutton.button)
             {
             case SDL_CONTROLLER_BUTTON_DPAD_UP:
-                if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
-                {
-                    m_mainScreenFocusIndex = WIDGET_APPLY_BUTTON;
-                    requestFocusScroll();
-                }
-                else if (!stepFocusVertical(-1))
-                {
-                    scrollSettingsToTop();
-                }
-                if (!m_upHeld)
-                {
-                    m_upHeld = true;
-                    m_lastNavigationTime = SDL_GetTicks();
-                    m_waitingForInitialNavigationRepeat = true;
-                }
-                return true;
+                return handleDpadUpPress();
             case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-                if (m_mainScreenFocusIndex == WIDGET_RESET_BUTTON)
-                {
-                    m_mainScreenFocusIndex = WIDGET_FONT_DROPDOWN;
-                    requestFocusScroll();
-                    scrollSettingsToTop();
-                }
-                else
-                {
-                    stepFocusVertical(1);
-                }
-                if (!m_downHeld)
-                {
-                    m_downHeld = true;
-                    m_lastNavigationTime = SDL_GetTicks();
-                    m_waitingForInitialNavigationRepeat = true;
-                }
-                return true;
+                return handleDpadDownPress();
             case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-                if (!handleHorizontalNavigation(-1))
-                {
-                    adjustFocusedWidget(-1);
-                }
-                return true;
+                return handleDpadLeftPress();
             case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-                if (!handleHorizontalNavigation(1))
-                {
-                    adjustFocusedWidget(1);
-                }
-                return true;
+                return handleDpadRightPress();
             case kAcceptButton:
                 activateFocusedWidget();
                 return true;
@@ -2703,26 +2890,27 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
     // Handle button up events to clear key states
     if (event.type == SDL_CONTROLLERBUTTONUP)
     {
+        if (event.cbutton.button == SDL_CONTROLLER_BUTTON_LEFTSHOULDER)
+        {
+            m_leftShoulderHeld = false;
+            m_shoulderComboLatched = false;
+        }
+        else if (event.cbutton.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
+        {
+            m_rightShoulderHeld = false;
+            m_shoulderComboLatched = false;
+        }
+
         switch (event.cbutton.button)
         {
         case SDL_CONTROLLER_BUTTON_DPAD_UP:
-            nk_input_key(m_ctx, NK_KEY_UP, 0);
-            m_upHeld = false;
-            m_lastNavigationTime = 0;
-            m_waitingForInitialNavigationRepeat = false;
-            return true;
+            return handleDpadUpRelease();
         case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-            nk_input_key(m_ctx, NK_KEY_DOWN, 0);
-            m_downHeld = false;
-            m_lastNavigationTime = 0;
-            m_waitingForInitialNavigationRepeat = false;
-            return true;
+            return handleDpadDownRelease();
         case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-            nk_input_key(m_ctx, NK_KEY_LEFT, 0);
-            return true;
+            return handleDpadLeftRelease();
         case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-            nk_input_key(m_ctx, NK_KEY_RIGHT, 0);
-            return true;
+            return handleDpadRightRelease();
         case kAcceptButton:
             nk_input_key(m_ctx, NK_KEY_ENTER, 0);
             return true;

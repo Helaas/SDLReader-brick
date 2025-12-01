@@ -465,9 +465,19 @@ InputActionData InputManager::processControllerButton(const SDL_Event& event)
         return actionData;
     }
 
+    SDL_GameControllerButton physicalButton = static_cast<SDL_GameControllerButton>(event.cbutton.button);
+
     if (event.type == SDL_CONTROLLERBUTTONDOWN)
     {
-        SDL_GameControllerButton physicalButton = static_cast<SDL_GameControllerButton>(event.cbutton.button);
+        if (physicalButton == SDL_CONTROLLER_BUTTON_LEFTSHOULDER)
+        {
+            m_leftShoulderHeld = true;
+        }
+        else if (physicalButton == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
+        {
+            m_rightShoulderHeld = true;
+        }
+
         LogicalButton logicalButton = m_buttonMapper.mapButton(physicalButton);
 
         switch (logicalButton)
@@ -547,11 +557,26 @@ InputActionData InputManager::processControllerButton(const SDL_Event& event)
             // Should be filtered out earlier in processEvent()
             break;
         }
+
+        if (shouldTriggerCombo(m_leftShoulderHeld, m_rightShoulderHeld, m_shoulderComboLatched))
+        {
+            actionData.action = InputAction::ToggleFontMenu;
+        }
     }
     else if (event.type == SDL_CONTROLLERBUTTONUP)
     {
-        SDL_GameControllerButton physicalButton = static_cast<SDL_GameControllerButton>(event.cbutton.button);
         LogicalButton logicalButton = m_buttonMapper.mapButton(physicalButton);
+
+        if (physicalButton == SDL_CONTROLLER_BUTTON_LEFTSHOULDER)
+        {
+            m_leftShoulderHeld = false;
+            m_shoulderComboLatched = false;
+        }
+        else if (physicalButton == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
+        {
+            m_rightShoulderHeld = false;
+            m_shoulderComboLatched = false;
+        }
 
         switch (logicalButton)
         {
@@ -610,31 +635,61 @@ InputActionData InputManager::processControllerAxis(const SDL_Event& event)
     }
 
     const Sint16 AXIS_DEAD_ZONE = 8000;
+    Uint32 now = SDL_GetTicks();
 
-    // L2/R2 triggers for page jumping
-    if (event.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT &&
-        event.caxis.value > AXIS_DEAD_ZONE)
+    switch (event.caxis.axis)
     {
-        if (!isInPageChangeCooldown())
+    case SDL_CONTROLLER_AXIS_TRIGGERLEFT:
+        m_leftTriggerActive = event.caxis.value > TRIGGER_DEAD_ZONE;
+        if (m_leftTriggerActive)
+        {
+            m_leftTriggerActivatedAt = now;
+        }
+        if (m_leftTriggerActive && !isInPageChangeCooldown())
         {
             actionData.action = InputAction::JumpPages;
             actionData.intValue = -10;
         }
-    }
-    else if (event.caxis.axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT &&
-             event.caxis.value > AXIS_DEAD_ZONE)
-    {
-        if (!isInPageChangeCooldown())
+        if (shouldTriggerCombo(m_leftTriggerActive || (now - m_leftTriggerActivatedAt) < TRIGGER_COMBO_GRACE_MS,
+                               m_rightTriggerActive || (now - m_rightTriggerActivatedAt) < TRIGGER_COMBO_GRACE_MS,
+                               m_triggerComboLatched) &&
+            !isInPageChangeCooldown())
+        {
+            actionData.action = InputAction::ResetPageView;
+        }
+        break;
+
+    case SDL_CONTROLLER_AXIS_TRIGGERRIGHT:
+        m_rightTriggerActive = event.caxis.value > TRIGGER_DEAD_ZONE;
+        if (m_rightTriggerActive)
+        {
+            m_rightTriggerActivatedAt = now;
+        }
+        if (m_rightTriggerActive && !isInPageChangeCooldown())
         {
             actionData.action = InputAction::JumpPages;
             actionData.intValue = 10;
         }
-    }
+        if (shouldTriggerCombo(m_leftTriggerActive || (now - m_leftTriggerActivatedAt) < TRIGGER_COMBO_GRACE_MS,
+                               m_rightTriggerActive || (now - m_rightTriggerActivatedAt) < TRIGGER_COMBO_GRACE_MS,
+                               m_triggerComboLatched) &&
+            !isInPageChangeCooldown())
+        {
+            actionData.action = InputAction::ResetPageView;
+        }
+        break;
 
-    // Analog stick movement for scrolling
-    switch (event.caxis.axis)
-    {
     case SDL_CONTROLLER_AXIS_LEFTX:
+        m_leftStickX = event.caxis.value;
+        updateDpadFromAnalog(m_leftStickX > AXIS_DEAD_ZONE, m_leftStickX < -AXIS_DEAD_ZONE,
+                             m_leftStickY < -AXIS_DEAD_ZONE, m_leftStickY > AXIS_DEAD_ZONE);
+        break;
+    case SDL_CONTROLLER_AXIS_LEFTY:
+        m_leftStickY = event.caxis.value;
+        updateDpadFromAnalog(m_leftStickX > AXIS_DEAD_ZONE, m_leftStickX < -AXIS_DEAD_ZONE,
+                             m_leftStickY < -AXIS_DEAD_ZONE, m_leftStickY > AXIS_DEAD_ZONE);
+        break;
+
     case SDL_CONTROLLER_AXIS_RIGHTX:
         if (!isInScrollTimeout())
         {
@@ -651,7 +706,6 @@ InputActionData InputManager::processControllerAxis(const SDL_Event& event)
         }
         break;
 
-    case SDL_CONTROLLER_AXIS_LEFTY:
     case SDL_CONTROLLER_AXIS_RIGHTY:
         if (!isInScrollTimeout())
         {
@@ -670,6 +724,49 @@ InputActionData InputManager::processControllerAxis(const SDL_Event& event)
     }
 
     return actionData;
+}
+
+bool InputManager::shouldTriggerCombo(bool leftActive, bool rightActive, bool& comboLatched)
+{
+    if (leftActive && rightActive)
+    {
+        if (!comboLatched)
+        {
+            comboLatched = true;
+            return true;
+        }
+    }
+    else
+    {
+        comboLatched = false;
+    }
+
+    return false;
+}
+
+void InputManager::updateDpadFromAnalog(bool rightActive, bool leftActive, bool upActive, bool downActive)
+{
+    auto updateDirection = [](bool desired, bool& state, float& hold, float& cooldown)
+    {
+        if (desired && !state)
+        {
+            state = true;
+        }
+        else if (!desired && state)
+        {
+            state = false;
+            if (hold > 0.0f)
+            {
+                cooldown = SDL_GetTicks() / 1000.0f;
+            }
+            hold = 0.0f;
+        }
+    };
+
+    updateDirection(rightActive, m_inputState.dpadRightHeld, m_inputState.edgeTurnHoldRight, m_inputState.edgeTurnCooldownRight);
+    updateDirection(leftActive, m_inputState.dpadLeftHeld, m_inputState.edgeTurnHoldLeft, m_inputState.edgeTurnCooldownLeft);
+    updateDirection(upActive, m_inputState.dpadUpHeld, m_inputState.edgeTurnHoldUp, m_inputState.edgeTurnCooldownUp);
+    updateDirection(downActive, m_inputState.dpadDownHeld, m_inputState.edgeTurnHoldDown, m_inputState.edgeTurnCooldownDown);
 }
 
 InputActionData InputManager::processMouse(const SDL_Event& event)

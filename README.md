@@ -1,11 +1,11 @@
 # SDL Reader
 
-SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and MuPDF. It supports viewing PDF, CBZ/ZIP & CBR/RAR comic archives, EPUB books, and MOBI e-books with intuitive navigation, zooming, rotation, and mirroring features. Optimized for embedded devices like the TrimUI Brick (TG5040) running [NextUI](https://github.com/LoveRetro/NextUI). It also runs on desktop platforms including macOS, Linux, and is a work in progress as Wii U homebrew.
+SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and MuPDF. It supports viewing PDF, CBZ/ZIP & CBR/RAR comic archives, EPUB books, and MOBI e-books with intuitive navigation, zooming, rotation, and mirroring features. Optimized for embedded devices like the TrimUI Brick and TrimUI Smart Pro running [NextUI](https://github.com/LoveRetro/NextUI). It also runs on desktop platforms including macOS, Linux, and is a work in progress as Wii U homebrew.
 
 ## Table of Contents
 * [Features](#features)
 * [Supported Document Types](#supported-document-types)
-* [TrimUI Brick Control Scheme](#trimui-brick-control-scheme)
+* [TrimUI Control Scheme](#trimui-control-scheme)
 * [Build Instructions](#build-instructions)
 * [Usage](#usage)
 * [TG5040 Deployment](#tg5040-deployment)
@@ -22,18 +22,18 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
   - Asynchronous multi-threaded thumbnail grid (toggle with **X**)
   - Color-coded tile badges for file types
   - Smarter auto-scroll and restore behavior for faster navigation
-  - TG5040-friendly layout
+  - TrimUI Brick/Smart Pro-friendly layout
 * **Stateful Home Directory Usage**: runtime assets (config, fonts list, and `reading_history.json`) now live under `$SDL_READER_STATE_DIR` (default `$HOME`) so settings persist across firmware/app updates and can be redirected per device.
 * Custom font picker with reading style themes, MuPDF-backed CSS injection, controller-friendly navigation, hold-to-scroll, inline tooltips, info glyphs, and persistent highlights.
 * On-screen number pad for page jumps when navigating with a controller.
 * Automatic reading history tracking with resume-on-open for the last 50 documents.
 * Page navigation (next/previous page) with **Smart Edge Navigation**: when zoomed ≥100% & at a page edge, holding the D-pad for 300 ms flips pages with a progress indicator.
 * Quick page jumping (±10 pages) and arbitrary page entry.
-* Zoom in/out, fit-to-width, high-maximum zoom levels, optimized downsampling paths, and improved caching for smoother zoom/pan performance (notably on TG5040).
+* Zoom in/out, fit-to-width, high-maximum zoom levels, optimized downsampling paths, and improved caching for smoother zoom/pan performance (notably on TrimUI Brick/Smart Pro devices).
 * Page rotation (90° increments) and horizontal/vertical mirroring.
 * Smooth scrolling within pages (if zoomed in or if the page is larger than the viewport).
 * Toggle fullscreen mode (desktop platforms).
-* TG5040-specific power button integration with a dedicated handler, fake sleep fallback, resume cleanup, and on-screen messaging for console-like behavior.
+* TrimUI Brick/Smart Pro power button integration with a dedicated handler, fake sleep fallback, resume cleanup, and on-screen messaging for console-like behavior.
 
 ## Screenshots
 <table>
@@ -55,13 +55,16 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 * **MOBI** (`.mobi`)
 
 ## TrimUI Brick Control Scheme
-![TrimUI Brick Controls](.github/resources/tg5040%20controls.png)
+![TrimUI Brick](.github/resources/tg5040%20controls.png)
+
+## TrimUI Smart Pro Control Scheme
+![Smart Pro Controls](.github/resources/smart%20pro%20controls.png)
 
 ## Build Instructions
 This project supports multiple platforms with a unified build system.
 
 ### Supported Platforms
-- **TG5040** - Trimui Brick - Embedded Linux device (default)
+- **TG5040** - TrimUI Brick and TrimUI Smart Pro - Embedded Linux devices (default)
 - **macOS** - Desktop development and testing
 - **Wii U** - Nintendo Wii U homebrew (requires devkitPro)
 - **Linux** - Desktop Linux distributions (tested on Ubuntu 24.04)
@@ -72,7 +75,7 @@ This project supports multiple platforms with a unified build system.
 make
 
 # Build for specific platform
-make tg5040    # TG5040 embedded device (Trimui Brick)
+make tg5040    # TG5040 embedded device (TrimUI Brick and Smart Pro)
 make mac       # macOS
 make wiiu      # Wii U (requires devkitPro environment)
 make linux     # Linux desktop
@@ -145,7 +148,7 @@ All `make` targets download MuPDF 1.26.7 and apply `webp-upstream-697749.patch` 
 
 ## Platform-Specific Features
 
-### TG5040 Embedded Device
+### TG5040 Embedded Device (TrimUI Brick & Smart Pro)
 - **Advanced Power Management**: NextUI-compatible power button integration
   - Short press: Intelligent sleep with fallback to fake sleep mode
   - Fake sleep: Black screen with input blocking when hardware sleep unavailable
