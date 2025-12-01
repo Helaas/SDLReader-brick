@@ -418,6 +418,11 @@ void GuiManager::render()
                 {
                     stepFocusVertical(-1);
                 }
+                // Scroll to top when font dropdown is selected
+                if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
+                {
+                    scrollSettingsToTop();
+                }
                 requestFocusScroll();
             }
             else if (m_downHeld)
@@ -1783,6 +1788,10 @@ void GuiManager::scrollFocusedWidgetIntoView()
         return;
     }
 
+    nk_uint scrollX = 0;
+    nk_uint scrollY = 0;
+    nk_window_get_scroll(m_ctx, &scrollX, &scrollY);
+
     const WidgetBounds& bounds = m_widgetBounds[m_mainScreenFocusIndex];
     if (!bounds.valid)
     {
@@ -1793,10 +1802,6 @@ void GuiManager::scrollFocusedWidgetIntoView()
     struct nk_rect clip = nk_window_get_content_region(m_ctx);
     m_windowClipY = clip.y;
     m_windowClipHeight = clip.h;
-
-    nk_uint scrollX = 0;
-    nk_uint scrollY = 0;
-    nk_window_get_scroll(m_ctx, &scrollX, &scrollY);
 
     float clipTop = clip.y;
     float clipBottom = clip.y + clip.h;
@@ -2145,6 +2150,11 @@ bool GuiManager::handleKeyboardNavigation(const SDL_Event& event)
                 requestFocusScroll();
             }
             else if (!stepFocusVertical(-1))
+            {
+                scrollSettingsToTop();
+            }
+            // Scroll to top when font dropdown is selected
+            if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
             {
                 scrollSettingsToTop();
             }
@@ -2533,6 +2543,11 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
                 requestFocusScroll();
             }
             else if (!stepFocusVertical(-1))
+            {
+                scrollSettingsToTop();
+            }
+            // Scroll to top when font dropdown is selected
+            if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
             {
                 scrollSettingsToTop();
             }

@@ -655,7 +655,7 @@ InputActionData InputManager::processControllerAxis(const SDL_Event& event)
                                m_triggerComboLatched) &&
             !isInPageChangeCooldown())
         {
-            actionData.action = InputAction::GoToNextPage;
+            actionData.action = InputAction::ResetPageView;
         }
         break;
 
@@ -675,7 +675,7 @@ InputActionData InputManager::processControllerAxis(const SDL_Event& event)
                                m_triggerComboLatched) &&
             !isInPageChangeCooldown())
         {
-            actionData.action = InputAction::GoToNextPage;
+            actionData.action = InputAction::ResetPageView;
         }
         break;
 
