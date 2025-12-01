@@ -172,6 +172,12 @@ private:
     bool m_waitingForInitialNavigationRepeat = false;
     static constexpr Uint32 NAV_INITIAL_DELAY_MS = 100; // Initial delay before repeat starts
     static constexpr Uint32 NAV_REPEAT_DELAY_MS = 50;   // Delay between repeats
+    Sint16 m_leftStickX = 0;
+    Sint16 m_leftStickY = 0;
+    bool m_leftStickUpActive = false;
+    bool m_leftStickDownActive = false;
+    bool m_leftStickLeftActive = false;
+    bool m_leftStickRightActive = false;
 
     std::vector<std::string> m_fontNames;
     std::array<WidgetBounds, WIDGET_COUNT> m_widgetBounds{};

@@ -219,6 +219,18 @@ private:
     static constexpr float EDGE_TURN_COOLDOWN_TIME = 0.5f;
     static constexpr int DPAD_NUDGE_AMOUNT = 20;
 
+    // Shoulder/trigger combo tracking
+    bool m_leftShoulderHeld{false};
+    bool m_rightShoulderHeld{false};
+    bool m_leftTriggerActive{false};
+    bool m_rightTriggerActive{false};
+    bool m_shoulderComboLatched{false};
+    bool m_triggerComboLatched{false};
+
+    // Left stick state for D-pad style handling
+    Sint16 m_leftStickX{0};
+    Sint16 m_leftStickY{0};
+
     // Helper methods
     InputActionData processKeyDown(const SDL_Event& event);
     InputActionData processKeyUp(const SDL_Event& event);
@@ -229,6 +241,8 @@ private:
     void handlePageJumpInput(char c);
     void updateEdgeTurnTimers(float dt);
     bool checkEdgeTurnTrigger();
+    bool shouldTriggerCombo(bool leftActive, bool rightActive, bool& comboLatched);
+    void updateDpadFromAnalog(bool rightActive, bool leftActive, bool upActive, bool downActive);
 };
 
 #endif // INPUT_MANAGER_H

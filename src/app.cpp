@@ -1010,6 +1010,72 @@ void App::updateInputState(const SDL_Event& event)
         }
         break;
 
+    case SDL_CONTROLLERAXISMOTION:
+    {
+        if (event.caxis.axis == SDL_CONTROLLER_AXIS_LEFTX)
+        {
+            m_leftStickX = event.caxis.value;
+        }
+        else if (event.caxis.axis == SDL_CONTROLLER_AXIS_LEFTY)
+        {
+            m_leftStickY = event.caxis.value;
+        }
+        else
+        {
+            break;
+        }
+
+        const Sint16 AXIS_DEAD_ZONE = 8000;
+        const bool rightActive = m_leftStickX > AXIS_DEAD_ZONE;
+        const bool leftActive = m_leftStickX < -AXIS_DEAD_ZONE;
+        const bool upActive = m_leftStickY < -AXIS_DEAD_ZONE;
+        const bool downActive = m_leftStickY > AXIS_DEAD_ZONE;
+
+        auto handlePress = [&](bool desired, bool& state, const std::function<void()>& nudgeFn)
+        {
+            if (desired && !state)
+            {
+                state = true;
+                nudgeFn();
+            }
+        };
+
+        bool releasedAny = false;
+        auto handleRelease = [&](bool desired, bool& state, float& hold, float& cooldown)
+        {
+            if (!desired && state)
+            {
+                state = false;
+                if (hold > 0.0f)
+                {
+                    cooldown = SDL_GetTicks() / 1000.0f;
+                }
+                hold = 0.0f;
+                releasedAny = true;
+            }
+        };
+
+        handlePress(rightActive, m_dpadRightHeld, [this]()
+                    { handleDpadNudgeRight(); });
+        handlePress(leftActive, m_dpadLeftHeld, [this]()
+                    { handleDpadNudgeLeft(); });
+        handlePress(upActive, m_dpadUpHeld, [this]()
+                    { handleDpadNudgeUp(); });
+        handlePress(downActive, m_dpadDownHeld, [this]()
+                    { handleDpadNudgeDown(); });
+
+        handleRelease(rightActive, m_dpadRightHeld, m_edgeTurnHoldRight, m_edgeTurnCooldownRight);
+        handleRelease(leftActive, m_dpadLeftHeld, m_edgeTurnHoldLeft, m_edgeTurnCooldownLeft);
+        handleRelease(upActive, m_dpadUpHeld, m_edgeTurnHoldUp, m_edgeTurnCooldownUp);
+        handleRelease(downActive, m_dpadDownHeld, m_edgeTurnHoldDown, m_edgeTurnCooldownDown);
+
+        if (releasedAny)
+        {
+            markDirty();
+        }
+        break;
+    }
+
     case SDL_CONTROLLERDEVICEADDED:
         if (m_gameController == nullptr)
         {
