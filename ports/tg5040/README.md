@@ -1,6 +1,6 @@
 # TG5040 Port - Docker Development Environment
 
-This directory contains the TG5040-specific build configuration and Docker development environment for the SDLReader project.
+This directory contains the TG5040-specific build configuration and Docker development environment for the SDLReader project. It supports both the TrimUI Brick and TrimUI Smart Pro devices.
 
 Based on the [Trimui toolchain Docker image](https://git.crowdedwood.com/trimui-toolchain/) by neonloop.
 
@@ -126,7 +126,7 @@ Drop additional `.ttf` or `.otf` files into `ports/tg5040/pak/fonts/` (or the pr
 - Built artifacts are stored in the project's `bin/` and `build/` directories
 
 ## Platform-Specific Features
-The TG5040 build includes:
+The TG5040 build (TrimUI Brick & Smart Pro) includes:
 - **Nuklear UI Stack**: Built-in browser launched via `--browse`, font & reading-style menu, controller number pad, and persisted `reading_history.json`
   - Toggle the new thumbnail grid with the **X** button for cover previews rendered asynchronously.
   - Control the zoom minimap overlay via the `showDocumentMinimap` flag in `config.json`.
