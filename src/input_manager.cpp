@@ -635,32 +635,47 @@ InputActionData InputManager::processControllerAxis(const SDL_Event& event)
     }
 
     const Sint16 AXIS_DEAD_ZONE = 8000;
+    Uint32 now = SDL_GetTicks();
 
     switch (event.caxis.axis)
     {
     case SDL_CONTROLLER_AXIS_TRIGGERLEFT:
-        m_leftTriggerActive = event.caxis.value > AXIS_DEAD_ZONE;
+        m_leftTriggerActive = event.caxis.value > TRIGGER_DEAD_ZONE;
+        if (m_leftTriggerActive)
+        {
+            m_leftTriggerActivatedAt = now;
+        }
         if (m_leftTriggerActive && !isInPageChangeCooldown())
         {
             actionData.action = InputAction::JumpPages;
             actionData.intValue = -10;
         }
-        if (shouldTriggerCombo(m_leftTriggerActive, m_rightTriggerActive, m_triggerComboLatched))
+        if (shouldTriggerCombo(m_leftTriggerActive || (now - m_leftTriggerActivatedAt) < TRIGGER_COMBO_GRACE_MS,
+                               m_rightTriggerActive || (now - m_rightTriggerActivatedAt) < TRIGGER_COMBO_GRACE_MS,
+                               m_triggerComboLatched) &&
+            !isInPageChangeCooldown())
         {
-            actionData.action = InputAction::ToggleFontMenu;
+            actionData.action = InputAction::GoToNextPage;
         }
         break;
 
     case SDL_CONTROLLER_AXIS_TRIGGERRIGHT:
-        m_rightTriggerActive = event.caxis.value > AXIS_DEAD_ZONE;
+        m_rightTriggerActive = event.caxis.value > TRIGGER_DEAD_ZONE;
+        if (m_rightTriggerActive)
+        {
+            m_rightTriggerActivatedAt = now;
+        }
         if (m_rightTriggerActive && !isInPageChangeCooldown())
         {
             actionData.action = InputAction::JumpPages;
             actionData.intValue = 10;
         }
-        if (shouldTriggerCombo(m_leftTriggerActive, m_rightTriggerActive, m_triggerComboLatched))
+        if (shouldTriggerCombo(m_leftTriggerActive || (now - m_leftTriggerActivatedAt) < TRIGGER_COMBO_GRACE_MS,
+                               m_rightTriggerActive || (now - m_rightTriggerActivatedAt) < TRIGGER_COMBO_GRACE_MS,
+                               m_triggerComboLatched) &&
+            !isInPageChangeCooldown())
         {
-            actionData.action = InputAction::ToggleFontMenu;
+            actionData.action = InputAction::GoToNextPage;
         }
         break;
 

@@ -178,6 +178,9 @@ private:
     bool m_leftStickDownActive = false;
     bool m_leftStickLeftActive = false;
     bool m_leftStickRightActive = false;
+    bool m_leftShoulderHeld = false;
+    bool m_rightShoulderHeld = false;
+    bool m_shoulderComboLatched = false;
 
     std::vector<std::string> m_fontNames;
     std::array<WidgetBounds, WIDGET_COUNT> m_widgetBounds{};

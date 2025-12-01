@@ -2722,6 +2722,22 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
 
     if (event.type == SDL_CONTROLLERBUTTONDOWN)
     {
+        if (event.cbutton.button == SDL_CONTROLLER_BUTTON_LEFTSHOULDER)
+        {
+            m_leftShoulderHeld = true;
+        }
+        else if (event.cbutton.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
+        {
+            m_rightShoulderHeld = true;
+        }
+
+        if (m_leftShoulderHeld && m_rightShoulderHeld && !m_shoulderComboLatched)
+        {
+            m_shoulderComboLatched = true;
+            closeTopUIWindow();
+            return true;
+        }
+
         // Simple time-based debouncing
         Uint32 currentTime = SDL_GetTicks();
         if (currentTime - m_lastButtonPressTime < BUTTON_DEBOUNCE_MS)
@@ -2859,6 +2875,17 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
     // Handle button up events to clear key states
     if (event.type == SDL_CONTROLLERBUTTONUP)
     {
+        if (event.cbutton.button == SDL_CONTROLLER_BUTTON_LEFTSHOULDER)
+        {
+            m_leftShoulderHeld = false;
+            m_shoulderComboLatched = false;
+        }
+        else if (event.cbutton.button == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
+        {
+            m_rightShoulderHeld = false;
+            m_shoulderComboLatched = false;
+        }
+
         switch (event.cbutton.button)
         {
         case SDL_CONTROLLER_BUTTON_DPAD_UP:
