@@ -1386,14 +1386,12 @@ void FileBrowser::pageJumpList(int direction)
     }
 
     const float firstVisibleF = m_listScrollY / stride;
-    const float lastVisibleF = (m_listScrollY + effectiveViewHeight - 1.0f) / stride;
     int firstVisible = std::clamp(static_cast<int>(std::floor(firstVisibleF)), 0, totalItems - 1);
-    int lastVisible = std::clamp(static_cast<int>(std::floor(lastVisibleF)), 0, totalItems - 1);
 
     const int itemsPerPage = std::max(1, static_cast<int>(std::floor(effectiveViewHeight / stride)));
 
     int target = (direction < 0) ? std::max(0, firstVisible - itemsPerPage)
-                                 : std::min(totalItems - 1, lastVisible + itemsPerPage);
+                                 : std::min(totalItems - 1, firstVisible + itemsPerPage);
     if (target != m_selectedIndex)
     {
         // Place target item at the top of the view when possible.
@@ -1462,12 +1460,7 @@ void FileBrowser::pageJumpThumbnail(int direction)
     }
 
     const float firstVisibleRowF = m_thumbnailScrollY / stride;
-    const float lastVisibleRowF = (m_thumbnailScrollY + effectiveViewHeight - 1.0f) / stride;
     int firstRow = std::clamp(static_cast<int>(std::floor(firstVisibleRowF)), 0, std::max(0, totalRows - 1));
-    int lastRow = std::clamp(static_cast<int>(std::floor(lastVisibleRowF)), 0, std::max(0, totalRows - 1));
-
-    int firstVisibleIndex = std::clamp(firstRow * columns, 0, totalEntries - 1);
-    int lastVisibleIndex = std::clamp(((lastRow + 1) * columns) - 1, 0, totalEntries - 1);
 
     const int rowsPerPage = std::max(1, static_cast<int>(std::floor(effectiveViewHeight / stride)));
 
@@ -1479,7 +1472,7 @@ void FileBrowser::pageJumpThumbnail(int direction)
     }
     else
     {
-        int targetRow = std::min(totalRows - 1, lastRow + rowsPerPage);
+        int targetRow = std::min(totalRows - 1, firstRow + rowsPerPage);
         target = std::clamp(targetRow * columns, 0, totalEntries - 1);
     }
 
@@ -1921,11 +1914,25 @@ std::string FileBrowser::run()
             {
                 if (m_leftHeld)
                 {
-                    pageJump(-1);
+                    if (m_thumbnailView)
+                    {
+                        moveSelectionHorizontal(-1);
+                    }
+                    else
+                    {
+                        pageJump(-1);
+                    }
                 }
                 else if (m_rightHeld)
                 {
-                    pageJump(1);
+                    if (m_thumbnailView)
+                    {
+                        moveSelectionHorizontal(1);
+                    }
+                    else
+                    {
+                        pageJump(1);
+                    }
                 }
 
                 m_lastHorizontalScrollTime = currentTime;
@@ -2202,7 +2209,14 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDLK_LEFT:
             if (!m_leftHeld)
             {
-                pageJump(-1);
+                if (m_thumbnailView)
+                {
+                    moveSelectionHorizontal(-1);
+                }
+                else
+                {
+                    pageJump(-1);
+                }
                 m_leftHeld = true;
                 m_lastHorizontalScrollTime = SDL_GetTicks();
                 m_waitingForInitialHorizontalRepeat = true;
@@ -2211,7 +2225,14 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDLK_RIGHT:
             if (!m_rightHeld)
             {
-                pageJump(1);
+                if (m_thumbnailView)
+                {
+                    moveSelectionHorizontal(1);
+                }
+                else
+                {
+                    pageJump(1);
+                }
                 m_rightHeld = true;
                 m_lastHorizontalScrollTime = SDL_GetTicks();
                 m_waitingForInitialHorizontalRepeat = true;
@@ -2297,7 +2318,14 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
             if (!m_leftHeld)
             {
-                pageJump(-1);
+                if (m_thumbnailView)
+                {
+                    moveSelectionHorizontal(-1);
+                }
+                else
+                {
+                    pageJump(-1);
+                }
                 m_leftHeld = true;
                 m_lastHorizontalScrollTime = SDL_GetTicks();
                 m_waitingForInitialHorizontalRepeat = true;
@@ -2306,7 +2334,14 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
             if (!m_rightHeld)
             {
-                pageJump(1);
+                if (m_thumbnailView)
+                {
+                    moveSelectionHorizontal(1);
+                }
+                else
+                {
+                    pageJump(1);
+                }
                 m_rightHeld = true;
                 m_lastHorizontalScrollTime = SDL_GetTicks();
                 m_waitingForInitialHorizontalRepeat = true;
@@ -2432,7 +2467,14 @@ void FileBrowser::handleEvent(const SDL_Event& event)
 
         if (leftActive && !m_leftHeld)
         {
-            pageJump(-1);
+            if (m_thumbnailView)
+            {
+                moveSelectionHorizontal(-1);
+            }
+            else
+            {
+                pageJump(-1);
+            }
             m_leftHeld = true;
             m_lastHorizontalScrollTime = SDL_GetTicks();
             m_waitingForInitialHorizontalRepeat = true;
@@ -2449,7 +2491,14 @@ void FileBrowser::handleEvent(const SDL_Event& event)
 
         if (rightActive && !m_rightHeld)
         {
-            pageJump(1);
+            if (m_thumbnailView)
+            {
+                moveSelectionHorizontal(1);
+            }
+            else
+            {
+                pageJump(1);
+            }
             m_rightHeld = true;
             m_lastHorizontalScrollTime = SDL_GetTicks();
             m_waitingForInitialHorizontalRepeat = true;
