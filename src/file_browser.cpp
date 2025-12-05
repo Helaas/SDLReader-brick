@@ -1359,6 +1359,505 @@ void FileBrowser::moveSelectionHorizontal(int direction)
     }
 }
 
+void FileBrowser::pageJumpList(int direction)
+{
+    if (!m_ctx || m_entries.empty() || direction == 0)
+    {
+        return;
+    }
+
+    const struct nk_user_font* font = m_ctx->style.font;
+    const float fontHeight = (font && font->height > 0.0f) ? font->height : 22.0f;
+    const float baseItemHeight = fontHeight + 14.0f;
+    const float itemHeight = std::max(40.0f, baseItemHeight);
+    const float viewHeight = (m_lastContentHeight > 0.0f) ? m_lastContentHeight
+                                                          : static_cast<float>(std::max(1, m_lastWindowHeight));
+    const float clampedViewHeight = std::max(itemHeight, viewHeight);
+    const float effectiveViewHeight = clampedViewHeight - itemHeight;
+    const float rowSpacing = (m_ctx && m_ctx->style.window.spacing.y > 0.0f)
+                                 ? m_ctx->style.window.spacing.y
+                                 : 0.0f;
+    const float stride = itemHeight + rowSpacing;
+
+    const int totalItems = static_cast<int>(m_entries.size());
+    if (stride <= 0.0f || totalItems == 0)
+    {
+        return;
+    }
+
+    const float firstVisibleF = m_listScrollY / stride;
+    const float lastVisibleF = (m_listScrollY + effectiveViewHeight - 1.0f) / stride;
+    int firstVisible = std::clamp(static_cast<int>(std::floor(firstVisibleF)), 0, totalItems - 1);
+    int lastVisible = std::clamp(static_cast<int>(std::floor(lastVisibleF)), 0, totalItems - 1);
+
+    const int visibleCount = std::max(1, lastVisible - firstVisible + 1);
+
+    const float totalHeight = itemHeight * static_cast<float>(totalItems) +
+                              rowSpacing * static_cast<float>(std::max(0, totalItems - 1));
+    const float maxScroll = std::max(0.0f, totalHeight - effectiveViewHeight);
+    const int remaining = std::max(0, totalItems - (firstVisible + visibleCount));
+
+    int target;
+    bool skipScroll = false;
+    if (direction < 0)
+    {
+        target = std::max(0, firstVisible - visibleCount);
+    }
+    else
+    {
+        if (remaining <= 0)
+        {
+            // Already on last page; select last item if not already there.
+            if (m_selectedIndex >= totalItems - 1)
+            {
+                return;
+            }
+            target = totalItems - 1;
+            // Last item is already visible on screen, don't adjust scroll.
+            skipScroll = true;
+        }
+        else
+        {
+            target = std::min(totalItems - 1, lastVisible + 1);
+            // If target is already visible, don't scroll.
+            if (target <= lastVisible)
+            {
+                skipScroll = true;
+            }
+        }
+    }
+    if (target != m_selectedIndex)
+    {
+        if (!skipScroll)
+        {
+            // Place target item at the top of the view when possible.
+            if (totalHeight > effectiveViewHeight)
+            {
+                const float desired = stride * static_cast<float>(target);
+                m_listScrollY = std::clamp(desired, 0.0f, maxScroll);
+            }
+            else
+            {
+                m_listScrollY = 0.0f;
+            }
+        }
+        else
+        {
+            // When skipping scroll, prevent ensureSelectionVisible from adjusting it
+            m_forceListScroll = true;
+        }
+        m_selectedIndex = target;
+        resetSelectionScrollTargets();
+    }
+}
+
+void FileBrowser::pageJumpThumbnail(int direction)
+{
+    if (!m_ctx || m_entries.empty() || direction == 0)
+    {
+        return;
+    }
+
+    const float baseThumb = static_cast<float>(THUMBNAIL_MAX_DIM);
+    const float labelHeight = 40.0f;
+    const float tilePadding = 12.0f;
+    const float maxBorderThickness = 4.0f;
+    const float thumbnailAreaHeight = baseThumb;
+    const float tileHeight = thumbnailAreaHeight + labelHeight + 2.0f * (tilePadding + maxBorderThickness);
+
+    const float spacingX = (m_ctx->style.window.spacing.x > 0.0f) ? m_ctx->style.window.spacing.x : 0.0f;
+    const float paddingX = m_ctx->style.window.padding.x * 2.0f;
+    const float scrollbarWidth =
+        (m_ctx->style.window.scrollbar_size.x > 0.0f) ? m_ctx->style.window.scrollbar_size.x : 16.0f;
+    const float extraScrollbarPadding = scrollbarWidth + spacingX + 12.0f;
+    const float usableWidth = std::max(0.0f,
+                                       static_cast<float>(std::max(1, m_lastWindowWidth)) - paddingX - extraScrollbarPadding);
+    const float preferredTileWidth = baseThumb + 48.0f;
+    const int desiredColumns = 4;
+    const int maxColumnsFit =
+        std::max(1, static_cast<int>((usableWidth + spacingX) / (preferredTileWidth + spacingX)));
+    int columns = (maxColumnsFit >= desiredColumns) ? desiredColumns : maxColumnsFit;
+    columns = std::max(1, columns);
+
+    const float clampedViewHeight = std::max(tileHeight + 20.0f,
+                                             (m_lastContentHeight > 0.0f) ? m_lastContentHeight
+                                                                          : static_cast<float>(std::max(1, m_lastWindowHeight)));
+    const float verticalPadding = (m_ctx->style.window.padding.y > 0.0f)
+                                      ? m_ctx->style.window.padding.y * 2.0f
+                                      : 0.0f;
+    const float effectiveViewHeight = std::max(tileHeight, clampedViewHeight - verticalPadding);
+    const float rowSpacing = (m_ctx && m_ctx->style.window.spacing.y > 0.0f)
+                                 ? m_ctx->style.window.spacing.y
+                                 : 0.0f;
+    const float stride = tileHeight + rowSpacing;
+
+    const int totalEntries = static_cast<int>(m_entries.size());
+    const int totalRows = (columns > 0) ? (totalEntries + columns - 1) / columns : 0;
+    if (stride <= 0.0f || totalRows == 0)
+    {
+        return;
+    }
+
+    const float firstVisibleRowF = m_thumbnailScrollY / stride;
+    const float lastVisibleRowF = (m_thumbnailScrollY + effectiveViewHeight - 1.0f) / stride;
+    int firstRow = std::clamp(static_cast<int>(std::floor(firstVisibleRowF)), 0, std::max(0, totalRows - 1));
+    int lastRow = std::clamp(static_cast<int>(std::floor(lastVisibleRowF)), 0, std::max(0, totalRows - 1));
+
+    const int rowsVisible = std::max(1, lastRow - firstRow + 1);
+
+    int target;
+    bool skipScroll = false;
+    if (direction < 0)
+    {
+        int targetRow = std::max(0, firstRow - rowsVisible);
+        target = std::clamp(targetRow * columns, 0, totalEntries - 1);
+    }
+    else
+    {
+        int nextRow = (lastRow >= 0) ? lastRow + 1 : 0;
+        if (nextRow >= totalRows)
+        {
+            // Already on last page; select last item if not already there.
+            if (m_selectedIndex >= totalEntries - 1)
+            {
+                return;
+            }
+            target = totalEntries - 1;
+            // Last item is already visible on screen, don't adjust scroll.
+            skipScroll = true;
+        }
+        else
+        {
+            int targetRow = std::min(totalRows - 1, nextRow);
+            target = std::clamp(targetRow * columns, 0, totalEntries - 1);
+        }
+    }
+
+    if (target != m_selectedIndex)
+    {
+        if (!skipScroll)
+        {
+            // Place target row at the top of the view when possible.
+            if (totalRows > 0)
+            {
+                const float totalHeight = tileHeight * static_cast<float>(totalRows) +
+                                          rowSpacing * static_cast<float>(std::max(0, totalRows - 1));
+                const int targetRow = std::clamp(target / columns, 0, std::max(0, totalRows - 1));
+                if (totalHeight > effectiveViewHeight)
+                {
+                    const float desired = stride * static_cast<float>(targetRow);
+                    const float maxScroll = std::max(0.0f, totalHeight - effectiveViewHeight);
+                    m_thumbnailScrollY = std::clamp(desired, 0.0f, maxScroll);
+                }
+                else
+                {
+                    m_thumbnailScrollY = 0.0f;
+                }
+            }
+        }
+        m_selectedIndex = target;
+        resetSelectionScrollTargets();
+    }
+}
+
+void FileBrowser::pageJump(int direction)
+{
+    if (m_thumbnailView)
+    {
+        pageJumpThumbnail(direction);
+    }
+    else
+    {
+        pageJumpList(direction);
+    }
+}
+
+void FileBrowser::jumpSelectionByLetter(int direction)
+{
+    if (m_entries.empty() || direction == 0)
+    {
+        return;
+    }
+
+    const int total = static_cast<int>(m_entries.size());
+    const int startIndex = std::clamp(m_selectedIndex, 0, total - 1);
+
+    int firstNonParentIndex = -1;
+    int firstDirIndex = -1;
+    int lastDirIndex = -1;
+    int firstFileIndex = -1;
+    int lastFileIndex = -1;
+    for (int i = 0; i < total; ++i)
+    {
+        if (!m_entries[i].isParentLink && firstNonParentIndex == -1)
+        {
+            firstNonParentIndex = i;
+        }
+        if (m_entries[i].isDirectory && !m_entries[i].isParentLink)
+        {
+            if (firstDirIndex == -1)
+            {
+                firstDirIndex = i;
+            }
+            lastDirIndex = i;
+        }
+        if (!m_entries[i].isDirectory && firstFileIndex == -1)
+        {
+            firstFileIndex = i;
+        }
+        if (!m_entries[i].isDirectory)
+        {
+            lastFileIndex = i;
+        }
+    }
+
+    auto extractKey = [](const FileEntry& entry) -> char
+    {
+        for (char ch : entry.name)
+        {
+            unsigned char uch = static_cast<unsigned char>(ch);
+            if (std::isalpha(uch))
+            {
+                return static_cast<char>(std::tolower(uch));
+            }
+            if (!std::isspace(uch))
+            {
+                return static_cast<char>(std::tolower(uch));
+            }
+        }
+        return 0;
+    };
+
+    const char currentKey = extractKey(m_entries[startIndex]);
+
+    // Hard boundary rules to respect directory grouping.
+    if (direction > 0)
+    {
+        if (m_entries[startIndex].isParentLink && firstNonParentIndex != -1)
+        {
+            m_selectedIndex = firstNonParentIndex;
+            resetSelectionScrollTargets();
+            return;
+        }
+        if (m_entries[startIndex].isDirectory && !m_entries[startIndex].isParentLink)
+        {
+            int dirTarget = -1;
+            if (startIndex < lastDirIndex)
+            {
+                for (int i = startIndex + 1; i <= lastDirIndex; ++i)
+                {
+                    if (m_entries[i].isDirectory && !m_entries[i].isParentLink)
+                    {
+                        char key = extractKey(m_entries[i]);
+                        if (key == 0)
+                        {
+                            continue;
+                        }
+                        if (currentKey == 0 || key > currentKey)
+                        {
+                            dirTarget = i;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (dirTarget != -1)
+            {
+                m_selectedIndex = dirTarget;
+                resetSelectionScrollTargets();
+                return;
+            }
+            if (firstFileIndex != -1)
+            {
+                m_selectedIndex = firstFileIndex;
+                resetSelectionScrollTargets();
+                return;
+            }
+        }
+    }
+    else // direction < 0
+    {
+        if (m_entries[startIndex].isParentLink && total > 1)
+        {
+            m_selectedIndex = total - 1;
+            resetSelectionScrollTargets();
+            return;
+        }
+        if (m_entries[startIndex].isDirectory && !m_entries[startIndex].isParentLink &&
+            startIndex == firstDirIndex && firstDirIndex > 0 && m_entries[0].isParentLink)
+        {
+            m_selectedIndex = 0;
+            resetSelectionScrollTargets();
+            return;
+        }
+        if (!m_entries[startIndex].isDirectory && firstFileIndex != -1 && lastDirIndex != -1 && startIndex >= firstFileIndex)
+        {
+            // If we're on the first file or earlier-than-first-file letter, allow jump back to last folder.
+            // Determine if current file is still within the first letter group.
+            char firstFileKey = extractKey(m_entries[firstFileIndex]);
+            char currentKey = extractKey(m_entries[startIndex]);
+            if (startIndex == firstFileIndex || currentKey == firstFileKey)
+            {
+                m_selectedIndex = lastDirIndex;
+                resetSelectionScrollTargets();
+                return;
+            }
+        }
+        if (m_entries[startIndex].isDirectory && !m_entries[startIndex].isParentLink && startIndex > firstDirIndex)
+        {
+            int dirTarget = -1;
+            int prevDir = -1;
+            for (int i = startIndex - 1; i >= firstDirIndex; --i)
+            {
+                if (m_entries[i].isDirectory && !m_entries[i].isParentLink)
+                {
+                    char key = extractKey(m_entries[i]);
+                    if (key == 0)
+                    {
+                        if (prevDir == -1)
+                        {
+                            prevDir = i;
+                        }
+                        continue;
+                    }
+                    if (currentKey == 0 || key < currentKey)
+                    {
+                        dirTarget = i;
+                        break;
+                    }
+                    // Track nearest previous directory even if same letter
+                    if (prevDir == -1)
+                    {
+                        prevDir = i;
+                    }
+                }
+            }
+            int finalDir = (dirTarget != -1) ? dirTarget : prevDir;
+            if (finalDir != -1)
+            {
+                m_selectedIndex = finalDir;
+                resetSelectionScrollTargets();
+                return;
+            }
+        }
+    }
+
+    auto isCandidate = [&](const FileEntry& entry, char key) -> bool
+    {
+        if (entry.isParentLink || key == 0 || key == currentKey)
+        {
+            return false;
+        }
+        if (direction > 0)
+        {
+            return currentKey == 0 || key > currentKey;
+        }
+        return currentKey == 0 || key < currentKey;
+    };
+
+    int targetIndex = -1;
+
+    if (direction > 0)
+    {
+        int searchStart = startIndex + 1;
+        int wrapStart = firstNonParentIndex;
+        if (!m_entries[startIndex].isDirectory && firstFileIndex != -1)
+        {
+            searchStart = std::max(searchStart, firstFileIndex);
+            wrapStart = firstFileIndex;
+        }
+
+        for (int i = searchStart; i < total; ++i)
+        {
+            char key = extractKey(m_entries[i]);
+            if (isCandidate(m_entries[i], key))
+            {
+                targetIndex = i;
+                break;
+            }
+        }
+
+        if (targetIndex == -1 && wrapStart != -1)
+        {
+            for (int i = wrapStart; i <= startIndex; ++i)
+            {
+                char key = extractKey(m_entries[i]);
+                if (isCandidate(m_entries[i], key))
+                {
+                    targetIndex = i;
+                    break;
+                }
+            }
+        }
+
+        // If still nothing, wrap to the first real entry (respecting parent at top).
+        if (targetIndex == -1)
+        {
+            if (firstNonParentIndex != -1)
+            {
+                targetIndex = firstNonParentIndex;
+            }
+            else if (total > 0)
+            {
+                targetIndex = 0;
+            }
+        }
+    }
+    else // direction < 0
+    {
+        int searchStart = startIndex - 1;
+        int searchEnd = 0;
+        int wrapStart = total - 1;
+        if (!m_entries[startIndex].isDirectory && firstFileIndex != -1)
+        {
+            searchEnd = firstFileIndex;
+            wrapStart = (lastFileIndex != -1) ? lastFileIndex : firstFileIndex;
+        }
+
+        for (int i = searchStart; i >= searchEnd; --i)
+        {
+            char key = extractKey(m_entries[i]);
+            if (isCandidate(m_entries[i], key))
+            {
+                targetIndex = i;
+                break;
+            }
+        }
+
+        if (targetIndex == -1)
+        {
+            for (int i = wrapStart; i > startIndex; --i)
+            {
+                char key = extractKey(m_entries[i]);
+                if (isCandidate(m_entries[i], key))
+                {
+                    targetIndex = i;
+                    break;
+                }
+            }
+        }
+
+        // If still nothing (e.g., only files), go to parent if present, otherwise last entry.
+        if (targetIndex == -1)
+        {
+            if (m_entries[0].isParentLink)
+            {
+                targetIndex = 0;
+            }
+            else
+            {
+                targetIndex = total - 1;
+            }
+        }
+    }
+
+    if (targetIndex >= 0 && targetIndex < total && targetIndex != m_selectedIndex)
+    {
+        m_selectedIndex = targetIndex;
+        resetSelectionScrollTargets();
+    }
+}
+
 void FileBrowser::clampSelection()
 {
     if (m_entries.empty())
@@ -1487,11 +1986,25 @@ std::string FileBrowser::run()
             {
                 if (m_leftHeld)
                 {
-                    moveSelectionHorizontal(-1);
+                    if (m_thumbnailView)
+                    {
+                        moveSelectionHorizontal(-1);
+                    }
+                    else
+                    {
+                        pageJump(-1);
+                    }
                 }
                 else if (m_rightHeld)
                 {
-                    moveSelectionHorizontal(1);
+                    if (m_thumbnailView)
+                    {
+                        moveSelectionHorizontal(1);
+                    }
+                    else
+                    {
+                        pageJump(1);
+                    }
                 }
 
                 m_lastHorizontalScrollTime = currentTime;
@@ -1585,6 +2098,7 @@ void FileBrowser::render()
         const float statusBottomPadding = std::max(12.0f, m_ctx->style.window.padding.y);
         const float reservedHeight = 35.0f + helpTextHeight + statusBarHeight + 24.0f + statusBottomPadding;
         const float contentHeight = std::max(60.0f, windowHeightF - reservedHeight);
+        m_lastContentHeight = contentHeight;
 
         nk_layout_row_dynamic(m_ctx, helpTextHeight, 1);
         nk_label_colored(m_ctx, "D-Pad: Navigate | A: Select | B: Back | X: Toggle View | Menu: Quit",
@@ -1767,7 +2281,14 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDLK_LEFT:
             if (!m_leftHeld)
             {
-                moveSelectionHorizontal(-1);
+                if (m_thumbnailView)
+                {
+                    moveSelectionHorizontal(-1);
+                }
+                else
+                {
+                    pageJump(-1);
+                }
                 m_leftHeld = true;
                 m_lastHorizontalScrollTime = SDL_GetTicks();
                 m_waitingForInitialHorizontalRepeat = true;
@@ -1776,7 +2297,14 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDLK_RIGHT:
             if (!m_rightHeld)
             {
-                moveSelectionHorizontal(1);
+                if (m_thumbnailView)
+                {
+                    moveSelectionHorizontal(1);
+                }
+                else
+                {
+                    pageJump(1);
+                }
                 m_rightHeld = true;
                 m_lastHorizontalScrollTime = SDL_GetTicks();
                 m_waitingForInitialHorizontalRepeat = true;
@@ -1862,7 +2390,14 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
             if (!m_leftHeld)
             {
-                moveSelectionHorizontal(-1);
+                if (m_thumbnailView)
+                {
+                    moveSelectionHorizontal(-1);
+                }
+                else
+                {
+                    pageJump(-1);
+                }
                 m_leftHeld = true;
                 m_lastHorizontalScrollTime = SDL_GetTicks();
                 m_waitingForInitialHorizontalRepeat = true;
@@ -1871,11 +2406,24 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
             if (!m_rightHeld)
             {
-                moveSelectionHorizontal(1);
+                if (m_thumbnailView)
+                {
+                    moveSelectionHorizontal(1);
+                }
+                else
+                {
+                    pageJump(1);
+                }
                 m_rightHeld = true;
                 m_lastHorizontalScrollTime = SDL_GetTicks();
                 m_waitingForInitialHorizontalRepeat = true;
             }
+            break;
+        case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
+            jumpSelectionByLetter(1);
+            break;
+        case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
+            jumpSelectionByLetter(-1);
             break;
 #ifdef TG5040_PLATFORM
         case kAcceptButton:
@@ -1991,7 +2539,14 @@ void FileBrowser::handleEvent(const SDL_Event& event)
 
         if (leftActive && !m_leftHeld)
         {
-            moveSelectionHorizontal(-1);
+            if (m_thumbnailView)
+            {
+                moveSelectionHorizontal(-1);
+            }
+            else
+            {
+                pageJump(-1);
+            }
             m_leftHeld = true;
             m_lastHorizontalScrollTime = SDL_GetTicks();
             m_waitingForInitialHorizontalRepeat = true;
@@ -2008,7 +2563,14 @@ void FileBrowser::handleEvent(const SDL_Event& event)
 
         if (rightActive && !m_rightHeld)
         {
-            moveSelectionHorizontal(1);
+            if (m_thumbnailView)
+            {
+                moveSelectionHorizontal(1);
+            }
+            else
+            {
+                pageJump(1);
+            }
             m_rightHeld = true;
             m_lastHorizontalScrollTime = SDL_GetTicks();
             m_waitingForInitialHorizontalRepeat = true;
@@ -2241,15 +2803,32 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
                                          ? std::clamp(m_selectedIndex, 0, totalItems - 1)
                                          : -1;
     // Check if we need to update scroll position for newly selected item
-    bool needScrollUpdate = m_pendingListEnsure || (m_lastListEnsureIndex != clampedSelectedIndex);
+    bool needScrollUpdate = m_pendingListEnsure || (m_lastListEnsureIndex != clampedSelectedIndex) || m_forceListScroll;
+    const float totalHeight = itemHeight * static_cast<float>(totalItems) +
+                              rowSpacing * static_cast<float>(std::max(0, totalItems - 1));
+    if (totalHeight <= effectiveViewHeight)
+    {
+        // Content fits; force scroll to 0 to avoid Nuklear clamping bounce.
+        m_listScrollY = 0.0f;
+        needScrollUpdate = true;
+    }
+    bool appliedForceScroll = false;
     if (needScrollUpdate)
     {
-        if (clampedSelectedIndex >= 0)
+        if (m_forceListScroll)
+        {
+            // We already set m_listScrollY explicitly; skip re-deriving via ensureSelectionVisible.
+            m_pendingListEnsure = false;
+            m_lastListEnsureIndex = clampedSelectedIndex;
+            appliedForceScroll = true;
+        }
+        else if (clampedSelectedIndex >= 0)
         {
             ensureSelectionVisible(itemHeight, effectiveViewHeight, rowSpacing, m_listScrollY,
                                    m_lastListEnsureIndex, clampedSelectedIndex, totalItems);
         }
         m_pendingListEnsure = false;
+        m_forceListScroll = false;
     }
 
     nk_layout_row_dynamic(m_ctx, clampedViewHeight, 1);
@@ -2260,6 +2839,13 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
         if (needScrollUpdate)
         {
             nk_group_set_scroll(m_ctx, "FileList", 0, static_cast<nk_uint>(m_listScrollY));
+            if (appliedForceScroll)
+            {
+                // Keep cached scroll in sync when we force-applied it.
+                nk_uint scrollX = 0, scrollY = 0;
+                nk_group_get_scroll(m_ctx, "FileList", &scrollX, &scrollY);
+                m_listScrollY = static_cast<float>(scrollY);
+            }
         }
 
         nk_layout_row_dynamic(m_ctx, itemHeight, 1);
@@ -2656,15 +3242,22 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
     bool needsScroll = false;       // Track if we actually need to change scroll
     bool shouldApplyScroll = false; // Track when we have to push cached scroll into Nuklear
 
+    const float stride = tileHeight + rowSpacing;
+    const float totalHeight = tileHeight * static_cast<float>(totalRows) +
+                              rowSpacing * static_cast<float>(std::max(0, totalRows - 1));
+    if (totalHeight <= effectiveViewHeight)
+    {
+        // Content fits; force scroll to 0 to avoid Nuklear clamping bounce.
+        m_thumbnailScrollY = 0.0f;
+        needScrollUpdate = true;
+        shouldApplyScroll = true;
+    }
+
     if (needScrollUpdate)
     {
         if (currentRow >= 0 && totalRows > 0)
         {
             // Calculate scroll position based on row layout
-            const float stride = tileHeight + rowSpacing;
-            const float totalHeight = tileHeight * static_cast<float>(totalRows) +
-                                      rowSpacing * static_cast<float>(std::max(0, totalRows - 1));
-
             // Only scroll if content is larger than view
             if (totalHeight > effectiveViewHeight)
             {
