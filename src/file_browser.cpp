@@ -1706,6 +1706,7 @@ void FileBrowser::jumpSelectionByLetter(int direction)
         if (m_entries[startIndex].isDirectory && !m_entries[startIndex].isParentLink && startIndex > firstDirIndex)
         {
             int dirTarget = -1;
+            int prevDir = -1;
             for (int i = startIndex - 1; i >= firstDirIndex; --i)
             {
                 if (m_entries[i].isDirectory && !m_entries[i].isParentLink)
@@ -1713,6 +1714,10 @@ void FileBrowser::jumpSelectionByLetter(int direction)
                     char key = extractKey(m_entries[i]);
                     if (key == 0)
                     {
+                        if (prevDir == -1)
+                        {
+                            prevDir = i;
+                        }
                         continue;
                     }
                     if (currentKey == 0 || key < currentKey)
@@ -1720,11 +1725,17 @@ void FileBrowser::jumpSelectionByLetter(int direction)
                         dirTarget = i;
                         break;
                     }
+                    // Track nearest previous directory even if same letter
+                    if (prevDir == -1)
+                    {
+                        prevDir = i;
+                    }
                 }
             }
-            if (dirTarget != -1)
+            int finalDir = (dirTarget != -1) ? dirTarget : prevDir;
+            if (finalDir != -1)
             {
-                m_selectedIndex = dirTarget;
+                m_selectedIndex = finalDir;
                 resetSelectionScrollTargets();
                 return;
             }
