@@ -1392,23 +1392,48 @@ void FileBrowser::pageJumpList(int direction)
 
     const int visibleCount = std::max(1, lastVisible - firstVisible + 1);
 
-    int target = (direction < 0) ? std::max(0, firstVisible - visibleCount)
-                                 : std::min(totalItems - 1, lastVisible + 1);
-    if (target != m_selectedIndex)
+    const float totalHeight = itemHeight * static_cast<float>(totalItems) +
+                              rowSpacing * static_cast<float>(std::max(0, totalItems - 1));
+    const float maxScroll = std::max(0.0f, totalHeight - effectiveViewHeight);
+    const int remaining = std::max(0, totalItems - (firstVisible + visibleCount));
+
+    int target;
+    if (direction < 0)
     {
-        // Place target item at the top of the view when possible.
-        const float totalHeight = itemHeight * static_cast<float>(totalItems) +
-                                  rowSpacing * static_cast<float>(std::max(0, totalItems - 1));
-        if (totalHeight > effectiveViewHeight)
+        target = std::max(0, firstVisible - visibleCount);
+    }
+    else
+    {
+        if (remaining <= 0)
         {
-            const float desired = stride * static_cast<float>(target);
-            const float maxScroll = std::max(0.0f, totalHeight - effectiveViewHeight);
-            m_listScrollY = std::clamp(desired, 0.0f, maxScroll);
+            // Already on last page; keep at end to avoid clamp bounce.
+            target = totalItems - 1;
+            m_listScrollY = maxScroll;
         }
         else
         {
-            m_listScrollY = 0.0f;
+            target = std::min(totalItems - 1, lastVisible + 1);
         }
+    }
+    if (target != m_selectedIndex)
+    {
+            // Place target item at the top of the view when possible.
+            if (totalHeight > effectiveViewHeight)
+            {
+                if (direction > 0 && remaining <= 0)
+                {
+                    m_listScrollY = maxScroll; // lock to bottom if on last page
+                }
+                else
+                {
+                    const float desired = stride * static_cast<float>(target);
+                    m_listScrollY = std::clamp(desired, 0.0f, maxScroll);
+                }
+            }
+            else
+            {
+                m_listScrollY = 0.0f;
+            }
         m_selectedIndex = target;
         resetSelectionScrollTargets();
     }
@@ -1476,7 +1501,16 @@ void FileBrowser::pageJumpThumbnail(int direction)
     }
     else
     {
-        int targetRow = std::min(totalRows - 1, lastRow + 1);
+        int nextRow = (lastRow >= 0) ? lastRow + 1 : 0;
+        int targetRow = std::min(totalRows - 1, nextRow);
+        if (nextRow >= totalRows)
+        {
+            // Already at last page; lock scroll to bottom to avoid clamp bounce.
+            const float pageTotalHeight = tileHeight * static_cast<float>(totalRows) +
+                                          rowSpacing * static_cast<float>(std::max(0, totalRows - 1));
+            const float maxScroll = std::max(0.0f, pageTotalHeight - effectiveViewHeight);
+            m_thumbnailScrollY = maxScroll;
+        }
         target = std::clamp(targetRow * columns, 0, totalEntries - 1);
     }
 
@@ -1634,12 +1668,18 @@ void FileBrowser::jumpSelectionByLetter(int direction)
             resetSelectionScrollTargets();
             return;
         }
-        if (!m_entries[startIndex].isDirectory && lastDirIndex != -1)
+        if (!m_entries[startIndex].isDirectory && firstFileIndex != -1 && lastDirIndex != -1 && startIndex >= firstFileIndex)
         {
-            // Any file jumps back to the last folder
-            m_selectedIndex = lastDirIndex;
-            resetSelectionScrollTargets();
-            return;
+            // If we're on the first file or earlier-than-first-file letter, allow jump back to last folder.
+            // Determine if current file is still within the first letter group.
+            char firstFileKey = extractKey(m_entries[firstFileIndex]);
+            char currentKey = extractKey(m_entries[startIndex]);
+            if (startIndex == firstFileIndex || currentKey == firstFileKey)
+            {
+                m_selectedIndex = lastDirIndex;
+                resetSelectionScrollTargets();
+                return;
+            }
         }
         if (m_entries[startIndex].isDirectory && !m_entries[startIndex].isParentLink && startIndex > firstDirIndex)
         {
@@ -1764,11 +1804,6 @@ void FileBrowser::jumpSelectionByLetter(int direction)
             }
         }
 
-        // If no earlier letter was found for a file, fall back to the last directory.
-        if (targetIndex == -1 && !m_entries[startIndex].isDirectory && lastDirIndex != -1)
-        {
-            targetIndex = lastDirIndex;
-        }
         // If still nothing (e.g., only files), go to parent if present, otherwise last entry.
         if (targetIndex == -1)
         {
@@ -2736,6 +2771,14 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
                                          : -1;
     // Check if we need to update scroll position for newly selected item
     bool needScrollUpdate = m_pendingListEnsure || (m_lastListEnsureIndex != clampedSelectedIndex);
+    const float totalHeight = itemHeight * static_cast<float>(totalItems) +
+                              rowSpacing * static_cast<float>(std::max(0, totalItems - 1));
+    if (totalHeight <= effectiveViewHeight)
+    {
+        // Content fits; force scroll to 0 to avoid Nuklear clamping bounce.
+        m_listScrollY = 0.0f;
+        needScrollUpdate = true;
+    }
     if (needScrollUpdate)
     {
         if (clampedSelectedIndex >= 0)
@@ -3150,15 +3193,22 @@ void FileBrowser::renderThumbnailViewNuklear(float viewHeight, int windowWidth)
     bool needsScroll = false;       // Track if we actually need to change scroll
     bool shouldApplyScroll = false; // Track when we have to push cached scroll into Nuklear
 
+    const float stride = tileHeight + rowSpacing;
+    const float totalHeight = tileHeight * static_cast<float>(totalRows) +
+                              rowSpacing * static_cast<float>(std::max(0, totalRows - 1));
+    if (totalHeight <= effectiveViewHeight)
+    {
+        // Content fits; force scroll to 0 to avoid Nuklear clamping bounce.
+        m_thumbnailScrollY = 0.0f;
+        needScrollUpdate = true;
+        shouldApplyScroll = true;
+    }
+
     if (needScrollUpdate)
     {
         if (currentRow >= 0 && totalRows > 0)
         {
             // Calculate scroll position based on row layout
-            const float stride = tileHeight + rowSpacing;
-            const float totalHeight = tileHeight * static_cast<float>(totalRows) +
-                                      rowSpacing * static_cast<float>(std::max(0, totalRows - 1));
-
             // Only scroll if content is larger than view
             if (totalHeight > effectiveViewHeight)
             {
