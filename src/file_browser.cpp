@@ -1559,6 +1559,19 @@ void FileBrowser::jumpSelectionByLetter(int direction)
                 }
             }
         }
+
+        // If still nothing, wrap to the first real entry (respecting parent at top).
+        if (targetIndex == -1)
+        {
+            if (firstNonParentIndex != -1)
+            {
+                targetIndex = firstNonParentIndex;
+            }
+            else if (total > 0)
+            {
+                targetIndex = 0;
+            }
+        }
     }
     else // direction < 0
     {
@@ -1598,6 +1611,18 @@ void FileBrowser::jumpSelectionByLetter(int direction)
         if (targetIndex == -1 && !m_entries[startIndex].isDirectory && lastDirIndex != -1)
         {
             targetIndex = lastDirIndex;
+        }
+        // If still nothing (e.g., only files), go to parent if present, otherwise last entry.
+        if (targetIndex == -1)
+        {
+            if (m_entries[0].isParentLink)
+            {
+                targetIndex = 0;
+            }
+            else
+            {
+                targetIndex = total - 1;
+            }
         }
     }
 
