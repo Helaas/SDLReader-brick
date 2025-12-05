@@ -35,7 +35,8 @@ void TextRenderer::setFontSize(int scale)
     {
         if (m_font)
         {
-            m_font.release();
+            // Close the previous font before opening a new size to avoid leaking file handles.
+            m_font.reset();
         }
 
         m_font.reset(TTF_OpenFont(m_fontPath.c_str(), newFontSize));

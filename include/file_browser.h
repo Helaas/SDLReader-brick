@@ -219,6 +219,7 @@ private:
     void toggleViewMode();
     void moveSelectionVertical(int direction);
     void moveSelectionHorizontal(int direction);
+    void jumpSelectionByLetter(int direction);
     void clampSelection();
     ThumbnailData& getOrCreateThumbnail(const FileEntry& entry);
     bool generateThumbnail(const FileEntry& entry, ThumbnailData& data);

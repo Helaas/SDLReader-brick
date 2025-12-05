@@ -1359,6 +1359,197 @@ void FileBrowser::moveSelectionHorizontal(int direction)
     }
 }
 
+void FileBrowser::jumpSelectionByLetter(int direction)
+{
+    if (m_entries.empty() || direction == 0)
+    {
+        return;
+    }
+
+    const int total = static_cast<int>(m_entries.size());
+    const int startIndex = std::clamp(m_selectedIndex, 0, total - 1);
+
+    int firstNonParentIndex = -1;
+    int firstFileIndex = -1;
+    int lastFolderIndex = -1;
+    for (int i = 0; i < total; ++i)
+    {
+        if (!m_entries[i].isParentLink && firstNonParentIndex == -1)
+        {
+            firstNonParentIndex = i;
+        }
+        if (!m_entries[i].isDirectory && firstFileIndex == -1)
+        {
+            firstFileIndex = i;
+        }
+        if (m_entries[i].isDirectory && !m_entries[i].isParentLink)
+        {
+            lastFolderIndex = i; // will end up as last directory due to ordering
+        }
+    }
+
+    // Hard boundary rules to respect directory grouping:
+    if (direction > 0)
+    {
+        // From parent -> first real entry (usually first folder)
+        if (m_entries[startIndex].isParentLink && firstNonParentIndex != -1)
+        {
+            m_selectedIndex = firstNonParentIndex;
+            resetSelectionScrollTargets();
+            return;
+        }
+        // From any folder -> first file
+        if (m_entries[startIndex].isDirectory && !m_entries[startIndex].isParentLink && firstFileIndex != -1)
+        {
+            m_selectedIndex = firstFileIndex;
+            resetSelectionScrollTargets();
+            return;
+        }
+    }
+    else // direction < 0
+    {
+        // From parent -> last entry
+        if (m_entries[startIndex].isParentLink && total > 1)
+        {
+            m_selectedIndex = total - 1;
+            resetSelectionScrollTargets();
+            return;
+        }
+        // From the first folder -> parent link (if present)
+        if (m_entries[startIndex].isDirectory && !m_entries[startIndex].isParentLink &&
+            startIndex == firstNonParentIndex && firstNonParentIndex > 0 && m_entries[0].isParentLink)
+        {
+            m_selectedIndex = 0;
+            resetSelectionScrollTargets();
+            return;
+        }
+        // From the first file -> last folder
+        if (!m_entries[startIndex].isDirectory && startIndex == firstFileIndex && lastFolderIndex != -1)
+        {
+            m_selectedIndex = lastFolderIndex;
+            resetSelectionScrollTargets();
+            return;
+        }
+    }
+
+    auto extractKey = [](const FileEntry& entry) -> char
+    {
+        for (char ch : entry.name)
+        {
+            unsigned char uch = static_cast<unsigned char>(ch);
+            if (std::isalpha(uch))
+            {
+                return static_cast<char>(std::tolower(uch));
+            }
+            if (!std::isspace(uch))
+            {
+                return static_cast<char>(std::tolower(uch));
+            }
+        }
+        return 0;
+    };
+
+    const char currentKey = extractKey(m_entries[startIndex]);
+
+    auto isCandidate = [&](const FileEntry& entry, char key) -> bool
+    {
+        if (entry.isParentLink || key == 0 || key == currentKey)
+        {
+            return false;
+        }
+        if (direction > 0)
+        {
+            return currentKey == 0 || key > currentKey;
+        }
+        return currentKey == 0 || key < currentKey;
+    };
+
+    int targetIndex = -1;
+
+    if (direction > 0)
+    {
+        for (int i = startIndex + 1; i < total; ++i)
+        {
+            char key = extractKey(m_entries[i]);
+            if (isCandidate(m_entries[i], key))
+            {
+                targetIndex = i;
+                break;
+            }
+        }
+
+        if (targetIndex == -1 && firstNonParentIndex != -1)
+        {
+            for (int i = firstNonParentIndex; i <= startIndex; ++i)
+            {
+                char key = extractKey(m_entries[i]);
+                if (isCandidate(m_entries[i], key))
+                {
+                    targetIndex = i;
+                    break;
+                }
+            }
+        }
+
+        // Boundary: from parent link jump to first real entry; from folders jump to first file.
+        if (targetIndex == -1)
+        {
+            if (m_entries[startIndex].isParentLink && firstNonParentIndex != -1)
+            {
+                targetIndex = firstNonParentIndex;
+            }
+            else if (m_entries[startIndex].isDirectory && firstFileIndex != -1)
+            {
+                targetIndex = firstFileIndex;
+            }
+        }
+    }
+    else // direction < 0
+    {
+        for (int i = startIndex - 1; i >= 0; --i)
+        {
+            char key = extractKey(m_entries[i]);
+            if (isCandidate(m_entries[i], key))
+            {
+                targetIndex = i;
+                break;
+            }
+        }
+
+        if (targetIndex == -1)
+        {
+            for (int i = total - 1; i >= startIndex; --i)
+            {
+                char key = extractKey(m_entries[i]);
+                if (isCandidate(m_entries[i], key))
+                {
+                    targetIndex = i;
+                    break;
+                }
+            }
+        }
+
+        // Boundary: from files jump back to last folder; from parent link jump to last entry.
+        if (targetIndex == -1)
+        {
+            if (!m_entries[startIndex].isDirectory && lastFolderIndex != -1)
+            {
+                targetIndex = lastFolderIndex;
+            }
+            else if (m_entries[startIndex].isParentLink && total > 1)
+            {
+                targetIndex = total - 1;
+            }
+        }
+    }
+
+    if (targetIndex >= 0 && targetIndex < total && targetIndex != m_selectedIndex)
+    {
+        m_selectedIndex = targetIndex;
+        resetSelectionScrollTargets();
+    }
+}
+
 void FileBrowser::clampSelection()
 {
     if (m_entries.empty())
@@ -1876,6 +2067,12 @@ void FileBrowser::handleEvent(const SDL_Event& event)
                 m_lastHorizontalScrollTime = SDL_GetTicks();
                 m_waitingForInitialHorizontalRepeat = true;
             }
+            break;
+        case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
+            jumpSelectionByLetter(1);
+            break;
+        case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
+            jumpSelectionByLetter(-1);
             break;
 #ifdef TG5040_PLATFORM
         case kAcceptButton:
