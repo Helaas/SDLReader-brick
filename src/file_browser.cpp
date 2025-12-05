@@ -1390,7 +1390,10 @@ void FileBrowser::pageJumpList(int direction)
     int firstVisible = std::clamp(static_cast<int>(std::floor(firstVisibleF)), 0, totalItems - 1);
     int lastVisible = std::clamp(static_cast<int>(std::floor(lastVisibleF)), 0, totalItems - 1);
 
-    int target = (direction < 0) ? std::max(0, firstVisible - 1) : std::min(totalItems - 1, lastVisible + 1);
+    const int itemsPerPage = std::max(1, static_cast<int>(std::floor(effectiveViewHeight / stride)));
+
+    int target = (direction < 0) ? std::max(0, firstVisible - itemsPerPage)
+                                 : std::min(totalItems - 1, lastVisible + itemsPerPage);
     if (target != m_selectedIndex)
     {
         // Place target item at the top of the view when possible.
@@ -1466,8 +1469,19 @@ void FileBrowser::pageJumpThumbnail(int direction)
     int firstVisibleIndex = std::clamp(firstRow * columns, 0, totalEntries - 1);
     int lastVisibleIndex = std::clamp(((lastRow + 1) * columns) - 1, 0, totalEntries - 1);
 
-    int target = (direction < 0) ? std::max(0, firstVisibleIndex - 1)
-                                 : std::min(totalEntries - 1, lastVisibleIndex + 1);
+    const int rowsPerPage = std::max(1, static_cast<int>(std::floor(effectiveViewHeight / stride)));
+
+    int target;
+    if (direction < 0)
+    {
+        int targetRow = std::max(0, firstRow - rowsPerPage);
+        target = std::clamp(targetRow * columns, 0, totalEntries - 1);
+    }
+    else
+    {
+        int targetRow = std::min(totalRows - 1, lastRow + rowsPerPage);
+        target = std::clamp(targetRow * columns, 0, totalEntries - 1);
+    }
 
     if (target != m_selectedIndex)
     {
@@ -1476,7 +1490,7 @@ void FileBrowser::pageJumpThumbnail(int direction)
         {
             const float totalHeight = tileHeight * static_cast<float>(totalRows) +
                                       rowSpacing * static_cast<float>(std::max(0, totalRows - 1));
-            const int targetRow = target / columns;
+            const int targetRow = std::clamp(target / columns, 0, std::max(0, totalRows - 1));
             if (totalHeight > effectiveViewHeight)
             {
                 const float desired = stride * static_cast<float>(targetRow);
