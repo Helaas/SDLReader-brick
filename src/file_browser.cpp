@@ -1386,12 +1386,14 @@ void FileBrowser::pageJumpList(int direction)
     }
 
     const float firstVisibleF = m_listScrollY / stride;
+    const float lastVisibleF = (m_listScrollY + effectiveViewHeight - 1.0f) / stride;
     int firstVisible = std::clamp(static_cast<int>(std::floor(firstVisibleF)), 0, totalItems - 1);
+    int lastVisible = std::clamp(static_cast<int>(std::floor(lastVisibleF)), 0, totalItems - 1);
 
-    const int itemsPerPage = std::max(1, static_cast<int>(std::floor(effectiveViewHeight / stride)));
+    const int visibleCount = std::max(1, lastVisible - firstVisible + 1);
 
-    int target = (direction < 0) ? std::max(0, firstVisible - itemsPerPage)
-                                 : std::min(totalItems - 1, firstVisible + itemsPerPage);
+    int target = (direction < 0) ? std::max(0, firstVisible - visibleCount)
+                                 : std::min(totalItems - 1, lastVisible + 1);
     if (target != m_selectedIndex)
     {
         // Place target item at the top of the view when possible.
@@ -1460,19 +1462,21 @@ void FileBrowser::pageJumpThumbnail(int direction)
     }
 
     const float firstVisibleRowF = m_thumbnailScrollY / stride;
+    const float lastVisibleRowF = (m_thumbnailScrollY + effectiveViewHeight - 1.0f) / stride;
     int firstRow = std::clamp(static_cast<int>(std::floor(firstVisibleRowF)), 0, std::max(0, totalRows - 1));
+    int lastRow = std::clamp(static_cast<int>(std::floor(lastVisibleRowF)), 0, std::max(0, totalRows - 1));
 
-    const int rowsPerPage = std::max(1, static_cast<int>(std::floor(effectiveViewHeight / stride)));
+    const int rowsVisible = std::max(1, lastRow - firstRow + 1);
 
     int target;
     if (direction < 0)
     {
-        int targetRow = std::max(0, firstRow - rowsPerPage);
+        int targetRow = std::max(0, firstRow - rowsVisible);
         target = std::clamp(targetRow * columns, 0, totalEntries - 1);
     }
     else
     {
-        int targetRow = std::min(totalRows - 1, firstRow + rowsPerPage);
+        int targetRow = std::min(totalRows - 1, lastRow + 1);
         target = std::clamp(targetRow * columns, 0, totalEntries - 1);
     }
 
