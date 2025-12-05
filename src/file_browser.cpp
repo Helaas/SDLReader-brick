@@ -1406,37 +1406,33 @@ void FileBrowser::pageJumpList(int direction)
     {
         if (remaining <= 0)
         {
-            // Already on last page; keep at end to avoid clamp bounce.
+            // Already on last page; select last item if not already there.
+            if (m_selectedIndex >= totalItems - 1)
+            {
+                return;
+            }
             target = totalItems - 1;
-            m_listScrollY = maxScroll;
         }
         else
         {
             target = std::min(totalItems - 1, lastVisible + 1);
         }
     }
-    if (target != m_selectedIndex)
-    {
+        if (target != m_selectedIndex)
+        {
             // Place target item at the top of the view when possible.
             if (totalHeight > effectiveViewHeight)
             {
-                if (direction > 0 && remaining <= 0)
-                {
-                    m_listScrollY = maxScroll; // lock to bottom if on last page
-                }
-                else
-                {
-                    const float desired = stride * static_cast<float>(target);
-                    m_listScrollY = std::clamp(desired, 0.0f, maxScroll);
-                }
+                const float desired = stride * static_cast<float>(target);
+                m_listScrollY = std::clamp(desired, 0.0f, maxScroll);
             }
             else
             {
                 m_listScrollY = 0.0f;
             }
-        m_selectedIndex = target;
-        resetSelectionScrollTargets();
-    }
+            m_selectedIndex = target;
+            resetSelectionScrollTargets();
+        }
 }
 
 void FileBrowser::pageJumpThumbnail(int direction)
@@ -1502,16 +1498,20 @@ void FileBrowser::pageJumpThumbnail(int direction)
     else
     {
         int nextRow = (lastRow >= 0) ? lastRow + 1 : 0;
-        int targetRow = std::min(totalRows - 1, nextRow);
         if (nextRow >= totalRows)
         {
-            // Already at last page; lock scroll to bottom to avoid clamp bounce.
-            const float pageTotalHeight = tileHeight * static_cast<float>(totalRows) +
-                                          rowSpacing * static_cast<float>(std::max(0, totalRows - 1));
-            const float maxScroll = std::max(0.0f, pageTotalHeight - effectiveViewHeight);
-            m_thumbnailScrollY = maxScroll;
+            // Already on last page; select last item if not already there.
+            if (m_selectedIndex >= totalEntries - 1)
+            {
+                return;
+            }
+            target = totalEntries - 1;
         }
-        target = std::clamp(targetRow * columns, 0, totalEntries - 1);
+        else
+        {
+            int targetRow = std::min(totalRows - 1, nextRow);
+            target = std::clamp(targetRow * columns, 0, totalEntries - 1);
+        }
     }
 
     if (target != m_selectedIndex)
@@ -2770,7 +2770,7 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
                                          ? std::clamp(m_selectedIndex, 0, totalItems - 1)
                                          : -1;
     // Check if we need to update scroll position for newly selected item
-    bool needScrollUpdate = m_pendingListEnsure || (m_lastListEnsureIndex != clampedSelectedIndex);
+    bool needScrollUpdate = m_pendingListEnsure || (m_lastListEnsureIndex != clampedSelectedIndex) || m_forceListScroll;
     const float totalHeight = itemHeight * static_cast<float>(totalItems) +
                               rowSpacing * static_cast<float>(std::max(0, totalItems - 1));
     if (totalHeight <= effectiveViewHeight)
@@ -2779,14 +2779,23 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
         m_listScrollY = 0.0f;
         needScrollUpdate = true;
     }
+    bool appliedForceScroll = false;
     if (needScrollUpdate)
     {
-        if (clampedSelectedIndex >= 0)
+        if (m_forceListScroll)
+        {
+            // We already set m_listScrollY explicitly; skip re-deriving via ensureSelectionVisible.
+            m_pendingListEnsure = false;
+            m_lastListEnsureIndex = clampedSelectedIndex;
+            appliedForceScroll = true;
+        }
+        else if (clampedSelectedIndex >= 0)
         {
             ensureSelectionVisible(itemHeight, effectiveViewHeight, rowSpacing, m_listScrollY,
                                    m_lastListEnsureIndex, clampedSelectedIndex, totalItems);
         }
         m_pendingListEnsure = false;
+        m_forceListScroll = false;
     }
 
     nk_layout_row_dynamic(m_ctx, clampedViewHeight, 1);
@@ -2797,6 +2806,13 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
         if (needScrollUpdate)
         {
             nk_group_set_scroll(m_ctx, "FileList", 0, static_cast<nk_uint>(m_listScrollY));
+            if (appliedForceScroll)
+            {
+                // Keep cached scroll in sync when we force-applied it.
+                nk_uint scrollX = 0, scrollY = 0;
+                nk_group_get_scroll(m_ctx, "FileList", &scrollX, &scrollY);
+                m_listScrollY = static_cast<float>(scrollY);
+            }
         }
 
         nk_layout_row_dynamic(m_ctx, itemHeight, 1);

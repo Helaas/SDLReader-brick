@@ -152,6 +152,7 @@ private:
     bool m_pendingThumbEnsure{false};
     bool m_scrollJustSet{false}; // Track when we just set scroll to avoid reading stale values
     float m_lastContentHeight{0.0f};
+    bool m_forceListScroll{false}; // Force applying list scroll without re-deriving in ensureSelectionVisible
 
     struct ThumbnailJobResult
     {
