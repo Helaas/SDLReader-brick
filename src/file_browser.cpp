@@ -1419,6 +1419,11 @@ void FileBrowser::pageJumpList(int direction)
         else
         {
             target = std::min(totalItems - 1, lastVisible + 1);
+            // If target is already visible, don't scroll.
+            if (target <= lastVisible)
+            {
+                skipScroll = true;
+            }
         }
     }
     if (target != m_selectedIndex)

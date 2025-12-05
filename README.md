@@ -309,8 +309,10 @@ The SDL Reader supports the following keyboard, mouse, and game controller input
 | **Shoulder Buttons**                       |                                                      |
 | `L1 (Left Shoulder)`                       | Previous page                                        |
 | `R1 (Right Shoulder)`                      | Next page                                            |
+| `L1 + R1 (Both Shoulders)`                  | Toggle font & reading style menu                     |
 | `L2 (Left Trigger)`                        | Jump back 10 pages                                   |
 | `R2 (Right Trigger)`                       | Jump forward 10 pages                                |
+| `L2 + R2 (Both Triggers)`                   | Reset page view                                      |
 | **Face Buttons**                           |                                                      |
 | `B`                                        | Fit page to width                                    |
 | `A`                                        | Zoom out                                             |
@@ -367,8 +369,10 @@ The SDL Reader supports the following keyboard, mouse, and game controller input
 | **Shoulder Buttons**                      |                                                       |
 | `L1 (Left Shoulder)`                      | Previous page                                         |
 | `R1 (Right Shoulder)`                     | Next page                                             |
+| `L1 + R1 (Both Shoulders)`                | Toggle font & reading style menu                      |
 | `L2 (Left Trigger)`                       | Jump back 10 pages                                    |
 | `R2 (Right Trigger)`                      | Jump forward 10 pages                                 |
+| `L2 + R2 (Both Triggers)`                 | Reset page view                                       |
 | **Face Buttons**                          |                                                       |
 | `A`                                       | Fit page to width                                     |
 | `B`                                       | Zoom out                                              |
@@ -381,6 +385,23 @@ The SDL Reader supports the following keyboard, mouse, and game controller input
 | **Analog Sticks**                         |                                                       |
 | `Left/Right Stick X-Axis`                 | Scroll horizontally                                   |
 | `Left/Right Stick Y-Axis`                 | Scroll vertically                                     |
+
+### File Browser Controls (--browse mode)
+| Button/Input                              | Action                                                |
+| :---------------------------------------- | :---------------------------------------------------- |
+| **D-Pad**                                 |                                                       |
+| `D-Pad Up/Down`                           | Move selection up/down                                |
+| `D-Pad Left/Right (List View)`            | Jump pages in file list                               |
+| `D-Pad Left/Right (Thumbnail View)`       | Move selection horizontally in grid                   |
+| **Shoulder Buttons**                      |                                                       |
+| `L1 (Left Shoulder)`                      | Jump selection backward by first letter               |
+| `R1 (Right Shoulder)`                     | Jump selection forward by first letter                |
+| **Face Buttons**                          |                                                       |
+| `A`                                       | Select/Open file or directory                         |
+| `B`                                       | Go to parent directory                                |
+| `X`                                       | Toggle between list and thumbnail view                |
+| **System Buttons**                        |                                                       |
+| `Guide/Menu`                              | Quit application                                      |
 
 *Note: Controller button names may vary depending on your controller type (Xbox, PlayStation, etc.). The mappings above use SDL2's standardized button names.*
 
