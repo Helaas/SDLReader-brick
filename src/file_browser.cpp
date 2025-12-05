@@ -1370,65 +1370,31 @@ void FileBrowser::jumpSelectionByLetter(int direction)
     const int startIndex = std::clamp(m_selectedIndex, 0, total - 1);
 
     int firstNonParentIndex = -1;
+    int firstDirIndex = -1;
+    int lastDirIndex = -1;
     int firstFileIndex = -1;
-    int lastFolderIndex = -1;
+    int lastFileIndex = -1;
     for (int i = 0; i < total; ++i)
     {
         if (!m_entries[i].isParentLink && firstNonParentIndex == -1)
         {
             firstNonParentIndex = i;
         }
+        if (m_entries[i].isDirectory && !m_entries[i].isParentLink)
+        {
+            if (firstDirIndex == -1)
+            {
+                firstDirIndex = i;
+            }
+            lastDirIndex = i;
+        }
         if (!m_entries[i].isDirectory && firstFileIndex == -1)
         {
             firstFileIndex = i;
         }
-        if (m_entries[i].isDirectory && !m_entries[i].isParentLink)
+        if (!m_entries[i].isDirectory)
         {
-            lastFolderIndex = i; // will end up as last directory due to ordering
-        }
-    }
-
-    // Hard boundary rules to respect directory grouping:
-    if (direction > 0)
-    {
-        // From parent -> first real entry (usually first folder)
-        if (m_entries[startIndex].isParentLink && firstNonParentIndex != -1)
-        {
-            m_selectedIndex = firstNonParentIndex;
-            resetSelectionScrollTargets();
-            return;
-        }
-        // From any folder -> first file
-        if (m_entries[startIndex].isDirectory && !m_entries[startIndex].isParentLink && firstFileIndex != -1)
-        {
-            m_selectedIndex = firstFileIndex;
-            resetSelectionScrollTargets();
-            return;
-        }
-    }
-    else // direction < 0
-    {
-        // From parent -> last entry
-        if (m_entries[startIndex].isParentLink && total > 1)
-        {
-            m_selectedIndex = total - 1;
-            resetSelectionScrollTargets();
-            return;
-        }
-        // From the first folder -> parent link (if present)
-        if (m_entries[startIndex].isDirectory && !m_entries[startIndex].isParentLink &&
-            startIndex == firstNonParentIndex && firstNonParentIndex > 0 && m_entries[0].isParentLink)
-        {
-            m_selectedIndex = 0;
-            resetSelectionScrollTargets();
-            return;
-        }
-        // From the first file -> last folder
-        if (!m_entries[startIndex].isDirectory && startIndex == firstFileIndex && lastFolderIndex != -1)
-        {
-            m_selectedIndex = lastFolderIndex;
-            resetSelectionScrollTargets();
-            return;
+            lastFileIndex = i;
         }
     }
 
@@ -1451,6 +1417,101 @@ void FileBrowser::jumpSelectionByLetter(int direction)
 
     const char currentKey = extractKey(m_entries[startIndex]);
 
+    // Hard boundary rules to respect directory grouping.
+    if (direction > 0)
+    {
+        if (m_entries[startIndex].isParentLink && firstNonParentIndex != -1)
+        {
+            m_selectedIndex = firstNonParentIndex;
+            resetSelectionScrollTargets();
+            return;
+        }
+        if (m_entries[startIndex].isDirectory && !m_entries[startIndex].isParentLink)
+        {
+            int dirTarget = -1;
+            if (startIndex < lastDirIndex)
+            {
+                for (int i = startIndex + 1; i <= lastDirIndex; ++i)
+                {
+                    if (m_entries[i].isDirectory && !m_entries[i].isParentLink)
+                    {
+                        char key = extractKey(m_entries[i]);
+                        if (key == 0)
+                        {
+                            continue;
+                        }
+                        if (currentKey == 0 || key > currentKey)
+                        {
+                            dirTarget = i;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (dirTarget != -1)
+            {
+                m_selectedIndex = dirTarget;
+                resetSelectionScrollTargets();
+                return;
+            }
+            if (firstFileIndex != -1)
+            {
+                m_selectedIndex = firstFileIndex;
+                resetSelectionScrollTargets();
+                return;
+            }
+        }
+    }
+    else // direction < 0
+    {
+        if (m_entries[startIndex].isParentLink && total > 1)
+        {
+            m_selectedIndex = total - 1;
+            resetSelectionScrollTargets();
+            return;
+        }
+        if (m_entries[startIndex].isDirectory && !m_entries[startIndex].isParentLink &&
+            startIndex == firstDirIndex && firstDirIndex > 0 && m_entries[0].isParentLink)
+        {
+            m_selectedIndex = 0;
+            resetSelectionScrollTargets();
+            return;
+        }
+        if (!m_entries[startIndex].isDirectory && lastDirIndex != -1)
+        {
+            // Any file jumps back to the last folder
+            m_selectedIndex = lastDirIndex;
+            resetSelectionScrollTargets();
+            return;
+        }
+        if (m_entries[startIndex].isDirectory && !m_entries[startIndex].isParentLink && startIndex > firstDirIndex)
+        {
+            int dirTarget = -1;
+            for (int i = startIndex - 1; i >= firstDirIndex; --i)
+            {
+                if (m_entries[i].isDirectory && !m_entries[i].isParentLink)
+                {
+                    char key = extractKey(m_entries[i]);
+                    if (key == 0)
+                    {
+                        continue;
+                    }
+                    if (currentKey == 0 || key < currentKey)
+                    {
+                        dirTarget = i;
+                        break;
+                    }
+                }
+            }
+            if (dirTarget != -1)
+            {
+                m_selectedIndex = dirTarget;
+                resetSelectionScrollTargets();
+                return;
+            }
+        }
+    }
+
     auto isCandidate = [&](const FileEntry& entry, char key) -> bool
     {
         if (entry.isParentLink || key == 0 || key == currentKey)
@@ -1468,7 +1529,15 @@ void FileBrowser::jumpSelectionByLetter(int direction)
 
     if (direction > 0)
     {
-        for (int i = startIndex + 1; i < total; ++i)
+        int searchStart = startIndex + 1;
+        int wrapStart = firstNonParentIndex;
+        if (!m_entries[startIndex].isDirectory && firstFileIndex != -1)
+        {
+            searchStart = std::max(searchStart, firstFileIndex);
+            wrapStart = firstFileIndex;
+        }
+
+        for (int i = searchStart; i < total; ++i)
         {
             char key = extractKey(m_entries[i]);
             if (isCandidate(m_entries[i], key))
@@ -1478,9 +1547,9 @@ void FileBrowser::jumpSelectionByLetter(int direction)
             }
         }
 
-        if (targetIndex == -1 && firstNonParentIndex != -1)
+        if (targetIndex == -1 && wrapStart != -1)
         {
-            for (int i = firstNonParentIndex; i <= startIndex; ++i)
+            for (int i = wrapStart; i <= startIndex; ++i)
             {
                 char key = extractKey(m_entries[i]);
                 if (isCandidate(m_entries[i], key))
@@ -1488,25 +1557,21 @@ void FileBrowser::jumpSelectionByLetter(int direction)
                     targetIndex = i;
                     break;
                 }
-            }
-        }
-
-        // Boundary: from parent link jump to first real entry; from folders jump to first file.
-        if (targetIndex == -1)
-        {
-            if (m_entries[startIndex].isParentLink && firstNonParentIndex != -1)
-            {
-                targetIndex = firstNonParentIndex;
-            }
-            else if (m_entries[startIndex].isDirectory && firstFileIndex != -1)
-            {
-                targetIndex = firstFileIndex;
             }
         }
     }
     else // direction < 0
     {
-        for (int i = startIndex - 1; i >= 0; --i)
+        int searchStart = startIndex - 1;
+        int searchEnd = 0;
+        int wrapStart = total - 1;
+        if (!m_entries[startIndex].isDirectory && firstFileIndex != -1)
+        {
+            searchEnd = firstFileIndex;
+            wrapStart = (lastFileIndex != -1) ? lastFileIndex : firstFileIndex;
+        }
+
+        for (int i = searchStart; i >= searchEnd; --i)
         {
             char key = extractKey(m_entries[i]);
             if (isCandidate(m_entries[i], key))
@@ -1518,7 +1583,7 @@ void FileBrowser::jumpSelectionByLetter(int direction)
 
         if (targetIndex == -1)
         {
-            for (int i = total - 1; i >= startIndex; --i)
+            for (int i = wrapStart; i > startIndex; --i)
             {
                 char key = extractKey(m_entries[i]);
                 if (isCandidate(m_entries[i], key))
@@ -1529,17 +1594,10 @@ void FileBrowser::jumpSelectionByLetter(int direction)
             }
         }
 
-        // Boundary: from files jump back to last folder; from parent link jump to last entry.
-        if (targetIndex == -1)
+        // If no earlier letter was found for a file, fall back to the last directory.
+        if (targetIndex == -1 && !m_entries[startIndex].isDirectory && lastDirIndex != -1)
         {
-            if (!m_entries[startIndex].isDirectory && lastFolderIndex != -1)
-            {
-                targetIndex = lastFolderIndex;
-            }
-            else if (m_entries[startIndex].isParentLink && total > 1)
-            {
-                targetIndex = total - 1;
-            }
+            targetIndex = lastDirIndex;
         }
     }
 
