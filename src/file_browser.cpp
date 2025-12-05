@@ -1398,6 +1398,7 @@ void FileBrowser::pageJumpList(int direction)
     const int remaining = std::max(0, totalItems - (firstVisible + visibleCount));
 
     int target;
+    bool skipScroll = false;
     if (direction < 0)
     {
         target = std::max(0, firstVisible - visibleCount);
@@ -1412,13 +1413,17 @@ void FileBrowser::pageJumpList(int direction)
                 return;
             }
             target = totalItems - 1;
+            // Last item is already visible on screen, don't adjust scroll.
+            skipScroll = true;
         }
         else
         {
             target = std::min(totalItems - 1, lastVisible + 1);
         }
     }
-        if (target != m_selectedIndex)
+    if (target != m_selectedIndex)
+    {
+        if (!skipScroll)
         {
             // Place target item at the top of the view when possible.
             if (totalHeight > effectiveViewHeight)
@@ -1430,9 +1435,15 @@ void FileBrowser::pageJumpList(int direction)
             {
                 m_listScrollY = 0.0f;
             }
-            m_selectedIndex = target;
-            resetSelectionScrollTargets();
         }
+        else
+        {
+            // When skipping scroll, prevent ensureSelectionVisible from adjusting it
+            m_forceListScroll = true;
+        }
+        m_selectedIndex = target;
+        resetSelectionScrollTargets();
+    }
 }
 
 void FileBrowser::pageJumpThumbnail(int direction)
@@ -1490,6 +1501,7 @@ void FileBrowser::pageJumpThumbnail(int direction)
     const int rowsVisible = std::max(1, lastRow - firstRow + 1);
 
     int target;
+    bool skipScroll = false;
     if (direction < 0)
     {
         int targetRow = std::max(0, firstRow - rowsVisible);
@@ -1506,6 +1518,8 @@ void FileBrowser::pageJumpThumbnail(int direction)
                 return;
             }
             target = totalEntries - 1;
+            // Last item is already visible on screen, don't adjust scroll.
+            skipScroll = true;
         }
         else
         {
@@ -1516,21 +1530,24 @@ void FileBrowser::pageJumpThumbnail(int direction)
 
     if (target != m_selectedIndex)
     {
-        // Place target row at the top of the view when possible.
-        if (totalRows > 0)
+        if (!skipScroll)
         {
-            const float totalHeight = tileHeight * static_cast<float>(totalRows) +
-                                      rowSpacing * static_cast<float>(std::max(0, totalRows - 1));
-            const int targetRow = std::clamp(target / columns, 0, std::max(0, totalRows - 1));
-            if (totalHeight > effectiveViewHeight)
+            // Place target row at the top of the view when possible.
+            if (totalRows > 0)
             {
-                const float desired = stride * static_cast<float>(targetRow);
-                const float maxScroll = std::max(0.0f, totalHeight - effectiveViewHeight);
-                m_thumbnailScrollY = std::clamp(desired, 0.0f, maxScroll);
-            }
-            else
-            {
-                m_thumbnailScrollY = 0.0f;
+                const float totalHeight = tileHeight * static_cast<float>(totalRows) +
+                                          rowSpacing * static_cast<float>(std::max(0, totalRows - 1));
+                const int targetRow = std::clamp(target / columns, 0, std::max(0, totalRows - 1));
+                if (totalHeight > effectiveViewHeight)
+                {
+                    const float desired = stride * static_cast<float>(targetRow);
+                    const float maxScroll = std::max(0.0f, totalHeight - effectiveViewHeight);
+                    m_thumbnailScrollY = std::clamp(desired, 0.0f, maxScroll);
+                }
+                else
+                {
+                    m_thumbnailScrollY = 0.0f;
+                }
             }
         }
         m_selectedIndex = target;
