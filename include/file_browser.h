@@ -151,6 +151,7 @@ private:
     bool m_pendingListEnsure{false};
     bool m_pendingThumbEnsure{false};
     bool m_scrollJustSet{false}; // Track when we just set scroll to avoid reading stale values
+    float m_lastContentHeight{0.0f};
 
     struct ThumbnailJobResult
     {
@@ -219,6 +220,9 @@ private:
     void toggleViewMode();
     void moveSelectionVertical(int direction);
     void moveSelectionHorizontal(int direction);
+    void pageJump(int direction);
+    void pageJumpList(int direction);
+    void pageJumpThumbnail(int direction);
     void jumpSelectionByLetter(int direction);
     void clampSelection();
     ThumbnailData& getOrCreateThumbnail(const FileEntry& entry);

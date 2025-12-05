@@ -1359,6 +1359,152 @@ void FileBrowser::moveSelectionHorizontal(int direction)
     }
 }
 
+void FileBrowser::pageJumpList(int direction)
+{
+    if (!m_ctx || m_entries.empty() || direction == 0)
+    {
+        return;
+    }
+
+    const struct nk_user_font* font = m_ctx->style.font;
+    const float fontHeight = (font && font->height > 0.0f) ? font->height : 22.0f;
+    const float baseItemHeight = fontHeight + 14.0f;
+    const float itemHeight = std::max(40.0f, baseItemHeight);
+    const float viewHeight = (m_lastContentHeight > 0.0f) ? m_lastContentHeight
+                                                         : static_cast<float>(std::max(1, m_lastWindowHeight));
+    const float clampedViewHeight = std::max(itemHeight, viewHeight);
+    const float effectiveViewHeight = clampedViewHeight - itemHeight;
+    const float rowSpacing = (m_ctx && m_ctx->style.window.spacing.y > 0.0f)
+                                 ? m_ctx->style.window.spacing.y
+                                 : 0.0f;
+    const float stride = itemHeight + rowSpacing;
+
+    const int totalItems = static_cast<int>(m_entries.size());
+    if (stride <= 0.0f || totalItems == 0)
+    {
+        return;
+    }
+
+    const float firstVisibleF = m_listScrollY / stride;
+    const float lastVisibleF = (m_listScrollY + effectiveViewHeight - 1.0f) / stride;
+    int firstVisible = std::clamp(static_cast<int>(std::floor(firstVisibleF)), 0, totalItems - 1);
+    int lastVisible = std::clamp(static_cast<int>(std::floor(lastVisibleF)), 0, totalItems - 1);
+
+    int target = (direction < 0) ? std::max(0, firstVisible - 1) : std::min(totalItems - 1, lastVisible + 1);
+    if (target != m_selectedIndex)
+    {
+        // Place target item at the top of the view when possible.
+        const float totalHeight = itemHeight * static_cast<float>(totalItems) +
+                                  rowSpacing * static_cast<float>(std::max(0, totalItems - 1));
+        if (totalHeight > effectiveViewHeight)
+        {
+            const float desired = stride * static_cast<float>(target);
+            const float maxScroll = std::max(0.0f, totalHeight - effectiveViewHeight);
+            m_listScrollY = std::clamp(desired, 0.0f, maxScroll);
+        }
+        else
+        {
+            m_listScrollY = 0.0f;
+        }
+        m_selectedIndex = target;
+        resetSelectionScrollTargets();
+    }
+}
+
+void FileBrowser::pageJumpThumbnail(int direction)
+{
+    if (!m_ctx || m_entries.empty() || direction == 0)
+    {
+        return;
+    }
+
+    const float baseThumb = static_cast<float>(THUMBNAIL_MAX_DIM);
+    const float labelHeight = 40.0f;
+    const float tilePadding = 12.0f;
+    const float maxBorderThickness = 4.0f;
+    const float thumbnailAreaHeight = baseThumb;
+    const float tileHeight = thumbnailAreaHeight + labelHeight + 2.0f * (tilePadding + maxBorderThickness);
+
+    const float spacingX = (m_ctx->style.window.spacing.x > 0.0f) ? m_ctx->style.window.spacing.x : 0.0f;
+    const float paddingX = m_ctx->style.window.padding.x * 2.0f;
+    const float scrollbarWidth =
+        (m_ctx->style.window.scrollbar_size.x > 0.0f) ? m_ctx->style.window.scrollbar_size.x : 16.0f;
+    const float extraScrollbarPadding = scrollbarWidth + spacingX + 12.0f;
+    const float usableWidth = std::max(0.0f,
+                                       static_cast<float>(std::max(1, m_lastWindowWidth)) - paddingX - extraScrollbarPadding);
+    const float preferredTileWidth = baseThumb + 48.0f;
+    const int desiredColumns = 4;
+    const int maxColumnsFit =
+        std::max(1, static_cast<int>((usableWidth + spacingX) / (preferredTileWidth + spacingX)));
+    int columns = (maxColumnsFit >= desiredColumns) ? desiredColumns : maxColumnsFit;
+    columns = std::max(1, columns);
+
+    const float clampedViewHeight = std::max(tileHeight + 20.0f,
+                                             (m_lastContentHeight > 0.0f) ? m_lastContentHeight
+                                                                          : static_cast<float>(std::max(1, m_lastWindowHeight)));
+    const float verticalPadding = (m_ctx->style.window.padding.y > 0.0f)
+                                      ? m_ctx->style.window.padding.y * 2.0f
+                                      : 0.0f;
+    const float effectiveViewHeight = std::max(tileHeight, clampedViewHeight - verticalPadding);
+    const float rowSpacing = (m_ctx && m_ctx->style.window.spacing.y > 0.0f)
+                                 ? m_ctx->style.window.spacing.y
+                                 : 0.0f;
+    const float stride = tileHeight + rowSpacing;
+
+    const int totalEntries = static_cast<int>(m_entries.size());
+    const int totalRows = (columns > 0) ? (totalEntries + columns - 1) / columns : 0;
+    if (stride <= 0.0f || totalRows == 0)
+    {
+        return;
+    }
+
+    const float firstVisibleRowF = m_thumbnailScrollY / stride;
+    const float lastVisibleRowF = (m_thumbnailScrollY + effectiveViewHeight - 1.0f) / stride;
+    int firstRow = std::clamp(static_cast<int>(std::floor(firstVisibleRowF)), 0, std::max(0, totalRows - 1));
+    int lastRow = std::clamp(static_cast<int>(std::floor(lastVisibleRowF)), 0, std::max(0, totalRows - 1));
+
+    int firstVisibleIndex = std::clamp(firstRow * columns, 0, totalEntries - 1);
+    int lastVisibleIndex = std::clamp(((lastRow + 1) * columns) - 1, 0, totalEntries - 1);
+
+    int target = (direction < 0) ? std::max(0, firstVisibleIndex - 1)
+                                 : std::min(totalEntries - 1, lastVisibleIndex + 1);
+
+    if (target != m_selectedIndex)
+    {
+        // Place target row at the top of the view when possible.
+        if (totalRows > 0)
+        {
+            const float totalHeight = tileHeight * static_cast<float>(totalRows) +
+                                      rowSpacing * static_cast<float>(std::max(0, totalRows - 1));
+            const int targetRow = target / columns;
+            if (totalHeight > effectiveViewHeight)
+            {
+                const float desired = stride * static_cast<float>(targetRow);
+                const float maxScroll = std::max(0.0f, totalHeight - effectiveViewHeight);
+                m_thumbnailScrollY = std::clamp(desired, 0.0f, maxScroll);
+            }
+            else
+            {
+                m_thumbnailScrollY = 0.0f;
+            }
+        }
+        m_selectedIndex = target;
+        resetSelectionScrollTargets();
+    }
+}
+
+void FileBrowser::pageJump(int direction)
+{
+    if (m_thumbnailView)
+    {
+        pageJumpThumbnail(direction);
+    }
+    else
+    {
+        pageJumpList(direction);
+    }
+}
+
 void FileBrowser::jumpSelectionByLetter(int direction)
 {
     if (m_entries.empty() || direction == 0)
@@ -1761,11 +1907,11 @@ std::string FileBrowser::run()
             {
                 if (m_leftHeld)
                 {
-                    moveSelectionHorizontal(-1);
+                    pageJump(-1);
                 }
                 else if (m_rightHeld)
                 {
-                    moveSelectionHorizontal(1);
+                    pageJump(1);
                 }
 
                 m_lastHorizontalScrollTime = currentTime;
@@ -1859,6 +2005,7 @@ void FileBrowser::render()
         const float statusBottomPadding = std::max(12.0f, m_ctx->style.window.padding.y);
         const float reservedHeight = 35.0f + helpTextHeight + statusBarHeight + 24.0f + statusBottomPadding;
         const float contentHeight = std::max(60.0f, windowHeightF - reservedHeight);
+        m_lastContentHeight = contentHeight;
 
         nk_layout_row_dynamic(m_ctx, helpTextHeight, 1);
         nk_label_colored(m_ctx, "D-Pad: Navigate | A: Select | B: Back | X: Toggle View | Menu: Quit",
@@ -2041,7 +2188,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDLK_LEFT:
             if (!m_leftHeld)
             {
-                moveSelectionHorizontal(-1);
+                pageJump(-1);
                 m_leftHeld = true;
                 m_lastHorizontalScrollTime = SDL_GetTicks();
                 m_waitingForInitialHorizontalRepeat = true;
@@ -2050,7 +2197,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDLK_RIGHT:
             if (!m_rightHeld)
             {
-                moveSelectionHorizontal(1);
+                pageJump(1);
                 m_rightHeld = true;
                 m_lastHorizontalScrollTime = SDL_GetTicks();
                 m_waitingForInitialHorizontalRepeat = true;
@@ -2136,7 +2283,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
             if (!m_leftHeld)
             {
-                moveSelectionHorizontal(-1);
+                pageJump(-1);
                 m_leftHeld = true;
                 m_lastHorizontalScrollTime = SDL_GetTicks();
                 m_waitingForInitialHorizontalRepeat = true;
@@ -2145,7 +2292,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
             if (!m_rightHeld)
             {
-                moveSelectionHorizontal(1);
+                pageJump(1);
                 m_rightHeld = true;
                 m_lastHorizontalScrollTime = SDL_GetTicks();
                 m_waitingForInitialHorizontalRepeat = true;
@@ -2271,7 +2418,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
 
         if (leftActive && !m_leftHeld)
         {
-            moveSelectionHorizontal(-1);
+            pageJump(-1);
             m_leftHeld = true;
             m_lastHorizontalScrollTime = SDL_GetTicks();
             m_waitingForInitialHorizontalRepeat = true;
@@ -2288,7 +2435,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
 
         if (rightActive && !m_rightHeld)
         {
-            moveSelectionHorizontal(1);
+            pageJump(1);
             m_rightHeld = true;
             m_lastHorizontalScrollTime = SDL_GetTicks();
             m_waitingForInitialHorizontalRepeat = true;
