@@ -1371,7 +1371,7 @@ void FileBrowser::pageJumpList(int direction)
     const float baseItemHeight = fontHeight + 14.0f;
     const float itemHeight = std::max(40.0f, baseItemHeight);
     const float viewHeight = (m_lastContentHeight > 0.0f) ? m_lastContentHeight
-                                                         : static_cast<float>(std::max(1, m_lastWindowHeight));
+                                                          : static_cast<float>(std::max(1, m_lastWindowHeight));
     const float clampedViewHeight = std::max(itemHeight, viewHeight);
     const float effectiveViewHeight = clampedViewHeight - itemHeight;
     const float rowSpacing = (m_ctx && m_ctx->style.window.spacing.y > 0.0f)
