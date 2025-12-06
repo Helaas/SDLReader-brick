@@ -116,6 +116,9 @@ void ViewportManager::applyPendingZoom(Document* document, int currentPage)
         int newPageWidth = m_state.pageWidth;
         int newPageHeight = m_state.pageHeight;
 
+        fprintf(stderr, "[DEBUG] applyPendingZoom: oldScale=%d newScale=%d oldSize=%dx%d newSize=%dx%d rotation=%d\n",
+                oldScale, newScale, oldPageWidth, oldPageHeight, newPageWidth, newPageHeight, m_state.rotation);
+
         if (newPageWidth > windowWidth)
         {
             float focalPointInNewPage = nativeFocalX * newPageWidth;
@@ -398,6 +401,14 @@ void ViewportManager::rotateClockwise(Document* document, int currentPage)
     m_state.scrollX = 0;
     m_state.scrollY = 0;
 
+    // Clear the MuPDF cache to force re-rendering at the new (rotated) dimensions
+    // This ensures the buffer is re-created immediately with the correct dimensions
+    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(document);
+    if (muPdfDoc)
+    {
+        muPdfDoc->clearCache();
+    }
+
     // When in FitWindow mode, intelligently fit based on rotation:
     // - At 0° or 180°: fit to window normally
     // - At 90° or 270°: fit native WIDTH to window HEIGHT (since rotation swaps dimensions)
@@ -602,6 +613,17 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
             int targetWidth = std::max(1, static_cast<int>(std::lround(nativeWidth * (m_state.currentScale / 100.0f))));
             int targetHeight = std::max(1, static_cast<int>(std::lround(nativeHeight * (m_state.currentScale / 100.0f))));
 
+            // When rotated 90° or 270°, the effective window dimensions swap relative to the page
+            // This matters for calculating headroom - we need to use the effective window dimension
+            // that corresponds to each rendered dimension
+            int effectiveWindowWidth = windowWidth;
+            int effectiveWindowHeight = windowHeight;
+            if (m_state.rotation % 180 != 0)
+            {
+                // At 90°/270°, swap which window dimension corresponds to which page dimension
+                std::swap(effectiveWindowWidth, effectiveWindowHeight);
+            }
+
             // Dynamically adjust max render size to ensure:
             // 1. We can actually see zoom changes (don't downsample to same size)
             // 2. We don't use excessive memory
@@ -624,26 +646,26 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
             else if (m_state.currentScale < 100)
             {
                 // Low zoom (50-99%) - use 2x target to allow some zoom without rerender
-                requiredWidth = std::max(targetWidth, windowWidth * 2);
-                requiredHeight = std::max(targetHeight, windowHeight * 2);
+                requiredWidth = std::max(targetWidth, effectiveWindowWidth * 2);
+                requiredHeight = std::max(targetHeight, effectiveWindowHeight * 2);
             }
             else if (m_state.currentScale < 150)
             {
                 // Moderate zoom, use 4x window size
-                requiredWidth = std::max(targetWidth, windowWidth * 4);
-                requiredHeight = std::max(targetHeight, windowHeight * 4);
+                requiredWidth = std::max(targetWidth, effectiveWindowWidth * 4);
+                requiredHeight = std::max(targetHeight, effectiveWindowHeight * 4);
             }
             else if (m_state.currentScale < 220)
             {
                 // At higher zoom, use 5x
-                requiredWidth = std::max(targetWidth, windowWidth * 5);
-                requiredHeight = std::max(targetHeight, windowHeight * 5);
+                requiredWidth = std::max(targetWidth, effectiveWindowWidth * 5);
+                requiredHeight = std::max(targetHeight, effectiveWindowHeight * 5);
             }
             else
             {
                 // At very high zoom, use 6x
-                requiredWidth = std::max(targetWidth, windowWidth * 6);
-                requiredHeight = std::max(targetHeight, windowHeight * 6);
+                requiredWidth = std::max(targetWidth, effectiveWindowWidth * 6);
+                requiredHeight = std::max(targetHeight, effectiveWindowHeight * 6);
             }
 
             // Only update maxRenderSize if it would actually change significantly
@@ -700,6 +722,9 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
             std::swap(m_state.pageWidth, m_state.pageHeight);
         }
     }
+    
+    fprintf(stderr, "[DEBUG] updatePageDimensions: scale=%d rotation=%d finalSize=%dx%d\n",
+            m_state.currentScale, m_state.rotation, m_state.pageWidth, m_state.pageHeight);
 }
 
 bool ViewportManager::isNextRenderLikelyExpensive(int lastRenderDuration) const

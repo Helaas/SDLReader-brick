@@ -12,6 +12,9 @@
 
 RenderManager::RenderManager(SDL_Window* window, SDL_Renderer* renderer)
 {
+    // Prefer nearest sampling to avoid softness when rotating at 90°/270°
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
+
     // Initialize renderer with the pre-initialized SDL objects
     m_renderer = std::make_unique<Renderer>(window, renderer);
 
@@ -165,30 +168,71 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
 
     SDL_Rect pageRect = {posX, posY, viewportManager->getPageWidth(), viewportManager->getPageHeight()};
 
-    // When rendering with rotation, SDL needs the PRE-ROTATION dimensions for destWidth/destHeight
-    // because it will rotate the texture and the dimensions will swap naturally.
-    // pageRect has post-rotation dimensions (swapped for 90°/270°), but we need to pass
-    // pre-rotation dimensions to match the source texture orientation.
+    // Determine the dimensions to pass to SDL for rendering.
+    // At 0° or 180°: source and destination should match for 1:1 pixel mapping (no blur)
+    // At 90° or 270°: SDL rotates the texture, so we need to pass pre-rotation dimensions
+    //                 that match the source buffer to avoid scaling (which causes blur)
     int renderWidth = pageRect.w;
     int renderHeight = pageRect.h;
-    int renderX = pageRect.x;
-    int renderY = pageRect.y;
+    float renderX = static_cast<float>(pageRect.x);
+    float renderY = static_cast<float>(pageRect.y);
     int rotation = viewportManager->getRotation();
 
     if (rotation % 180 != 0)
     {
-        // At 90° or 270°, swap dimensions back to match source texture
-        std::swap(renderWidth, renderHeight);
+        // At 90° or 270° rotation, the source buffer should be in the UNROTATED orientation.
+        // So srcW should correspond to pageRect.h and srcH should correspond to pageRect.w
+        // (since pageRect is the rotated/swapped dimensions).
+        
+        // Check if the buffer matches expected dimensions (within tolerance for rounding)
+        // Expected: srcW ≈ pageRect.h, srcH ≈ pageRect.w
+        int expectedSrcW = pageRect.h;
+        int expectedSrcH = pageRect.w;
+        
+        bool bufferMatchesExpected = (std::abs(srcW - expectedSrcW) <= 2 && 
+                                      std::abs(srcH - expectedSrcH) <= 2);
+        
+        if (!bufferMatchesExpected)
+        {
+            // Buffer is stale (from before rotation or zoom change).
+            // Skip rendering this frame to avoid blur from scaling a mismatched buffer.
+            fprintf(stderr, "[DEBUG] Skipping frame - buffer stale: srcW=%d srcH=%d expected=%dx%d\n",
+                    srcW, srcH, expectedSrcW, expectedSrcH);
+            return;
+        }
 
-        // Adjust position because SDL rotates around the center point.
-        // When dimensions swap, the center point moves, so we need to compensate.
-        // The center should stay at the same screen position.
-        int centerX = pageRect.x + pageRect.w / 2;
-        int centerY = pageRect.y + pageRect.h / 2;
+        // At 90° or 270° rotation, use the SOURCE dimensions directly.
+        // This ensures SDL doesn't scale the texture, only rotates it.
+        // The source buffer is rendered at native (unrotated) orientation.
+        renderWidth = srcW;
+        renderHeight = srcH;
 
-        // New top-left corner position for the unswapped dimensions, keeping same center
-        renderX = centerX - renderWidth / 2;
-        renderY = centerY - renderHeight / 2;
+        // Adjust position so the center stays at the intended screen position.
+        // pageRect center is where we want the final rotated image to be centered.
+        // Snap rotation center to the integer grid (SDL_RenderCopyEx also uses an integer center).
+        // This avoids half-pixel offsets that cause alternating blur on 90/270° zoom steps.
+        float centerX = static_cast<float>(pageRect.x) + static_cast<float>(pageRect.w) * 0.5f;
+        float centerY = static_cast<float>(pageRect.y) + static_cast<float>(pageRect.h) * 0.5f;
+
+        // Position the source-sized rect to keep the same center
+        renderX = centerX - static_cast<float>(renderWidth) * 0.5f;
+        renderY = centerY - static_cast<float>(renderHeight) * 0.5f;
+
+        fprintf(stderr, "[DEBUG] 90/270° rotation: srcW=%d srcH=%d pageRect.w=%d pageRect.h=%d "
+                        "renderW=%d renderH=%d posX=%d posY=%d renderX=%.2f renderY=%.2f zoom=%.2f\n",
+                srcW, srcH, pageRect.w, pageRect.h, renderWidth, renderHeight, 
+                pageRect.x, pageRect.y, renderX, renderY, viewportManager->getState().currentScale / 100.0f);
+    }
+    else
+    {
+        // At 0° or 180°, use source dimensions directly for 1:1 mapping (no scaling blur)
+        // Only do this if source is close to expected size (within a reasonable margin)
+        // Otherwise keep viewport dimensions for intentional scaling
+        if (std::abs(srcW - pageRect.w) <= 2 && std::abs(srcH - pageRect.h) <= 2)
+        {
+            renderWidth = srcW;
+            renderHeight = srcH;
+        }
     }
 
     m_renderer->renderPageExARGB(*argbData, srcW, srcH,
@@ -398,19 +442,20 @@ void RenderManager::renderDocumentMinimap(std::shared_ptr<const std::vector<uint
     // Use pre-rotation dimensions like the main render path to avoid double-swapping at 90/270°
     int renderWidth = minimapRect.w;
     int renderHeight = minimapRect.h;
-    int renderX = minimapRect.x;
-    int renderY = minimapRect.y;
+    float renderX = static_cast<float>(minimapRect.x);
+    float renderY = static_cast<float>(minimapRect.y);
     int rotation = viewportManager->getRotation();
 
     if (rotation % 180 != 0)
     {
         std::swap(renderWidth, renderHeight);
 
-        int centerX = minimapRect.x + minimapRect.w / 2;
-        int centerY = minimapRect.y + minimapRect.h / 2;
+        // Keep minimap rotation aligned to integer center to avoid half-pixel blur.
+        float centerX = static_cast<float>(minimapRect.x) + static_cast<float>(minimapRect.w) * 0.5f;
+        float centerY = static_cast<float>(minimapRect.y) + static_cast<float>(minimapRect.h) * 0.5f;
 
-        renderX = centerX - renderWidth / 2;
-        renderY = centerY - renderHeight / 2;
+        renderX = centerX - static_cast<float>(renderWidth) * 0.5f;
+        renderY = centerY - static_cast<float>(renderHeight) * 0.5f;
     }
 
     m_renderer->renderPageExARGB(*argbData, srcWidth, srcHeight,

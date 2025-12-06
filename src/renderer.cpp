@@ -51,7 +51,7 @@ Renderer::Renderer(SDL_Window* window, SDL_Renderer* renderer)
 
 void Renderer::renderPageEx(const std::vector<uint8_t>& pixelData,
                             int srcWidth, int srcHeight,
-                            int destX, int destY, int destWidth, int destHeight,
+                            float destX, float destY, float destWidth, float destHeight,
                             double angleDeg, SDL_RendererFlip flip)
 {
     if (pixelData.empty() || srcWidth == 0 || srcHeight == 0)
@@ -75,6 +75,8 @@ void Renderer::renderPageEx(const std::vector<uint8_t>& pixelData,
             std::cerr << "Error: Unable to create texture! SDL_Error: " << SDL_GetError() << std::endl;
             return;
         }
+        // Force nearest-neighbor scaling to avoid blur during rotation/scaling
+        SDL_SetTextureScaleMode(m_texture.get(), SDL_ScaleModeNearest);
         m_currentTexWidth = allocWidth;
         m_currentTexHeight = allocHeight;
     }
@@ -103,13 +105,14 @@ void Renderer::renderPageEx(const std::vector<uint8_t>& pixelData,
     SDL_UnlockTexture(m_texture.get());
 
     SDL_Rect srcRect = {0, 0, srcWidth, srcHeight};
-    SDL_Rect destRect = {destX, destY, destWidth, destHeight};
-    SDL_RenderCopyEx(m_renderer, m_texture.get(), &srcRect, &destRect, angleDeg, /*center*/ nullptr, flip);
+    SDL_FRect destRect = {destX, destY, destWidth, destHeight};
+    SDL_FPoint center{destRect.w / 2.0f, destRect.h / 2.0f}; // keep true center (avoids odd-size blur)
+    SDL_RenderCopyExF(m_renderer, m_texture.get(), &srcRect, &destRect, angleDeg, &center, flip);
 }
 
 void Renderer::renderPageExARGB(const std::vector<uint32_t>& argbData,
                                 int srcWidth, int srcHeight,
-                                int destX, int destY, int destWidth, int destHeight,
+                                float destX, float destY, float destWidth, float destHeight,
                                 double angleDeg, SDL_RendererFlip flip, const void* bufferToken)
 {
     if (argbData.empty() || srcWidth == 0 || srcHeight == 0)
@@ -134,6 +137,8 @@ void Renderer::renderPageExARGB(const std::vector<uint32_t>& argbData,
             std::cerr << "Error: Unable to create texture! SDL_Error: " << SDL_GetError() << std::endl;
             return;
         }
+        // Force nearest-neighbor scaling to avoid blur during rotation/scaling
+        SDL_SetTextureScaleMode(m_texture.get(), SDL_ScaleModeNearest);
         m_currentTexWidth = allocWidth;
         m_currentTexHeight = allocHeight;
         textureResized = true;
@@ -172,8 +177,9 @@ void Renderer::renderPageExARGB(const std::vector<uint32_t>& argbData,
     }
 
     SDL_Rect srcRect = {0, 0, srcWidth, srcHeight};
-    SDL_Rect destRect = {destX, destY, destWidth, destHeight};
-    SDL_RenderCopyEx(m_renderer, m_texture.get(), &srcRect, &destRect, angleDeg, /*center*/ nullptr, flip);
+    SDL_FRect destRect = {destX, destY, destWidth, destHeight};
+    SDL_FPoint center{destRect.w / 2.0f, destRect.h / 2.0f}; // float center prevents 0.5px drift on odd sizes
+    SDL_RenderCopyExF(m_renderer, m_texture.get(), &srcRect, &destRect, angleDeg, &center, flip);
 }
 
 void Renderer::clear(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
