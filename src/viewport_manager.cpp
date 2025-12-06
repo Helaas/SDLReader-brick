@@ -321,14 +321,19 @@ void ViewportManager::onPageChangedKeepZoom(Document* document, int newPage)
         muPdfDoc->cancelPrerendering();
     }
 
-    // Recompute scaled page dims for current page at the existing zoom
-    updatePageDimensions(document, newPage);
+    // Recompute scaled page dims for current page (respect fit mode if active)
+    if (m_state.fitMode != FitMode::None)
+    {
+        applyFitMode(document, newPage);
+    }
+    else
+    {
+        updatePageDimensions(document, newPage);
+        clampScroll();
+    }
 
     // Set the flag to force top alignment on next render
     m_state.forceTopAlignNextRender = true;
-
-    // Clamp scroll to new page dimensions
-    clampScroll();
 }
 
 void ViewportManager::alignToTopOfCurrentPage()

@@ -393,9 +393,29 @@ void RenderManager::renderDocumentMinimap(std::shared_ptr<const std::vector<uint
     int contentX = outerX + MINIMAP_PADDING;
     int contentY = outerY + MINIMAP_PADDING;
 
+    SDL_Rect minimapRect = {contentX, contentY, minimapWidth, minimapHeight};
+
+    // Use pre-rotation dimensions like the main render path to avoid double-swapping at 90/270°
+    int renderWidth = minimapRect.w;
+    int renderHeight = minimapRect.h;
+    int renderX = minimapRect.x;
+    int renderY = minimapRect.y;
+    int rotation = viewportManager->getRotation();
+
+    if (rotation % 180 != 0)
+    {
+        std::swap(renderWidth, renderHeight);
+
+        int centerX = minimapRect.x + minimapRect.w / 2;
+        int centerY = minimapRect.y + minimapRect.h / 2;
+
+        renderX = centerX - renderWidth / 2;
+        renderY = centerY - renderHeight / 2;
+    }
+
     m_renderer->renderPageExARGB(*argbData, srcWidth, srcHeight,
-                                 contentX, contentY, minimapWidth, minimapHeight,
-                                 static_cast<double>(viewportManager->getRotation()),
+                                 renderX, renderY, renderWidth, renderHeight,
+                                 static_cast<double>(rotation),
                                  viewportManager->currentFlipFlags(), argbData.get());
 
     int pageLeft = pageRect.x;
