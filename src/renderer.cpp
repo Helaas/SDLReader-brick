@@ -1,6 +1,7 @@
 #include "renderer.h"
 #include "document.h" // Assuming document.h provides rgb24_to_argb32
 #include <algorithm>
+#include <cmath>
 #include <cstring> // For memcpy
 #include <iostream>
 #include <numeric>
@@ -14,6 +15,26 @@ inline int roundUpTextureDimension(int value)
     constexpr int GRANULARITY = 64;
     return ((value + GRANULARITY - 1) / GRANULARITY) * GRANULARITY;
 }
+
+#if !SDL_VERSION_ATLEAST(2, 0, 10)
+inline SDL_Rect makeSDLRectFromFloat(float x, float y, float w, float h)
+{
+    SDL_Rect rect;
+    rect.x = static_cast<int>(std::lround(x));
+    rect.y = static_cast<int>(std::lround(y));
+    rect.w = std::max(1, static_cast<int>(std::lround(w)));
+    rect.h = std::max(1, static_cast<int>(std::lround(h)));
+    return rect;
+}
+
+inline SDL_Point makeSDLPointFromFloat(float x, float y)
+{
+    SDL_Point pt;
+    pt.x = static_cast<int>(std::lround(x));
+    pt.y = static_cast<int>(std::lround(y));
+    return pt;
+}
+#endif
 } // namespace
 
 // Removed custom deleters for SDL_Window and SDL_Renderer as they are no longer owned by Renderer.
@@ -76,7 +97,11 @@ void Renderer::renderPageEx(const std::vector<uint8_t>& pixelData,
             return;
         }
         // Force nearest-neighbor scaling to avoid blur during rotation/scaling
+#if SDL_VERSION_ATLEAST(2, 0, 12)
         SDL_SetTextureScaleMode(m_texture.get(), SDL_ScaleModeNearest);
+#else
+        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
+#endif
         m_currentTexWidth = allocWidth;
         m_currentTexHeight = allocHeight;
     }
@@ -105,9 +130,15 @@ void Renderer::renderPageEx(const std::vector<uint8_t>& pixelData,
     SDL_UnlockTexture(m_texture.get());
 
     SDL_Rect srcRect = {0, 0, srcWidth, srcHeight};
+#if SDL_VERSION_ATLEAST(2, 0, 10)
     SDL_FRect destRect = {destX, destY, destWidth, destHeight};
     SDL_FPoint center{destRect.w / 2.0f, destRect.h / 2.0f}; // keep true center (avoids odd-size blur)
     SDL_RenderCopyExF(m_renderer, m_texture.get(), &srcRect, &destRect, angleDeg, &center, flip);
+#else
+    SDL_Rect destRect = makeSDLRectFromFloat(destX, destY, destWidth, destHeight);
+    SDL_Point center = makeSDLPointFromFloat(destRect.w / 2.0f, destRect.h / 2.0f);
+    SDL_RenderCopyEx(m_renderer, m_texture.get(), &srcRect, &destRect, angleDeg, &center, flip);
+#endif
 }
 
 void Renderer::renderPageExARGB(const std::vector<uint32_t>& argbData,
@@ -138,7 +169,11 @@ void Renderer::renderPageExARGB(const std::vector<uint32_t>& argbData,
             return;
         }
         // Force nearest-neighbor scaling to avoid blur during rotation/scaling
+#if SDL_VERSION_ATLEAST(2, 0, 12)
         SDL_SetTextureScaleMode(m_texture.get(), SDL_ScaleModeNearest);
+#else
+        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
+#endif
         m_currentTexWidth = allocWidth;
         m_currentTexHeight = allocHeight;
         textureResized = true;
@@ -177,9 +212,15 @@ void Renderer::renderPageExARGB(const std::vector<uint32_t>& argbData,
     }
 
     SDL_Rect srcRect = {0, 0, srcWidth, srcHeight};
+#if SDL_VERSION_ATLEAST(2, 0, 10)
     SDL_FRect destRect = {destX, destY, destWidth, destHeight};
     SDL_FPoint center{destRect.w / 2.0f, destRect.h / 2.0f}; // float center prevents 0.5px drift on odd sizes
     SDL_RenderCopyExF(m_renderer, m_texture.get(), &srcRect, &destRect, angleDeg, &center, flip);
+#else
+    SDL_Rect destRect = makeSDLRectFromFloat(destX, destY, destWidth, destHeight);
+    SDL_Point center = makeSDLPointFromFloat(destRect.w / 2.0f, destRect.h / 2.0f);
+    SDL_RenderCopyEx(m_renderer, m_texture.get(), &srcRect, &destRect, angleDeg, &center, flip);
+#endif
 }
 
 void Renderer::clear(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
