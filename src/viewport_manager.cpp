@@ -404,13 +404,13 @@ void ViewportManager::rotateClockwise(Document* document, int currentPage)
             // So we fit the NATIVE width to the WINDOW height for proper scaling
             int windowHeight = m_renderer->getWindowHeight();
             auto [nativeWidth, nativeHeight] = getNativePageSize(document, currentPage);
-            
+
             if (nativeWidth > 0)
             {
                 double scaleRatio = static_cast<double>(windowHeight) / static_cast<double>(nativeWidth);
                 int calculatedScale = static_cast<int>(std::lround(scaleRatio * 100.0));
                 m_state.currentScale = std::clamp(calculatedScale, 10, 350);
-                
+
                 updatePageDimensions(document, currentPage);
                 m_state.scrollY = 0;
                 clampScroll();
@@ -439,13 +439,13 @@ void ViewportManager::applyFitMode(Document* document, int currentPage)
         {
             int windowHeight = m_renderer->getWindowHeight();
             auto [nativeWidth, nativeHeight] = getNativePageSize(document, currentPage);
-            
+
             if (nativeWidth > 0)
             {
                 double scaleRatio = static_cast<double>(windowHeight) / static_cast<double>(nativeWidth);
                 int calculatedScale = static_cast<int>(std::lround(scaleRatio * 100.0));
                 m_state.currentScale = std::clamp(calculatedScale, 10, 350);
-                
+
                 updatePageDimensions(document, currentPage);
                 m_state.scrollY = 0;
                 clampScroll();
@@ -688,7 +688,7 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
         auto [nativeWidth, nativeHeight] = getNativePageSize(document, currentPage);
         m_state.pageWidth = std::max(1, static_cast<int>(std::lround(nativeWidth * (m_state.currentScale / 100.0))));
         m_state.pageHeight = std::max(1, static_cast<int>(std::lround(nativeHeight * (m_state.currentScale / 100.0))));
-        
+
         // Apply rotation swap
         if (m_state.rotation % 180 != 0)
         {

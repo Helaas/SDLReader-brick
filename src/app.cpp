@@ -45,8 +45,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
         {
             delete static_cast<std::string*>(event.user.data1);
             std::cerr << "App: Failed to push power message event: " << SDL_GetError() << std::endl;
-        }
-    });
+        } });
 
     // Register sleep mode callback for fake sleep functionality
     m_powerHandler->setSleepModeCallback([this](bool enterFakeSleep)

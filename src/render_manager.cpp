@@ -171,16 +171,28 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
     // pre-rotation dimensions to match the source texture orientation.
     int renderWidth = pageRect.w;
     int renderHeight = pageRect.h;
+    int renderX = pageRect.x;
+    int renderY = pageRect.y;
     int rotation = viewportManager->getRotation();
-    
+
     if (rotation % 180 != 0)
     {
-        // At 90° or 270°, swap back to match source texture dimensions
+        // At 90° or 270°, swap dimensions back to match source texture
         std::swap(renderWidth, renderHeight);
+
+        // Adjust position because SDL rotates around the center point.
+        // When dimensions swap, the center point moves, so we need to compensate.
+        // The center should stay at the same screen position.
+        int centerX = pageRect.x + pageRect.w / 2;
+        int centerY = pageRect.y + pageRect.h / 2;
+
+        // New top-left corner position for the unswapped dimensions, keeping same center
+        renderX = centerX - renderWidth / 2;
+        renderY = centerY - renderHeight / 2;
     }
 
     m_renderer->renderPageExARGB(*argbData, srcW, srcH,
-                                 pageRect.x, pageRect.y, renderWidth, renderHeight,
+                                 renderX, renderY, renderWidth, renderHeight,
                                  static_cast<double>(rotation),
                                  viewportManager->currentFlipFlags(), argbData.get());
 
