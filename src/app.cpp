@@ -573,7 +573,8 @@ void App::processInputAction(const InputActionData& actionData)
         m_running = false;
         break;
     case InputAction::Resize:
-        m_viewportManager->fitPageToWindow(m_document.get(), m_navigationManager->getCurrentPage());
+        // Re-apply the current fit mode to adapt to new window dimensions
+        m_viewportManager->applyFitMode(m_document.get(), m_navigationManager->getCurrentPage());
         markDirty();
         break;
     case InputAction::ToggleFontMenu:
@@ -697,7 +698,7 @@ void App::processInputAction(const InputActionData& actionData)
         markDirty();
         break;
     case InputAction::RotateClockwise:
-        m_viewportManager->rotateClockwise();
+        m_viewportManager->rotateClockwise(m_document.get(), m_navigationManager->getCurrentPage());
         markDirty();
         break;
     case InputAction::ScrollUp:

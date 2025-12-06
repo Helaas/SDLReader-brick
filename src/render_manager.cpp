@@ -165,9 +165,23 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
 
     SDL_Rect pageRect = {posX, posY, viewportManager->getPageWidth(), viewportManager->getPageHeight()};
 
+    // When rendering with rotation, SDL needs the PRE-ROTATION dimensions for destWidth/destHeight
+    // because it will rotate the texture and the dimensions will swap naturally.
+    // pageRect has post-rotation dimensions (swapped for 90°/270°), but we need to pass
+    // pre-rotation dimensions to match the source texture orientation.
+    int renderWidth = pageRect.w;
+    int renderHeight = pageRect.h;
+    int rotation = viewportManager->getRotation();
+    
+    if (rotation % 180 != 0)
+    {
+        // At 90° or 270°, swap back to match source texture dimensions
+        std::swap(renderWidth, renderHeight);
+    }
+
     m_renderer->renderPageExARGB(*argbData, srcW, srcH,
-                                 pageRect.x, pageRect.y, pageRect.w, pageRect.h,
-                                 static_cast<double>(viewportManager->getRotation()),
+                                 pageRect.x, pageRect.y, renderWidth, renderHeight,
+                                 static_cast<double>(rotation),
                                  viewportManager->currentFlipFlags(), argbData.get());
 
     renderDocumentMinimap(argbData, srcW, srcH, pageRect, viewportManager, winW, winH);
