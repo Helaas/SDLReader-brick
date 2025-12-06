@@ -116,9 +116,6 @@ void ViewportManager::applyPendingZoom(Document* document, int currentPage)
         int newPageWidth = m_state.pageWidth;
         int newPageHeight = m_state.pageHeight;
 
-        fprintf(stderr, "[DEBUG] applyPendingZoom: oldScale=%d newScale=%d oldSize=%dx%d newSize=%dx%d rotation=%d\n",
-                oldScale, newScale, oldPageWidth, oldPageHeight, newPageWidth, newPageHeight, m_state.rotation);
-
         if (newPageWidth > windowWidth)
         {
             float focalPointInNewPage = nativeFocalX * newPageWidth;
@@ -722,9 +719,7 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
             std::swap(m_state.pageWidth, m_state.pageHeight);
         }
     }
-    
-    fprintf(stderr, "[DEBUG] updatePageDimensions: scale=%d rotation=%d finalSize=%dx%d\n",
-            m_state.currentScale, m_state.rotation, m_state.pageWidth, m_state.pageHeight);
+
 }
 
 bool ViewportManager::isNextRenderLikelyExpensive(int lastRenderDuration) const

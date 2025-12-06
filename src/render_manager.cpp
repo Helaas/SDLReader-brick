@@ -183,21 +183,19 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
         // At 90° or 270° rotation, the source buffer should be in the UNROTATED orientation.
         // So srcW should correspond to pageRect.h and srcH should correspond to pageRect.w
         // (since pageRect is the rotated/swapped dimensions).
-        
+
         // Check if the buffer matches expected dimensions (within tolerance for rounding)
         // Expected: srcW ≈ pageRect.h, srcH ≈ pageRect.w
         int expectedSrcW = pageRect.h;
         int expectedSrcH = pageRect.w;
-        
-        bool bufferMatchesExpected = (std::abs(srcW - expectedSrcW) <= 2 && 
+
+        bool bufferMatchesExpected = (std::abs(srcW - expectedSrcW) <= 2 &&
                                       std::abs(srcH - expectedSrcH) <= 2);
-        
+
         if (!bufferMatchesExpected)
         {
             // Buffer is stale (from before rotation or zoom change).
             // Skip rendering this frame to avoid blur from scaling a mismatched buffer.
-            fprintf(stderr, "[DEBUG] Skipping frame - buffer stale: srcW=%d srcH=%d expected=%dx%d\n",
-                    srcW, srcH, expectedSrcW, expectedSrcH);
             return;
         }
 
@@ -218,10 +216,6 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
         renderX = centerX - static_cast<float>(renderWidth) * 0.5f;
         renderY = centerY - static_cast<float>(renderHeight) * 0.5f;
 
-        fprintf(stderr, "[DEBUG] 90/270° rotation: srcW=%d srcH=%d pageRect.w=%d pageRect.h=%d "
-                        "renderW=%d renderH=%d posX=%d posY=%d renderX=%.2f renderY=%.2f zoom=%.2f\n",
-                srcW, srcH, pageRect.w, pageRect.h, renderWidth, renderHeight, 
-                pageRect.x, pageRect.y, renderX, renderY, viewportManager->getState().currentScale / 100.0f);
     }
     else
     {
