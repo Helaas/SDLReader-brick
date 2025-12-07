@@ -549,6 +549,51 @@ void GuiManager::renderFontMenu()
 
     m_pendingTooltips.clear();
 
+    constexpr float kDropdownItemHeight = 20.0f;
+    // Keep highlighted dropdown items in view when navigating without a mouse
+    auto ensureDropdownHighlightVisible = [&](int highlightedIndex, int itemCount) {
+        if (highlightedIndex < 0 || highlightedIndex >= itemCount || itemCount <= 0)
+        {
+            return;
+        }
+
+        const float spacingY = m_ctx->style.window.spacing.y;
+        const float paddingY = m_ctx->style.window.padding.y;
+        const float rowHeight = kDropdownItemHeight + spacingY;
+        const float itemTop = paddingY + spacingY + highlightedIndex * rowHeight;
+        const float itemBottom = itemTop + kDropdownItemHeight;
+
+        nk_uint scrollX = 0;
+        nk_uint scrollY = 0;
+        nk_popup_get_scroll(m_ctx, &scrollX, &scrollY);
+
+        const float viewHeight = nk_window_get_content_region(m_ctx).h;
+        if (viewHeight <= 0.0f)
+        {
+            return;
+        }
+
+        float newScrollY = static_cast<float>(scrollY);
+        if (itemTop < newScrollY)
+        {
+            newScrollY = itemTop;
+        }
+        else if (itemBottom > newScrollY + viewHeight)
+        {
+            newScrollY = itemBottom - viewHeight;
+        }
+
+        if (newScrollY < 0.0f)
+        {
+            newScrollY = 0.0f;
+        }
+
+        if (static_cast<nk_uint>(newScrollY) != scrollY)
+        {
+            nk_popup_set_scroll(m_ctx, scrollX, static_cast<nk_uint>(newScrollY));
+        }
+    };
+
     // Nuklear state debug disabled (was too spammy)
     /*
     static int debugCounter = 0;
@@ -655,7 +700,8 @@ void GuiManager::renderFontMenu()
             rememberWidgetBounds(WIDGET_FONT_DROPDOWN);
             if (comboOpened)
             {
-                nk_layout_row_dynamic(m_ctx, 20, 1);
+                ensureDropdownHighlightVisible(m_fontDropdownHighlightedIndex, static_cast<int>(fonts.size()));
+                nk_layout_row_dynamic(m_ctx, kDropdownItemHeight, 1);
                 for (size_t i = 0; i < fonts.size(); ++i)
                 {
                     m_ctx->style.selectable = originalSelectableStyle;
@@ -857,7 +903,8 @@ void GuiManager::renderFontMenu()
         rememberWidgetBounds(WIDGET_READING_STYLE_DROPDOWN);
         if (readingComboOpened)
         {
-            nk_layout_row_dynamic(m_ctx, 20, 1);
+            ensureDropdownHighlightVisible(m_styleDropdownHighlightedIndex, static_cast<int>(allStyles.size()));
+            nk_layout_row_dynamic(m_ctx, kDropdownItemHeight, 1);
             for (size_t i = 0; i < allStyles.size(); ++i)
             {
                 m_ctx->style.selectable = originalSelectableStyle;
