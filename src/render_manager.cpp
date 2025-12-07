@@ -169,39 +169,16 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
 
     if (rotation % 180 != 0)
     {
-        // At 90° or 270° rotation, the source buffer should be in the UNROTATED orientation.
-        // So srcW should correspond to pageRect.h and srcH should correspond to pageRect.w
-        // (since pageRect is the rotated/swapped dimensions).
-
-        // Check if the buffer matches expected dimensions (within tolerance for rounding)
-        // Expected: srcW ≈ pageRect.h, srcH ≈ pageRect.w
-        int expectedSrcW = pageRect.h;
-        int expectedSrcH = pageRect.w;
-
-        bool bufferMatchesExpected = (std::abs(srcW - expectedSrcW) <= 2 &&
-                                      std::abs(srcH - expectedSrcH) <= 2);
-
-        if (!bufferMatchesExpected)
-        {
-            // Buffer is stale (from before rotation or zoom change).
-            // Skip rendering this frame to avoid blur from scaling a mismatched buffer.
-            return;
-        }
-
-        // At 90° or 270° rotation, use the SOURCE dimensions directly.
-        // This ensures SDL doesn't scale the texture, only rotates it.
-        // The source buffer is rendered at native (unrotated) orientation.
+        // At 90° or 270°, always render using the source buffer dimensions.
+        // Even if the buffer is from a previous zoom step, keep showing it (with rotation)
+        // to avoid flashing the unrotated background while the new render arrives.
         renderWidth = srcW;
         renderHeight = srcH;
 
-        // Adjust position so the center stays at the intended screen position.
-        // pageRect center is where we want the final rotated image to be centered.
-        // Snap rotation center to the integer grid (SDL_RenderCopyEx also uses an integer center).
-        // This avoids half-pixel offsets that cause alternating blur on 90/270° zoom steps.
+        // Keep the rotated content centered at the intended page position.
         float centerX = static_cast<float>(pageRect.x) + static_cast<float>(pageRect.w) * 0.5f;
         float centerY = static_cast<float>(pageRect.y) + static_cast<float>(pageRect.h) * 0.5f;
 
-        // Position the source-sized rect to keep the same center
         renderX = centerX - static_cast<float>(renderWidth) * 0.5f;
         renderY = centerY - static_cast<float>(renderHeight) * 0.5f;
     }
