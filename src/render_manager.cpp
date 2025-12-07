@@ -149,22 +149,11 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
     // The viewport should use the logical page size at the current scale,
     // not the actual render buffer size (which may include headroom for zooming)
 
+    // Calculate position using scroll values from viewport manager.
+    // The scroll values are already properly managed and clamped by ViewportManager,
+    // so we always respect them to preserve user's panning position across page changes.
     int posX = (winW - viewportManager->getPageWidth()) / 2 + viewportManager->getScrollX();
-
-    int posY;
-    if (viewportManager->getPageHeight() <= winH)
-    {
-        const auto& state = viewportManager->getState();
-        if (state.topAlignWhenFits || state.forceTopAlignNextRender)
-            posY = 0;
-        else
-            posY = (winH - viewportManager->getPageHeight()) / 2;
-    }
-    else
-    {
-        posY = (winH - viewportManager->getPageHeight()) / 2 + viewportManager->getScrollY();
-    }
-    viewportManager->setForceTopAlignNextRender(false);
+    int posY = (winH - viewportManager->getPageHeight()) / 2 + viewportManager->getScrollY();
 
     SDL_Rect pageRect = {posX, posY, viewportManager->getPageWidth(), viewportManager->getPageHeight()};
 

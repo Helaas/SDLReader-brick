@@ -321,6 +321,10 @@ void ViewportManager::onPageChangedKeepZoom(Document* document, int newPage)
         muPdfDoc->cancelPrerendering();
     }
 
+    // Store scroll position BEFORE any updates
+    int oldScrollX = m_state.scrollX;
+    int oldScrollY = m_state.scrollY;
+
     // Recompute scaled page dims for current page (respect fit mode if active)
     if (m_state.fitMode != FitMode::None)
     {
@@ -329,11 +333,24 @@ void ViewportManager::onPageChangedKeepZoom(Document* document, int newPage)
     else
     {
         updatePageDimensions(document, newPage);
-        clampScroll();
     }
 
-    // Set the flag to force top alignment on next render
-    m_state.forceTopAlignNextRender = true;
+    // ALWAYS restore scroll position - preserving panning takes priority over fit mode behavior
+    // The fit mode sets the scale, but we want to keep the user's manual panning position
+    m_state.scrollX = oldScrollX;
+    m_state.scrollY = oldScrollY;
+
+    // Preserve the current panning position as much as possible.
+    // This keeps the viewing "window" in the same position when flipping pages,
+    // which is useful when reading zoomed content (e.g., comics with margins cropped out).
+    // Just clamp the scroll to the new page's valid range.
+    int maxScrollX = getMaxScrollX();
+    int maxScrollY = getMaxScrollY();
+    m_state.scrollX = std::max(-maxScrollX, std::min(maxScrollX, m_state.scrollX));
+    m_state.scrollY = std::max(-maxScrollY, std::min(maxScrollY, m_state.scrollY));
+
+    // Don't force any specific alignment - preserve user's panning position
+    m_state.forceTopAlignNextRender = false;
 }
 
 void ViewportManager::alignToTopOfCurrentPage()
