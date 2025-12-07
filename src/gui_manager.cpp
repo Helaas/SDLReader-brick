@@ -2393,6 +2393,11 @@ void GuiManager::activateFocusedWidget()
         m_tempConfig.showDocumentMinimap = !m_tempConfig.showDocumentMinimap;
         std::cout << "[DEBUG] Toggle Document Minimap: " << (m_tempConfig.showDocumentMinimap ? "enabled" : "disabled") << std::endl;
         break;
+    case WIDGET_KEEP_PANNING_CHECKBOX:
+        // Toggle checkbox
+        m_tempConfig.keepPanningPosition = !m_tempConfig.keepPanningPosition;
+        std::cout << "[DEBUG] Toggle Keep Panning Position: " << (m_tempConfig.keepPanningPosition ? "enabled" : "disabled") << std::endl;
+        break;
     case WIDGET_GO_BUTTON:
         // Activate Go button
         if (strlen(m_pageJumpInput) > 0)
@@ -2470,7 +2475,7 @@ bool GuiManager::moveFocusInGroup(const MainScreenWidget* group, size_t count, i
 
 bool GuiManager::isInfoWidget(MainScreenWidget widget) const
 {
-    return widget == WIDGET_EDGE_PROGRESS_INFO_BUTTON || widget == WIDGET_MINIMAP_INFO_BUTTON;
+    return widget == WIDGET_EDGE_PROGRESS_INFO_BUTTON || widget == WIDGET_MINIMAP_INFO_BUTTON || widget == WIDGET_KEEP_PANNING_INFO_BUTTON;
 }
 
 bool GuiManager::stepFocusVertical(int direction)
@@ -2507,6 +2512,9 @@ bool GuiManager::handleHorizontalNavigation(int direction)
     static constexpr MainScreenWidget kMinimapInfoGroup[] = {
         WIDGET_MINIMAP_CHECKBOX,
         WIDGET_MINIMAP_INFO_BUTTON};
+    static constexpr MainScreenWidget kKeepPanningGroup[] = {
+        WIDGET_KEEP_PANNING_CHECKBOX,
+        WIDGET_KEEP_PANNING_INFO_BUTTON};
     static constexpr MainScreenWidget kPageJumpGroup[] = {
         WIDGET_PAGE_JUMP_INPUT,
         WIDGET_GO_BUTTON,
@@ -2521,6 +2529,10 @@ bool GuiManager::handleHorizontalNavigation(int direction)
         return true;
     }
     if (moveFocusInGroup(kMinimapInfoGroup, sizeof(kMinimapInfoGroup) / sizeof(kMinimapInfoGroup[0]), direction))
+    {
+        return true;
+    }
+    if (moveFocusInGroup(kKeepPanningGroup, sizeof(kKeepPanningGroup) / sizeof(kKeepPanningGroup[0]), direction))
     {
         return true;
     }
