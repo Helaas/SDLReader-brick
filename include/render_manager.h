@@ -193,7 +193,6 @@ private:
     // Helper methods
     uint32_t rgb24_to_argb32(uint8_t r, uint8_t g, uint8_t b);
     void renderProgressBar(int x, int y, int width, int height, float progress, SDL_Color bgColor, SDL_Color fillColor);
-    SDL_Color getContrastingTextColor() const;
     void storeLastRender(int page, int scale, std::shared_ptr<const std::vector<uint32_t>> buffer, int width, int height);
     void renderOverlayBadge(const std::string& text, int textWidth, int textHeight,
                             float centerX, float centerY, double angleDeg,

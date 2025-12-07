@@ -327,7 +327,7 @@ void RenderManager::renderPageInfo(NavigationManager* navigationManager, Viewpor
     {
         m_textRenderer->setFontSize(100);
 
-        SDL_Color textColor = getContrastingTextColor();
+        SDL_Color textColor = {255, 255, 255, 255};
         SDL_Color bgColor = {20, 24, 32, 220};
         SDL_Color borderColor = {255, 255, 255, 180};
         SDL_Color shadowColor = {0, 0, 0, 120};
@@ -392,7 +392,7 @@ void RenderManager::renderScaleInfo(ViewportManager* viewportManager, int window
     {
         m_textRenderer->setFontSize(100);
 
-        SDL_Color textColor = getContrastingTextColor();
+        SDL_Color textColor = {255, 255, 255, 255};
         SDL_Color bgColor = {22, 26, 34, 210};
         SDL_Color borderColor = {120, 180, 255, 200};
         SDL_Color shadowColor = {0, 0, 0, 120};
@@ -949,38 +949,6 @@ void RenderManager::present()
 uint32_t RenderManager::rgb24_to_argb32(uint8_t r, uint8_t g, uint8_t b)
 {
     return (0xFF << 24) | (r << 16) | (g << 8) | b;
-}
-
-SDL_Color RenderManager::getContrastingTextColor() const
-{
-    // Calculate relative luminance using the sRGB color space formula
-    // https://www.w3.org/TR/WCAG20/#relativeluminancedef
-    auto toLinear = [](uint8_t c) -> float
-    {
-        float val = c / 255.0f;
-        if (val <= 0.03928f)
-            return val / 12.92f;
-        else
-            return std::pow((val + 0.055f) / 1.055f, 2.4f);
-    };
-
-    float r = toLinear(m_bgColorR);
-    float g = toLinear(m_bgColorG);
-    float b = toLinear(m_bgColorB);
-
-    // Calculate relative luminance
-    float luminance = 0.2126f * r + 0.7152f * g + 0.0722f * b;
-
-    // Use white text on dark backgrounds, black text on light backgrounds
-    // Threshold of 0.5 works well for most cases
-    if (luminance > 0.5f)
-    {
-        return {0, 0, 0, 255}; // Black text
-    }
-    else
-    {
-        return {255, 255, 255, 255}; // White text
-    }
 }
 
 void RenderManager::storeLastRender(int page, int scale, std::shared_ptr<const std::vector<uint32_t>> buffer, int width, int height)
