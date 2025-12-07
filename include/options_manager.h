@@ -46,6 +46,8 @@ struct FontConfig
     bool disableEdgeProgressBar = false;                       // Disable edge nudge progress bar for instant page turns
     bool showDocumentMinimap = true;                           // Display minimap overlay when zoomed in
     bool keepPanningPosition = false;                          // Keep panning position when changing pages (vs. align to top)
+    bool showPageIndicatorOverlay = true;                      // Display page indicator overlay when page changes
+    bool showScaleOverlay = true;                              // Display zoom/scale overlay during zoom changes
 
     // Default constructor
     FontConfig() = default;

@@ -238,6 +238,8 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     OptionsManager::getReadingStyleBackgroundColor(savedConfig.readingStyle, bgR, bgG, bgB);
     m_renderManager->setBackgroundColor(bgR, bgG, bgB);
     m_renderManager->setShowMinimap(savedConfig.showDocumentMinimap);
+    m_renderManager->setShowPageIndicatorOverlay(savedConfig.showPageIndicatorOverlay);
+    m_renderManager->setShowScaleOverlay(savedConfig.showScaleOverlay);
 
     // Update ViewportManager with the proper renderer from RenderManager
     m_viewportManager->setRenderer(m_renderManager->getRenderer());
@@ -678,11 +680,13 @@ void App::processInputAction(const InputActionData& actionData)
     case InputAction::FitPageToWidth:
         m_viewportManager->fitPageToWidth(m_document.get(), m_navigationManager->getCurrentPage());
         m_renderManager->clearLastRender(m_document.get()); // Clear preview cache to force re-render at new scale
+        updateScaleDisplayTime();
         markDirty();
         break;
     case InputAction::FitPageToWindow:
         m_viewportManager->fitPageToWindow(m_document.get(), m_navigationManager->getCurrentPage());
         m_renderManager->clearLastRender(m_document.get()); // Clear preview cache to force re-render at new scale
+        updateScaleDisplayTime();
         markDirty();
         break;
     case InputAction::ResetPageView:
@@ -701,6 +705,7 @@ void App::processInputAction(const InputActionData& actionData)
         break;
     case InputAction::RotateClockwise:
         m_viewportManager->rotateClockwise(m_document.get(), m_navigationManager->getCurrentPage());
+        updateScaleDisplayTime();
         markDirty();
         break;
     case InputAction::ScrollUp:
@@ -1145,15 +1150,17 @@ void App::applyPendingFontChange()
     bool edgeProgressBarChanged = (m_pendingFontConfig.disableEdgeProgressBar != m_cachedConfig.disableEdgeProgressBar);
     bool minimapChanged = (m_pendingFontConfig.showDocumentMinimap != m_cachedConfig.showDocumentMinimap);
     bool keepPanningChanged = (m_pendingFontConfig.keepPanningPosition != m_cachedConfig.keepPanningPosition);
+    bool pageOverlayChanged = (m_pendingFontConfig.showPageIndicatorOverlay != m_cachedConfig.showPageIndicatorOverlay);
+    bool scaleOverlayChanged = (m_pendingFontConfig.showScaleOverlay != m_cachedConfig.showScaleOverlay);
 
     if (!fontChanged && !sizeChanged && !styleChanged)
     {
         std::cout << "No font/size/style change detected - skipping document reopen" << std::endl;
 
         // Even if font/size/style didn't change, we still need to save other setting changes
-        if (zoomStepChanged || edgeProgressBarChanged || minimapChanged || keepPanningChanged)
+        if (zoomStepChanged || edgeProgressBarChanged || minimapChanged || keepPanningChanged || pageOverlayChanged || scaleOverlayChanged)
         {
-            std::cout << "Zoom step, edge progress bar, minimap, or panning setting changed - saving config" << std::endl;
+            std::cout << "Zoom step, edge progress bar, minimap, overlays, or panning setting changed - saving config" << std::endl;
             m_optionsManager->saveConfig(m_pendingFontConfig);
             refreshCachedConfig(); // Update cache after save
 
@@ -1164,6 +1171,8 @@ void App::applyPendingFontChange()
             if (m_renderManager)
             {
                 m_renderManager->setShowMinimap(m_cachedConfig.showDocumentMinimap);
+                m_renderManager->setShowPageIndicatorOverlay(m_cachedConfig.showPageIndicatorOverlay);
+                m_renderManager->setShowScaleOverlay(m_cachedConfig.showScaleOverlay);
             }
             if (keepPanningChanged && m_navigationManager)
             {
@@ -1254,6 +1263,8 @@ void App::applyPendingFontChange()
                     if (m_renderManager)
                     {
                         m_renderManager->setShowMinimap(m_cachedConfig.showDocumentMinimap);
+                        m_renderManager->setShowPageIndicatorOverlay(m_cachedConfig.showPageIndicatorOverlay);
+                        m_renderManager->setShowScaleOverlay(m_cachedConfig.showScaleOverlay);
                     }
 
                     // Update InputManager's zoom step with the new value

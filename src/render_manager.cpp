@@ -229,7 +229,7 @@ void RenderManager::renderUI(App* app, NavigationManager* navigationManager, Vie
     int windowHeight = m_renderer->getWindowHeight();
 
     // Render all UI components
-    renderPageInfo(navigationManager, windowWidth, windowHeight);
+    renderPageInfo(navigationManager, viewportManager, windowWidth, windowHeight);
     renderScaleInfo(viewportManager, windowWidth, windowHeight);
     renderZoomProcessingIndicator(viewportManager, windowWidth, windowHeight);
     renderErrorMessage(windowWidth, windowHeight);
@@ -249,37 +249,196 @@ void RenderManager::renderFakeSleepScreen()
     // Note: Don't clear dirty flag here - let the caller handle it after present()
 }
 
-void RenderManager::renderPageInfo(NavigationManager* navigationManager, int windowWidth, int windowHeight)
+void RenderManager::renderOverlayBadge(const std::string& text, int textWidth, int textHeight,
+                                       float centerX, float centerY, double angleDeg,
+                                       SDL_Color textColor, SDL_Color bgColor, SDL_Color borderColor,
+                                       SDL_Color shadowColor, int paddingX, int paddingY)
 {
+    int badgeWidth = textWidth + paddingX * 2;
+    int badgeHeight = textHeight + paddingY * 2;
+
+    SDL_Renderer* sdlRenderer = m_renderer->getSDLRenderer();
+    SDL_Texture* previousTarget = SDL_GetRenderTarget(sdlRenderer);
+
+    std::unique_ptr<SDL_Texture, MySDLTextureDeleter> badgeTexture(
+        SDL_CreateTexture(sdlRenderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET,
+                          badgeWidth, badgeHeight));
+    if (!badgeTexture)
+    {
+        std::cerr << "Failed to create badge texture: " << SDL_GetError() << std::endl;
+        return;
+    }
+
+#if SDL_VERSION_ATLEAST(2, 0, 12)
+    // Use linear sampling for text to avoid pixelation during rotation
+    SDL_SetTextureScaleMode(badgeTexture.get(), SDL_ScaleModeBest);
+#endif
+
+    SDL_SetTextureBlendMode(badgeTexture.get(), SDL_BLENDMODE_BLEND);
+    SDL_SetRenderTarget(sdlRenderer, badgeTexture.get());
+    SDL_SetRenderDrawBlendMode(sdlRenderer, SDL_BLENDMODE_BLEND);
+
+    // Soft shadow
+    SDL_Rect shadowRect = {4, 6, badgeWidth, badgeHeight};
+    SDL_SetRenderDrawColor(sdlRenderer, shadowColor.r, shadowColor.g, shadowColor.b, shadowColor.a);
+    SDL_RenderFillRect(sdlRenderer, &shadowRect);
+
+    // Background card
+    SDL_Rect bgRect = {0, 0, badgeWidth, badgeHeight};
+    SDL_SetRenderDrawColor(sdlRenderer, bgColor.r, bgColor.g, bgColor.b, bgColor.a);
+    SDL_RenderFillRect(sdlRenderer, &bgRect);
+
+    // Border
+    SDL_SetRenderDrawColor(sdlRenderer, borderColor.r, borderColor.g, borderColor.b, borderColor.a);
+    SDL_RenderDrawRect(sdlRenderer, &bgRect);
+
+    // Text
+    m_textRenderer->renderText(text, paddingX, paddingY, textColor);
+
+    SDL_SetRenderTarget(sdlRenderer, previousTarget);
+
+    float destX = std::round(centerX - badgeWidth * 0.5f);
+    float destY = std::round(centerY - badgeHeight * 0.5f);
+
+    SDL_FRect destRectF = {destX, destY, static_cast<float>(badgeWidth), static_cast<float>(badgeHeight)};
+    SDL_FPoint centerF = {std::round(destRectF.w * 0.5f), std::round(destRectF.h * 0.5f)};
+
+#if SDL_VERSION_ATLEAST(2, 0, 10)
+    SDL_RenderCopyExF(sdlRenderer, badgeTexture.get(), nullptr, &destRectF, angleDeg, &centerF, SDL_FLIP_NONE);
+#else
+    SDL_Rect destRect = {static_cast<int>(destX), static_cast<int>(destY), badgeWidth, badgeHeight};
+    SDL_Point center = {badgeWidth / 2, badgeHeight / 2};
+    SDL_RenderCopyEx(sdlRenderer, badgeTexture.get(), nullptr, &destRect, angleDeg, &center, SDL_FLIP_NONE);
+#endif
+}
+
+void RenderManager::renderPageInfo(NavigationManager* navigationManager, ViewportManager* viewportManager, int windowWidth, int windowHeight)
+{
+    if (!m_showPageIndicatorOverlay)
+    {
+        return;
+    }
+
     // Only show page info for 2 seconds after it changes
     if ((SDL_GetTicks() - m_state.pageDisplayTime) < RenderState::PAGE_DISPLAY_DURATION)
     {
-        m_textRenderer->setFontSize(100); // 100% = normal base size
+        m_textRenderer->setFontSize(100);
 
         SDL_Color textColor = getContrastingTextColor();
-        std::string pageInfo = "Page: " + std::to_string(navigationManager->getCurrentPage() + 1) + "/" + std::to_string(navigationManager->getPageCount());
+        SDL_Color bgColor = {20, 24, 32, 220};
+        SDL_Color borderColor = {255, 255, 255, 180};
+        SDL_Color shadowColor = {0, 0, 0, 120};
 
-        m_textRenderer->renderText(pageInfo,
-                                   (windowWidth - static_cast<int>(pageInfo.length()) * 8) / 2,
-                                   windowHeight - 30, textColor);
+        std::string pageInfo = "Page " + std::to_string(navigationManager->getCurrentPage() + 1) + " / " + std::to_string(navigationManager->getPageCount());
+
+        int textW = 0, textH = 0;
+        if (!m_textRenderer->measureText(pageInfo, textW, textH))
+        {
+            return;
+        }
+
+        int paddingX = 16;
+        int paddingY = 10;
+        int badgeH = textH + paddingY * 2;
+
+        int rotation = viewportManager->getRotation();
+        float margin = 6.0f; // Smaller margin to place badge closer to screen edge
+
+        // Calculate badge center based on rotation - badge stays at bottom-center of visible screen
+        // but its content is rotated to match document orientation
+        float centerX, centerY;
+        switch (rotation)
+        {
+        case 90:
+            // Bottom of rotated view is left side of screen
+            centerX = badgeH * 0.5f + margin;
+            centerY = static_cast<float>(windowHeight) * 0.5f;
+            break;
+        case 180:
+            // Bottom of rotated view is top of screen
+            centerX = static_cast<float>(windowWidth) * 0.5f;
+            centerY = badgeH * 0.5f + margin;
+            break;
+        case 270:
+            // Bottom of rotated view is right side of screen
+            centerX = static_cast<float>(windowWidth) - (badgeH * 0.5f + margin);
+            centerY = static_cast<float>(windowHeight) * 0.5f;
+            break;
+        default: // 0
+            // Normal orientation - bottom of screen
+            centerX = static_cast<float>(windowWidth) * 0.5f;
+            centerY = static_cast<float>(windowHeight) - (badgeH * 0.5f + margin);
+            break;
+        }
+
+        renderOverlayBadge(pageInfo, textW, textH, centerX, centerY, static_cast<double>(rotation),
+                           textColor, bgColor, borderColor, shadowColor, paddingX, paddingY);
     }
 }
 
 void RenderManager::renderScaleInfo(ViewportManager* viewportManager, int windowWidth, int windowHeight)
 {
-    (void) windowHeight; // Suppress unused parameter warning
-
-    // Only show scale info for 2 seconds after it changes
-    if ((SDL_GetTicks() - m_state.scaleDisplayTime) < RenderState::SCALE_DISPLAY_DURATION)
+    if (!m_showScaleOverlay)
     {
-        m_textRenderer->setFontSize(100); // 100% = normal base size
+        return;
+    }
+
+    Uint32 elapsed = SDL_GetTicks() - m_state.scaleDisplayTime;
+    // Only show scale info for 2 seconds after it changes
+    if (elapsed < RenderState::SCALE_DISPLAY_DURATION)
+    {
+        m_textRenderer->setFontSize(100);
 
         SDL_Color textColor = getContrastingTextColor();
-        std::string scaleInfo = "Scale: " + std::to_string(viewportManager->getCurrentScale()) + "%";
+        SDL_Color bgColor = {22, 26, 34, 210};
+        SDL_Color borderColor = {120, 180, 255, 200};
+        SDL_Color shadowColor = {0, 0, 0, 120};
 
-        m_textRenderer->renderText(scaleInfo,
-                                   windowWidth - static_cast<int>(scaleInfo.length()) * 8 - 10,
-                                   10, textColor);
+        std::string scaleInfo = "Zoom " + std::to_string(viewportManager->getCurrentScale()) + "%";
+
+        int textW = 0, textH = 0;
+        if (!m_textRenderer->measureText(scaleInfo, textW, textH))
+        {
+            return;
+        }
+
+        int paddingX = 14;
+        int paddingY = 9;
+        int badgeW = textW + paddingX * 2;
+        int badgeH = textH + paddingY * 2;
+
+        int rotation = viewportManager->getRotation();
+        float margin = 12.0f;
+
+        // Calculate badge center based on rotation - badge stays at top-right of visible screen
+        // but its content is rotated to match document orientation
+        float centerX, centerY;
+        switch (rotation)
+        {
+        case 90:
+            // Top-right of rotated view is top-left of screen
+            centerX = badgeH * 0.5f + margin;
+            centerY = margin + badgeW * 0.5f;
+            break;
+        case 180:
+            // Top-right of rotated view is bottom-left of screen
+            centerX = badgeW * 0.5f + margin;
+            centerY = static_cast<float>(windowHeight) - (badgeH * 0.5f + margin);
+            break;
+        case 270:
+            // Top-right of rotated view is bottom-right of screen
+            centerX = static_cast<float>(windowWidth) - (badgeH * 0.5f + margin);
+            centerY = static_cast<float>(windowHeight) - (badgeW * 0.5f + margin);
+            break;
+        default: // 0
+            // Normal orientation - top-right of screen
+            centerX = static_cast<float>(windowWidth) - (badgeW * 0.5f + margin);
+            centerY = badgeH * 0.5f + margin;
+            break;
+        }
+
+        renderOverlayBadge(scaleInfo, textW, textH, centerX, centerY, static_cast<double>(rotation),
+                           textColor, bgColor, borderColor, shadowColor, paddingX, paddingY);
     }
 }
 

@@ -1127,6 +1127,82 @@ void GuiManager::renderFontMenu()
 
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
+        // Page indicator checkbox + info button
+        nk_layout_row_template_begin(m_ctx, 25);
+        nk_layout_row_template_push_dynamic(m_ctx);
+        nk_layout_row_template_push_static(m_ctx, 32);
+        nk_layout_row_template_end(m_ctx);
+
+        if (m_mainScreenFocusIndex == WIDGET_PAGE_INDICATOR_CHECKBOX)
+        {
+            m_ctx->style.checkbox.normal = nk_style_item_color(focusBackground);
+            m_ctx->style.checkbox.hover = nk_style_item_color(focusBackground);
+            m_ctx->style.checkbox.cursor_normal = nk_style_item_color(focusCursorColor);
+            m_ctx->style.checkbox.cursor_hover = nk_style_item_color(focusCursorColor);
+            m_ctx->style.checkbox.border = 2.0f;
+            m_ctx->style.checkbox.border_color = focusBorderColor;
+        }
+
+        nk_bool showPageIndicator = m_tempConfig.showPageIndicatorOverlay ? nk_true : nk_false;
+        if (nk_checkbox_label(m_ctx, "Show Page Indicator", &showPageIndicator))
+        {
+            m_tempConfig.showPageIndicatorOverlay = (showPageIndicator == nk_true);
+        }
+        rememberWidgetBounds(WIDGET_PAGE_INDICATOR_CHECKBOX);
+
+        m_ctx->style.checkbox = originalToggleStyle;
+
+        struct nk_style_button pageIndicatorInfoStyle = m_ctx->style.button;
+        configureInfoGlyphStyle(pageIndicatorInfoStyle, m_mainScreenFocusIndex == WIDGET_PAGE_INDICATOR_INFO_BUTTON);
+        nk_button_label_styled(m_ctx, &pageIndicatorInfoStyle, "(?)");
+        bool pageIndicatorInfoHovered = nk_widget_is_hovered(m_ctx);
+        rememberWidgetBounds(WIDGET_PAGE_INDICATOR_INFO_BUTTON);
+        if (m_mainScreenFocusIndex == WIDGET_PAGE_INDICATOR_INFO_BUTTON || pageIndicatorInfoHovered)
+        {
+            showInfoTooltip(WIDGET_PAGE_INDICATOR_INFO_BUTTON,
+                            "Display the current page badge\nthat fades after a few seconds.");
+        }
+
+        nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
+
+        // Zoom/scale overlay checkbox + info button
+        nk_layout_row_template_begin(m_ctx, 25);
+        nk_layout_row_template_push_dynamic(m_ctx);
+        nk_layout_row_template_push_static(m_ctx, 32);
+        nk_layout_row_template_end(m_ctx);
+
+        if (m_mainScreenFocusIndex == WIDGET_ZOOM_OVERLAY_CHECKBOX)
+        {
+            m_ctx->style.checkbox.normal = nk_style_item_color(focusBackground);
+            m_ctx->style.checkbox.hover = nk_style_item_color(focusBackground);
+            m_ctx->style.checkbox.cursor_normal = nk_style_item_color(focusCursorColor);
+            m_ctx->style.checkbox.cursor_hover = nk_style_item_color(focusCursorColor);
+            m_ctx->style.checkbox.border = 2.0f;
+            m_ctx->style.checkbox.border_color = focusBorderColor;
+        }
+
+        nk_bool showZoomOverlay = m_tempConfig.showScaleOverlay ? nk_true : nk_false;
+        if (nk_checkbox_label(m_ctx, "Show Zoom Overlay", &showZoomOverlay))
+        {
+            m_tempConfig.showScaleOverlay = (showZoomOverlay == nk_true);
+        }
+        rememberWidgetBounds(WIDGET_ZOOM_OVERLAY_CHECKBOX);
+
+        m_ctx->style.checkbox = originalToggleStyle;
+
+        struct nk_style_button zoomOverlayInfoStyle = m_ctx->style.button;
+        configureInfoGlyphStyle(zoomOverlayInfoStyle, m_mainScreenFocusIndex == WIDGET_ZOOM_OVERLAY_INFO_BUTTON);
+        nk_button_label_styled(m_ctx, &zoomOverlayInfoStyle, "(?)");
+        bool zoomOverlayInfoHovered = nk_widget_is_hovered(m_ctx);
+        rememberWidgetBounds(WIDGET_ZOOM_OVERLAY_INFO_BUTTON);
+        if (m_mainScreenFocusIndex == WIDGET_ZOOM_OVERLAY_INFO_BUTTON || zoomOverlayInfoHovered)
+        {
+            showInfoTooltip(WIDGET_ZOOM_OVERLAY_INFO_BUTTON,
+                            "Show the zoom level badge\nwhen you change scale or rotate the page.");
+        }
+
+        nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
+
         // Keep Panning Position checkbox + info button
         nk_layout_row_template_begin(m_ctx, 25);
         nk_layout_row_template_push_dynamic(m_ctx);
@@ -2393,6 +2469,14 @@ void GuiManager::activateFocusedWidget()
         m_tempConfig.showDocumentMinimap = !m_tempConfig.showDocumentMinimap;
         std::cout << "[DEBUG] Toggle Document Minimap: " << (m_tempConfig.showDocumentMinimap ? "enabled" : "disabled") << std::endl;
         break;
+    case WIDGET_PAGE_INDICATOR_CHECKBOX:
+        m_tempConfig.showPageIndicatorOverlay = !m_tempConfig.showPageIndicatorOverlay;
+        std::cout << "[DEBUG] Toggle Page Indicator: " << (m_tempConfig.showPageIndicatorOverlay ? "enabled" : "disabled") << std::endl;
+        break;
+    case WIDGET_ZOOM_OVERLAY_CHECKBOX:
+        m_tempConfig.showScaleOverlay = !m_tempConfig.showScaleOverlay;
+        std::cout << "[DEBUG] Toggle Zoom Overlay: " << (m_tempConfig.showScaleOverlay ? "enabled" : "disabled") << std::endl;
+        break;
     case WIDGET_KEEP_PANNING_CHECKBOX:
         // Toggle checkbox
         m_tempConfig.keepPanningPosition = !m_tempConfig.keepPanningPosition;
@@ -2475,7 +2559,9 @@ bool GuiManager::moveFocusInGroup(const MainScreenWidget* group, size_t count, i
 
 bool GuiManager::isInfoWidget(MainScreenWidget widget) const
 {
-    return widget == WIDGET_EDGE_PROGRESS_INFO_BUTTON || widget == WIDGET_MINIMAP_INFO_BUTTON || widget == WIDGET_KEEP_PANNING_INFO_BUTTON;
+    return widget == WIDGET_EDGE_PROGRESS_INFO_BUTTON || widget == WIDGET_MINIMAP_INFO_BUTTON ||
+           widget == WIDGET_PAGE_INDICATOR_INFO_BUTTON || widget == WIDGET_ZOOM_OVERLAY_INFO_BUTTON ||
+           widget == WIDGET_KEEP_PANNING_INFO_BUTTON;
 }
 
 bool GuiManager::stepFocusVertical(int direction)
@@ -2512,6 +2598,12 @@ bool GuiManager::handleHorizontalNavigation(int direction)
     static constexpr MainScreenWidget kMinimapInfoGroup[] = {
         WIDGET_MINIMAP_CHECKBOX,
         WIDGET_MINIMAP_INFO_BUTTON};
+    static constexpr MainScreenWidget kPageIndicatorGroup[] = {
+        WIDGET_PAGE_INDICATOR_CHECKBOX,
+        WIDGET_PAGE_INDICATOR_INFO_BUTTON};
+    static constexpr MainScreenWidget kZoomOverlayGroup[] = {
+        WIDGET_ZOOM_OVERLAY_CHECKBOX,
+        WIDGET_ZOOM_OVERLAY_INFO_BUTTON};
     static constexpr MainScreenWidget kKeepPanningGroup[] = {
         WIDGET_KEEP_PANNING_CHECKBOX,
         WIDGET_KEEP_PANNING_INFO_BUTTON};
@@ -2529,6 +2621,14 @@ bool GuiManager::handleHorizontalNavigation(int direction)
         return true;
     }
     if (moveFocusInGroup(kMinimapInfoGroup, sizeof(kMinimapInfoGroup) / sizeof(kMinimapInfoGroup[0]), direction))
+    {
+        return true;
+    }
+    if (moveFocusInGroup(kPageIndicatorGroup, sizeof(kPageIndicatorGroup) / sizeof(kPageIndicatorGroup[0]), direction))
+    {
+        return true;
+    }
+    if (moveFocusInGroup(kZoomOverlayGroup, sizeof(kZoomOverlayGroup) / sizeof(kZoomOverlayGroup[0]), direction))
     {
         return true;
     }
