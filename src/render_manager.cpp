@@ -204,7 +204,6 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
         // Position the source-sized rect to keep the same center
         renderX = centerX - static_cast<float>(renderWidth) * 0.5f;
         renderY = centerY - static_cast<float>(renderHeight) * 0.5f;
-
     }
     else
     {

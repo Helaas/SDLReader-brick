@@ -736,7 +736,6 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
             std::swap(m_state.pageWidth, m_state.pageHeight);
         }
     }
-
 }
 
 bool ViewportManager::isNextRenderLikelyExpensive(int lastRenderDuration) const
