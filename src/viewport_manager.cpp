@@ -15,6 +15,9 @@ void ViewportManager::zoom(int delta, Document* document)
 {
     (void) document; // Document not used after removing prerender cancellation
 
+    // Manual zoom disables automatic fit mode
+    m_state.fitMode = FitMode::None;
+
     // Accumulate zoom changes and track input timing for debouncing
     auto now = std::chrono::steady_clock::now();
 
@@ -36,6 +39,9 @@ void ViewportManager::zoom(int delta, Document* document)
 void ViewportManager::zoomTo(int scale, Document* document)
 {
     (void) document; // Document not used after removing prerender cancellation
+
+    // Manual zoom disables automatic fit mode
+    m_state.fitMode = FitMode::None;
 
     // Always use debouncing for consistent behavior
     int targetDelta = scale - m_state.currentScale;
@@ -162,6 +168,9 @@ void ViewportManager::fitPageToWindow(Document* document, int currentPage)
         return;
     }
 
+    // Track the fit mode for later use (e.g., on resize or rotation)
+    m_state.fitMode = FitMode::FitWindow;
+
     int windowWidth = m_renderer->getWindowWidth();
     int windowHeight = m_renderer->getWindowHeight();
 
@@ -195,6 +204,9 @@ void ViewportManager::fitPageToWindow(Document* document, int currentPage)
 
 void ViewportManager::fitPageToWidth(Document* document, int currentPage)
 {
+    // Track the fit mode for later use (e.g., on resize or rotation)
+    m_state.fitMode = FitMode::FitWidth;
+
     int windowWidth = m_renderer->getWindowWidth();
 
     // Use effective width so 90/270 rotation swaps W/H
@@ -217,6 +229,36 @@ void ViewportManager::fitPageToWidth(Document* document, int currentPage)
     updatePageDimensions(document, currentPage);
 
     m_state.scrollX = 0;
+    clampScroll();
+}
+
+void ViewportManager::fitPageToHeight(Document* document, int currentPage)
+{
+    // Track the fit mode for later use (e.g., on resize or rotation)
+    m_state.fitMode = FitMode::FitHeight;
+
+    int windowHeight = m_renderer->getWindowHeight();
+
+    // Use effective height so 90/270 rotation swaps W/H
+    int nativeHeight = effectiveNativeHeight(document, currentPage);
+
+    if (nativeHeight == 0)
+    {
+        std::cerr << "ViewportManager ERROR: Native page height is zero for page "
+                  << currentPage << std::endl;
+        return;
+    }
+
+    // Calculate scale to fit page height within window.
+    // Use rounding to avoid undershooting by a pixel.
+    double scaleRatio = static_cast<double>(windowHeight) / static_cast<double>(nativeHeight);
+    int scaleToFitHeight = static_cast<int>(std::lround(scaleRatio * 100.0));
+
+    m_state.currentScale = std::clamp(scaleToFitHeight, 10, 350);
+
+    updatePageDimensions(document, currentPage);
+
+    m_state.scrollY = 0;
     clampScroll();
 }
 
@@ -279,14 +321,36 @@ void ViewportManager::onPageChangedKeepZoom(Document* document, int newPage)
         muPdfDoc->cancelPrerendering();
     }
 
-    // Recompute scaled page dims for current page at the existing zoom
-    updatePageDimensions(document, newPage);
+    // Store scroll position BEFORE any updates
+    int oldScrollX = m_state.scrollX;
+    int oldScrollY = m_state.scrollY;
 
-    // Set the flag to force top alignment on next render
-    m_state.forceTopAlignNextRender = true;
+    // Recompute scaled page dims for current page (respect fit mode if active)
+    if (m_state.fitMode != FitMode::None)
+    {
+        applyFitMode(document, newPage);
+    }
+    else
+    {
+        updatePageDimensions(document, newPage);
+    }
 
-    // Clamp scroll to new page dimensions
-    clampScroll();
+    // ALWAYS restore scroll position - preserving panning takes priority over fit mode behavior
+    // The fit mode sets the scale, but we want to keep the user's manual panning position
+    m_state.scrollX = oldScrollX;
+    m_state.scrollY = oldScrollY;
+
+    // Preserve the current panning position as much as possible.
+    // This keeps the viewing "window" in the same position when flipping pages,
+    // which is useful when reading zoomed content (e.g., comics with margins cropped out).
+    // Just clamp the scroll to the new page's valid range.
+    int maxScrollX = getMaxScrollX();
+    int maxScrollY = getMaxScrollY();
+    m_state.scrollX = std::max(-maxScrollX, std::min(maxScrollX, m_state.scrollX));
+    m_state.scrollY = std::max(-maxScrollY, std::min(maxScrollY, m_state.scrollY));
+
+    // Don't force any specific alignment - preserve user's panning position
+    m_state.forceTopAlignNextRender = false;
 }
 
 void ViewportManager::alignToTopOfCurrentPage()
@@ -341,6 +405,99 @@ void ViewportManager::rotateClockwise()
 
     // Ensure scroll remains within bounds for the new orientation
     clampScroll();
+}
+
+void ViewportManager::rotateClockwise(Document* document, int currentPage)
+{
+    m_state.rotation = (m_state.rotation + 90) % 360;
+
+    // Reset scroll position after rotation
+    m_state.scrollX = 0;
+    m_state.scrollY = 0;
+
+    // Clear the MuPDF cache to force re-rendering at the new (rotated) dimensions
+    // This ensures the buffer is re-created immediately with the correct dimensions
+    auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(document);
+    if (muPdfDoc)
+    {
+        muPdfDoc->clearCache();
+    }
+
+    // When in FitWindow mode, intelligently fit based on rotation:
+    // - At 0° or 180°: fit to window normally
+    // - At 90° or 270°: fit native WIDTH to window HEIGHT (since rotation swaps dimensions)
+    if (m_state.fitMode == FitMode::FitWindow)
+    {
+        if (m_state.rotation % 180 != 0)
+        {
+            // Rotated 90° or 270° - the native width becomes the displayed height
+            // So we fit the NATIVE width to the WINDOW height for proper scaling
+            int windowHeight = m_renderer->getWindowHeight();
+            auto [nativeWidth, nativeHeight] = getNativePageSize(document, currentPage);
+
+            if (nativeWidth > 0)
+            {
+                double scaleRatio = static_cast<double>(windowHeight) / static_cast<double>(nativeWidth);
+                int calculatedScale = static_cast<int>(std::lround(scaleRatio * 100.0));
+                m_state.currentScale = std::clamp(calculatedScale, 10, 350);
+
+                updatePageDimensions(document, currentPage);
+                m_state.scrollY = 0;
+                clampScroll();
+            }
+        }
+        else
+        {
+            // Normal orientation - fit to window
+            fitPageToWindow(document, currentPage);
+        }
+    }
+    else
+    {
+        // For other fit modes, just apply the current mode
+        applyFitMode(document, currentPage);
+    }
+}
+
+void ViewportManager::applyFitMode(Document* document, int currentPage)
+{
+    switch (m_state.fitMode)
+    {
+    case FitMode::FitWindow:
+        // When in FitWindow mode with 90°/270° rotation, fit native width to window height
+        if (m_state.rotation % 180 != 0)
+        {
+            int windowHeight = m_renderer->getWindowHeight();
+            auto [nativeWidth, nativeHeight] = getNativePageSize(document, currentPage);
+
+            if (nativeWidth > 0)
+            {
+                double scaleRatio = static_cast<double>(windowHeight) / static_cast<double>(nativeWidth);
+                int calculatedScale = static_cast<int>(std::lround(scaleRatio * 100.0));
+                m_state.currentScale = std::clamp(calculatedScale, 10, 350);
+
+                updatePageDimensions(document, currentPage);
+                m_state.scrollY = 0;
+                clampScroll();
+            }
+        }
+        else
+        {
+            fitPageToWindow(document, currentPage);
+        }
+        break;
+    case FitMode::FitWidth:
+        fitPageToWidth(document, currentPage);
+        break;
+    case FitMode::FitHeight:
+        fitPageToHeight(document, currentPage);
+        break;
+    case FitMode::None:
+        // Manual zoom mode: just update dimensions without changing scale
+        updatePageDimensions(document, currentPage);
+        clampScroll();
+        break;
+    }
 }
 
 void ViewportManager::toggleMirrorVertical()
@@ -462,13 +619,24 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
             int windowWidth = m_renderer->getWindowWidth();
             int windowHeight = m_renderer->getWindowHeight();
 
-            // Get native dimensions to calculate expected rendered size
-            int nativeWidth = effectiveNativeWidth(document, currentPage);
-            int nativeHeight = effectiveNativeHeight(document, currentPage);
+            // Get ACTUAL native dimensions (not effective/swapped) to calculate rendered size
+            // Rotation will be applied later by swapping the final dimensions
+            auto [nativeWidth, nativeHeight] = getNativePageSize(document, currentPage);
 
             // Calculate what the page size would be at current zoom (before downsampling)
             int targetWidth = std::max(1, static_cast<int>(std::lround(nativeWidth * (m_state.currentScale / 100.0f))));
             int targetHeight = std::max(1, static_cast<int>(std::lround(nativeHeight * (m_state.currentScale / 100.0f))));
+
+            // When rotated 90° or 270°, the effective window dimensions swap relative to the page
+            // This matters for calculating headroom - we need to use the effective window dimension
+            // that corresponds to each rendered dimension
+            int effectiveWindowWidth = windowWidth;
+            int effectiveWindowHeight = windowHeight;
+            if (m_state.rotation % 180 != 0)
+            {
+                // At 90°/270°, swap which window dimension corresponds to which page dimension
+                std::swap(effectiveWindowWidth, effectiveWindowHeight);
+            }
 
             // Dynamically adjust max render size to ensure:
             // 1. We can actually see zoom changes (don't downsample to same size)
@@ -492,26 +660,26 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
             else if (m_state.currentScale < 100)
             {
                 // Low zoom (50-99%) - use 2x target to allow some zoom without rerender
-                requiredWidth = std::max(targetWidth, windowWidth * 2);
-                requiredHeight = std::max(targetHeight, windowHeight * 2);
+                requiredWidth = std::max(targetWidth, effectiveWindowWidth * 2);
+                requiredHeight = std::max(targetHeight, effectiveWindowHeight * 2);
             }
             else if (m_state.currentScale < 150)
             {
                 // Moderate zoom, use 4x window size
-                requiredWidth = std::max(targetWidth, windowWidth * 4);
-                requiredHeight = std::max(targetHeight, windowHeight * 4);
+                requiredWidth = std::max(targetWidth, effectiveWindowWidth * 4);
+                requiredHeight = std::max(targetHeight, effectiveWindowHeight * 4);
             }
             else if (m_state.currentScale < 220)
             {
                 // At higher zoom, use 5x
-                requiredWidth = std::max(targetWidth, windowWidth * 5);
-                requiredHeight = std::max(targetHeight, windowHeight * 5);
+                requiredWidth = std::max(targetWidth, effectiveWindowWidth * 5);
+                requiredHeight = std::max(targetHeight, effectiveWindowHeight * 5);
             }
             else
             {
                 // At very high zoom, use 6x
-                requiredWidth = std::max(targetWidth, windowWidth * 6);
-                requiredHeight = std::max(targetHeight, windowHeight * 6);
+                requiredWidth = std::max(targetWidth, effectiveWindowWidth * 6);
+                requiredHeight = std::max(targetHeight, effectiveWindowHeight * 6);
             }
 
             // Only update maxRenderSize if it would actually change significantly
@@ -543,8 +711,7 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
             }
             else
             {
-                int nativeWidth = effectiveNativeWidth(document, currentPage);
-                int nativeHeight = effectiveNativeHeight(document, currentPage);
+                auto [nativeWidth, nativeHeight] = getNativePageSize(document, currentPage);
                 m_state.pageWidth = std::max(1, static_cast<int>(std::lround(nativeWidth * (m_state.currentScale / 100.0f))));
                 m_state.pageHeight = std::max(1, static_cast<int>(std::lround(nativeHeight * (m_state.currentScale / 100.0f))));
             }
@@ -559,10 +726,15 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
     else
     {
         // Fallback for other document types
-        int nativeWidth = effectiveNativeWidth(document, currentPage);
-        int nativeHeight = effectiveNativeHeight(document, currentPage);
+        auto [nativeWidth, nativeHeight] = getNativePageSize(document, currentPage);
         m_state.pageWidth = std::max(1, static_cast<int>(std::lround(nativeWidth * (m_state.currentScale / 100.0))));
         m_state.pageHeight = std::max(1, static_cast<int>(std::lround(nativeHeight * (m_state.currentScale / 100.0))));
+
+        // Apply rotation swap
+        if (m_state.rotation % 180 != 0)
+        {
+            std::swap(m_state.pageWidth, m_state.pageHeight);
+        }
     }
 }
 

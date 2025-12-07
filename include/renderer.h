@@ -28,9 +28,13 @@ public:
 
     SDL_Renderer* getSDLRenderer() const; // This method remains useful
 
-    void renderPageEx(const std::vector<uint8_t>& pixelData, int srcWidth, int srcHeight, int destX, int destY, int destWidth, int destHeight, double angleDeg, SDL_RendererFlip flip);
+    void renderPageEx(const std::vector<uint8_t>& pixelData, int srcWidth, int srcHeight,
+                      float destX, float destY, float destWidth, float destHeight,
+                      double angleDeg, SDL_RendererFlip flip);
 
-    void renderPageExARGB(const std::vector<uint32_t>& argbData, int srcWidth, int srcHeight, int destX, int destY, int destWidth, int destHeight, double angleDeg, SDL_RendererFlip flip, const void* bufferToken = nullptr);
+    void renderPageExARGB(const std::vector<uint32_t>& argbData, int srcWidth, int srcHeight,
+                          float destX, float destY, float destWidth, float destHeight,
+                          double angleDeg, SDL_RendererFlip flip, const void* bufferToken = nullptr);
 
     int getWindowWidth() const;
     int getWindowHeight() const;

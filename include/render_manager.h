@@ -144,6 +144,14 @@ public:
     {
         return m_showMinimap;
     }
+    void setShowPageIndicatorOverlay(bool enabled)
+    {
+        m_showPageIndicatorOverlay = enabled;
+    }
+    void setShowScaleOverlay(bool enabled)
+    {
+        m_showScaleOverlay = enabled;
+    }
 
 private:
     // Rendering resources
@@ -167,9 +175,11 @@ private:
     bool m_lastArgbValid = false;
     bool m_previewActive = false;
     bool m_showMinimap = true;
+    bool m_showPageIndicatorOverlay = true;
+    bool m_showScaleOverlay = true;
 
     // UI rendering methods
-    void renderPageInfo(NavigationManager* navigationManager, int windowWidth, int windowHeight);
+    void renderPageInfo(NavigationManager* navigationManager, ViewportManager* viewportManager, int windowWidth, int windowHeight);
     void renderScaleInfo(ViewportManager* viewportManager, int windowWidth, int windowHeight);
     void renderZoomProcessingIndicator(ViewportManager* viewportManager, int windowWidth, int windowHeight);
     void renderErrorMessage(int windowWidth, int windowHeight);
@@ -183,8 +193,11 @@ private:
     // Helper methods
     uint32_t rgb24_to_argb32(uint8_t r, uint8_t g, uint8_t b);
     void renderProgressBar(int x, int y, int width, int height, float progress, SDL_Color bgColor, SDL_Color fillColor);
-    SDL_Color getContrastingTextColor() const;
     void storeLastRender(int page, int scale, std::shared_ptr<const std::vector<uint32_t>> buffer, int width, int height);
+    void renderOverlayBadge(const std::string& text, int textWidth, int textHeight,
+                            float centerX, float centerY, double angleDeg,
+                            SDL_Color textColor, SDL_Color bgColor, SDL_Color borderColor,
+                            SDL_Color shadowColor, int paddingX, int paddingY);
 };
 
 #endif // RENDER_MANAGER_H

@@ -34,6 +34,9 @@ std::string configToJson(const FontConfig& config)
     oss << "  \"readingStyle\": " << static_cast<int>(config.readingStyle) << ",\n";
     oss << "  \"disableEdgeProgressBar\": " << (config.disableEdgeProgressBar ? "true" : "false") << ",\n";
     oss << "  \"showDocumentMinimap\": " << (config.showDocumentMinimap ? "true" : "false") << ",\n";
+    oss << "  \"keepPanningPosition\": " << (config.keepPanningPosition ? "true" : "false") << ",\n";
+    oss << "  \"showPageIndicatorOverlay\": " << (config.showPageIndicatorOverlay ? "true" : "false") << ",\n";
+    oss << "  \"showScaleOverlay\": " << (config.showScaleOverlay ? "true" : "false") << ",\n";
     oss << "  \"lastBrowseDirectory\": \"" << config.lastBrowseDirectory << "\"\n";
     oss << "}";
     return oss.str();
@@ -137,6 +140,30 @@ FontConfig jsonToConfig(const std::string& json)
     else
     {
         config.showDocumentMinimap = true;
+    }
+    if (json.find("\"keepPanningPosition\"") != std::string::npos)
+    {
+        config.keepPanningPosition = findBoolValue("keepPanningPosition");
+    }
+    else
+    {
+        config.keepPanningPosition = false;
+    }
+    if (json.find("\"showPageIndicatorOverlay\"") != std::string::npos)
+    {
+        config.showPageIndicatorOverlay = findBoolValue("showPageIndicatorOverlay");
+    }
+    else
+    {
+        config.showPageIndicatorOverlay = true;
+    }
+    if (json.find("\"showScaleOverlay\"") != std::string::npos)
+    {
+        config.showScaleOverlay = findBoolValue("showScaleOverlay");
+    }
+    else
+    {
+        config.showScaleOverlay = true;
     }
     config.lastBrowseDirectory = findStringValue("lastBrowseDirectory");
     if (config.lastBrowseDirectory.empty())

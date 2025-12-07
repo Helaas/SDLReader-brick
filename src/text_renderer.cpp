@@ -91,3 +91,57 @@ void TextRenderer::renderText(const std::string& text, int x, int y, SDL_Color c
 
     SDL_RenderCopy(m_sdlRenderer, textTexture.get(), NULL, &renderQuad);
 }
+
+bool TextRenderer::measureText(const std::string& text, int& width, int& height) const
+{
+    width = 0;
+    height = 0;
+    if (text.empty() || !m_font)
+    {
+        return false;
+    }
+
+    if (TTF_SizeText(m_font.get(), text.c_str(), &width, &height) != 0)
+    {
+        std::cerr << "Error: Unable to measure text! TTF_Error: " << TTF_GetError() << std::endl;
+        width = 0;
+        height = 0;
+        return false;
+    }
+
+    return true;
+}
+
+void TextRenderer::renderTextRotated(const std::string& text, float x, float y, SDL_Color color,
+                                     double angleDeg, const SDL_Point* centerOverride)
+{
+    if (text.empty())
+        return;
+    if (!m_font)
+    {
+        std::cerr << "Error: Font not loaded for rendering text." << std::endl;
+        return;
+    }
+
+    std::unique_ptr<SDL_Surface, void (*)(SDL_Surface*)> textSurface(
+        TTF_RenderText_Blended(m_font.get(), text.c_str(), color),
+        SDL_FreeSurface);
+    if (!textSurface)
+    {
+        std::cerr << "Error: Unable to render text surface! TTF_Error: " << TTF_GetError() << std::endl;
+        return;
+    }
+
+    std::unique_ptr<SDL_Texture, MySDLTextureDeleter> textTexture(
+        SDL_CreateTextureFromSurface(m_sdlRenderer, textSurface.get()));
+    if (!textTexture)
+    {
+        std::cerr << "Error: Unable to create texture from rendered text! SDL_Error: " << SDL_GetError() << std::endl;
+        return;
+    }
+
+    SDL_Rect destRect = {static_cast<int>(x), static_cast<int>(y), textSurface->w, textSurface->h};
+    SDL_Point center = centerOverride ? *centerOverride : SDL_Point{destRect.w / 2, destRect.h / 2};
+
+    SDL_RenderCopyEx(m_sdlRenderer, textTexture.get(), NULL, &destRect, angleDeg, &center, SDL_FLIP_NONE);
+}

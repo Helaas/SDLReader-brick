@@ -12,6 +12,17 @@ class Document;
 class Renderer;
 class MuPdfDocument;
 
+/**
+ * @brief Fit mode for automatic page scaling
+ */
+enum class FitMode
+{
+    None,      // No automatic fitting (manual zoom)
+    FitWindow, // Fit page to window (both width and height)
+    FitWidth,  // Fit page to window width only
+    FitHeight  // Fit page to window height only (useful for rotated content)
+};
+
 struct ViewportState
 {
     int scrollX{0};
@@ -26,6 +37,9 @@ struct ViewportState
     // Top alignment control when page height <= window height
     bool topAlignWhenFits{true};
     bool forceTopAlignNextRender{false}; // One-shot flag after page changes
+
+    // Current fit mode for automatic scaling on resize/rotate
+    FitMode fitMode{FitMode::FitWindow};
 };
 
 class ViewportManager
@@ -119,6 +133,14 @@ public:
     {
         m_state.forceTopAlignNextRender = force;
     }
+    FitMode getFitMode() const
+    {
+        return m_state.fitMode;
+    }
+    void setFitMode(FitMode mode)
+    {
+        m_state.fitMode = mode;
+    }
 
     // Zoom operations
     void zoom(int delta, Document* document);
@@ -133,6 +155,7 @@ public:
     // Fit operations
     void fitPageToWindow(Document* document, int currentPage);
     void fitPageToWidth(Document* document, int currentPage);
+    void fitPageToHeight(Document* document, int currentPage);
 
     // Scroll operations
     void clampScroll();
@@ -145,8 +168,12 @@ public:
 
     // Rotation and mirroring
     void rotateClockwise();
+    void rotateClockwise(Document* document, int currentPage); // Re-fits page after rotation
     void toggleMirrorVertical();
     void toggleMirrorHorizontal();
+
+    // Resolution change handling
+    void applyFitMode(Document* document, int currentPage);
 
     // Dimension helpers
     int getMaxScrollX() const;
