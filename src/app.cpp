@@ -96,6 +96,9 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     FontConfig savedConfig = m_optionsManager->loadConfig();
     m_cachedConfig = savedConfig;
 
+    // Apply saved settings to navigation manager
+    m_navigationManager->setKeepPanningPosition(savedConfig.keepPanningPosition);
+
     // Determine document type based on file extension
     // MuPDF supports PDF, CBZ, ZIP (with images), XPS, EPUB, and other formats
     std::string lowercaseFilename = filename;
@@ -1141,15 +1144,16 @@ void App::applyPendingFontChange()
     bool zoomStepChanged = (m_pendingFontConfig.zoomStep != m_cachedConfig.zoomStep);
     bool edgeProgressBarChanged = (m_pendingFontConfig.disableEdgeProgressBar != m_cachedConfig.disableEdgeProgressBar);
     bool minimapChanged = (m_pendingFontConfig.showDocumentMinimap != m_cachedConfig.showDocumentMinimap);
+    bool keepPanningChanged = (m_pendingFontConfig.keepPanningPosition != m_cachedConfig.keepPanningPosition);
 
     if (!fontChanged && !sizeChanged && !styleChanged)
     {
         std::cout << "No font/size/style change detected - skipping document reopen" << std::endl;
 
         // Even if font/size/style didn't change, we still need to save other setting changes
-        if (zoomStepChanged || edgeProgressBarChanged || minimapChanged)
+        if (zoomStepChanged || edgeProgressBarChanged || minimapChanged || keepPanningChanged)
         {
-            std::cout << "Zoom step or edge progress bar changed - saving config" << std::endl;
+            std::cout << "Zoom step, edge progress bar, minimap, or panning setting changed - saving config" << std::endl;
             m_optionsManager->saveConfig(m_pendingFontConfig);
             refreshCachedConfig(); // Update cache after save
 
@@ -1160,6 +1164,10 @@ void App::applyPendingFontChange()
             if (m_renderManager)
             {
                 m_renderManager->setShowMinimap(m_cachedConfig.showDocumentMinimap);
+            }
+            if (keepPanningChanged && m_navigationManager)
+            {
+                m_navigationManager->setKeepPanningPosition(m_cachedConfig.keepPanningPosition);
             }
         }
 

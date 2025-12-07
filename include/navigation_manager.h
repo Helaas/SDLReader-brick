@@ -55,6 +55,10 @@ public:
     {
         m_state.lastRenderDuration = duration;
     }
+    void setKeepPanningPosition(bool keep)
+    {
+        m_keepPanningPosition = keep;
+    }
 
     // State accessors
     int getCurrentPage() const
@@ -106,6 +110,7 @@ public:
 
 private:
     NavigationState m_state;
+    bool m_keepPanningPosition = false; // Setting for whether to keep panning position on page change
 
     // Internal page change implementation
     void performPageChange(int newPage, Document* document, ViewportManager* viewportManager, std::function<void(int)> setCurrentPageCallback,

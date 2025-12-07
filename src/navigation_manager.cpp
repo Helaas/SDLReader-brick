@@ -66,8 +66,13 @@ void NavigationManager::performPageChange(int newPage, Document* document, Viewp
 
     if (viewportManager)
     {
-        // onPageChangedKeepZoom handles scroll positioning - don't override it with alignToTopOfCurrentPage
         viewportManager->onPageChangedKeepZoom(document, m_state.currentPage);
+
+        // Only align to top if keepPanningPosition is disabled
+        if (!m_keepPanningPosition)
+        {
+            viewportManager->alignToTopOfCurrentPage();
+        }
     }
 
     if (updateScaleDisplayCallback)

@@ -45,14 +45,15 @@ struct FontConfig
     ReadingStyle readingStyle = ReadingStyle::Default;         // Reading style/theme
     bool disableEdgeProgressBar = false;                       // Disable edge nudge progress bar for instant page turns
     bool showDocumentMinimap = true;                           // Display minimap overlay when zoomed in
+    bool keepPanningPosition = false;                          // Keep panning position when changing pages (vs. align to top)
 
     // Default constructor
     FontConfig() = default;
 
     // Constructor with parameters
-    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10, const std::string& browseDir = getDefaultLibraryRoot(), ReadingStyle style = ReadingStyle::Default, bool disableEdgeBar = false, bool showMinimap = true)
+    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10, const std::string& browseDir = getDefaultLibraryRoot(), ReadingStyle style = ReadingStyle::Default, bool disableEdgeBar = false, bool showMinimap = true, bool keepPanning = false)
         : fontPath(path), fontName(name), fontSize(size), zoomStep(zoom), lastBrowseDirectory(browseDir), readingStyle(style),
-          disableEdgeProgressBar(disableEdgeBar), showDocumentMinimap(showMinimap)
+          disableEdgeProgressBar(disableEdgeBar), showDocumentMinimap(showMinimap), keepPanningPosition(keepPanning)
     {
     }
 };

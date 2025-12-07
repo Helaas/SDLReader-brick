@@ -6,5 +6,6 @@
   "readingStyle": 0,
   "disableEdgeProgressBar": false,
   "showDocumentMinimap": true,
+  "keepPanningPosition": false,
   "lastBrowseDirectory": "/path/to/library"
 }

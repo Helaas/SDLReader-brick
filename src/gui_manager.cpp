@@ -1127,6 +1127,49 @@ void GuiManager::renderFontMenu()
 
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
+        // Keep Panning Position checkbox + info button
+        nk_layout_row_template_begin(m_ctx, 25);
+        nk_layout_row_template_push_dynamic(m_ctx);
+        nk_layout_row_template_push_static(m_ctx, 32);
+        nk_layout_row_template_end(m_ctx);
+
+        // Highlight checkbox if focused
+        if (m_mainScreenFocusIndex == WIDGET_KEEP_PANNING_CHECKBOX)
+        {
+            m_ctx->style.checkbox.normal = nk_style_item_color(focusBackground);
+            m_ctx->style.checkbox.hover = nk_style_item_color(focusBackground);
+            m_ctx->style.checkbox.cursor_normal = nk_style_item_color(focusCursorColor);
+            m_ctx->style.checkbox.cursor_hover = nk_style_item_color(focusCursorColor);
+            m_ctx->style.checkbox.border = 2.0f;
+            m_ctx->style.checkbox.border_color = focusBorderColor;
+        }
+
+        nk_bool keepPanning = m_tempConfig.keepPanningPosition ? nk_true : nk_false;
+        if (nk_checkbox_label(m_ctx, "Keep Panning Position on Page Change", &keepPanning))
+        {
+            m_tempConfig.keepPanningPosition = (keepPanning == nk_true);
+        }
+        rememberWidgetBounds(WIDGET_KEEP_PANNING_CHECKBOX);
+
+        // Restore checkbox style
+        m_ctx->style.checkbox = originalToggleStyle;
+
+        // Info button for keep panning description uses same glyph styling
+        struct nk_style_button panningInfoStyle = m_ctx->style.button;
+        configureInfoGlyphStyle(panningInfoStyle, m_mainScreenFocusIndex == WIDGET_KEEP_PANNING_INFO_BUTTON);
+        nk_button_label_styled(m_ctx, &panningInfoStyle, "(?)");
+        bool panningInfoHovered = nk_widget_is_hovered(m_ctx);
+        rememberWidgetBounds(WIDGET_KEEP_PANNING_INFO_BUTTON);
+        if (m_mainScreenFocusIndex == WIDGET_KEEP_PANNING_INFO_BUTTON || panningInfoHovered)
+        {
+            showInfoTooltip(WIDGET_KEEP_PANNING_INFO_BUTTON,
+                            "When enabled, panning position is preserved when\n"
+                            "changing pages (useful for zoomed reading).\n"
+                            "When disabled, pages always start at the top.");
+        }
+
+        nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
+
         nk_layout_row_dynamic(m_ctx, 20, 1);
         nk_label(m_ctx, "Jump to Page:", NK_TEXT_LEFT);
 
