@@ -278,6 +278,10 @@ void RenderManager::renderOverlayBadge(const std::string& text, int textWidth, i
     SDL_SetRenderTarget(sdlRenderer, badgeTexture.get());
     SDL_SetRenderDrawBlendMode(sdlRenderer, SDL_BLENDMODE_BLEND);
 
+    // Clear the texture to transparent
+    SDL_SetRenderDrawColor(sdlRenderer, 0, 0, 0, 0);
+    SDL_RenderClear(sdlRenderer);
+
     // Soft shadow
     SDL_Rect shadowRect = {4, 6, badgeWidth, badgeHeight};
     SDL_SetRenderDrawColor(sdlRenderer, shadowColor.r, shadowColor.g, shadowColor.b, shadowColor.a);
