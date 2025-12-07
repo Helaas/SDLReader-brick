@@ -113,7 +113,7 @@ bool TextRenderer::measureText(const std::string& text, int& width, int& height)
 }
 
 void TextRenderer::renderTextRotated(const std::string& text, float x, float y, SDL_Color color,
-                                     double angleDeg, const SDL_FPoint* centerOverride)
+                                     double angleDeg, const SDL_Point* centerOverride)
 {
     if (text.empty())
         return;
@@ -140,8 +140,8 @@ void TextRenderer::renderTextRotated(const std::string& text, float x, float y, 
         return;
     }
 
-    SDL_FRect destRect = {x, y, static_cast<float>(textSurface->w), static_cast<float>(textSurface->h)};
-    SDL_FPoint center = centerOverride ? *centerOverride : SDL_FPoint{destRect.w / 2.0f, destRect.h / 2.0f};
+    SDL_Rect destRect = {static_cast<int>(x), static_cast<int>(y), textSurface->w, textSurface->h};
+    SDL_Point center = centerOverride ? *centerOverride : SDL_Point{destRect.w / 2, destRect.h / 2};
 
-    SDL_RenderCopyExF(m_sdlRenderer, textTexture.get(), NULL, &destRect, angleDeg, &center, SDL_FLIP_NONE);
+    SDL_RenderCopyEx(m_sdlRenderer, textTexture.get(), NULL, &destRect, angleDeg, &center, SDL_FLIP_NONE);
 }

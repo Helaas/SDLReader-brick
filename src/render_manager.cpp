@@ -300,10 +300,9 @@ void RenderManager::renderOverlayBadge(const std::string& text, int textWidth, i
     float destX = std::round(centerX - badgeWidth * 0.5f);
     float destY = std::round(centerY - badgeHeight * 0.5f);
 
+#if SDL_VERSION_ATLEAST(2, 0, 10)
     SDL_FRect destRectF = {destX, destY, static_cast<float>(badgeWidth), static_cast<float>(badgeHeight)};
     SDL_FPoint centerF = {std::round(destRectF.w * 0.5f), std::round(destRectF.h * 0.5f)};
-
-#if SDL_VERSION_ATLEAST(2, 0, 10)
     SDL_RenderCopyExF(sdlRenderer, badgeTexture.get(), nullptr, &destRectF, angleDeg, &centerF, SDL_FLIP_NONE);
 #else
     SDL_Rect destRect = {static_cast<int>(destX), static_cast<int>(destY), badgeWidth, badgeHeight};

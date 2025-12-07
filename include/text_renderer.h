@@ -38,7 +38,7 @@ public:
 
     // Render text with rotation applied around its center (or an optional pivot).
     void renderTextRotated(const std::string& text, float x, float y, SDL_Color color,
-                           double angleDeg, const SDL_FPoint* centerOverride = nullptr);
+                           double angleDeg, const SDL_Point* centerOverride = nullptr);
 
 private:
     SDL_Renderer* m_sdlRenderer;
