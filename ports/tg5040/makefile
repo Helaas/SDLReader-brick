@@ -96,23 +96,12 @@ check-libarchive:
 setup-nuklear:
 	@cd $(BASE_PATH) && \
 	if [ ! -d "nuklear-tg5040" ]; then \
-		echo "Setting up Nuklear GUI library (v4.12.8) for SDL 2.0.9 support (TG5040)..."; \
+		echo "Setting up Nuklear GUI library (v4.12.8) for TG5040..."; \
 		rm -rf nuklear-tg5040; \
 		git clone --depth 1 --branch 4.12.8 https://github.com/Immediate-Mode-UI/Nuklear.git nuklear-tg5040; \
 		echo "Nuklear repository cloned for TG5040"; \
 	else \
 		echo "Nuklear repository already present for TG5040"; \
-	fi
-	@cd $(BASE_PATH) && \
-	if [ -d "nuklear-tg5040" ]; then \
-		if [ ! -f "nuklear-tg5040/.tg5040_patched" ]; then \
-			echo "Applying TG5040 SDL renderer compatibility patch to Nuklear..."; \
-		(cd nuklear-tg5040 && (patch --batch -s -N -p1 < ../patches/nuklear_sdl_renderer_compat.patch || true)); \
-		touch nuklear-tg5040/.tg5040_patched; \
-		rm -f nuklear-tg5040/demo/sdl_renderer/nuklear_sdl_renderer.h.rej; \
-		else \
-			echo "Nuklear SDL renderer already patched for TG5040"; \
-		fi; \
 	fi
 
 # Setup MuPDF repository if it doesn't exist

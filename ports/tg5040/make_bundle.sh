@@ -113,26 +113,13 @@ for real in "$LIBDIR"/*.so*; do
   fi
 done
 
-# RPATH/RUNPATH patching:
-# - Remove any existing RPATH
-# - Set RUNPATH on the binary to $ORIGIN/../lib (patchelf writes DT_RUNPATH by default)
-# - Set RUNPATH on each bundled .so to $ORIGIN (siblings can find each other)
-if command -v patchelf >/dev/null 2>&1; then
-  patchelf --remove-rpath "$BINDIR/sdl_reader_cli" 2>/dev/null || true
-  patchelf --set-rpath '$ORIGIN/../lib' "$BINDIR/sdl_reader_cli"
-  for so in "$LIBDIR"/*.so*; do
-    patchelf --remove-rpath "$so" 2>/dev/null || true
-    patchelf --set-rpath '$ORIGIN' "$so" || true
-  done
-else
-  echo "WARNING: patchelf not found; skipping RPATH/RUNPATH embed."
+# Optional: prune heavy libs you likely don't need on the Brick (set PRUNE_LIBS=1)
+if [[ "${PRUNE_LIBS:-0}" -eq 1 ]]; then
+  rm -f "$LIBDIR"/libpulse*.so* "$LIBDIR"/libsystemd*.so* "$LIBDIR"/libdbus-1*.so* || true
+  rm -f "$LIBDIR"/libX*.so* "$LIBDIR"/libSM*.so* "$LIBDIR"/libICE*.so* "$LIBDIR"/libwayland-*.so* || true
+  # Remove ICU and XML libraries (not needed with minimal libarchive)
+  rm -f "$LIBDIR"/libicu*.so* "$LIBDIR"/libxml2*.so* || true
 fi
-
-# Optional: prune heavy libs you likely don't need on the Brick (uncomment if desired)
- rm -f "$LIBDIR"/libpulse*.so* "$LIBDIR"/libsystemd*.so* "$LIBDIR"/libdbus-1*.so* || true
- rm -f "$LIBDIR"/libX*.so* "$LIBDIR"/libSM*.so* "$LIBDIR"/libICE*.so* "$LIBDIR"/libwayland-*.so* || true
- # Remove ICU and XML libraries (not needed with minimal libarchive)
- rm -f "$LIBDIR"/libicu*.so* "$LIBDIR"/libxml2*.so* || true
 
 # Size trim (optional)
 strip "$BINDIR/sdl_reader_cli" 2>/dev/null || true
