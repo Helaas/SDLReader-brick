@@ -2,11 +2,9 @@
 # For Docker-specific build tasks, see Makefile.docker
 services:
   dev:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: sdlreader:latest
+    image: ghcr.io/loveretro/tg5040-toolchain:latest
+    pull_policy: always
     volumes:
-      - ../../:/root/workspace
+      - ../../:/workspace
     stdin_open: true
     tty: true

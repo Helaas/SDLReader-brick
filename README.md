@@ -96,8 +96,8 @@ make help
 ### Platform-Specific Requirements
 
 #### TG5040 (Embedded Linux)
-* Cross-compilation toolchain for the target device
-* Docker environment available (see `ports/tg5040/` for Docker setup)
+* Prebuilt cross-compilation toolchain container: `ghcr.io/loveretro/tg5040-toolchain`
+* Docker environment available (see `ports/tg5040/` for Compose/Makefile helpers)
 * **Limited external dependencies**: MuPDF & libarchive built automatically for optimal bundle size
 
 #### macOS
@@ -450,9 +450,9 @@ SDLReader-brick/
 └── ports/                        # Platform-specific builds
     ├── tg5040/                   # TG5040 embedded device
     │   ├── Makefile              # TG5040 build configuration
-    │   ├── Makefile.docker       # Docker environment management
-    │   ├── docker-compose.yml    # Docker Compose setup
-    │   ├── Dockerfile            # TG5040 toolchain image
+    │   ├── Makefile.docker       # Docker environment (pulls ghcr.io/loveretro/tg5040-toolchain)
+    │   ├── docker-compose.yml    # Docker Compose setup (prebuilt toolchain)
+    │   ├── Dockerfile            # Thin wrapper for the GHCR toolchain image
     │   ├── export_bundle.sh      # Bundle export script
     │   ├── make_bundle2.sh       # Library dependency bundler
     │   ├── pak/                  # Distribution bundle (created by export)
@@ -479,7 +479,7 @@ SDLReader-brick/
 - **Platform-specific code**: Use conditional compilation (`#ifdef TG5040_PLATFORM`) or create port-specific implementations in `ports/{platform}/`
 - **Power management**: TG5040 includes hardware-specific power button handling and suspend/resume functionality
 - **Build system**: Each platform has its own Makefile in `ports/{platform}/`
-- **Docker development**: Use `ports/tg5040/docker-compose.yml` for containerized development
+- **Docker development**: Use `ports/tg5040/docker-compose.yml` to pull `ghcr.io/loveretro/tg5040-toolchain` (workspace mounts at `/workspace`)
 - **TG5040 distribution**: Use `make export-tg5040` to create complete deployment package
 
 ## Architecture
