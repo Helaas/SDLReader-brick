@@ -1,6 +1,6 @@
 # Font & Reading Style Menu
 
-This implementation adds a comprehensive font and reading-style menu to SDL Reader, allowing runtime customization of EPUB/MOBI typography, colors, and navigation aids across desktop and TrimUI Brick/Smart Pro builds.
+This implementation adds a comprehensive font and reading-style menu to SDL Reader, allowing runtime customization of EPUB/MOBI/TXT typography, colors, and navigation aids across desktop and TrimUI Brick/Smart Pro builds.
 
 ## Features
 
@@ -104,12 +104,12 @@ body {
 ## Supported Formats
 
 - **Font Files**: TTF, OTF
-- **Document Types**: EPUB, MOBI (any format supporting CSS via MuPDF)
+- **Document Types**: EPUB, MOBI, TXT (any format supporting CSS via MuPDF)
 - **Font Sources**: Local files in `/fonts` directory
 
 ## Limitations
 
-- Only works with documents that support CSS styling (EPUB/MOBI)
+- Only works with documents that support CSS styling (EPUB/MOBI/TXT)
 - PDF documents do not support runtime font changes
 - Font preview in GUI uses default system font (actual document uses selected font)
 
@@ -124,6 +124,6 @@ make mac  # for macOS
 ## Troubleshooting
 
 - **No fonts showing**: Check that `.ttf` or `.otf` files are in the `fonts/` directory
-- **CSS not applying**: Ensure document is EPUB/MOBI format (PDF not supported)
+- **CSS not applying**: Ensure document is EPUB/MOBI/TXT format (PDF not supported)
 - **Font not loading**: Verify font file is not corrupted and has correct permissions
 - **Menu not appearing**: Check that Nuklear initialized correctly (see console output)

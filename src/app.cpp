@@ -111,7 +111,8 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
           lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".cbz" ||
           lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".cbr" ||
           lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".rar" ||
-          lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".zip")) ||
+          lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".zip" ||
+          lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".txt")) ||
         (lowercaseFilename.size() >= 5 &&
          (lowercaseFilename.substr(lowercaseFilename.size() - 5) == ".epub" ||
           lowercaseFilename.substr(lowercaseFilename.size() - 5) == ".mobi")))
@@ -139,7 +140,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     else
     {
         throw std::runtime_error("Unsupported file format: " + filename +
-                                 " (supported: .pdf, .cbz, .cbr, .rar, .zip, .epub, .mobi)");
+                                 " (supported: .pdf, .cbz, .cbr, .rar, .zip, .epub, .mobi, .txt)");
     }
 
     if (!m_document->open(filename))

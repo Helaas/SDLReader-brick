@@ -725,7 +725,8 @@ bool FileBrowser::isSupportedFile(const std::string& filename) const
              lower.substr(lower.size() - 4) == ".cbz" ||
              lower.substr(lower.size() - 4) == ".cbr" ||
              lower.substr(lower.size() - 4) == ".rar" ||
-             lower.substr(lower.size() - 4) == ".zip")) ||
+             lower.substr(lower.size() - 4) == ".zip" ||
+             lower.substr(lower.size() - 4) == ".txt")) ||
            (lower.size() >= 5 &&
             (lower.substr(lower.size() - 5) == ".epub" ||
              lower.substr(lower.size() - 5) == ".mobi"));

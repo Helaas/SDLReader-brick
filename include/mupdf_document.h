@@ -24,6 +24,7 @@
  * - Comic book archives (.cbz, .zip containing images)
  * - EPUB documents (.epub)
  * - MOBI e-books (.mobi)
+ * - Plain text files (.txt)
  * - And other formats supported by MuPDF
  */
 class MuPdfDocument : public Document
@@ -66,7 +67,7 @@ public:
     void prerenderAdjacentPages(int currentPage, int scale);
     void prerenderAdjacentPagesAsync(int currentPage, int scale);
 
-    // CSS styling for documents (EPUB/MOBI)
+    // CSS styling for documents (EPUB/MOBI/TXT)
     void setUserCSSBeforeOpen(const std::string& css); // Set CSS before opening document
     std::string getUserCSS() const
     {
