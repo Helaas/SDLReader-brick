@@ -551,7 +551,8 @@ void GuiManager::renderFontMenu()
 
     constexpr float kDropdownItemHeight = 20.0f;
     // Keep highlighted dropdown items in view when navigating without a mouse
-    auto ensureDropdownHighlightVisible = [&](int highlightedIndex, int itemCount) {
+    auto ensureDropdownHighlightVisible = [&](int highlightedIndex, int itemCount)
+    {
         if (highlightedIndex < 0 || highlightedIndex >= itemCount || itemCount <= 0)
         {
             return;
@@ -648,7 +649,7 @@ void GuiManager::renderFontMenu()
         nk_layout_row_dynamic(m_ctx, 25, 1);
         nk_label(m_ctx, "Font Settings", NK_TEXT_LEFT);
         nk_layout_row_dynamic(m_ctx, 35, 1);
-        nk_label_colored_wrap(m_ctx, "Font controls for EPUB/MOBI. Other formats use embedded fonts.", nk_rgba(180, 200, 255, 255));
+        nk_label_colored_wrap(m_ctx, "Font controls for EPUB/MOBI/TXT; others use embedded fonts.", nk_rgba(180, 200, 255, 255));
 
         // Separator line
         nk_layout_row_dynamic(m_ctx, 1, 1);
@@ -863,7 +864,7 @@ void GuiManager::renderFontMenu()
 
         // Informational notice
         nk_layout_row_dynamic(m_ctx, 35, 1);
-        nk_label_colored_wrap(m_ctx, "Select theme for comfortable reading. Applies to EPUB/MOBI only.", nk_rgba(180, 200, 255, 255));
+        nk_label_colored_wrap(m_ctx, "Select theme for comfortable reading. Applies to EPUB/MOBI/TXT.", nk_rgba(180, 200, 255, 255));
 
         nk_layout_row_dynamic(m_ctx, 20, 1);
         nk_label(m_ctx, "Color Theme:", NK_TEXT_LEFT);

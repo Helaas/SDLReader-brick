@@ -143,6 +143,7 @@ The TG5040 build (TrimUI Brick & Smart Pro) includes:
   - CBZ/ZIP comic book archives via MuPDF native support
   - CBR comic book archives via custom-built minimal libarchive (no ICU dependencies)
   - EPUB e-books via MuPDF native support
+  - Plain text files (.txt) with configurable font size, face, and reading style
   - **WebP images**: Enhanced WebP format support within documents and archives
 - **Platform-optimized build flags**: `-DTG5040_PLATFORM`
 - **Port-specific source structure**:

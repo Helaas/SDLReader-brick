@@ -1,6 +1,6 @@
 # SDL Reader
 
-SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and MuPDF. It supports viewing PDF, CBZ/ZIP & CBR/RAR comic archives, EPUB books, and MOBI e-books with intuitive navigation, zooming, rotation, and mirroring features. Optimized for embedded devices like the TrimUI Brick and TrimUI Smart Pro running [NextUI](https://github.com/LoveRetro/NextUI). It also runs on desktop platforms including macOS, Linux, and is a work in progress as Wii U homebrew.
+SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and MuPDF. It supports viewing PDF, CBZ/ZIP & CBR/RAR comic archives, EPUB books, MOBI e-books, and plain text files with intuitive navigation, zooming, rotation, and mirroring features. Optimized for embedded devices like the TrimUI Brick and TrimUI Smart Pro running [NextUI](https://github.com/LoveRetro/NextUI). It also runs on desktop platforms including macOS, Linux, and is a work in progress as Wii U homebrew.
 
 ## Table of Contents
 * [Features](#features)
@@ -53,6 +53,7 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
   * **Enhanced WebP Support**: Supports WebP images within comic book archives
 * **EPUB** (`.epub`)
 * **MOBI** (`.mobi`)
+* **Plain Text** (`.txt`)
 
 ## TrimUI Brick Control Scheme
 ![TrimUI Brick](.github/resources/tg5040%20controls.png)
@@ -225,7 +226,7 @@ SDL Reader uses a `config.json` file (stored under `$SDL_READER_STATE_DIR`, defa
    ```
 
 ### Configuration Options
-- **fontPath**: Path to the TTF/OTF font file to use for documents that support CSS (EPUB/MOBI)
+- **fontPath**: Path to the TTF/OTF font file to use for documents that support CSS/reflow (EPUB/MOBI/TXT)
 - **fontName**: Display name for the font (shown in the font menu)
 - **fontSize**: Default font size in points applied by the CSS generator
 - **zoomStep**: Percentage increment for zoom operations and controller zoom buttons
@@ -250,7 +251,7 @@ All configuration values are saved automatically when you apply changes from the
 
 **Note**: Runtime `config.json` files are stored outside the repository (in the reader state directory) and are ignored by Git so you can personalize settings without affecting the repo.
 
-**Adding new fonts:** Drop any `.ttf` or `.otf` files into the top-level `fonts/` directory (either on desktop or inside a TG5040 bundle). The Options → Font & Reading Style menu will automatically discover them, let you preview the typography, and persist your selection for EPUB/MOBI documents.
+**Adding new fonts:** Drop any `.ttf` or `.otf` files into the top-level `fonts/` directory (either on desktop or inside a TG5040 bundle). The Options → Font & Reading Style menu will automatically discover them, let you preview the typography, and persist your selection for EPUB/MOBI/TXT documents.
 
 ### Bundled Fonts & Licensing
 
