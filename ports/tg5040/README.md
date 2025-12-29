@@ -2,13 +2,14 @@
 
 This directory contains the TG5040-specific build configuration and Docker development environment for the SDLReader project. It supports both the TrimUI Brick and TrimUI Smart Pro devices.
 
-Based on the [Trimui toolchain Docker image](https://git.crowdedwood.com/trimui-toolchain/) by neonloop.
+Powered by the prebuilt [tg5040-toolchain](https://github.com/LoveRetro/tg5040-toolchain) container published to GHCR.
 
 ## Key Features
 
 - **Built-in CBR Support**: Now includes support for CBR (Comic Book RAR) files alongside CBZ/ZIP comic books
 - **WebP Image Support**: Enhanced WebP format support in PDF documents and comic book archives
 - **Self-Contained MuPDF**: Automatically downloads and builds MuPDF 1.26.7 with custom libarchive and WebP support
+- **Bundled libwebp**: Builds a static libwebp (1.3.2) inside the workspace to provide WebP decode/demux without system packages in the toolchain container
 - **Custom libarchive**: Builds minimal libarchive without ICU/XML dependencies for optimal bundle size
 - **Hardware Power Management**: NextUI-compatible power button handling
 - **Complete Bundle Export**: Creates self-contained distribution packages
@@ -32,14 +33,14 @@ Based on the [Trimui toolchain Docker image](https://git.crowdedwood.com/trimui-
 ```bash
 cd ports/tg5040
 
-# Start development environment
-docker-compose up -d dev
+# Ensure the latest toolchain image is available
+docker compose pull dev
 
-# Enter the container
-docker-compose exec dev bash
+# Start a shell with the prebuilt toolchain (ghcr.io/loveretro/tg5040-toolchain)
+docker compose run --rm dev bash
 
 # Build the application (inside container)
-cd /root/workspace
+cd /workspace
 make            # auto-selects the TG5040 target when run in the container
 ```
 
@@ -47,11 +48,11 @@ make            # auto-selects the TG5040 target when run in the container
 ```bash
 cd ports/tg5040
 
-# Build toolchain and enter shell
+# Pull toolchain and enter shell
 make -f Makefile.docker shell
 
 # Build the application (inside container)
-cd /root/workspace
+cd /workspace
 make            # auto-selects the TG5040 target when run in the container
 ```
 
@@ -103,16 +104,16 @@ The TG5040 build uses the Nuklear UI framework with a custom SDL renderer backen
 
 ## Installation
 
-With Docker installed and running, `make shell` builds the toolchain and drops into a shell inside the container. The container's `~/workspace` is bound to `./workspace` by default. The toolchain is located at `/opt/` inside the container.
+With Docker installed and running, `make -f Makefile.docker shell` pulls the prebuilt toolchain image (`ghcr.io/loveretro/tg5040-toolchain`) and drops into a shell inside the container. The container's `/workspace` path is bound to the project root by default. The cross toolchain is located at `/opt/aarch64-nextui-linux-gnu` inside the container.
 
-After building the first time, unless a dependency of the image has changed, `make shell` will skip building and drop into the shell.
+Because the image is prebuilt, the shell target simply pulls updates and starts the container—no local image build step is required.
 
 ## Development Workflow
 
 - **Host machine**: Edit source code in the project root (`../../src/`, `../../include/`, etc.)
 - **Container**: Build and test inside the Docker container
-- **Volume mapping**: The project root is mounted at `/root/workspace` inside the container
-- **Toolchain**: Located at `/opt/` inside the container
+- **Volume mapping**: The project root is mounted at `/workspace` inside the container
+- **Toolchain**: Located at `/opt/aarch64-nextui-linux-gnu` inside the container
 
 Runtime settings (`config.json`) and reading progress (`reading_history.json`) are generated inside the reader state directory (`$SDL_READER_STATE_DIR`, set by `launch.sh`). The launcher also sets `SDL_READER_DEFAULT_DIR=/mnt/SDCARD` so the browser never leaves the SD card root. Both files are ignored by Git so you can modify them freely on the device or within the container.
 
@@ -121,7 +122,7 @@ Runtime settings (`config.json`) and reading progress (`reading_history.json`) a
 Drop additional `.ttf` or `.otf` files into `ports/tg5040/pak/fonts/` (or the project-root `fonts/` folder before exporting). When you launch the bundle, the Options → Font & Reading Style menu automatically discovers those fonts so you can preview and select them on-device.
 
 ### Container Details
-- The container's `/root/workspace` is mapped to the project root directory
+- The container's `/workspace` is mapped to the project root directory
 - Source code changes on the host are immediately available in the container
 - Built artifacts are stored in the project's `bin/` and `build/` directories
 

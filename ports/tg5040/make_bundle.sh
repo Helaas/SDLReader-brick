@@ -8,6 +8,7 @@ set -x
 # --- Config ---
 BIN="${BIN:-./bin/sdl_reader_cli}"
 DEST="${DEST:-./bundle}"
+SYSROOT="${SYSROOT:-/opt/aarch64-nextui-linux-gnu/aarch64-nextui-linux-gnu/libc}"
 # Check if DEST ends with /lib (meaning we want libs directly in DEST)
 if [[ "$DEST" == */lib ]]; then
     BINDIR="$(dirname "$DEST")/bin"
@@ -25,9 +26,15 @@ fi
 # If the device also provides SDL2_ttf, you can optionally add ^libSDL2_ttf-2\.0\.so\. here too.
 EXCL_REGEX='(^ld-linux-|^libc\.so\.|^libpthread\.so\.|^libm\.so\.|^librt\.so\.|^libdl\.so\.|^libnsl\.so\.|^libresolv\.so\.|^libSDL2-2\.0\.so\.|^libicu)'
 
+SYSROOT_SRC=()
+for p in "$SYSROOT/lib" "$SYSROOT/lib64" "$SYSROOT/usr/lib" "$SYSROOT/usr/lib64" "$SYSROOT/usr/lib/aarch64-nextui-linux-gnu" "$SYSROOT/lib/aarch64-nextui-linux-gnu" "$SYSROOT/usr/lib/aarch64-linux-gnu" "$SYSROOT/lib/aarch64-linux-gnu"; do
+  [ -d "$p" ] && SYSROOT_SRC+=("$p")
+done
+
 echo "START bundling from: $PWD"
 echo "Binary: $BIN"
 echo "Dest:   $DEST"
+echo "Sysroot: $SYSROOT"
 
 # Sanity: binary must exist
 [ -f "$BIN" ] || { echo "Missing binary: $BIN"; exit 1; }
@@ -42,6 +49,14 @@ copy_one() {
   local src="$1"
   local base
   base="$(basename "$src")"
+
+  # prefer sysroot copy if available (avoids pulling host glibc builds)
+  for root in "${SYSROOT_SRC[@]}"; do
+    if [ -f "$root/$base" ]; then
+      src="$root/$base"
+      break
+    fi
+  done
 
   # skip excluded
   if echo "$base" | grep -Eq "$EXCL_REGEX"; then

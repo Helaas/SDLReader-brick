@@ -12,13 +12,24 @@ else
   WORKSPACE_PATH := .
 endif
 
+# Toolchain configuration
+CROSS_COMPILE ?=
+ifndef PREFIX
+  ifneq ($(wildcard /opt/aarch64-nextui-linux-gnu/aarch64-nextui-linux-gnu/libc/usr/include/SDL2),)
+    PREFIX := /opt/aarch64-nextui-linux-gnu/aarch64-nextui-linux-gnu/libc/usr
+  else
+    PREFIX := /usr
+  endif
+endif
+SDL2_INCLUDE := $(PREFIX)/include/SDL2
+
 # Compiler and flags
-CXX      := g++
+CXX      ?= $(if $(CROSS_COMPILE),$(CROSS_COMPILE)g++,g++)
 TG_INCLUDE_DIR := $(BASE_PATH)/include
-CXXFLAGS := -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTG5040_PLATFORM\
+CXXFLAGS = -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTG5040_PLATFORM\
             -I$(WORKSPACE_PATH)/src -I$(WORKSPACE_PATH)/include -I$(TG_INCLUDE_DIR) -I$(BASE_PATH)/mupdf/include \
             -I$(BASE_PATH)/nuklear-tg5040 -I$(BASE_PATH)/nuklear-tg5040/demo/sdl_renderer \
-            -I/usr/local/libarchive-minimal/include -D_REENTRANT -I/usr/include/SDL2
+            -I/usr/local/libarchive-minimal/include -I$(WEBP_PREFIX)/include -D_REENTRANT -I$(SDL2_INCLUDE)
 
 # Source directories
 SRC_DIR = $(WORKSPACE_PATH)/src
@@ -48,19 +59,28 @@ LIBARCHIVE_SRC_DIR := libarchive-$(LIBARCHIVE_VERSION)
 LIBARCHIVE_TARBALL := libarchive-$(LIBARCHIVE_VERSION).tar.gz
 LIBARCHIVE_URL := https://www.libarchive.org/downloads/$(LIBARCHIVE_TARBALL)
 
+# WebP (static build for MuPDF)
+WEBP_VERSION := 1.3.2
+WEBP_SRC_DIR := libwebp-$(WEBP_VERSION)
+WEBP_TARBALL := libwebp-$(WEBP_VERSION).tar.gz
+WEBP_URL := https://storage.googleapis.com/downloads.webmproject.org/releases/webp/$(WEBP_TARBALL)
+WEBP_PREFIX := $(abspath $(BASE_PATH)/webp-install)
+WEBP_LIB := $(WEBP_PREFIX)/lib/libwebp.a
+GUMBO_INCLUDE := $(abspath $(BASE_PATH)/mupdf/thirdparty/gumbo-parser/src)
+
 # Libraries (link order matters)
-# Using static libarchive to avoid bundling extra dependencies
-LIBS := -lSDL2_ttf -lSDL2 \
+# Using static libarchive to avoid bundling extra dependencies; MuPDF is built with bundled third-party libs.
+LIBS := -L$(PREFIX)/lib -lSDL2_ttf -lSDL2 \
   -L$(BASE_PATH)/mupdf/build/release \
   -lmupdf -lmupdf-third \
+  -L$(WEBP_PREFIX)/lib -lwebp -lwebpdemux \
   $(LIBARCHIVE_MINIMAL) \
-  -ljpeg -lopenjp2 -lharfbuzz -ljbig2dec \
-  -lfreetype -lz -llzma -lm -lpthread -ldl -lwebp -lwebpdemux -lgumbo -lstdc++fs
+  -lbz2 -llz4 -lzstd -llzma -lz -lm -lpthread -ldl -lstdc++fs
 
-.PHONY: all clean export-bundle build-mupdf setup-mupdf clean-mupdf build-libarchive clean-libarchive setup-nuklear clean-nuklear check-libarchive
+.PHONY: all clean export-bundle build-mupdf setup-mupdf clean-mupdf build-libarchive clean-libarchive build-webp clean-webp setup-nuklear clean-nuklear check-libarchive
 
-# Default goal - ensures minimal libarchive is built before anything else
-all: setup-nuklear build-libarchive setup-mupdf build-mupdf $(TARGET)
+# Default goal - ensures minimal libarchive and WebP are built before anything else
+all: setup-nuklear build-libarchive build-webp setup-mupdf build-mupdf $(TARGET)
 
 # Helper target to verify minimal libarchive is built
 check-libarchive:
@@ -111,12 +131,13 @@ setup-mupdf:
 	echo "USE_LIBARCHIVE=yes" > $(BASE_PATH)/mupdf/user.make; \
 	echo "HAVE_WEBP=yes" >> $(BASE_PATH)/mupdf/user.make; \
 	echo "XCFLAGS += -DHAVE_LIBARCHIVE -I/usr/local/libarchive-minimal/include" >> $(BASE_PATH)/mupdf/user.make; \
-	echo "XCFLAGS += -DHAVE_WEBP" >> $(BASE_PATH)/mupdf/user.make; \
+	echo "XCFLAGS += -DHAVE_WEBP -I$(WEBP_PREFIX)/include" >> $(BASE_PATH)/mupdf/user.make; \
 	echo "SYS_LIBARCHIVE_CFLAGS := -I/usr/local/libarchive-minimal/include" >> $(BASE_PATH)/mupdf/user.make; \
 	echo "SYS_LIBARCHIVE_LIBS := -L/usr/local/libarchive-minimal/lib -larchive" >> $(BASE_PATH)/mupdf/user.make; \
-	echo "SYS_WEBP_LIBS := -lwebp -lwebpdemux" >> $(BASE_PATH)/mupdf/user.make
+	echo "SYS_WEBP_CFLAGS := -I$(WEBP_PREFIX)/include" >> $(BASE_PATH)/mupdf/user.make; \
+	echo "SYS_WEBP_LIBS := -L$(WEBP_PREFIX)/lib -lwebp -lwebpdemux" >> $(BASE_PATH)/mupdf/user.make
 	@echo "Initializing minimal required submodules..."; \
-	cd $(BASE_PATH)/mupdf && git submodule update --init --depth 1 thirdparty/freetype thirdparty/harfbuzz thirdparty/jbig2dec thirdparty/libjpeg thirdparty/openjpeg thirdparty/zlib thirdparty/lcms2
+	cd $(BASE_PATH)/mupdf && git submodule update --init --depth 1 thirdparty/freetype thirdparty/harfbuzz thirdparty/jbig2dec thirdparty/libjpeg thirdparty/openjpeg thirdparty/zlib thirdparty/lcms2 thirdparty/gumbo-parser
 	@echo "Applying patches to disable barcode compilation when barcode=no..."; \
 	cd $(BASE_PATH)/mupdf && sed -i 's/-std=c++20/-std=c++17/g' Makelists
 
@@ -135,7 +156,11 @@ $(LIBARCHIVE_MINIMAL):
 		cd $(BASE_PATH) && \
 		if [ ! -d "$(LIBARCHIVE_SRC_DIR)" ]; then \
 			echo "Downloading libarchive $(LIBARCHIVE_VERSION)..."; \
-			curl -L $(LIBARCHIVE_URL) | tar -xzf -; \
+			if command -v curl >/dev/null 2>&1; then \
+				curl -L $(LIBARCHIVE_URL) | tar -xzf -; \
+			else \
+				wget -O - $(LIBARCHIVE_URL) | tar -xzf -; \
+			fi; \
 		fi && \
 		cd $(LIBARCHIVE_SRC_DIR) && \
 		echo "Configuring minimal libarchive build (includes RAR5 support)..."; \
@@ -160,12 +185,34 @@ $(LIBARCHIVE_MINIMAL):
 		echo "Minimal libarchive already exists at $(LIBARCHIVE_MINIMAL)"; \
 	fi
 
+# Build static libwebp (decoder + demux) for MuPDF
+build-webp: $(WEBP_LIB)
+
+$(WEBP_LIB):
+	@echo "Building static libwebp $(WEBP_VERSION)..."
+	@cd $(BASE_PATH) && \
+	if [ ! -d "$(WEBP_SRC_DIR)" ]; then \
+		echo "Downloading libwebp $(WEBP_VERSION)..."; \
+		if command -v curl >/dev/null 2>&1; then \
+			curl -L $(WEBP_URL) | tar -xzf -; \
+		else \
+			wget -O - $(WEBP_URL) | tar -xzf -; \
+		fi; \
+	fi && \
+	cd $(WEBP_SRC_DIR) && \
+	./configure --prefix=$(WEBP_PREFIX) --disable-shared --enable-static \
+		--disable-png --disable-jpeg --disable-tiff --disable-gif \
+		--enable-libwebpdecoder --disable-libwebpextras \
+		CC="$(CROSS_COMPILE)gcc" CXX="$(CROSS_COMPILE)g++" && \
+	$(MAKE) -j$$(nproc) && \
+	$(MAKE) install
+
 # Build MuPDF with custom libarchive support for CBR/CBZ files and WebP support
-build-mupdf: build-libarchive
+build-mupdf: build-libarchive build-webp
 	@echo "Building MuPDF with custom libarchive support for CBR/CBZ files, WebP support, and HTML engine..."
 	@cd $(BASE_PATH)/mupdf && $(MAKE) libs \
-		CFLAGS="-std=c17 -D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0 -DHAVE_LIBARCHIVE -DHAVE_WEBP -Iinclude" \
-		CXXFLAGS="-std=c++17 -D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0 -DHAVE_LIBARCHIVE -DHAVE_WEBP -Iinclude" \
+		CFLAGS="-std=c17 -D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0 -DHAVE_LIBARCHIVE -DHAVE_WEBP -Iinclude -I$(WEBP_PREFIX)/include -I$(GUMBO_INCLUDE)" \
+		CXXFLAGS="-std=c++17 -D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0 -DHAVE_LIBARCHIVE -DHAVE_WEBP -Iinclude -I$(WEBP_PREFIX)/include -I$(GUMBO_INCLUDE)" \
 		HAVE_LIBARCHIVE=yes \
 		HAVE_WEBP=yes \
 		mujs=no \
@@ -175,7 +222,7 @@ build-mupdf: build-libarchive
 		svg=no \
 		brotli=no \
 		xps=no \
-		USE_SYSTEM_LIBS=yes \
+		USE_SYSTEM_LIBS=no \
 		USE_SYSTEM_FREETYPE=no \
 		USE_SYSTEM_HARFBUZZ=no \
 		USE_SYSTEM_JBIG2DEC=no \
@@ -202,9 +249,7 @@ $(BUILD_DIR):
 # Link final binary - depends on minimal libarchive being built
 $(TARGET): $(OBJS) $(LIBARCHIVE_MINIMAL) | $(BIN_DIR)
 	@echo "Linking sdl_reader_cli with minimal libarchive..."
-	$(CXX) $(OBJS) $(LIBS) -o $@
-	@patchelf --remove-rpath "$@" 2>/dev/null || true
-	@patchelf --set-rpath '$$ORIGIN/../lib' "$@"
+	$(CXX) $(OBJS) $(LIBS) -Wl,-rpath,'$$ORIGIN/../lib' -o $@
 	@echo "Binary built successfully: $@"
 
 # Compile source files into object files in the build directory
@@ -238,8 +283,8 @@ clean-mupdf:
 # Clean libarchive build and installation
 clean-libarchive:
 	@echo "Cleaning minimal libarchive..."
-	@if [ -d "$(BASE_PATH)/libarchive-3.3.3" ]; then \
-		cd $(BASE_PATH)/libarchive-3.3.3 && make clean 2>/dev/null || true; \
+	@if [ -d "$(BASE_PATH)/$(LIBARCHIVE_SRC_DIR)" ]; then \
+		cd $(BASE_PATH)/$(LIBARCHIVE_SRC_DIR) && make clean 2>/dev/null || true; \
 	fi
 	@echo "Removing libarchive installation..."
 	@if command -v sudo >/dev/null 2>&1; then \
@@ -249,15 +294,21 @@ clean-libarchive:
 	fi
 	@echo "Minimal libarchive cleaned"
 
+# Clean WebP build
+clean-webp:
+	@echo "Cleaning libwebp..."
+	rm -rf $(BASE_PATH)/$(WEBP_SRC_DIR) $(WEBP_PREFIX)
+
 # Clean Nuklear checkout
 clean-nuklear:
 	@echo "Removing Nuklear checkout..."
 	rm -rf $(BASE_PATH)/nuklear-tg5040
 
 # Deep clean - removes everything including downloaded dependencies
-clean-all: clean clean-mupdf clean-libarchive clean-nuklear
+clean-all: clean clean-mupdf clean-libarchive clean-webp clean-nuklear
 	@echo "Removing downloaded dependencies..."
-	rm -rf $(BASE_PATH)/libarchive-3.3.3
+	rm -rf $(BASE_PATH)/$(LIBARCHIVE_SRC_DIR) $(BASE_PATH)/libarchive-3.3.3
+	rm -rf $(BASE_PATH)/$(WEBP_SRC_DIR) $(WEBP_PREFIX)
 	rm -rf $(BASE_PATH)/mupdf
 	rm -f $(BASE_PATH)/webp-upstream-697749.patch
 	rm -rf $(BASE_PATH)/pak
