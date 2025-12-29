@@ -81,7 +81,7 @@ make export-tg5040
 
 The exported bundle (`ports/tg5040/pak/`) contains:
 - **bin/**: `sdl_reader_cli` (legacy utilities such as `jq`/`minui-list` are preserved if present before export)
-- **lib/**: All required shared library dependencies with patched RPATHs
+- **lib/**: All required shared library dependencies with embedded RPATHs
 - **fonts/**: Bundled fonts for the runtime picker (Inter, JetBrains Mono, Noto Serif Condensed, Roboto)
 - **res/**: Optional resource files (bundled docs, etc.)
 - **launch.sh**: Launcher script that invokes `./bin/sdl_reader_cli --browse`
@@ -89,9 +89,7 @@ The exported bundle (`ports/tg5040/pak/`) contains:
 
 ## Applied Patches
 
-When you run `make tg5040` or `make export-tg5040`, the build system applies `webp-upstream-697749.patch` (MuPDF) to backport WebP decoding fixes from KOReader (shared with other platforms).
-
-The TG5040 build uses the Nuklear UI framework with a custom SDL renderer backend optimized for the device's SDL 2.0.10 stack and low-power GPU.
+When you run `make tg5040` or `make export-tg5040`, the build system applies `webp-upstream-697749.patch` (MuPDF) to backport WebP decoding fixes from KOReader (shared with other platforms). The updated GHCR toolchain ships a modern SDL2 stack, so no Nuklear SDL renderer compatibility patch is required; we use the upstream renderer from Nuklear 4.12.8.
 
 ### Bundle Features
 - **Self-contained**: Includes all dependencies and resources
