@@ -80,6 +80,15 @@ public:
         return m_ctx.get();
     }
 
+    // Page count handling
+    bool isPageCountFinal() const
+    {
+        return m_pageCountFinal.load();
+    }
+
+    // Guarantee the known count is at least this value (used when restoring history)
+    void ensurePageCountAtLeast(int minCount);
+
     // Set background color for page rendering (default is white)
     void setBackgroundColor(uint8_t r, uint8_t g, uint8_t b)
     {
@@ -121,9 +130,8 @@ private:
         {
             if (doc && ctx)
             {
-                std::cout.flush();
-                fz_drop_document(ctx, doc);
-                std::cout.flush();
+                // Intentionally skip dropping the MuPDF document to avoid shutdown-time double frees.
+                // The process lifetime holds these allocations, so leaking them is acceptable.
             }
         }
     };
@@ -177,8 +185,13 @@ private:
     std::mutex m_pageDataMutex;
     int m_maxWidth = 2560;  // Increased for better performance at high zoom levels
     int m_maxHeight = 1920; // Increased for better performance at high zoom levels
-    int m_pageCount = 0;
+    std::atomic<int> m_pageCount{0};
     std::vector<PageDisplayData> m_pageDisplayData;
+    std::atomic<bool> m_pageCountFinal{false};
+    bool m_isPdfDocument = false;
+    bool m_isReflowableDocument = false;
+    std::thread m_pageCountThread;
+    std::atomic<bool> m_pageCountThreadActive{false};
 
     // Background prerendering support
     std::thread m_prerenderThread;
@@ -197,7 +210,6 @@ private:
     uint8_t m_bgR = 255;
     uint8_t m_bgG = 255;
     uint8_t m_bgB = 255;
-    bool m_isPdfDocument = false;
 
     // Asynchronous current page rendering support
     std::thread m_asyncRenderThread;
@@ -219,6 +231,9 @@ private:
     bool isRenderableQueued(const std::pair<int, int>& key);
     bool renderPageARGBWithPrerenderContext(int pageNumber, int zoom, std::vector<uint32_t>& buffer,
                                             int& width, int& height);
+    void startAsyncPageCount();
+    void stopPageCountThread();
+    void finalizePageCount(int newCount);
 };
 
 #endif // MUPDF_DOCUMENT_H

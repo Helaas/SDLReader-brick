@@ -160,21 +160,36 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     }
 #endif
 
+    int lastPage = m_readingHistoryManager->getLastPage(m_documentPath);
+
+    if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
+    {
+        if (lastPage >= 0)
+        {
+            muDoc->ensurePageCountAtLeast(lastPage + 1);
+        }
+    }
+
     int pageCount = m_document->getPageCount();
     if (pageCount == 0)
     {
         throw std::runtime_error("Document contains no pages: " + filename);
     }
 
+    int navigationPageCount = pageCount;
+    if (lastPage >= 0 && (lastPage + 1) > navigationPageCount)
+    {
+        navigationPageCount = lastPage + 1;
+    }
+
     // Set page count in navigation manager
-    m_navigationManager->setPageCount(pageCount);
+    m_navigationManager->setPageCount(navigationPageCount);
 
     // Check if we have a last read page for this document
-    int lastPage = m_readingHistoryManager->getLastPage(m_documentPath);
-    if (lastPage >= 0 && lastPage < pageCount)
+    if (lastPage >= 0 && lastPage < navigationPageCount)
     {
         m_navigationManager->setCurrentPage(lastPage);
-        std::cout << "Restored last read page: " << (lastPage + 1) << " of " << pageCount << std::endl;
+        std::cout << "Restored last read page: " << (lastPage + 1) << " of " << navigationPageCount << std::endl;
     }
     else
     {
@@ -184,7 +199,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     // Initialize InputManager
     m_inputManager = std::make_unique<InputManager>();
     m_inputManager->setZoomStep(m_cachedConfig.zoomStep);
-    m_inputManager->setPageCount(pageCount);
+    m_inputManager->setPageCount(navigationPageCount);
 
     // Note: Custom font loader is already installed before document opening
     // (see earlier in constructor, before m_document->open() call)
@@ -304,6 +319,8 @@ void App::run()
         {
             m_guiManager->newFrame();
         }
+
+        refreshPageCountFromDocument();
 
         while (SDL_PollEvent(&event) != 0)
         {
@@ -1111,6 +1128,54 @@ void App::updateInputState(const SDL_Event& event)
         }
         break;
     }
+}
+
+void App::refreshPageCountFromDocument()
+{
+    auto* muDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
+    if (!muDoc || !m_navigationManager || !m_inputManager)
+    {
+        return;
+    }
+
+    if (!muDoc->isPageCountFinal())
+    {
+        return;
+    }
+
+    int docPageCount = muDoc->getPageCount();
+    if (docPageCount <= 0)
+    {
+        return;
+    }
+
+    int currentNavCount = m_navigationManager->getPageCount();
+    if (docPageCount == currentNavCount)
+    {
+        return;
+    }
+
+    m_navigationManager->setPageCount(docPageCount);
+    m_inputManager->setPageCount(docPageCount);
+
+    if (m_guiManager)
+    {
+        m_guiManager->setPageCount(docPageCount);
+    }
+
+    int currentPage = m_navigationManager->getCurrentPage();
+    if (currentPage >= docPageCount)
+    {
+        currentPage = docPageCount - 1;
+        m_navigationManager->setCurrentPage(currentPage);
+    }
+
+    if (m_guiManager)
+    {
+        m_guiManager->setCurrentPage(currentPage);
+    }
+
+    markDirty();
 }
 
 void App::loadDocument()

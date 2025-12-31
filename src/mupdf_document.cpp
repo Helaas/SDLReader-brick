@@ -34,6 +34,7 @@ MuPdfDocument::~MuPdfDocument()
 
     m_asyncShutdown = true;
     cancelPrerendering();
+    stopPageCountThread();
     joinAsyncRenderThread();
 
     {
@@ -44,6 +45,14 @@ MuPdfDocument::~MuPdfDocument()
     }
 
     resetDisplayCache();
+
+    // Allow process teardown to leak MuPDF allocations instead of risking double-free during shutdown.
+    // These contexts/documents live for the process lifetime; skipping destruction here avoids crashes
+    // observed in macOS malloc guard.
+    m_doc.release();
+    m_prerenderDoc.release();
+    m_ctx.release();
+    m_prerenderCtx.release();
 
     std::cout.flush();
 }
@@ -56,6 +65,8 @@ bool MuPdfDocument::open(const std::string& filePath)
 // Internal version with context reuse option
 bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
 {
+    stopPageCountThread();
+
     if (!reuseContexts)
     {
         close();
@@ -72,6 +83,7 @@ bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
 
     // PDF pages should always render on a white canvas even in dark themes
     m_isPdfDocument = false;
+    m_isReflowableDocument = false;
     try
     {
         std::filesystem::path path(filePath);
@@ -80,10 +92,12 @@ bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
                        [](unsigned char c)
                        { return static_cast<char>(std::tolower(c)); });
         m_isPdfDocument = (ext == ".pdf");
+        m_isReflowableDocument = (ext == ".epub" || ext == ".mobi" || ext == ".txt");
     }
     catch (...)
     {
         m_isPdfDocument = false;
+        m_isReflowableDocument = false;
     }
 
     fz_context* ctx = nullptr;
@@ -185,7 +199,24 @@ bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
     }
 
     m_prerenderDoc = std::unique_ptr<fz_document, DocumentDeleter>(prerenderDocPtr, DocumentDeleter{prerenderCtx});
-    m_pageCount = fz_count_pages(ctx, doc);
+
+    m_pageCountFinal.store(false);
+    m_pageCountThreadActive.store(false);
+
+    int initialPageCount = 0;
+    if (m_isReflowableDocument)
+    {
+        // Start with a generous provisional page count so navigation isn't blocked while counting.
+        // Final count will be resolved asynchronously or when we hit the real end of the book.
+        initialPageCount = 400;
+    }
+    else
+    {
+        initialPageCount = fz_count_pages(ctx, doc);
+        m_pageCountFinal.store(true);
+    }
+
+    m_pageCount.store(initialPageCount);
 
     m_asyncShutdown = false;
     resetDisplayCache();
@@ -196,7 +227,123 @@ bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
         m_argbCache.clear();
     }
 
+    if (m_isReflowableDocument)
+    {
+        startAsyncPageCount();
+    }
+
     return true;
+}
+
+void MuPdfDocument::ensurePageCountAtLeast(int minCount)
+{
+    if (minCount <= 0 || m_pageCountFinal.load())
+    {
+        return;
+    }
+
+    int current = m_pageCount.load();
+    if (minCount > current)
+    {
+        m_pageCount.store(minCount);
+        std::lock_guard<std::mutex> dataLock(m_pageDataMutex);
+        if (static_cast<int>(m_pageDisplayData.size()) < minCount)
+        {
+            m_pageDisplayData.resize(static_cast<size_t>(minCount));
+        }
+    }
+}
+
+void MuPdfDocument::startAsyncPageCount()
+{
+    if (m_pageCountThreadActive.load())
+    {
+        return;
+    }
+
+    if (m_pageCountThread.joinable())
+    {
+        m_pageCountThread.join();
+    }
+
+    if (m_asyncShutdown.load())
+    {
+        return;
+    }
+
+    m_pageCountThreadActive.store(true);
+    m_pageCountThread = std::thread([this]()
+                                    {
+        if (m_asyncShutdown.load())
+        {
+            m_pageCountThreadActive.store(false);
+            return;
+        }
+
+        std::string path = m_filePath;
+        if (path.empty())
+        {
+            m_pageCountThreadActive.store(false);
+            return;
+        }
+
+        int resolvedCount = 0;
+        fz_context* localCtx = fz_new_context(nullptr, getSharedMuPdfLocks(), 64 << 20);
+        if (!localCtx)
+        {
+            m_pageCountThreadActive.store(false);
+            return;
+        }
+        fz_register_document_handlers(localCtx);
+
+        fz_document* localDoc = nullptr;
+        fz_var(localDoc);
+        fz_var(resolvedCount);
+        fz_try(localCtx)
+        {
+            localDoc = fz_open_document(localCtx, path.c_str());
+            resolvedCount = fz_count_pages(localCtx, localDoc);
+        }
+        fz_catch(localCtx)
+        {
+            const char* msg = fz_caught_message(localCtx);
+            if (msg && std::strlen(msg) > 0)
+            {
+                std::cerr << "Async page count failed: " << msg << std::endl;
+            }
+        }
+
+        if (resolvedCount > 0 && !m_asyncShutdown.load())
+        {
+            finalizePageCount(resolvedCount);
+        }
+
+        m_pageCountThreadActive.store(false); });
+}
+
+void MuPdfDocument::stopPageCountThread()
+{
+    if (m_pageCountThread.joinable())
+    {
+        m_pageCountThreadActive.store(false);
+        m_pageCountThread.join();
+    }
+}
+
+void MuPdfDocument::finalizePageCount(int newCount)
+{
+    int clamped = std::max(newCount, 1);
+    m_pageCount.store(clamped);
+
+    {
+        std::lock_guard<std::mutex> dataLock(m_pageDataMutex);
+        if (static_cast<int>(m_pageDisplayData.size()) < clamped)
+        {
+            m_pageDisplayData.resize(static_cast<size_t>(clamped));
+        }
+    }
+
+    m_pageCountFinal.store(true);
 }
 
 bool MuPdfDocument::reopenWithCSS(const std::string& css)
@@ -214,6 +361,7 @@ bool MuPdfDocument::reopenWithCSS(const std::string& css)
 
     // Stop any background operations before we touch shared state
     cancelPrerendering();
+    stopPageCountThread();
 
     std::unique_lock<std::mutex> renderLock(m_renderMutex);
     std::unique_lock<std::mutex> prerenderLock(m_prerenderMutex);
@@ -273,9 +421,19 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int& width,
         throw std::runtime_error("Document not open");
     }
 
-    if (pageNumber < 0 || pageNumber >= m_pageCount)
+    int currentPageCount = m_pageCount.load();
+    if (pageNumber < 0)
     {
         throw std::runtime_error("Invalid page number: " + std::to_string(pageNumber));
+    }
+
+    if (pageNumber >= currentPageCount)
+    {
+        if (m_pageCountFinal.load())
+        {
+            throw std::runtime_error("Invalid page number: " + std::to_string(pageNumber));
+        }
+        ensurePageCountAtLeast(pageNumber + 1);
     }
 
     auto key = std::make_pair(pageNumber, zoom);
@@ -338,9 +496,19 @@ MuPdfDocument::ArgbBufferPtr MuPdfDocument::renderPageARGB(int pageNumber, int& 
         throw std::runtime_error("Document not open");
     }
 
-    if (pageNumber < 0 || pageNumber >= m_pageCount)
+    int currentPageCount = m_pageCount.load();
+    if (pageNumber < 0)
     {
         throw std::runtime_error("Invalid page number: " + std::to_string(pageNumber));
+    }
+
+    if (pageNumber >= currentPageCount)
+    {
+        if (m_pageCountFinal.load())
+        {
+            throw std::runtime_error("Invalid page number: " + std::to_string(pageNumber));
+        }
+        ensurePageCountAtLeast(pageNumber + 1);
     }
 
     auto key = std::make_pair(pageNumber, zoom);
@@ -363,7 +531,19 @@ MuPdfDocument::ArgbBufferPtr MuPdfDocument::renderPageARGB(int pageNumber, int& 
         throw std::runtime_error("MuPDF context is null");
     }
 
-    ensureDisplayList(pageNumber);
+    try
+    {
+        ensureDisplayList(pageNumber);
+    }
+    catch (const std::exception& e)
+    {
+        if (!m_pageCountFinal.load())
+        {
+            finalizePageCount(std::max(pageNumber, 1));
+        }
+        throw;
+    }
+
     PageScaleInfo scaleInfo = computePageScaleInfoLocked(pageNumber, zoom);
 
     if (!scaleInfo.displayList)
@@ -615,6 +795,10 @@ int MuPdfDocument::getPageWidthNative(int pageNumber)
     }
     catch (const std::exception& e)
     {
+        if (!m_pageCountFinal.load())
+        {
+            finalizePageCount(std::max(pageNumber, 1));
+        }
         std::cerr << e.what() << std::endl;
         return 0;
     }
@@ -642,6 +826,10 @@ int MuPdfDocument::getPageHeightNative(int pageNumber)
     }
     catch (const std::exception& e)
     {
+        if (!m_pageCountFinal.load())
+        {
+            finalizePageCount(std::max(pageNumber, 1));
+        }
         std::cerr << e.what() << std::endl;
         return 0;
     }
@@ -702,7 +890,7 @@ int MuPdfDocument::getPageHeightEffective(int pageNumber, int zoom)
 
 int MuPdfDocument::getPageCount() const
 {
-    return m_pageCount;
+    return m_pageCount.load();
 }
 
 void MuPdfDocument::setMaxRenderSize(int width, int height)
@@ -761,6 +949,7 @@ void MuPdfDocument::setMaxRenderSize(int width, int height)
 void MuPdfDocument::close()
 {
     cancelPrerendering();
+    stopPageCountThread();
     joinAsyncRenderThread();
 
     m_doc.reset();
@@ -779,7 +968,10 @@ void MuPdfDocument::close()
         m_dimensionCache.clear();
     }
 
-    m_pageCount = 0;
+    m_pageCount.store(0);
+    m_pageCountFinal.store(false);
+    m_pageCountThreadActive.store(false);
+    m_isReflowableDocument = false;
     resetDisplayCache();
 }
 
@@ -874,9 +1066,10 @@ void MuPdfDocument::resetDisplayCache()
 {
     std::lock_guard<std::mutex> lock(m_pageDataMutex);
     m_pageDisplayData.clear();
-    if (m_pageCount > 0)
+    int pageCount = m_pageCount.load();
+    if (pageCount > 0)
     {
-        m_pageDisplayData.resize(static_cast<size_t>(m_pageCount));
+        m_pageDisplayData.resize(static_cast<size_t>(pageCount));
     }
     m_dimensionCache.clear();
 }
@@ -960,7 +1153,8 @@ void MuPdfDocument::ensureDisplayList(int pageNumber)
         std::lock_guard<std::mutex> dataLock(m_pageDataMutex);
         if (pageNumber >= static_cast<int>(m_pageDisplayData.size()))
         {
-            m_pageDisplayData.resize(static_cast<size_t>(m_pageCount));
+            int requiredSize = std::max(m_pageCount.load(), pageNumber + 1);
+            m_pageDisplayData.resize(static_cast<size_t>(requiredSize));
         }
 
         auto& entry = m_pageDisplayData[pageNumber];
@@ -1302,8 +1496,18 @@ void MuPdfDocument::prerenderPageInternal(int pageNumber, int scale, uint64_t ge
 
     // Original body from prerenderPage with added stale checks
     // Validate page number
-    if (pageNumber < 0 || pageNumber >= m_pageCount)
+    int knownCount = m_pageCount.load();
+    if (pageNumber < 0)
     {
+        return;
+    }
+
+    if (pageNumber >= knownCount)
+    {
+        if (!m_pageCountFinal.load())
+        {
+            return; // Don't prerender beyond known range until count resolves
+        }
         return;
     }
 
@@ -1469,7 +1673,9 @@ void MuPdfDocument::prerenderAdjacentPagesInternal(int currentPage, int scale, u
         return;
     }
 
-    if (currentPage + 1 < m_pageCount)
+    int knownCount = m_pageCount.load();
+
+    if (currentPage + 1 < knownCount)
     {
         prerenderPageInternal(currentPage + 1, scale, generationToken);
     }
@@ -1489,7 +1695,7 @@ void MuPdfDocument::prerenderAdjacentPagesInternal(int currentPage, int scale, u
         return;
     }
 
-    if (currentPage + 2 < m_pageCount)
+    if (currentPage + 2 < knownCount)
     {
         prerenderPageInternal(currentPage + 2, scale, generationToken);
     }

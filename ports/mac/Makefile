@@ -11,7 +11,7 @@
 #   make help         # Show available targets
 
 # Compiler
-CXX = g++
+CXX = clang++
 
 # Source directories
 SRC_DIR = ../../src
@@ -37,6 +37,9 @@ NUKLEAR_DIR = nuklear-mac
 # Local MuPDF Build Paths (using our custom build with libarchive support)
 MUPDF_BUILD_PATH = mupdf/build/release
 
+# Sanitizer toggle (set SANITIZE=address to enable ASan)
+SANITIZE ?=
+
 # Compiler flags
 # -std=c++17: Use C++17 standard
 # -Wall -Wextra: Enable common warnings
@@ -46,6 +49,12 @@ MUPDF_BUILD_PATH = mupdf/build/release
 # -I$(NUKLEAR_DIR): Include path for Nuklear headers
 # -I$(NUKLEAR_DIR)/demo/sdl_renderer: Include path for Nuklear SDL renderer backend
 CXXFLAGS = -std=c++17 -Wall -Wextra -g -Imupdf/include -I$(SRC_DIR) -I../../include -I$(NUKLEAR_DIR) -I$(NUKLEAR_DIR)/demo/sdl_renderer
+LDFLAGS  =
+
+ifeq ($(SANITIZE),address)
+  CXXFLAGS += -fsanitize=address -fno-omit-frame-pointer
+  LDFLAGS  += -fsanitize=address
+endif
 
 # Include paths for SDL2, SDL2_ttf, and SDL2_image
 # pkg-config --cflags SDL2_ttf SDL2_image added for explicit header paths
@@ -157,7 +166,7 @@ $(BUILD_DIR):
 
 # Link the executable
 $(TARGET): $(OBJS) | $(BIN_DIR)
-	$(CXX) $(OBJS) $(LIBS) -o $@
+	$(CXX) $(OBJS) $(LDFLAGS) $(LIBS) -o $@
 
 # Compile source files into object files in the build directory
 # This rule handles both src/ and cli/ cpp files
