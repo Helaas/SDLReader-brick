@@ -332,7 +332,10 @@ void RenderManager::renderPageInfo(NavigationManager* navigationManager, Viewpor
         SDL_Color borderColor = {255, 255, 255, 180};
         SDL_Color shadowColor = {0, 0, 0, 120};
 
-        std::string pageInfo = "Page " + std::to_string(navigationManager->getCurrentPage() + 1) + " / " + std::to_string(navigationManager->getPageCount());
+        int displayCount = navigationManager->getDisplayPageCount();
+        bool estimated = navigationManager->isDisplayPageCountEstimated();
+        std::string pageInfo = "Page " + std::to_string(navigationManager->getCurrentPage() + 1) + " / " +
+                               std::to_string(displayCount) + (estimated ? "*" : "");
 
         int textW = 0, textH = 0;
         if (!m_textRenderer->measureText(pageInfo, textW, textH))

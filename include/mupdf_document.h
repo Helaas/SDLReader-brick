@@ -86,6 +86,11 @@ public:
         return m_pageCountFinal.load();
     }
 
+    bool isPageCountEstimated() const
+    {
+        return m_pageCountEstimated.load();
+    }
+
     // Guarantee the known count is at least this value (used when restoring history)
     void ensurePageCountAtLeast(int minCount);
 
@@ -188,8 +193,10 @@ private:
     std::atomic<int> m_pageCount{0};
     std::vector<PageDisplayData> m_pageDisplayData;
     std::atomic<bool> m_pageCountFinal{false};
+    std::atomic<bool> m_pageCountEstimated{false};
     bool m_isPdfDocument = false;
     bool m_isReflowableDocument = false;
+    bool m_isTxtDocument = false;
     std::thread m_pageCountThread;
     std::atomic<bool> m_pageCountThreadActive{false};
 

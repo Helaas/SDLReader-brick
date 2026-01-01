@@ -54,9 +54,10 @@ public:
     {
         m_pageJumpCallback = callback;
     }
-    void setPageCount(int pageCount)
+    void setPageCount(int pageCount, bool estimated = false)
     {
         m_pageCount = pageCount;
+        m_pageCountEstimated = estimated;
     }
     void setCurrentPage(int currentPage)
     {
@@ -94,6 +95,7 @@ private:
 
     int m_pageCount = 0;
     int m_currentPage = 0;
+    bool m_pageCountEstimated = false;
 
     std::function<void(const FontConfig&)> m_fontApplyCallback;
     std::function<void()> m_closeCallback;

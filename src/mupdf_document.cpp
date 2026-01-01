@@ -84,6 +84,8 @@ bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
     // PDF pages should always render on a white canvas even in dark themes
     m_isPdfDocument = false;
     m_isReflowableDocument = false;
+    m_isTxtDocument = false;
+    m_pageCountEstimated.store(false);
     try
     {
         std::filesystem::path path(filePath);
@@ -92,11 +94,13 @@ bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
                        [](unsigned char c)
                        { return static_cast<char>(std::tolower(c)); });
         m_isPdfDocument = (ext == ".pdf");
+        m_isTxtDocument = (ext == ".txt");
         m_isReflowableDocument = (ext == ".epub" || ext == ".mobi" || ext == ".txt");
     }
     catch (...)
     {
         m_isPdfDocument = false;
+        m_isTxtDocument = false;
         m_isReflowableDocument = false;
     }
 
@@ -202,18 +206,38 @@ bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
 
     m_pageCountFinal.store(false);
     m_pageCountThreadActive.store(false);
+    m_pageCountEstimated.store(false);
 
     int initialPageCount = 0;
     if (m_isReflowableDocument)
     {
-        // Start with a generous provisional page count so navigation isn't blocked while counting.
-        // Final count will be resolved asynchronously or when we hit the real end of the book.
-        initialPageCount = 400;
+        // Estimate page count for reflowable formats (EPUB/MOBI/TXT) using file size to avoid blocking UI.
+        // Different base estimates to account for compression and layout density.
+        int bytesPerPage = 3000; // default for EPUB/MOBI
+        if (m_isTxtDocument)
+        {
+            bytesPerPage = 2500;
+        }
+
+        try
+        {
+            auto fileSize = std::filesystem::file_size(filePath);
+            initialPageCount = std::max(1, static_cast<int>((fileSize + bytesPerPage - 1) / bytesPerPage));
+            // Small buffer to avoid underestimation
+            initialPageCount = static_cast<int>(initialPageCount * 1.1);
+        }
+        catch (...)
+        {
+            initialPageCount = 400; // fallback estimate
+        }
+
+        m_pageCountEstimated.store(true);
     }
     else
     {
         initialPageCount = fz_count_pages(ctx, doc);
         m_pageCountFinal.store(true);
+        m_pageCountEstimated.store(false);
     }
 
     m_pageCount.store(initialPageCount);
@@ -227,7 +251,8 @@ bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
         m_argbCache.clear();
     }
 
-    if (m_isReflowableDocument)
+    // Skip async page counting for TXT files - it blocks due to MuPDF shared locks
+    if (m_isReflowableDocument && !m_isTxtDocument)
     {
         startAsyncPageCount();
     }
@@ -344,6 +369,7 @@ void MuPdfDocument::finalizePageCount(int newCount)
     }
 
     m_pageCountFinal.store(true);
+    m_pageCountEstimated.store(false);
 }
 
 bool MuPdfDocument::reopenWithCSS(const std::string& css)
@@ -970,8 +996,10 @@ void MuPdfDocument::close()
 
     m_pageCount.store(0);
     m_pageCountFinal.store(false);
+    m_pageCountEstimated.store(false);
     m_pageCountThreadActive.store(false);
     m_isReflowableDocument = false;
+    m_isTxtDocument = false;
     resetDisplayCache();
 }
 

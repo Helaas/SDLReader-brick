@@ -171,6 +171,11 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     }
 
     int pageCount = m_document->getPageCount();
+    bool pageCountEstimated = false;
+    if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
+    {
+        pageCountEstimated = !muDoc->isPageCountFinal() && muDoc->isPageCountEstimated();
+    }
     if (pageCount == 0)
     {
         throw std::runtime_error("Document contains no pages: " + filename);
@@ -184,6 +189,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
 
     // Set page count in navigation manager
     m_navigationManager->setPageCount(navigationPageCount);
+    m_navigationManager->setDisplayPageCount(navigationPageCount, pageCountEstimated);
 
     // Check if we have a last read page for this document
     if (lastPage >= 0 && lastPage < navigationPageCount)
@@ -236,7 +242,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
                                       [this]() { updatePageDisplayTime(); }); });
 
     // Initialize page information in GUI manager
-    m_guiManager->setPageCount(m_navigationManager->getPageCount());
+    m_guiManager->setPageCount(m_navigationManager->getDisplayPageCount(), pageCountEstimated);
     m_guiManager->setCurrentPage(m_navigationManager->getCurrentPage());
 
     // Always set the saved configuration in GUI (even for Document Default)
@@ -1156,11 +1162,12 @@ void App::refreshPageCountFromDocument()
     }
 
     m_navigationManager->setPageCount(docPageCount);
+    m_navigationManager->setDisplayPageCount(docPageCount, false);
     m_inputManager->setPageCount(docPageCount);
 
     if (m_guiManager)
     {
-        m_guiManager->setPageCount(docPageCount);
+        m_guiManager->setPageCount(docPageCount, false);
     }
 
     int currentPage = m_navigationManager->getCurrentPage();
@@ -1310,11 +1317,12 @@ void App::applyPendingFontChange()
 
                     // Update page count after reopening
                     m_navigationManager->setPageCount(pageCount);
+                    m_navigationManager->setDisplayPageCount(pageCount, false);
 
                     // Update GUI manager's page count for the font menu display
                     if (m_guiManager)
                     {
-                        m_guiManager->setPageCount(pageCount);
+                        m_guiManager->setPageCount(pageCount, false);
                     }
 
                     // Clamp scroll to ensure it's within bounds
