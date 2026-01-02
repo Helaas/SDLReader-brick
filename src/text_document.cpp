@@ -229,6 +229,7 @@ TextDocument::Layout TextDocument::buildLayoutForSize(int fontSize)
     int contentWidthPx = std::max(targetWidth - marginX * 2, layout.charsPerLine * layout.charWidth);
     int maxLineWidthPx = std::max(1, contentWidthPx);
     int maxObservedLineWidth = 0;
+    std::unordered_map<std::string, int> widthCache;
 
     // Measure actual text width so proportional fonts don't wrap prematurely
     auto measureWidth = [&](const std::string& text)
@@ -238,13 +239,22 @@ TextDocument::Layout TextDocument::buildLayoutForSize(int fontSize)
             return 0;
         }
 
+        auto it = widthCache.find(text);
+        if (it != widthCache.end())
+        {
+            return it->second;
+        }
+
         int w = 0;
         if (TTF_SizeUTF8(font, text.c_str(), &w, nullptr) == 0)
         {
+            widthCache.emplace(text, w);
             return w;
         }
 
-        return static_cast<int>(text.size()) * layout.charWidth;
+        w = static_cast<int>(text.size()) * layout.charWidth;
+        widthCache.emplace(text, w);
+        return w;
     };
 
     auto wrapLine = [&](const std::string& line)
@@ -255,77 +265,95 @@ TextDocument::Layout TextDocument::buildLayoutForSize(int fontSize)
             return;
         }
 
-        size_t pos = 0;
-        const size_t len = line.size();
-        while (pos < len)
+        std::vector<std::pair<std::string, int>> tokens;
+        tokens.reserve(line.size() / 2 + 1);
+
+        // Tokenize into runs of spaces and non-spaces so we can reuse measurements
+        for (size_t i = 0; i < line.size();)
         {
-            size_t remaining = len - pos;
-            size_t chunk = std::min(static_cast<size_t>(layout.charsPerLine), remaining);
-
-            if (chunk < remaining)
+            size_t start = i;
+            if (line[i] == ' ')
             {
-                size_t breakPos = line.rfind(' ', pos + chunk - 1);
-                if (breakPos != std::string::npos && breakPos >= pos && breakPos > pos + chunk / 2)
+                while (i < line.size() && line[i] == ' ')
                 {
-                    chunk = breakPos - pos + 1;
+                    ++i;
+                }
+            }
+            else
+            {
+                while (i < line.size() && line[i] != ' ')
+                {
+                    ++i;
                 }
             }
 
-            size_t end = pos + chunk;
-            std::string segment = line.substr(pos, chunk);
-            int widthPx = measureWidth(segment);
+            std::string token = line.substr(start, i - start);
+            int w = measureWidth(token);
+            tokens.emplace_back(std::move(token), w);
+        }
 
-            while (end < len)
+        std::string current;
+        int currentWidth = 0;
+
+        auto flushCurrent = [&]()
+        {
+            layout.wrappedLines.emplace_back(std::move(current));
+            maxObservedLineWidth = std::max(maxObservedLineWidth, currentWidth);
+            current.clear();
+            currentWidth = 0;
+        };
+
+        for (auto& [token, width] : tokens)
+        {
+            // Extremely long token without spaces: hard-wrap it
+            if (width > maxLineWidthPx && token.find(' ') == std::string::npos)
             {
-                size_t nextSpace = line.find(' ', end);
-                size_t candidateEnd = (nextSpace == std::string::npos) ? len : nextSpace + 1;
-                std::string candidate = line.substr(pos, candidateEnd - pos);
-                int candidateWidth = measureWidth(candidate);
-
-                if (candidateWidth <= maxLineWidthPx)
+                if (!current.empty())
                 {
-                    segment.swap(candidate);
-                    end = candidateEnd;
-                    widthPx = candidateWidth;
-                }
-                else
-                {
-                    break;
-                }
-            }
-
-            if (widthPx > maxLineWidthPx)
-            {
-                size_t backtrackPos = segment.find_last_of(' ');
-                bool adjusted = false;
-                while (backtrackPos != std::string::npos && backtrackPos > 0)
-                {
-                    size_t candidateLen = backtrackPos + 1;
-                    std::string candidate = segment.substr(0, candidateLen);
-                    int candidateWidth = measureWidth(candidate);
-                    if (candidateWidth <= maxLineWidthPx)
-                    {
-                        segment.swap(candidate);
-                        end = pos + candidateLen;
-                        widthPx = candidateWidth;
-                        adjusted = true;
-                        break;
-                    }
-                    backtrackPos = segment.find_last_of(' ', backtrackPos - 1);
+                    flushCurrent();
                 }
 
-                if (!adjusted && widthPx > maxLineWidthPx)
+                size_t pos = 0;
+                while (pos < token.size())
                 {
                     size_t hardLen = std::max<size_t>(1, static_cast<size_t>(maxLineWidthPx / std::max(layout.charWidth, 1)));
-                    end = std::min(len, pos + hardLen);
-                    segment = line.substr(pos, end - pos);
-                    widthPx = measureWidth(segment);
+                    size_t take = std::min(hardLen, token.size() - pos);
+                    std::string piece = token.substr(pos, take);
+                    int pieceWidth = measureWidth(piece);
+
+                    // If the measured width is still too large, shrink until it fits
+                    while (pieceWidth > maxLineWidthPx && take > 1)
+                    {
+                        --take;
+                        piece = token.substr(pos, take);
+                        pieceWidth = measureWidth(piece);
+                    }
+
+                    layout.wrappedLines.emplace_back(std::move(piece));
+                    maxObservedLineWidth = std::max(maxObservedLineWidth, pieceWidth);
+                    pos += take;
                 }
+
+                continue;
             }
 
-            layout.wrappedLines.emplace_back(std::move(segment));
-            maxObservedLineWidth = std::max(maxObservedLineWidth, widthPx);
-            pos = end;
+            // Normal case: add token to current line or wrap
+            if (currentWidth + width <= maxLineWidthPx || current.empty())
+            {
+                current += token;
+                currentWidth += width;
+            }
+            else
+            {
+                flushCurrent();
+                current = token;
+                currentWidth = width;
+            }
+        }
+
+        if (!current.empty())
+        {
+            flushCurrent();
         }
     };
 
