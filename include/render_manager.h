@@ -13,6 +13,7 @@ class Renderer;
 class TextRenderer;
 class Document;
 class MuPdfDocument;
+class TextDocument;
 class ViewportManager;
 class NavigationManager;
 

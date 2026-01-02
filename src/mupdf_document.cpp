@@ -8,6 +8,8 @@
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
+#include <cstdlib>
+#include <chrono>
 
 struct MuPdfDocument::PageScaleInfo
 {
@@ -20,6 +22,10 @@ struct MuPdfDocument::PageScaleInfo
     float baseScale{1.0f};
     float downsampleScale{1.0f};
 };
+
+namespace
+{
+} // namespace
 
 MuPdfDocument::MuPdfDocument()
     : Document()
@@ -57,6 +63,7 @@ MuPdfDocument::~MuPdfDocument()
     std::cout.flush();
 }
 
+
 bool MuPdfDocument::open(const std::string& filePath)
 {
     return open(filePath, false);
@@ -84,7 +91,6 @@ bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
     // PDF pages should always render on a white canvas even in dark themes
     m_isPdfDocument = false;
     m_isReflowableDocument = false;
-    m_isTxtDocument = false;
     m_pageCountEstimated.store(false);
     try
     {
@@ -94,13 +100,11 @@ bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
                        [](unsigned char c)
                        { return static_cast<char>(std::tolower(c)); });
         m_isPdfDocument = (ext == ".pdf");
-        m_isTxtDocument = (ext == ".txt");
-        m_isReflowableDocument = (ext == ".epub" || ext == ".mobi" || ext == ".txt");
+        m_isReflowableDocument = (ext == ".epub" || ext == ".mobi");
     }
     catch (...)
     {
         m_isPdfDocument = false;
-        m_isTxtDocument = false;
         m_isReflowableDocument = false;
     }
 
@@ -211,13 +215,9 @@ bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
     int initialPageCount = 0;
     if (m_isReflowableDocument)
     {
-        // Estimate page count for reflowable formats (EPUB/MOBI/TXT) using file size to avoid blocking UI.
+        // Estimate page count for reflowable formats (EPUB/MOBI) using file size to avoid blocking UI.
         // Different base estimates to account for compression and layout density.
         int bytesPerPage = 3000; // default for EPUB/MOBI
-        if (m_isTxtDocument)
-        {
-            bytesPerPage = 2500;
-        }
 
         try
         {
@@ -251,8 +251,7 @@ bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
         m_argbCache.clear();
     }
 
-    // Skip async page counting for TXT files - it blocks due to MuPDF shared locks
-    if (m_isReflowableDocument && !m_isTxtDocument)
+    if (m_isReflowableDocument)
     {
         startAsyncPageCount();
     }
@@ -646,7 +645,6 @@ MuPdfDocument::ArgbBufferPtr MuPdfDocument::renderPageARGB(int pageNumber, int& 
                 argbBuffer[static_cast<size_t>(y) * width + x] = (a << 24) | (r << 16) | (g << 8) | b;
             }
         }
-
         fz_drop_pixmap(ctx, pix);
         pix = nullptr;
     }
@@ -998,8 +996,8 @@ void MuPdfDocument::close()
     m_pageCountFinal.store(false);
     m_pageCountEstimated.store(false);
     m_pageCountThreadActive.store(false);
+    m_isPdfDocument = false;
     m_isReflowableDocument = false;
-    m_isTxtDocument = false;
     resetDisplayCache();
 }
 
@@ -1174,7 +1172,6 @@ void MuPdfDocument::ensureDisplayList(int pageNumber)
         }
         throw std::runtime_error(message);
     }
-
     std::unique_ptr<fz_display_list, DisplayListDeleter> listPtr(list, DisplayListDeleter{ctx});
 
     {
@@ -1315,7 +1312,6 @@ bool MuPdfDocument::renderPageARGBWithPrerenderContext(int pageNumber, int zoom,
         {
             fz_throw(ctx, FZ_ERROR_GENERIC, "Failed to load page %d", pageNumber);
         }
-
         fz_rect bounds = fz_bound_page(ctx, page);
 
         float baseScale = std::max(zoom, 1) / 100.0f;
@@ -1407,7 +1403,6 @@ bool MuPdfDocument::renderPageARGBWithPrerenderContext(int pageNumber, int zoom,
                 localBuffer[static_cast<size_t>(y) * width + x] = (a << 24) | (r << 16) | (g << 8) | b;
             }
         }
-
         fz_drop_pixmap(ctx, pix);
         pix = nullptr;
         fz_drop_page(ctx, page);
@@ -1433,6 +1428,7 @@ bool MuPdfDocument::renderPageARGBWithPrerenderContext(int pageNumber, int zoom,
     }
 
     buffer = std::move(localBuffer);
+
     return true;
 }
 

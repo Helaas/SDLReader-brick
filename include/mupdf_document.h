@@ -196,7 +196,6 @@ private:
     std::atomic<bool> m_pageCountEstimated{false};
     bool m_isPdfDocument = false;
     bool m_isReflowableDocument = false;
-    bool m_isTxtDocument = false;
     std::thread m_pageCountThread;
     std::atomic<bool> m_pageCountThreadActive{false};
 

@@ -1,6 +1,7 @@
 #include "app.h"
 #include "document.h"
 #include "mupdf_document.h"
+#include "text_document.h"
 #include "navigation_manager.h"
 #include "options_manager.h"
 #include "renderer.h"
@@ -105,17 +106,24 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     std::transform(lowercaseFilename.begin(), lowercaseFilename.end(),
                    lowercaseFilename.begin(), ::tolower);
 
-    // MuPDF can handle all these formats through its generic document interface
-    if ((lowercaseFilename.size() >= 4 &&
-         (lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".pdf" ||
-          lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".cbz" ||
-          lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".cbr" ||
-          lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".rar" ||
-          lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".zip" ||
-          lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".txt")) ||
-        (lowercaseFilename.size() >= 5 &&
-         (lowercaseFilename.substr(lowercaseFilename.size() - 5) == ".epub" ||
-          lowercaseFilename.substr(lowercaseFilename.size() - 5) == ".mobi")))
+    bool isTxt = lowercaseFilename.size() >= 4 && lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".txt";
+    bool isMuPdfType = (lowercaseFilename.size() >= 4 &&
+                        (lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".pdf" ||
+                         lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".cbz" ||
+                         lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".cbr" ||
+                         lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".rar" ||
+                         lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".zip")) ||
+                       (lowercaseFilename.size() >= 5 &&
+                        (lowercaseFilename.substr(lowercaseFilename.size() - 5) == ".epub" ||
+                         lowercaseFilename.substr(lowercaseFilename.size() - 5) == ".mobi"));
+
+    if (isTxt)
+    {
+        auto txtDoc = std::make_unique<TextDocument>();
+        txtDoc->setFontConfig(savedConfig);
+        m_document = std::move(txtDoc);
+    }
+    else if (isMuPdfType)
     {
         m_document = std::make_unique<MuPdfDocument>();
 
@@ -1138,18 +1146,18 @@ void App::updateInputState(const SDL_Event& event)
 
 void App::refreshPageCountFromDocument()
 {
+    if (!m_document || !m_navigationManager || !m_inputManager)
+    {
+        return;
+    }
+
     auto* muDoc = dynamic_cast<MuPdfDocument*>(m_document.get());
-    if (!muDoc || !m_navigationManager || !m_inputManager)
+    if (muDoc && !muDoc->isPageCountFinal())
     {
         return;
     }
 
-    if (!muDoc->isPageCountFinal())
-    {
-        return;
-    }
-
-    int docPageCount = muDoc->getPageCount();
+    int docPageCount = m_document->getPageCount();
     if (docPageCount <= 0)
     {
         return;
@@ -1268,6 +1276,49 @@ void App::applyPendingFontChange()
     {
         std::string css = m_optionsManager->generateCSS(m_pendingFontConfig);
         std::cout << "DEBUG: Generated CSS: " << css << std::endl;
+
+        if (auto textDoc = dynamic_cast<TextDocument*>(m_document.get()))
+        {
+            textDoc->setFontConfig(m_pendingFontConfig);
+
+            int newCount = textDoc->getPageCount();
+            m_navigationManager->setPageCount(newCount);
+            m_navigationManager->setDisplayPageCount(newCount, false);
+
+            if (m_guiManager)
+            {
+                m_guiManager->setPageCount(newCount, false);
+            }
+            if (m_inputManager)
+            {
+                m_inputManager->setPageCount(newCount);
+            }
+
+            int currentPage = m_navigationManager->getCurrentPage();
+            if (currentPage >= newCount)
+            {
+                m_navigationManager->setCurrentPage(std::max(0, newCount - 1));
+            }
+
+            m_optionsManager->saveConfig(m_pendingFontConfig);
+            refreshCachedConfig();
+
+            uint8_t bgR, bgG, bgB;
+            OptionsManager::getReadingStyleBackgroundColor(m_pendingFontConfig.readingStyle, bgR, bgG, bgB);
+            m_renderManager->setBackgroundColor(bgR, bgG, bgB);
+
+            markDirty();
+
+            if (m_guiManager && m_guiManager->isFontMenuVisible())
+            {
+                m_guiManager->toggleFontMenu();
+            }
+
+            std::cout << "Applied font configuration to text document: " << m_pendingFontConfig.fontName
+                      << " at " << m_pendingFontConfig.fontSize << "pt" << std::endl;
+            m_pendingFontChange = false;
+            return;
+        }
 
         if (!css.empty())
         {
