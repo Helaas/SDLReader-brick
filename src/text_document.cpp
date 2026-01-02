@@ -189,13 +189,27 @@ TextDocument::Layout TextDocument::buildLayoutForSize(int fontSize)
 
     int cw = 0;
     int ch = 0;
-    if (TTF_SizeUTF8(font, "M", &cw, &ch) != 0)
+    const char* avgSample = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    if (TTF_SizeUTF8(font, avgSample, &cw, &ch) == 0)
     {
-        cw = 8;
-        ch = fontSize + 2;
+        int sampleLen = static_cast<int>(std::strlen(avgSample));
+        if (sampleLen > 0)
+        {
+            layout.charWidth = std::max(4, cw / sampleLen);
+        }
     }
 
-    layout.charWidth = std::max(4, cw);
+    if (layout.charWidth <= 0)
+    {
+        if (TTF_SizeUTF8(font, "M", &cw, &ch) != 0)
+        {
+            cw = 8;
+            ch = fontSize + 2;
+        }
+
+        layout.charWidth = std::max(4, cw);
+    }
+
     layout.lineHeight = std::max(TTF_FontLineSkip(font), std::max(ch, fontSize + 2));
 
     // Grow page dimensions when zooming in, but keep the base size when zooming out
@@ -207,10 +221,33 @@ TextDocument::Layout TextDocument::buildLayoutForSize(int fontSize)
     int marginX = std::max(8, layout.charWidth / 2);
     int marginY = std::max(8, layout.lineHeight / 4);
 
+    constexpr int MIN_CHARS_PER_LINE = 96;
     layout.charsPerLine = std::clamp((targetWidth - marginX * 2) / layout.charWidth, 40, 160);
+    layout.charsPerLine = std::clamp(std::max(layout.charsPerLine, MIN_CHARS_PER_LINE), 40, 160);
     layout.linesPerPage = std::clamp((targetHeight - marginY * 2) / layout.lineHeight, 25, 200);
 
-    auto wrapLine = [&layout](const std::string& line)
+    int contentWidthPx = std::max(targetWidth - marginX * 2, layout.charsPerLine * layout.charWidth);
+    int maxLineWidthPx = std::max(1, contentWidthPx);
+    int maxObservedLineWidth = 0;
+
+    // Measure actual text width so proportional fonts don't wrap prematurely
+    auto measureWidth = [&](const std::string& text)
+    {
+        if (text.empty())
+        {
+            return 0;
+        }
+
+        int w = 0;
+        if (TTF_SizeUTF8(font, text.c_str(), &w, nullptr) == 0)
+        {
+            return w;
+        }
+
+        return static_cast<int>(text.size()) * layout.charWidth;
+    };
+
+    auto wrapLine = [&](const std::string& line)
     {
         if (line.empty())
         {
@@ -234,8 +271,61 @@ TextDocument::Layout TextDocument::buildLayoutForSize(int fontSize)
                 }
             }
 
-            layout.wrappedLines.emplace_back(line.substr(pos, chunk));
-            pos += chunk;
+            size_t end = pos + chunk;
+            std::string segment = line.substr(pos, chunk);
+            int widthPx = measureWidth(segment);
+
+            while (end < len)
+            {
+                size_t nextSpace = line.find(' ', end);
+                size_t candidateEnd = (nextSpace == std::string::npos) ? len : nextSpace + 1;
+                std::string candidate = line.substr(pos, candidateEnd - pos);
+                int candidateWidth = measureWidth(candidate);
+
+                if (candidateWidth <= maxLineWidthPx)
+                {
+                    segment.swap(candidate);
+                    end = candidateEnd;
+                    widthPx = candidateWidth;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            if (widthPx > maxLineWidthPx)
+            {
+                size_t backtrackPos = segment.find_last_of(' ');
+                bool adjusted = false;
+                while (backtrackPos != std::string::npos && backtrackPos > 0)
+                {
+                    size_t candidateLen = backtrackPos + 1;
+                    std::string candidate = segment.substr(0, candidateLen);
+                    int candidateWidth = measureWidth(candidate);
+                    if (candidateWidth <= maxLineWidthPx)
+                    {
+                        segment.swap(candidate);
+                        end = pos + candidateLen;
+                        widthPx = candidateWidth;
+                        adjusted = true;
+                        break;
+                    }
+                    backtrackPos = segment.find_last_of(' ', backtrackPos - 1);
+                }
+
+                if (!adjusted && widthPx > maxLineWidthPx)
+                {
+                    size_t hardLen = std::max<size_t>(1, static_cast<size_t>(maxLineWidthPx / std::max(layout.charWidth, 1)));
+                    end = std::min(len, pos + hardLen);
+                    segment = line.substr(pos, end - pos);
+                    widthPx = measureWidth(segment);
+                }
+            }
+
+            layout.wrappedLines.emplace_back(std::move(segment));
+            maxObservedLineWidth = std::max(maxObservedLineWidth, widthPx);
+            pos = end;
         }
     };
 
@@ -267,8 +357,11 @@ TextDocument::Layout TextDocument::buildLayoutForSize(int fontSize)
 
     int totalLines = static_cast<int>(layout.wrappedLines.size());
     layout.pageCount = std::max(1, (totalLines + layout.linesPerPage - 1) / layout.linesPerPage);
-    layout.pageWidth = computePageWidth(layout);
-    layout.pageHeight = computePageHeight(layout);
+    int effectiveLineWidth = maxObservedLineWidth > 0 ? maxObservedLineWidth : maxLineWidthPx;
+    int basePageWidth = std::max(targetWidth, contentWidthPx + marginX * 2);
+    layout.pageWidth = std::max(basePageWidth, effectiveLineWidth + marginX * 2);
+    int heightFromLines = layout.linesPerPage * layout.lineHeight + marginY * 2;
+    layout.pageHeight = std::max(targetHeight, heightFromLines);
 
     return layout;
 }
@@ -292,12 +385,22 @@ const TextDocument::Layout& TextDocument::ensureLayoutForSize(int fontSize)
 
 int TextDocument::computePageWidth(const Layout& layout) const
 {
+    if (layout.pageWidth > 0)
+    {
+        return layout.pageWidth;
+    }
+
     int marginX = std::max(8, layout.charWidth / 2);
     return std::max(1, layout.charsPerLine * layout.charWidth + marginX * 2);
 }
 
 int TextDocument::computePageHeight(const Layout& layout) const
 {
+    if (layout.pageHeight > 0)
+    {
+        return layout.pageHeight;
+    }
+
     int marginY = std::max(8, layout.lineHeight / 4);
     return std::max(1, layout.linesPerPage * layout.lineHeight + marginY * 2);
 }
