@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <fstream>
 #include <iostream>
@@ -189,8 +190,12 @@ TextDocument::Layout TextDocument::buildLayoutForSize(int fontSize)
     layout.charWidth = std::max(4, cw);
     layout.lineHeight = std::max(TTF_FontLineSkip(font), std::max(ch, fontSize + 2));
 
-    int targetWidth = 720;
-    int targetHeight = 1024;
+    // Grow page dimensions when zooming in, but keep the base size when zooming out
+    // so chars-per-line still increases at smaller font sizes
+    double scaleFactor = static_cast<double>(fontSize) / static_cast<double>(m_baseFontSize);
+    double grow = std::max(1.0, scaleFactor);
+    int targetWidth = static_cast<int>(std::lround(720.0 * grow));
+    int targetHeight = static_cast<int>(std::lround(1024.0 * grow));
     int marginX = std::max(8, layout.charWidth / 2);
     int marginY = std::max(8, layout.lineHeight / 4);
 
