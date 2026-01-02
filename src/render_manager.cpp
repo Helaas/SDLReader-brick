@@ -2,6 +2,7 @@
 #include "app.h"
 #include "document.h"
 #include "mupdf_document.h"
+#include "text_document.h"
 #include "navigation_manager.h"
 #include "renderer.h"
 #include "text_renderer.h"
@@ -67,6 +68,7 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
     bool usedPreview = false;
     bool highResReady = false;
     MuPdfDocument* muPdfDocPtr = dynamic_cast<MuPdfDocument*>(document);
+    TextDocument* textDocPtr = dynamic_cast<TextDocument*>(document);
     int currentPage = navigationManager->getCurrentPage();
     int currentScale = viewportManager->getCurrentScale();
 
@@ -99,6 +101,35 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
                 // No preview available (wrong page or first render), must render synchronously
                 // This is the slow path but necessary for page changes
                 argbData = muPdfDocPtr->renderPageARGB(currentPage, srcW, srcH, currentScale);
+                highResReady = static_cast<bool>(argbData);
+            }
+        }
+        catch (const std::exception&)
+        {
+            std::vector<uint8_t> rgbData = document->renderPage(currentPage, srcW, srcH, currentScale);
+            auto converted = std::make_shared<std::vector<uint32_t>>(static_cast<size_t>(srcW) * static_cast<size_t>(srcH));
+            for (int i = 0; i < srcW * srcH; ++i)
+            {
+                (*converted)[static_cast<size_t>(i)] = rgb24_to_argb32(rgbData[i * 3], rgbData[i * 3 + 1], rgbData[i * 3 + 2]);
+            }
+            argbData = converted;
+            highResReady = true;
+        }
+    }
+    else if (textDocPtr)
+    {
+        textDocPtr->setBackgroundColor(m_bgColorR, m_bgColorG, m_bgColorB);
+        try
+        {
+            TextDocument::ArgbBufferPtr cachedBuffer;
+            if (textDocPtr->tryGetCachedPageARGB(currentPage, currentScale, cachedBuffer, srcW, srcH))
+            {
+                argbData = cachedBuffer;
+                highResReady = static_cast<bool>(argbData);
+            }
+            else
+            {
+                argbData = textDocPtr->renderPageARGB(currentPage, srcW, srcH, currentScale);
                 highResReady = static_cast<bool>(argbData);
             }
         }
@@ -332,7 +363,10 @@ void RenderManager::renderPageInfo(NavigationManager* navigationManager, Viewpor
         SDL_Color borderColor = {255, 255, 255, 180};
         SDL_Color shadowColor = {0, 0, 0, 120};
 
-        std::string pageInfo = "Page " + std::to_string(navigationManager->getCurrentPage() + 1) + " / " + std::to_string(navigationManager->getPageCount());
+        int displayCount = navigationManager->getDisplayPageCount();
+        bool estimated = navigationManager->isDisplayPageCountEstimated();
+        std::string pageInfo = "Page " + std::to_string(navigationManager->getCurrentPage() + 1) + " / " +
+                               std::to_string(displayCount) + (estimated ? "*" : "");
 
         int textW = 0, textH = 0;
         if (!m_textRenderer->measureText(pageInfo, textW, textH))

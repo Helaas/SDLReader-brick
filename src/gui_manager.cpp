@@ -1065,7 +1065,14 @@ void GuiManager::renderFontMenu()
 
         // Current page display
         char pageInfo[64];
-        snprintf(pageInfo, sizeof(pageInfo), "Current Page: %d / %d", m_currentPage + 1, m_pageCount);
+        if (m_pageCountEstimated)
+        {
+            snprintf(pageInfo, sizeof(pageInfo), "Current Page: %d / %d*", m_currentPage + 1, m_pageCount);
+        }
+        else
+        {
+            snprintf(pageInfo, sizeof(pageInfo), "Current Page: %d / %d", m_currentPage + 1, m_pageCount);
+        }
         nk_layout_row_dynamic(m_ctx, 20, 1);
         nk_label(m_ctx, pageInfo, NK_TEXT_LEFT);
 

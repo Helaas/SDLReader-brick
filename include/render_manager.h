@@ -13,6 +13,7 @@ class Renderer;
 class TextRenderer;
 class Document;
 class MuPdfDocument;
+class TextDocument;
 class ViewportManager;
 class NavigationManager;
 
@@ -128,9 +129,18 @@ public:
     // Set background color for margins
     void setBackgroundColor(uint8_t r, uint8_t g, uint8_t b)
     {
+        if (r == m_bgColorR && g == m_bgColorG && b == m_bgColorB)
+        {
+            return;
+        }
+
         m_bgColorR = r;
         m_bgColorG = g;
         m_bgColorB = b;
+
+        // Drop preview cache so theme changes take effect on next render
+        m_lastArgbValid = false;
+        m_lastArgbBuffer.reset();
     }
 
     // Clear cached render and dimension cache (for document load/reset)

@@ -2,6 +2,7 @@
 #define NAVIGATION_MANAGER_H
 
 #include <SDL.h>
+#include <algorithm>
 #include <functional>
 #include <string>
 
@@ -17,6 +18,8 @@ struct NavigationState
 {
     int currentPage = 0;
     int pageCount = 0;
+    int displayPageCount = 0;
+    bool displayPageCountEstimated = false;
 
     // Page jump input state
     bool pageJumpInputActive = false;
@@ -46,6 +49,15 @@ public:
     void setPageCount(int pageCount)
     {
         m_state.pageCount = pageCount;
+        if (!m_state.displayPageCountEstimated)
+        {
+            m_state.displayPageCount = pageCount;
+        }
+    }
+    void setDisplayPageCount(int pageCount, bool isEstimate)
+    {
+        m_state.displayPageCount = std::max(pageCount, m_state.pageCount);
+        m_state.displayPageCountEstimated = isEstimate;
     }
     void setCurrentPage(int currentPage)
     {
@@ -72,6 +84,14 @@ public:
     bool isPageJumpInputActive() const
     {
         return m_state.pageJumpInputActive;
+    }
+    int getDisplayPageCount() const
+    {
+        return m_state.displayPageCount > 0 ? m_state.displayPageCount : m_state.pageCount;
+    }
+    bool isDisplayPageCountEstimated() const
+    {
+        return m_state.displayPageCountEstimated;
     }
     const std::string& getPageJumpBuffer() const
     {

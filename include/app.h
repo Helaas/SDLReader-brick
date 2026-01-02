@@ -104,6 +104,7 @@ public:
 private:
     // Document Management
     void loadDocument();
+    void refreshPageCountFromDocument();
 
     // Event Handling
     void handleEvent(const SDL_Event& event);

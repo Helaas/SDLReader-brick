@@ -9,6 +9,8 @@
 NavigationManager::NavigationManager()
 {
     // Default state is already initialized in NavigationState
+    m_state.displayPageCount = m_state.pageCount;
+    m_state.displayPageCountEstimated = false;
 }
 
 bool NavigationManager::goToNextPage(Document* document, ViewportManager* viewportManager, std::function<void(int)> setCurrentPageCallback,
