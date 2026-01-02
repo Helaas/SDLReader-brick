@@ -2,6 +2,7 @@
 #include "document.h"
 #include "mupdf_document.h"
 #include "renderer.h"
+#include "text_document.h"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -612,6 +613,8 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
 {
     // Update page dimensions based on effective size (accounting for downsampling)
     auto* muPdfDoc = dynamic_cast<MuPdfDocument*>(document);
+    auto* textDoc = dynamic_cast<TextDocument*>(document);
+
     if (muPdfDoc)
     {
         if (m_renderer)
@@ -718,6 +721,17 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
         }
 
         // Apply rotation
+        if (m_state.rotation % 180 != 0)
+        {
+            std::swap(m_state.pageWidth, m_state.pageHeight);
+        }
+    }
+    else if (textDoc)
+    {
+        auto [layoutWidth, layoutHeight] = textDoc->getPageDimensionsForScale(m_state.currentScale);
+        m_state.pageWidth = std::max(1, layoutWidth);
+        m_state.pageHeight = std::max(1, layoutHeight);
+
         if (m_state.rotation % 180 != 0)
         {
             std::swap(m_state.pageWidth, m_state.pageHeight);

@@ -11,6 +11,7 @@
 #include <mutex>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <unordered_map>
 #include <vector>
 
@@ -38,6 +39,9 @@ public:
 
     int getPageWidthNative(int pageNum) override;
     int getPageHeightNative(int pageNum) override;
+
+    // Return the exact rendered page dimensions for a given zoom scale.
+    std::pair<int, int> getPageDimensionsForScale(int scale);
 
     void setBackgroundColor(uint8_t r, uint8_t g, uint8_t b);
     void setFontConfig(const FontConfig& config);

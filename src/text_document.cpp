@@ -299,6 +299,13 @@ int TextDocument::getPageHeightNative(int /*pageNum*/)
     return computePageHeight(ensureLayoutForSize(m_baseFontSize));
 }
 
+std::pair<int, int> TextDocument::getPageDimensionsForScale(int scale)
+{
+    int fontSize = std::max(8, m_baseFontSize * scale / 100);
+    const Layout& layout = ensureLayoutForSize(fontSize);
+    return {layout.pageWidth, layout.pageHeight};
+}
+
 bool TextDocument::tryGetCachedPageARGB(int pageNumber, int scale, ArgbBufferPtr& buffer, int& width, int& height)
 {
     auto key = std::make_pair(pageNumber, scale);
