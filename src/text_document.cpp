@@ -118,9 +118,17 @@ void TextDocument::setFontConfig(const FontConfig& config)
 
 void TextDocument::setBackgroundColor(uint8_t r, uint8_t g, uint8_t b)
 {
+    if (r == m_bgR && g == m_bgG && b == m_bgB)
+    {
+        return;
+    }
+
     m_bgR = r;
     m_bgG = g;
     m_bgB = b;
+
+    // Theme change should invalidate cached renders so the new background is applied immediately
+    clearCaches();
 }
 
 void TextDocument::clearCaches()
