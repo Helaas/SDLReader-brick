@@ -20,16 +20,31 @@
 !/ports/tg5040/pak/res/docs.pdf
 /ports/tg5040/pak/bin/sdl_reader_cli
 
+# TG5050 bundle artifacts
+/ports/tg5050/pak/lib/*
+/ports/tg5050/pak/fonts/*
+/ports/tg5050/pak/res/*
+!/ports/tg5050/pak/res/docs.pdf
+/ports/tg5050/pak/bin/sdl_reader_cli
+
 # Zipped bundle
 SDLReader.pak.zip
 ports/tg5040/pak/README.md
 ports/tg5040/pak/pak.json
+ports/tg5050/pak/README.md
+ports/tg5050/pak/pak.json
 ports/mac/webp-upstream-697749.patch
 config.json
 ports/tg5040/webp-upstream-697749.patch
+ports/tg5050/webp-upstream-697749.patch
 webp-upstream-697749.patch
 ports/tg5040/nuklear
+ports/tg5050/nuklear
 reading_history.json
 test_transform.log
 ports/tg5040/nuklear-tg5040
+ports/tg5050/nuklear-tg5050
 sample.txt
+SDLReader.tg5040.pak.zip
+.gitignore
+SDLReader.tg5050.pak.zip

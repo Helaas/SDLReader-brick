@@ -79,7 +79,7 @@ InputActionData InputManager::processEvent(const SDL_Event& event)
     case SDL_CONTROLLERBUTTONUP:
         // On TG5040, joystick buttons 9 and 10 are extra buttons handled via SDL_JOYBUTTONDOWN
         // SDL maps these to controller buttons 7 and 8 - filter them out to prevent double-processing
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     {
         int buttonNum = event.cbutton.button;
 

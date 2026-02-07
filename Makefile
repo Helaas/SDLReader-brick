@@ -1,6 +1,6 @@
 # SDLReader Main Makefile
 
-AVAILABLE_PLATFORMS := tg5040 mac wiiu linux
+AVAILABLE_PLATFORMS := tg5040 tg5050 mac wiiu linux
 DEFAULT_PLATFORM := tg5040
 UNAME_S := $(shell uname -s 2>/dev/null || echo Unknown)
 IN_DOCKER := $(shell if [ -f /.dockerenv ]; then echo 1; elif [ -f /proc/1/cgroup ] && grep -qE '(docker|kubepods|containerd|podman)' /proc/1/cgroup; then echo 1; else echo 0; fi)
@@ -21,7 +21,7 @@ ifeq ($(origin PLATFORM), undefined)
   endif
 endif
 
-.PHONY: all clean clean-local help list-platforms export-tg5040 $(AVAILABLE_PLATFORMS)
+.PHONY: all clean clean-local help list-platforms export-tg5040 export-tg5050 $(AVAILABLE_PLATFORMS)
 
 all: $(PLATFORM)
 
@@ -32,6 +32,14 @@ tg5040:
 export-tg5040: tg5040
 	@echo "Exporting TG5040 bundle..."
 	$(MAKE) -f ports/tg5040/Makefile export-bundle
+
+tg5050:
+	@echo "Building for TG5050..."
+	$(MAKE) -f ports/tg5050/Makefile
+
+export-tg5050: tg5050
+	@echo "Exporting TG5050 bundle..."
+	$(MAKE) -f ports/tg5050/Makefile export-bundle
 
 mac:
 	@echo "Building for macOS..."
@@ -52,6 +60,7 @@ clean:
 	-@$(MAKE) -C ports/wiiu clean 2>/dev/null || true
 	-@$(MAKE) -C ports/linux clean 2>/dev/null || true
 	-@$(MAKE) -C ports/tg5040 clean 2>/dev/null || true
+	-@$(MAKE) -C ports/tg5050 clean 2>/dev/null || true
 
 clean-local:
 	@echo "Cleaning build artifacts..."
@@ -61,6 +70,7 @@ clean-local:
 list-platforms:
 	@echo "Available platforms:"
 	@echo "  - tg5040"
+	@echo "  - tg5050"
 	@echo "  - mac"
 	@echo "  - wiiu"
 	@echo "  - linux"
@@ -69,8 +79,10 @@ help:
 	@echo "SDLReader Build System"
 	@echo "Usage:"
 	@echo "  make            - Build for your current platform (Docker->tg5040, macOS->mac, Linux->linux)"
-	@echo "  make tg5040     - Build for TG5040"
+	@echo "  make tg5040     - Build for TG5040 (TrimUI Brick & Smart Pro)"
 	@echo "  make export-tg5040 - Build and export TG5040 bundle"
+	@echo "  make tg5050     - Build for TG5050 (TrimUI Smart Pro S)"
+	@echo "  make export-tg5050 - Build and export TG5050 bundle"
 	@echo "  make mac        - Build for macOS"
 	@echo "  make wiiu       - Build for Wii U"
 	@echo "  make linux      - Build for Linux"

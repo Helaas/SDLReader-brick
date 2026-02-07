@@ -200,7 +200,7 @@ public:
     bool shouldShowZoomProcessingIndicator() const;
 
     // Timing constants
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     static constexpr int ZOOM_THROTTLE_MS = 30;
     static constexpr int ZOOM_DEBOUNCE_MS = 250;
 #else

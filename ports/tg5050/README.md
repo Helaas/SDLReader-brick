@@ -1,8 +1,10 @@
-# TG5040 Port - Docker Development Environment
+# TG5050 Port - Docker Development Environment
 
-This directory contains the TG5040-specific build configuration and Docker development environment for the SDLReader project. It supports both the TrimUI Brick and TrimUI Smart Pro devices.
+This directory contains the TG5050-specific build configuration and Docker development environment for the SDLReader project. It supports the TrimUI Smart Pro S device.
 
-Powered by the prebuilt [tg5040-toolchain](https://github.com/LoveRetro/tg5040-toolchain) container published to GHCR.
+The TG5050 shares the same hardware interface as the TG5040 (TrimUI Brick/Smart Pro), so power management code is reused from `ports/tg5040/`.
+
+Powered by the prebuilt [tg5050-toolchain](https://github.com/LoveRetro/tg5050-toolchain) container published to GHCR.
 
 ## Key Features
 
@@ -11,75 +13,75 @@ Powered by the prebuilt [tg5040-toolchain](https://github.com/LoveRetro/tg5040-t
 - **Self-Contained MuPDF**: Automatically downloads and builds MuPDF 1.26.7 with custom libarchive and WebP support
 - **Bundled libwebp**: Builds a static libwebp (1.3.2) inside the workspace to provide WebP decode/demux without system packages in the toolchain container
 - **Custom libarchive**: Builds minimal libarchive without ICU/XML dependencies for optimal bundle size
-- **Hardware Power Management**: NextUI-compatible power button handling
+- **Hardware Power Management**: NextUI-compatible power button handling (shared with TG5040)
 - **Complete Bundle Export**: Creates self-contained distribution packages
 - **Integrated Nuklear UI**: Controller-first file browser, font picker, reading-style themes, and on-screen number pad
 - **Persistent Preferences**: Ships with curated fonts, `config.json` (user-managed), and automatic `reading_history.json` resume support
 
 ## Files in this directory
-- `Makefile` - TG5040 application build configuration
+- `Makefile` - TG5050 application build configuration
 - `Makefile.docker` - Docker environment management
 - `docker-compose.yml` - Docker Compose setup
-- `Dockerfile` - TG5040 toolchain container image
+- `Dockerfile` - TG5050 toolchain container image
 - `export_bundle.sh` - Bundle export script for distribution packages
 - `make_bundle.sh` - Library dependency bundling script (called from `export_bundle.sh`)
 - `BUNDLE_EXPORT.md` - Detailed bundle export system documentation
 
 ## Quick Start
 
-**Auto-detected builds**: The top-level `Makefile` now notices when it runs inside this Docker environment (or any container that exposes `/.dockerenv`) and defaults to the TG5040 target. Plain `make` inside the container will therefore build the TG5040 port. When building from the host, continue to use `make tg5040` (or `make PLATFORM=tg5040`) to opt in explicitly.
+**Auto-detected builds**: The top-level `Makefile` now notices when it runs inside this Docker environment (or any container that exposes `/.dockerenv`) and defaults to the TG5050 target when using `make PLATFORM=tg5050`. Plain `make tg5050` from the host will build the TG5050 port explicitly.
 
 ### Using Docker Compose (Recommended)
 ```bash
-cd ports/tg5040
+cd ports/tg5050
 
 # Ensure the latest toolchain image is available
 docker compose pull dev
 
-# Start a shell with the prebuilt toolchain (ghcr.io/loveretro/tg5040-toolchain)
+# Start a shell with the prebuilt toolchain (ghcr.io/loveretro/tg5050-toolchain)
 docker compose run --rm dev bash
 
 # Build the application (inside container)
 cd /workspace
-make            # auto-selects the TG5040 target when run in the container
+make tg5050
 ```
 
 ### Using Docker Makefile
 ```bash
-cd ports/tg5040
+cd ports/tg5050
 
 # Pull toolchain and enter shell
 make -f Makefile.docker shell
 
 # Build the application (inside container)
 cd /workspace
-make            # auto-selects the TG5040 target when run in the container
+make tg5050
 ```
 
 ### Direct Build (with toolchain installed)
 ```bash
 # From project root (outside Docker)
-make tg5040
+make tg5050
 # or
-make PLATFORM=tg5040
+make PLATFORM=tg5050
 
-# Build and export TG5040 bundle
-make export-tg5040
+# Build and export TG5050 bundle
+make export-tg5050
 ```
 
 ## Bundle Export
 
-The TG5040 port includes an automated bundle export system that creates a complete distribution package:
+The TG5050 port includes an automated bundle export system that creates a complete distribution package:
 
 ```bash
-# Export complete TG5040 bundle
-make export-tg5040
+# Export complete TG5050 bundle
+make export-tg5050
 
-# Manual export from ports/tg5040 directory
+# Manual export from ports/tg5050 directory
 ./export_bundle.sh
 ```
 
-The exported bundle (`ports/tg5040/pak/`) contains:
+The exported bundle (`ports/tg5050/pak/`) contains:
 - **bin/**: `sdl_reader_cli` (legacy utilities such as `jq`/`minui-list` are preserved if present before export)
 - **lib/**: All required shared library dependencies with embedded RPATHs
 - **fonts/**: Bundled fonts for the runtime picker (Inter, JetBrains Mono, Noto Serif Condensed, Roboto)
@@ -89,7 +91,7 @@ The exported bundle (`ports/tg5040/pak/`) contains:
 
 ## Applied Patches
 
-When you run `make tg5040` or `make export-tg5040`, the build system applies `webp-upstream-697749.patch` (MuPDF) to backport WebP decoding fixes from KOReader (shared with other platforms). The updated GHCR toolchain ships a modern SDL2 stack, so no Nuklear SDL renderer compatibility patch is required; we use the upstream renderer from Nuklear 4.12.8.
+When you run `make tg5050` or `make export-tg5050`, the build system applies `webp-upstream-697749.patch` (MuPDF) to backport WebP decoding fixes from KOReader (shared with other platforms). The updated GHCR toolchain ships a modern SDL2 stack, so no Nuklear SDL renderer compatibility patch is required; we use the upstream renderer from Nuklear 4.12.8.
 
 ### Bundle Features
 - **Self-contained**: Includes all dependencies and resources
@@ -99,7 +101,7 @@ When you run `make tg5040` or `make export-tg5040`, the build system applies `we
 
 ## Installation
 
-With Docker installed and running, `make -f Makefile.docker shell` pulls the prebuilt toolchain image (`ghcr.io/loveretro/tg5040-toolchain`) and drops into a shell inside the container. The container's `/workspace` path is bound to the project root by default. The cross toolchain is located at `/opt/aarch64-nextui-linux-gnu` inside the container.
+With Docker installed and running, `make -f Makefile.docker shell` pulls the prebuilt toolchain image (`ghcr.io/loveretro/tg5050-toolchain`) and drops into a shell inside the container. The container's `/workspace` path is bound to the project root by default. The cross toolchain is located at `/opt/aarch64-nextui-linux-gnu` inside the container.
 
 Because the image is prebuilt, the shell target simply pulls updates and starts the container—no local image build step is required.
 
@@ -114,7 +116,7 @@ Runtime settings (`config.json`) and reading progress (`reading_history.json`) a
 
 ### Fonts & Reading Styles
 
-Drop additional `.ttf` or `.otf` files into `ports/tg5040/pak/fonts/` (or the project-root `fonts/` folder before exporting). When you launch the bundle, the Options → Font & Reading Style menu automatically discovers those fonts so you can preview and select them on-device.
+Drop additional `.ttf` or `.otf` files into `ports/tg5050/pak/fonts/` (or the project-root `fonts/` folder before exporting). When you launch the bundle, the Options → Font & Reading Style menu automatically discovers those fonts so you can preview and select them on-device.
 
 ### Container Details
 - The container's `/workspace` is mapped to the project root directory
@@ -122,11 +124,11 @@ Drop additional `.ttf` or `.otf` files into `ports/tg5040/pak/fonts/` (or the pr
 - Built artifacts are stored in the project's `bin/` and `build/` directories
 
 ## Platform-Specific Features
-The TG5040 build (TrimUI Brick & Smart Pro) includes:
+The TG5050 build (TrimUI Smart Pro S) includes:
 - **Nuklear UI Stack**: Built-in browser launched via `--browse`, font & reading-style menu, controller number pad, and persisted `reading_history.json`
   - Toggle the new thumbnail grid with the **X** button for cover previews rendered asynchronously.
   - Control the zoom minimap overlay via the `showDocumentMinimap` flag in `config.json`.
-- **Advanced Hardware Power Management**: NextUI-compatible power button handling
+- **Advanced Hardware Power Management**: NextUI-compatible power button handling (shared with TG5040)
   - Power button monitoring via `/dev/input/event1`
   - Short press: Intelligent sleep with fake sleep fallback
     - Attempts real hardware sleep first
@@ -146,9 +148,9 @@ The TG5040 build (TrimUI Brick & Smart Pro) includes:
   - Plain text files (.txt) with configurable font size, face, and reading style
   - **WebP images**: Enhanced WebP format support within documents and archives
 - **Platform-optimized build flags**: `-DTRIMUI_PLATFORM`
-- **Port-specific source structure** (shared with TG5050):
-  - `include/power_handler.h` - TrimUI power management interface
-  - `src/power_handler.cpp` - Hardware-specific power button implementation with NextUI compatibility
+- **Shared power handler** from `ports/tg5040/`:
+  - `ports/tg5040/include/power_handler.h` - TrimUI power management interface
+  - `ports/tg5040/src/power_handler.cpp` - Hardware-specific power button implementation with NextUI compatibility
 - **Embedded Linux-specific libraries and dependencies**
   - SDL2, SDL2_ttf for graphics and input
   - Self-built MuPDF 1.26.7 with custom libarchive for CBR support and WebP for enhanced image format support (no ICU dependencies)

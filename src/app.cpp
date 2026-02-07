@@ -6,7 +6,7 @@
 #include "options_manager.h"
 #include "renderer.h"
 #include "text_renderer.h"
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
 #include "power_handler.h"
 #include "power_events.h"
 #endif
@@ -27,7 +27,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     SDL_Window* localWindow = window;
     SDL_Renderer* localSDLRenderer = renderer;
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     // Initialize power handler
     m_powerHandler = std::make_unique<PowerHandler>();
 
@@ -156,7 +156,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
         throw std::runtime_error("Failed to open document: " + filename);
     }
 
-#ifndef TG5040_PLATFORM
+#ifndef TRIMUI_PLATFORM
     // Set max render size for downsampling - allow for meaningful zoom levels on non-TG5040 platforms
     // Use 4x window size to enable proper zooming while TG5040 has no limit
     if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
@@ -281,7 +281,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
 App::~App()
 {
     std::cout.flush();
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     if (m_powerHandler)
     {
         std::cout.flush();
@@ -316,7 +316,7 @@ void App::run()
 {
     m_prevTick = SDL_GetTicks();
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     // Start power button monitoring
     if (!m_powerHandler->start())
     {
@@ -338,7 +338,7 @@ void App::run()
 
         while (SDL_PollEvent(&event) != 0)
         {
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
             if (m_powerMessageEventType != 0 && event.type == m_powerMessageEventType)
             {
                 handlePowerMessageEvent(event);
@@ -470,7 +470,7 @@ void App::run()
     }
 }
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
 void App::handlePowerMessageEvent(const SDL_Event& event)
 {
     std::unique_ptr<std::string> message(static_cast<std::string*>(event.user.data1));
@@ -1366,14 +1366,17 @@ void App::applyPendingFontChange()
                     m_viewportManager->setScrollX(currentScrollX);
                     m_viewportManager->setScrollY(currentScrollY);
 
-                    // Update page count after reopening
+                    // Update page count after reopening - pass the actual
+                    // estimated status so navigation isn't prematurely capped
+                    // before the async page count thread finishes.
+                    bool isEstimated = muDoc->isPageCountEstimated();
                     m_navigationManager->setPageCount(pageCount);
-                    m_navigationManager->setDisplayPageCount(pageCount, false);
+                    m_navigationManager->setDisplayPageCount(pageCount, isEstimated);
 
                     // Update GUI manager's page count for the font menu display
                     if (m_guiManager)
                     {
-                        m_guiManager->setPageCount(pageCount, false);
+                        m_guiManager->setPageCount(pageCount, isEstimated);
                     }
 
                     // Clamp scroll to ensure it's within bounds

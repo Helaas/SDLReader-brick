@@ -22,7 +22,7 @@
 // Include the SDL renderer implementation
 #include "demo/sdl_renderer/nuklear_sdl_renderer.h"
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
 static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_B;
 static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_A;
 static constexpr SDL_GameControllerButton kApplySettingsButton = SDL_CONTROLLER_BUTTON_X; // Physical Y

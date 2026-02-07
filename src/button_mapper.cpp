@@ -18,7 +18,7 @@ void ButtonMapper::initializePlatformMappings()
     m_buttonMap[SDL_CONTROLLER_BUTTON_DPAD_LEFT] = LogicalButton::DPadLeft;
     m_buttonMap[SDL_CONTROLLER_BUTTON_DPAD_RIGHT] = LogicalButton::DPadRight;
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     // TG5040 platform: Controller is detected as Xbox 360, but physical buttons are different
     // We keep the ORIGINAL behavior - SDL reports them "wrong" but the original code compensated
     // So we map them as-is without "fixing" the swap:
@@ -103,7 +103,7 @@ LogicalButton ButtonMapper::mapJoystickButton(int joystickButton) const
 
 const char* ButtonMapper::getPlatformName() const
 {
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     return "TG5040";
 #else
     return "Desktop";

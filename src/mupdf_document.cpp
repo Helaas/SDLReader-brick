@@ -311,6 +311,12 @@ void MuPdfDocument::startAsyncPageCount()
             return;
         }
 
+        // Capture the current user CSS so the async page count uses the same
+        // styling as the main rendering context.  Without this, reflowable
+        // documents (EPUB/MOBI) would be laid out with MuPDF defaults and the
+        // resulting page count would not match the actual rendered pages.
+        std::string css = m_userCSS;
+
         int resolvedCount = 0;
         fz_context* localCtx = fz_new_context(nullptr, getSharedMuPdfLocks(), 64 << 20);
         if (!localCtx)
@@ -319,6 +325,21 @@ void MuPdfDocument::startAsyncPageCount()
             return;
         }
         fz_register_document_handlers(localCtx);
+
+        // Apply user CSS to the local context so fz_count_pages() lays out
+        // the document with the same font size / margins as the main context.
+        if (!css.empty())
+        {
+            fz_try(localCtx)
+            {
+                fz_set_user_css(localCtx, css.c_str());
+            }
+            fz_catch(localCtx)
+            {
+                // Non-fatal: proceed with default styling
+                std::cerr << "Async page count: failed to set user CSS" << std::endl;
+            }
+        }
 
         fz_document* localDoc = nullptr;
         fz_var(localDoc);
@@ -670,7 +691,7 @@ MuPdfDocument::ArgbBufferPtr MuPdfDocument::renderPageARGB(int pageNumber, int& 
 
     {
         std::lock_guard<std::mutex> cacheLock(m_cacheMutex);
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
         if (m_argbCache.size() >= 2)
         {
 #else
@@ -732,7 +753,7 @@ bool MuPdfDocument::tryGetCachedPageARGB(int pageNumber, int scale, ArgbBufferPt
 
     {
         std::lock_guard<std::mutex> lock(m_cacheMutex);
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
         if (m_argbCache.size() >= 2)
         {
 #else
@@ -1486,7 +1507,7 @@ void MuPdfDocument::asyncRenderWorker()
 
         {
             std::lock_guard<std::mutex> cacheLock(m_cacheMutex);
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
             if (m_argbCache.size() >= 2)
             {
 #else

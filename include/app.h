@@ -12,7 +12,7 @@ using GuiManagerType = GuiManager;
 #include "renderer.h"
 #include "text_renderer.h"
 #include "viewport_manager.h"
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
 #include "power_handler.h"
 #endif
 
@@ -108,7 +108,7 @@ private:
 
     // Event Handling
     void handleEvent(const SDL_Event& event);
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     void handlePowerMessageEvent(const SDL_Event& event);
 #endif
     void processInputAction(const InputActionData& actionData);
@@ -188,7 +188,7 @@ private:
     // Mutex to protect document access from multiple threads
     mutable std::mutex m_documentMutex;
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     std::unique_ptr<PowerHandler> m_powerHandler;
     Uint32 m_powerMessageEventType{0};
 #endif

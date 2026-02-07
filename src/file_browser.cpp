@@ -28,7 +28,7 @@
 // The SDL renderer header depends on types defined in the main Nuklear header
 #include "nuklear.h"
 #include "demo/sdl_renderer/nuklear_sdl_renderer.h"
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
 #include "power_handler.h"
 #include "power_events.h"
 #endif
@@ -52,12 +52,12 @@
 
 #include <mupdf/fitz.h>
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
 static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_B;
 static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_A;
 #endif
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
 static constexpr SDL_GameControllerButton kToggleViewButton = SDL_CONTROLLER_BUTTON_Y;
 #else
 static constexpr SDL_GameControllerButton kToggleViewButton = SDL_CONTROLLER_BUTTON_X;
@@ -162,7 +162,7 @@ public:
             throw std::runtime_error("Failed to create MuPDF context for thumbnails");
         }
         fz_register_document_handlers(m_ctx);
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
         fz_set_aa_level(m_ctx, 2);
         fz_set_text_aa_level(m_ctx, 2);
         fz_set_graphics_aa_level(m_ctx, 1);
@@ -203,7 +203,7 @@ public:
             float pageHeight = bounds.y1 - bounds.y0;
             float maxDimension = std::max(pageWidth, pageHeight);
             float scale = (maxDimension > 0.0f) ? static_cast<float>(maxDim) / maxDimension : 1.0f;
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
             scale = std::clamp(scale, 0.04f, 1.0f);
 #else
             scale = std::clamp(scale, 0.05f, 1.5f);
@@ -407,7 +407,7 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
 
     setupNuklearStyle();
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     // Initialize power handler
     m_powerHandler = std::make_unique<PowerHandler>();
 
@@ -513,7 +513,7 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
 
 void FileBrowser::cleanup(bool preserveThumbnails)
 {
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     // Stop power handler first
     if (m_powerHandler)
     {
@@ -1882,7 +1882,7 @@ std::string FileBrowser::run()
     m_running = true;
     m_selectedFile.clear();
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     // Start power button monitoring
     if (m_powerHandler && !m_powerHandler->start())
     {
@@ -1892,7 +1892,7 @@ std::string FileBrowser::run()
 
     while (m_running)
     {
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
         if (m_ctx)
         {
             nk_input_begin(m_ctx);
@@ -1901,7 +1901,7 @@ std::string FileBrowser::run()
         SDL_Event event;
         while (SDL_PollEvent(&event))
         {
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
             if (m_powerMessageEventType != 0 && event.type == m_powerMessageEventType)
             {
                 std::unique_ptr<std::string> message(static_cast<std::string*>(event.user.data1));
@@ -1929,7 +1929,7 @@ std::string FileBrowser::run()
 #endif
         }
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
         if (m_ctx)
         {
             nk_input_end(m_ctx);
@@ -2013,7 +2013,7 @@ std::string FileBrowser::run()
             }
         }
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
         if (m_inFakeSleep)
         {
             // Fake sleep mode - render black screen
@@ -2043,7 +2043,7 @@ std::string FileBrowser::run()
     while (SDL_PollEvent(&event))
     {
         flushedEvents++;
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
         if (m_powerMessageEventType != 0 && event.type == m_powerMessageEventType)
         {
             delete static_cast<std::string*>(event.user.data1);
@@ -2146,7 +2146,7 @@ void FileBrowser::render()
         nk_layout_row_dynamic(m_ctx, statusBottomPadding, 1);
         nk_spacing(m_ctx, 1);
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
         renderPowerMessageOverlay(windowWidthF, windowHeightF);
 #endif
     }
@@ -2169,7 +2169,7 @@ void FileBrowser::renderThumbnailView(int windowWidth, int windowHeight)
     (void) windowHeight;
 }
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
 void FileBrowser::showPowerMessage(const std::string& message)
 {
     m_powerMessage = message;
@@ -2236,7 +2236,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
     }
 
     if (m_ctx
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
         && !m_inFakeSleep
 #endif
     )
@@ -2244,7 +2244,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         nk_sdl_handle_event(const_cast<SDL_Event*>(&event));
     }
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     if (m_inFakeSleep)
     {
         return;
@@ -2426,7 +2426,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
             jumpSelectionByLetter(-1);
             break;
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
         case kAcceptButton:
             navigateInto();
             break;
