@@ -2,6 +2,7 @@
 # SDL Reader launcher with built-in Nuklear file browser
 #  - On first run (per shared userdata) opens docs.pdf.
 #  - Subsequent runs launch the internal file browser (-b).
+#  - Supports multiple TrimUI platforms via PLATFORM environment variable
 
 set -eu
 
@@ -9,10 +10,16 @@ set -eu
 PAK_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PAK_BASENAME=$(basename -- "$PAK_DIR")
 PAK_NAME=${PAK_BASENAME%.*}
-BIN_DIR="$PAK_DIR/bin"
 
 # Ensure we always run from the pak directory
 cd "$PAK_DIR"
+
+# Use system PLATFORM variable, fallback to tg5040 if not set
+[ -z "${PLATFORM:-}" ] && PLATFORM="tg5040"
+
+# Platform-specific directories
+BIN_DIR="$PAK_DIR/bin/$PLATFORM"
+LIB_DIR="$PAK_DIR/lib/$PLATFORM"
 
 # Shared userdata home for this pak (fallback to $HOME/.userdata if not provided)
 SHARED_USERDATA_ROOT=${SHARED_USERDATA_PATH:-"$HOME/.userdata"}
@@ -30,26 +37,8 @@ exec >>"$LOG_FILE"
 exec 2>&1
 
 echo "=== Launching $PAK_NAME at $(date) ==="
+echo "Platform: $PLATFORM"
 echo "Arguments: $*"
-
-# Build PATH entries for platform / architecture specific binaries if they exist
-PATH_PREFIX=""
-maybe_append_path() {
-    [ -d "$1" ] || return 0
-    if [ -z "$PATH_PREFIX" ]; then
-        PATH_PREFIX="$1"
-    else
-        PATH_PREFIX="$PATH_PREFIX:$1"
-    fi
-}
-
-maybe_append_path "$BIN_DIR/${PLATFORM:-}"
-maybe_append_path "$BIN_DIR/${architecture:-}"
-maybe_append_path "$BIN_DIR/shared"
-
-if [ -n "$PATH_PREFIX" ]; then
-    export PATH="$PATH_PREFIX:$PATH"
-fi
 
 # Configure default library and state directories for the reader
 if [ -z "${SDL_READER_DEFAULT_DIR-}" ]; then
@@ -57,8 +46,14 @@ if [ -z "${SDL_READER_DEFAULT_DIR-}" ]; then
 fi
 export SDL_READER_STATE_DIR="$HOME"
 
-# Library path (only prepend if lib directory exists)
-if [ -d "$PAK_DIR/lib" ]; then
+# Library path - include platform-specific lib directory
+if [ -d "$LIB_DIR" ]; then
+    if [ -n "${LD_LIBRARY_PATH-}" ]; then
+        export LD_LIBRARY_PATH="$LIB_DIR:$PAK_DIR/lib:$LD_LIBRARY_PATH"
+    else
+        export LD_LIBRARY_PATH="$LIB_DIR:$PAK_DIR/lib"
+    fi
+elif [ -d "$PAK_DIR/lib" ]; then
     if [ -n "${LD_LIBRARY_PATH-}" ]; then
         export LD_LIBRARY_PATH="$PAK_DIR/lib:$LD_LIBRARY_PATH"
     else

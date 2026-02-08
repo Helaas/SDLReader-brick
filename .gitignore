@@ -4,6 +4,11 @@
 /lib/lib
 /build
 /bundle
+
+# Platform-specific build directories
+/build/tg5040/
+/build/tg5050/
+/build/mac/
 .DS_Store
 /.vscode
 *.trashinfo
@@ -13,19 +18,22 @@
 /ports/*/libarchive*
 /ports/*/*webp*
 
-# TG5040 bundle artifacts
+# TG5040 bundle artifacts (legacy - for individual builds)
 /ports/tg5040/pak/lib/*
 /ports/tg5040/pak/fonts/*
 /ports/tg5040/pak/res/*
 !/ports/tg5040/pak/res/docs.pdf
 /ports/tg5040/pak/bin/sdl_reader_cli
 
-# TG5050 bundle artifacts
+# TG5050 bundle artifacts (legacy - for individual builds)
 /ports/tg5050/pak/lib/*
 /ports/tg5050/pak/fonts/*
 /ports/tg5050/pak/res/*
 !/ports/tg5050/pak/res/docs.pdf
 /ports/tg5050/pak/bin/sdl_reader_cli
+
+# Unified TrimUI bundle artifacts (TG5040 + TG5050)
+/ports/trimui/pak/
 
 # Zipped bundle
 SDLReader.pak.zip

@@ -15,8 +15,6 @@ echo "Bundle destination: $BUNDLE_DIR"
 TEMP_DIR=$(mktemp -d)
 [ -f "$BUNDLE_DIR/bin/jq" ] && cp "$BUNDLE_DIR/bin/jq" "$TEMP_DIR/"
 [ -f "$BUNDLE_DIR/bin/minui-list" ] && cp "$BUNDLE_DIR/bin/minui-list" "$TEMP_DIR/"
-[ -f "$BUNDLE_DIR/launch.sh" ] && cp "$BUNDLE_DIR/launch.sh" "$TEMP_DIR/"
-[ -f "$BUNDLE_DIR/res/docs.pdf" ] && cp "$BUNDLE_DIR/res/docs.pdf" "$TEMP_DIR/docs.pdf"
 
 rm -rf "$BUNDLE_DIR"
 mkdir -p "$BUNDLE_DIR/bin" "$BUNDLE_DIR/lib" "$BUNDLE_DIR/res"
@@ -24,9 +22,19 @@ mkdir -p "$BUNDLE_DIR/bin" "$BUNDLE_DIR/lib" "$BUNDLE_DIR/res"
 # Restore preserved files
 [ -f "$TEMP_DIR/jq" ] && cp "$TEMP_DIR/jq" "$BUNDLE_DIR/bin/"
 [ -f "$TEMP_DIR/minui-list" ] && cp "$TEMP_DIR/minui-list" "$BUNDLE_DIR/bin/"
-[ -f "$TEMP_DIR/launch.sh" ] && cp "$TEMP_DIR/launch.sh" "$BUNDLE_DIR/"
-[ -f "$TEMP_DIR/docs.pdf" ] && cp "$TEMP_DIR/docs.pdf" "$BUNDLE_DIR/res/docs.pdf"
 rm -rf "$TEMP_DIR"
+
+# Copy template files (launch.sh and docs.pdf)
+TEMPLATE_DIR="$PROJECT_ROOT/ports/trimui/pak-template"
+if [ -f "$TEMPLATE_DIR/launch.sh" ]; then
+    echo "Copying launch.sh from template..."
+    cp "$TEMPLATE_DIR/launch.sh" "$BUNDLE_DIR/"
+    chmod +x "$BUNDLE_DIR/launch.sh"
+fi
+if [ -f "$TEMPLATE_DIR/res/docs.pdf" ]; then
+    echo "Copying docs.pdf from template..."
+    cp "$TEMPLATE_DIR/res/docs.pdf" "$BUNDLE_DIR/res/"
+fi
 
 # Copy bin contents from existing pak folder
 if [ -d "$PROJECT_ROOT/pak/bin" ]; then

@@ -38,8 +38,8 @@ TG_SRC_DIR = $(BASE_PATH)/src
 
 # Output locations
 BIN_DIR  := $(WORKSPACE_PATH)/bin
-BUILD_DIR  := $(WORKSPACE_PATH)/build
-TARGET   := $(BIN_DIR)/sdl_reader_cli
+BUILD_DIR  := $(WORKSPACE_PATH)/build/tg5040
+TARGET   := $(BUILD_DIR)/sdl_reader_cli
 
 # Source files: Combine all .cpp files from src/ and cli/, excluding Linux-specific files
 SRC_FILES = $(filter-out $(SRC_DIR)/power_handler.cpp, $(wildcard $(SRC_DIR)/*.cpp))
