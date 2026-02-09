@@ -79,23 +79,18 @@ else
 endif
 
 export-trimui-in-docker:
-	@echo "Building and exporting unified TrimUI bundle in Docker..."
-	@echo "Building TG5040..."
+	@echo "Building TG5040 (in Docker)..."
 	@docker run --rm -v "$(CURDIR)":/workspace ghcr.io/loveretro/tg5040-toolchain:latest \
 		make -C /workspace -f ports/tg5040/Makefile
-	@echo "Building TG5050..."
+	@echo "Building TG5050 (in Docker)..."
 	@docker run --rm -v "$(CURDIR)":/workspace ghcr.io/loveretro/tg5050-toolchain:latest \
 		make -C /workspace -f ports/tg5050/Makefile
-	@echo "Creating unified PAK bundle..."
 	@bash ports/trimui/export_bundle.sh
 
 export-trimui:
 ifeq ($(IN_DOCKER),1)
-	@echo "Building TG5040..."
 	@$(MAKE) -f ports/tg5040/Makefile
-	@echo "Building TG5050..."
 	@$(MAKE) -f ports/tg5050/Makefile
-	@echo "Creating unified TrimUI bundle (TG5040 + TG5050)..."
 	@bash ports/trimui/export_bundle.sh
 else
 	@$(MAKE) export-trimui-in-docker
@@ -143,9 +138,7 @@ help:
 	@echo "TrimUI (Cross-compilation - automatically uses Docker when run from host):"
 	@echo "  make tg5040     - Build for TG5040 (TrimUI Brick & Smart Pro)"
 	@echo "  make tg5050     - Build for TG5050 (TrimUI Smart Pro S)"
-	@echo "  make export-trimui - Build and export unified PAK with both TG5040 & TG5050"
-	@echo ""
-	@echo "Individual platform exports (legacy):"
+	@echo "  make export-trimui - Build and export SDLReader.pakz (TG5040 + TG5050)"
 	@echo "  make export-tg5040 - Build and export TG5040-only bundle"
 	@echo "  make export-tg5050 - Build and export TG5050-only bundle"
 	@echo ""
