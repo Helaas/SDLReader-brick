@@ -132,7 +132,6 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
         if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
         {
             m_optionsManager->installFontLoader(muDoc->getContext());
-            std::cout << "DEBUG: Custom font loader installed before opening document" << std::endl;
 
             // Apply saved CSS configuration BEFORE opening document
             // Generate CSS even for "Document Default" to apply reading style colors
@@ -231,7 +230,6 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     // Set up font apply callback AFTER all initialization is complete
     m_guiManager->setFontApplyCallback([this](const FontConfig& config)
                                        {
-        std::cout << "DEBUG: Font apply callback triggered" << std::endl;
         applyFontConfiguration(config); });
 
     // Set up font close callback to trigger redraw
@@ -243,7 +241,6 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     // Set up page jump callback
     m_guiManager->setPageJumpCallback([this](int pageNumber)
                                       {
-        std::cout << "DEBUG: Page jump callback triggered to page " << (pageNumber + 1) << std::endl;
         m_navigationManager->goToPage(pageNumber, m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(),
                                       [this]() { markDirty(); },
                                       [this]() { updateScaleDisplayTime(); },
@@ -1229,10 +1226,6 @@ void App::applyPendingFontChange()
         return; // No pending font change
     }
 
-    std::cout << "DEBUG: Applying pending font change - " << m_pendingFontConfig.fontName
-              << " at " << m_pendingFontConfig.fontSize << "pt, style: "
-              << static_cast<int>(m_pendingFontConfig.readingStyle) << std::endl;
-
     // Check if font, size, or style actually changed
     bool fontChanged = (m_pendingFontConfig.fontName != m_cachedConfig.fontName);
     bool sizeChanged = (m_pendingFontConfig.fontSize != m_cachedConfig.fontSize);
@@ -1285,8 +1278,6 @@ void App::applyPendingFontChange()
     if (m_optionsManager)
     {
         std::string css = m_optionsManager->generateCSS(m_pendingFontConfig);
-        std::cout << "DEBUG: Generated CSS: " << css << std::endl;
-
         if (auto textDoc = dynamic_cast<TextDocument*>(m_document.get()))
         {
             textDoc->setFontConfig(m_pendingFontConfig);
@@ -1851,10 +1842,6 @@ bool App::updateHeldPanning(float dt)
     else if (scrollingOccurred)
     {
         // Reset vertical edge-turn timers if actively scrolling
-        if (m_edgeTurnHoldUp > 0.0f || m_edgeTurnHoldDown > 0.0f)
-        {
-            printf("DEBUG: Resetting vertical edge-turn timers due to active scrolling\n");
-        }
         m_edgeTurnHoldUp = 0.0f;
         m_edgeTurnHoldDown = 0.0f;
     }
@@ -1924,10 +1911,6 @@ void App::handleDpadNudgeRight()
 {
     const int maxX = m_viewportManager->getMaxScrollX();
 
-    printf("DEBUG: Right nudge called - maxX=%d, scrollX=%d, condition=%s, inScrollTimeout=%s\n",
-           maxX, m_viewportManager->getScrollX(), (maxX == 0 || m_viewportManager->getScrollX() <= (-maxX + 2)) ? "AT_EDGE" : "NOT_AT_EDGE",
-           m_navigationManager->isInScrollTimeout() ? "YES" : "NO");
-
     // Right nudge while already at right edge
     if (maxX == 0 || m_viewportManager->getScrollX() <= (-maxX + 2)) // Use same tolerance as edge-turn system
     {
@@ -1939,7 +1922,6 @@ void App::handleDpadNudgeRight()
             {
                 if (m_navigationManager->getCurrentPage() < m_navigationManager->getPageCount() - 1 && !m_navigationManager->isInPageChangeCooldown())
                 {
-                    printf("DEBUG: Immediate page change via nudge (fit-to-width)\n");
                     m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
                                                       { markDirty(); }, [this]()
                                                       { updateScaleDisplayTime(); }, [this]()
@@ -1954,11 +1936,9 @@ void App::handleDpadNudgeRight()
         else
         {
             // For zoomed pages (maxX > 0): defer to progress bar system
-            printf("DEBUG: Zoomed page at edge - deferring to progress bar system\n");
         }
         return;
     }
-    printf("DEBUG: Normal scroll - moving right\n");
     m_viewportManager->setScrollX(m_viewportManager->getScrollX() - 50);
     m_viewportManager->clampScroll();
 }
@@ -1966,9 +1946,6 @@ void App::handleDpadNudgeRight()
 void App::handleDpadNudgeLeft()
 {
     const int maxX = m_viewportManager->getMaxScrollX();
-
-    printf("DEBUG: Left nudge called - maxX=%d, scrollX=%d, condition=%s\n",
-           maxX, m_viewportManager->getScrollX(), (maxX == 0 || m_viewportManager->getScrollX() >= (maxX - 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
 
     // Left nudge while already at left edge
     if (maxX == 0 || m_viewportManager->getScrollX() >= (maxX - 2)) // Use same tolerance as edge-turn system
@@ -2004,9 +1981,6 @@ void App::handleDpadNudgeDown()
 {
     const int maxY = m_viewportManager->getMaxScrollY();
 
-    printf("DEBUG: Down nudge called - maxY=%d, scrollY=%d, condition=%s\n",
-           maxY, m_viewportManager->getScrollY(), (maxY == 0 || m_viewportManager->getScrollY() <= (-maxY + 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
-
     // Down nudge while already at bottom edge
     if (maxY == 0 || m_viewportManager->getScrollY() <= (-maxY + 2)) // Use same tolerance as edge-turn system
     {
@@ -2040,9 +2014,6 @@ void App::handleDpadNudgeDown()
 void App::handleDpadNudgeUp()
 {
     const int maxY = m_viewportManager->getMaxScrollY();
-
-    printf("DEBUG: Up nudge called - maxY=%d, scrollY=%d, condition=%s\n",
-           maxY, m_viewportManager->getScrollY(), (maxY == 0 || m_viewportManager->getScrollY() >= (maxY - 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
 
     // Up nudge while already at top edge
     if (maxY == 0 || m_viewportManager->getScrollY() >= (maxY - 2)) // Use same tolerance as edge-turn system
@@ -2092,9 +2063,6 @@ void App::applyFontConfiguration(const FontConfig& config)
         std::cerr << "Cannot apply font configuration: no document loaded" << std::endl;
         return;
     }
-
-    std::cout << "DEBUG: Scheduling deferred font change - " << config.fontName
-              << " at " << config.fontSize << "pt" << std::endl;
 
     // Cancel any ongoing prerendering to speed up font application
     if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
