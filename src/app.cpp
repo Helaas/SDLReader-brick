@@ -977,6 +977,7 @@ void App::updateInputState(const SDL_Event& event)
         switch (event.cbutton.button)
         {
         case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+            m_dpadRightButtonDown = true;
             if (!m_dpadRightHeld)
             { // Only on true initial press
                 m_dpadRightHeld = true;
@@ -984,6 +985,7 @@ void App::updateInputState(const SDL_Event& event)
             }
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+            m_dpadLeftButtonDown = true;
             if (!m_dpadLeftHeld)
             { // Only on true initial press
                 m_dpadLeftHeld = true;
@@ -991,6 +993,7 @@ void App::updateInputState(const SDL_Event& event)
             }
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_UP:
+            m_dpadUpButtonDown = true;
             if (!m_dpadUpHeld)
             { // Only on true initial press
                 m_dpadUpHeld = true;
@@ -998,6 +1001,7 @@ void App::updateInputState(const SDL_Event& event)
             }
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+            m_dpadDownButtonDown = true;
             if (!m_dpadDownHeld)
             { // Only on true initial press
                 m_dpadDownHeld = true;
@@ -1012,6 +1016,7 @@ void App::updateInputState(const SDL_Event& event)
         switch (event.cbutton.button)
         {
         case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+            m_dpadRightButtonDown = false;
             m_dpadRightHeld = false;
             if (m_edgeTurnHoldRight > 0.0f)
             {
@@ -1021,6 +1026,7 @@ void App::updateInputState(const SDL_Event& event)
             markDirty();
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+            m_dpadLeftButtonDown = false;
             m_dpadLeftHeld = false;
             if (m_edgeTurnHoldLeft > 0.0f)
             {
@@ -1030,6 +1036,7 @@ void App::updateInputState(const SDL_Event& event)
             markDirty();
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_UP:
+            m_dpadUpButtonDown = false;
             m_dpadUpHeld = false;
             if (m_edgeTurnHoldUp > 0.0f)
             {
@@ -1039,6 +1046,7 @@ void App::updateInputState(const SDL_Event& event)
             markDirty();
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+            m_dpadDownButtonDown = false;
             m_dpadDownHeld = false;
             if (m_edgeTurnHoldDown > 0.0f)
             {
@@ -1081,8 +1089,10 @@ void App::updateInputState(const SDL_Event& event)
         };
 
         bool releasedAny = false;
-        auto handleRelease = [&](bool desired, bool& state, float& hold, float& cooldown)
+        auto handleRelease = [&](bool desired, bool& state, float& hold, float& cooldown, bool buttonDown)
         {
+            // Don't let analog stick clear held state if a D-pad button is physically pressed
+            if (buttonDown) return;
             if (!desired && state)
             {
                 state = false;
@@ -1104,10 +1114,10 @@ void App::updateInputState(const SDL_Event& event)
         handlePress(downActive, m_dpadDownHeld, [this]()
                     { handleDpadNudgeDown(); });
 
-        handleRelease(rightActive, m_dpadRightHeld, m_edgeTurnHoldRight, m_edgeTurnCooldownRight);
-        handleRelease(leftActive, m_dpadLeftHeld, m_edgeTurnHoldLeft, m_edgeTurnCooldownLeft);
-        handleRelease(upActive, m_dpadUpHeld, m_edgeTurnHoldUp, m_edgeTurnCooldownUp);
-        handleRelease(downActive, m_dpadDownHeld, m_edgeTurnHoldDown, m_edgeTurnCooldownDown);
+        handleRelease(rightActive, m_dpadRightHeld, m_edgeTurnHoldRight, m_edgeTurnCooldownRight, m_dpadRightButtonDown);
+        handleRelease(leftActive, m_dpadLeftHeld, m_edgeTurnHoldLeft, m_edgeTurnCooldownLeft, m_dpadLeftButtonDown);
+        handleRelease(upActive, m_dpadUpHeld, m_edgeTurnHoldUp, m_edgeTurnCooldownUp, m_dpadUpButtonDown);
+        handleRelease(downActive, m_dpadDownHeld, m_edgeTurnHoldDown, m_edgeTurnCooldownDown, m_dpadDownButtonDown);
 
         if (releasedAny)
         {
@@ -1702,11 +1712,6 @@ bool App::updateHeldPanning(float dt)
             }
             else
             {
-                if ((m_dpadLeftHeld || m_keyboardLeftHeld) && m_edgeTurnHoldLeft > 0.0f)
-                {
-                    printf("DEBUG: Left edge-turn timer stopped (scrollX=%d, threshold=%d, held=%s)\n",
-                           m_viewportManager->getScrollX(), maxX - edgeTolerance, (m_dpadLeftHeld || m_keyboardLeftHeld) ? "YES" : "NO");
-                }
                 m_edgeTurnHoldLeft = 0.0f;
             }
         }

@@ -484,22 +484,22 @@ InputActionData InputManager::processControllerButton(const SDL_Event& event)
         {
         case LogicalButton::DPadRight:
             m_inputState.dpadRightHeld = true;
-            // Let App handle edge-turn and nudge logic
+            m_dpadRightButtonDown = true;
             break;
 
         case LogicalButton::DPadLeft:
             m_inputState.dpadLeftHeld = true;
-            // Let App handle edge-turn and nudge logic
+            m_dpadLeftButtonDown = true;
             break;
 
         case LogicalButton::DPadUp:
             m_inputState.dpadUpHeld = true;
-            // Let App handle edge-turn and nudge logic
+            m_dpadUpButtonDown = true;
             break;
 
         case LogicalButton::DPadDown:
             m_inputState.dpadDownHeld = true;
-            // Let App handle edge-turn and nudge logic
+            m_dpadDownButtonDown = true;
             break;
 
         case LogicalButton::PagePrevious:
@@ -581,6 +581,7 @@ InputActionData InputManager::processControllerButton(const SDL_Event& event)
         switch (logicalButton)
         {
         case LogicalButton::DPadRight:
+            m_dpadRightButtonDown = false;
             m_inputState.dpadRightHeld = false;
             if (m_inputState.edgeTurnHoldRight > 0.0f)
             {
@@ -590,6 +591,7 @@ InputActionData InputManager::processControllerButton(const SDL_Event& event)
             break;
 
         case LogicalButton::DPadLeft:
+            m_dpadLeftButtonDown = false;
             m_inputState.dpadLeftHeld = false;
             if (m_inputState.edgeTurnHoldLeft > 0.0f)
             {
@@ -599,6 +601,7 @@ InputActionData InputManager::processControllerButton(const SDL_Event& event)
             break;
 
         case LogicalButton::DPadUp:
+            m_dpadUpButtonDown = false;
             m_inputState.dpadUpHeld = false;
             if (m_inputState.edgeTurnHoldUp > 0.0f)
             {
@@ -608,6 +611,7 @@ InputActionData InputManager::processControllerButton(const SDL_Event& event)
             break;
 
         case LogicalButton::DPadDown:
+            m_dpadDownButtonDown = false;
             m_inputState.dpadDownHeld = false;
             if (m_inputState.edgeTurnHoldDown > 0.0f)
             {
@@ -746,7 +750,7 @@ bool InputManager::shouldTriggerCombo(bool leftActive, bool rightActive, bool& c
 
 void InputManager::updateDpadFromAnalog(bool rightActive, bool leftActive, bool upActive, bool downActive)
 {
-    auto updateDirection = [](bool desired, bool& state, float& hold, float& cooldown)
+    auto updateDirection = [](bool desired, bool& state, float& hold, float& cooldown, bool buttonDown)
     {
         if (desired && !state)
         {
@@ -754,6 +758,8 @@ void InputManager::updateDpadFromAnalog(bool rightActive, bool leftActive, bool 
         }
         else if (!desired && state)
         {
+            // Don't let analog stick clear held state if a D-pad button is physically pressed
+            if (buttonDown) return;
             state = false;
             if (hold > 0.0f)
             {
@@ -763,10 +769,10 @@ void InputManager::updateDpadFromAnalog(bool rightActive, bool leftActive, bool 
         }
     };
 
-    updateDirection(rightActive, m_inputState.dpadRightHeld, m_inputState.edgeTurnHoldRight, m_inputState.edgeTurnCooldownRight);
-    updateDirection(leftActive, m_inputState.dpadLeftHeld, m_inputState.edgeTurnHoldLeft, m_inputState.edgeTurnCooldownLeft);
-    updateDirection(upActive, m_inputState.dpadUpHeld, m_inputState.edgeTurnHoldUp, m_inputState.edgeTurnCooldownUp);
-    updateDirection(downActive, m_inputState.dpadDownHeld, m_inputState.edgeTurnHoldDown, m_inputState.edgeTurnCooldownDown);
+    updateDirection(rightActive, m_inputState.dpadRightHeld, m_inputState.edgeTurnHoldRight, m_inputState.edgeTurnCooldownRight, m_dpadRightButtonDown);
+    updateDirection(leftActive, m_inputState.dpadLeftHeld, m_inputState.edgeTurnHoldLeft, m_inputState.edgeTurnCooldownLeft, m_dpadLeftButtonDown);
+    updateDirection(upActive, m_inputState.dpadUpHeld, m_inputState.edgeTurnHoldUp, m_inputState.edgeTurnCooldownUp, m_dpadUpButtonDown);
+    updateDirection(downActive, m_inputState.dpadDownHeld, m_inputState.edgeTurnHoldDown, m_inputState.edgeTurnCooldownDown, m_dpadDownButtonDown);
 }
 
 InputActionData InputManager::processMouse(const SDL_Event& event)

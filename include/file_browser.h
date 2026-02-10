@@ -126,6 +126,14 @@ private:
     bool m_waitingForInitialRepeat;
     bool m_leftHeld{false};
     bool m_rightHeld{false};
+
+    // Track whether each direction was set by a physical D-pad button press.
+    // Prevents the analog stick axis handler from clearing held state that was
+    // set by a D-pad button (the two input sources share m_dpad*Held).
+    bool m_dpadUpButtonDown{false};
+    bool m_dpadDownButtonDown{false};
+    bool m_leftButtonDown{false};
+    bool m_rightButtonDown{false};
     Sint16 m_leftStickX{0};
     Sint16 m_leftStickY{0};
     Uint32 m_lastHorizontalScrollTime{0};

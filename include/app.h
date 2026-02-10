@@ -157,11 +157,19 @@ private:
     float m_lastTouchX{0.0f};
     float m_lastTouchY{0.0f};
 
-    // D-pad held state for continuous input
+    // D-pad held state for continuous input (shared by D-pad buttons and analog stick)
     bool m_dpadLeftHeld{false};
     bool m_dpadRightHeld{false};
     bool m_dpadUpHeld{false};
     bool m_dpadDownHeld{false};
+
+    // Track whether each direction was set by a physical D-pad button press.
+    // Prevents the analog stick axis handler from clearing held state that was
+    // set by a D-pad button (the two input sources share m_dpad*Held).
+    bool m_dpadRightButtonDown{false};
+    bool m_dpadLeftButtonDown{false};
+    bool m_dpadUpButtonDown{false};
+    bool m_dpadDownButtonDown{false};
     bool m_keyboardLeftHeld{false};
     bool m_keyboardRightHeld{false};
     bool m_keyboardUpHeld{false};

@@ -221,6 +221,13 @@ private:
     static constexpr int DPAD_NUDGE_AMOUNT = 20;
     static constexpr Sint16 TRIGGER_DEAD_ZONE = 4000;
 
+    // Track whether each direction was set by a physical D-pad button press.
+    // Prevents updateDpadFromAnalog from clearing held state set by D-pad buttons.
+    bool m_dpadRightButtonDown{false};
+    bool m_dpadLeftButtonDown{false};
+    bool m_dpadUpButtonDown{false};
+    bool m_dpadDownButtonDown{false};
+
     // Shoulder/trigger combo tracking
     bool m_leftShoulderHeld{false};
     bool m_rightShoulderHeld{false};

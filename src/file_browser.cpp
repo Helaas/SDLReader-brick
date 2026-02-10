@@ -1943,8 +1943,9 @@ std::string FileBrowser::run()
             break;
         }
 
-        // Handle continuous scrolling when D-pad is held
         Uint32 currentTime = SDL_GetTicks();
+
+        // Handle continuous scrolling when D-pad is held
         if ((m_dpadUpHeld || m_dpadDownHeld) && !m_entries.empty())
         {
             const Uint32 elapsed = (m_lastScrollTime <= currentTime) ? (currentTime - m_lastScrollTime) : 0;
@@ -2371,6 +2372,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         switch (event.cbutton.button)
         {
         case SDL_CONTROLLER_BUTTON_DPAD_UP:
+            m_dpadUpButtonDown = true;
             if (!m_dpadUpHeld)
             {
                 moveSelectionVertical(-1);
@@ -2380,6 +2382,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             }
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+            m_dpadDownButtonDown = true;
             if (!m_dpadDownHeld)
             {
                 moveSelectionVertical(1);
@@ -2389,6 +2392,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             }
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+            m_leftButtonDown = true;
             if (!m_leftHeld)
             {
                 if (m_thumbnailView)
@@ -2405,6 +2409,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             }
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+            m_rightButtonDown = true;
             if (!m_rightHeld)
             {
                 if (m_thumbnailView)
@@ -2459,16 +2464,19 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         switch (event.cbutton.button)
         {
         case SDL_CONTROLLER_BUTTON_DPAD_UP:
+            m_dpadUpButtonDown = false;
             m_dpadUpHeld = false;
             m_lastScrollTime = 0;
             m_waitingForInitialRepeat = false;
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+            m_dpadDownButtonDown = false;
             m_dpadDownHeld = false;
             m_lastScrollTime = 0;
             m_waitingForInitialRepeat = false;
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+            m_leftButtonDown = false;
             m_leftHeld = false;
             if (!m_rightHeld)
             {
@@ -2477,6 +2485,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             }
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+            m_rightButtonDown = false;
             m_rightHeld = false;
             if (!m_leftHeld)
             {
@@ -2517,7 +2526,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             m_lastScrollTime = SDL_GetTicks();
             m_waitingForInitialRepeat = true;
         }
-        else if (!upActive && m_dpadUpHeld)
+        else if (!upActive && m_dpadUpHeld && !m_dpadUpButtonDown)
         {
             m_dpadUpHeld = false;
             m_lastScrollTime = 0;
@@ -2531,7 +2540,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             m_lastScrollTime = SDL_GetTicks();
             m_waitingForInitialRepeat = true;
         }
-        else if (!downActive && m_dpadDownHeld)
+        else if (!downActive && m_dpadDownHeld && !m_dpadDownButtonDown)
         {
             m_dpadDownHeld = false;
             m_lastScrollTime = 0;
@@ -2552,7 +2561,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             m_lastHorizontalScrollTime = SDL_GetTicks();
             m_waitingForInitialHorizontalRepeat = true;
         }
-        else if (!leftActive && m_leftHeld)
+        else if (!leftActive && m_leftHeld && !m_leftButtonDown)
         {
             m_leftHeld = false;
             if (!m_rightHeld)
@@ -2576,7 +2585,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             m_lastHorizontalScrollTime = SDL_GetTicks();
             m_waitingForInitialHorizontalRepeat = true;
         }
-        else if (!rightActive && m_rightHeld)
+        else if (!rightActive && m_rightHeld && !m_rightButtonDown)
         {
             m_rightHeld = false;
             if (!m_leftHeld)
