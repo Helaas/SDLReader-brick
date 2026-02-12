@@ -1186,7 +1186,16 @@ void App::refreshPageCountFromDocument()
     }
 
     int currentPage = m_navigationManager->getCurrentPage();
-    if (currentPage >= docPageCount)
+
+    // If we parked on page 0 after a CSS reopen, restore the desired page
+    // now that the real page count is known.
+    if (m_pendingPageRestore >= 0)
+    {
+        currentPage = std::min(m_pendingPageRestore, docPageCount - 1);
+        m_pendingPageRestore = -1;
+        m_navigationManager->setCurrentPage(currentPage);
+    }
+    else if (currentPage >= docPageCount)
     {
         currentPage = docPageCount - 1;
         m_navigationManager->setCurrentPage(currentPage);
@@ -1342,15 +1351,25 @@ void App::applyPendingFontChange()
                 // Use the much safer reopening method
                 if (muDoc->reopenWithCSS(css))
                 {
-                    // Restore state after reopening with bounds checking
+                    // After reopening with new CSS the page count is only an
+                    // estimate (based on file size).  Navigating to the old page
+                    // number can trigger "invalid page number" exceptions if the
+                    // new styling produces fewer pages.  Park on page 0 and let
+                    // refreshPageCountFromDocument() restore the position once
+                    // the async page count finalises.
                     int pageCount = m_document->getPageCount();
-                    if (currentPage >= 0 && currentPage < pageCount)
+                    if (muDoc->isPageCountEstimated())
+                    {
+                        m_pendingPageRestore = currentPage;
+                        m_navigationManager->setCurrentPage(0);
+                    }
+                    else if (currentPage >= 0 && currentPage < pageCount)
                     {
                         m_navigationManager->setCurrentPage(currentPage);
                     }
                     else
                     {
-                        m_navigationManager->setCurrentPage(0); // Fallback to first page
+                        m_navigationManager->setCurrentPage(std::max(0, pageCount - 1));
                     }
 
                     // Restore scale with reasonable bounds

@@ -208,6 +208,11 @@ private:
     bool m_pendingFontChange{false};
     FontConfig m_pendingFontConfig;
 
+    // After a CSS-based reopen, the page count is estimated from file size and
+    // may be higher than the actual count.  We park on page 0 until the async
+    // page count finalises, then navigate to min(desired, newCount-1).
+    int m_pendingPageRestore{-1};
+
     // Cached configuration to avoid repeated file reads
     FontConfig m_cachedConfig;
     void refreshCachedConfig()
