@@ -7,6 +7,7 @@
     "repo_url": "https://github.com/Helaas/SDLReader-brick",
     "release_filename": "SDLReader.pak.zip",
     "changelog": {
+        "v2.2.2": "Smart Pro S support, and bugfix for final ebook pages being unreachable after changing font size.",
         "v2.2.1": "TXT & EPUB performance improvements and bug fixes.",
         "v2.2.0": "TXT file support & toolchain moved to loveretro/tg5040-toolchain",
         "v2.1.4": "Smarter rotation/fit views, on-screen page/zoom overlays. Optionally keep pan position when changing page.",

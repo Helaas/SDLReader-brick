@@ -30,7 +30,7 @@ SDL2_INCLUDE := $(PREFIX)/include/SDL2
 # Compiler and flags
 CXX      ?= $(if $(CROSS_COMPILE),$(CROSS_COMPILE)g++,g++)
 TG_INCLUDE_DIR := $(TG5040_PORT_PATH)/include
-CXXFLAGS = -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTRIMUI_PLATFORM\
+CXXFLAGS = -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTRIMUI_PLATFORM -DPLATFORM_POWER_DEVICE_PATH='"/dev/input/event2"'\
             -I$(WORKSPACE_PATH)/src -I$(WORKSPACE_PATH)/include -I$(TG_INCLUDE_DIR) -I$(BASE_PATH)/mupdf/include \
             -I$(BASE_PATH)/nuklear-tg5050 -I$(BASE_PATH)/nuklear-tg5050/demo/sdl_renderer \
             -I/usr/local/libarchive-minimal/include -I$(WEBP_PREFIX)/include -D_REENTRANT -I$(SDL2_INCLUDE)

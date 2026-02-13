@@ -86,6 +86,7 @@ make linux     # Linux desktop
 # Export distribution bundles
 make export-tg5040    # Build and create complete TG5040 package
 make export-tg5050    # Build and create complete TG5050 package
+make export-trimui    # Build and create complete pakz for both TG5040 and TG5050
 
 # List available platforms
 make list-platforms
@@ -169,13 +170,12 @@ The TG5040 (TrimUI Brick & Smart Pro) and TG5050 (TrimUI Smart Pro S) share the 
   - Long press (2+ seconds): Safe shutdown
   - Smart error handling: No immediate errors, 30-second timeout before user notification
   - Event flushing on wake to prevent phantom button presses
-- **Device-specific Input**: `/dev/input/event1` monitoring for power events
 - **System Integration**: NextUI-compatible suspend/shutdown scripts
 - **Bundle Export**: Complete distribution package creation
   - Self-contained bundle with all dependencies
   - Automated library bundling and RPATH setup
   - Includes utilities (jq, minui-list) and resources
-  - Ready for device deployment via `make export-tg5040` or `make export-tg5050`
+  - Ready for device deployment via `make export-tg5040`,  `make export-tg5050` or `make export-trimui`
 
 ### macOS
 - **Desktop Environment**: Standard desktop window management
@@ -292,9 +292,8 @@ make export-tg5040
 # TG5050 (TrimUI Smart Pro S)
 make export-tg5050
 
-# Or build first, then export
-make tg5040 && make export-tg5040
-make tg5050 && make export-tg5050
+# Pakz for both TG5040 and TG5050
+make export-trimui
 ```
 
 ### Bundle Contents
@@ -498,7 +497,7 @@ SDLReader-brick/
 - **Power management**: TrimUI devices (TG5040/TG5050) share hardware-specific power button handling and suspend/resume functionality in `ports/tg5040/`
 - **Build system**: Each platform has its own Makefile in `ports/{platform}/`
 - **Docker development**: Use `ports/tg5040/docker-compose.yml` or `ports/tg5050/docker-compose.yml` for the respective toolchain
-- **TrimUI distribution**: Use `make export-tg5040` or `make export-tg5050` to create complete deployment packages
+- **TrimUI distribution**: Use `make export-tg5040` or `make export-tg5050` to create complete deployment packages for a device, or `make export-trimui` to create a single package for both platforms
 
 ## Architecture
 
@@ -512,9 +511,8 @@ Key architectural highlights:
 - **Scalable design** for easy addition of new platforms
 
 # Acknowledgements
-- <a href="https://github.com/hito16" target="_blank" rel="noopener noreferrer"><img src="https://github.com/hito16.png" alt="@hito16" width="18" height="18" style="border-radius:50%"> hito16</a>, for starting the original SDl Reader project.
-- [rofl0r/SDLBook](https://github.com/rofl0r/SDLBook), for inspiring hito16.
-- [LoveRetro/NextUI](https://github.com/LoveRetro/NextUI), for creating an excellent OS for the TrimUI Brick.
+- <a href="https://github.com/hito16" target="_blank" rel="noopener noreferrer"><img src="https://github.com/hito16.png" alt="@hito16" width="18" height="18" style="border-radius:50%"> hito16</a>, for starting the original SDL Reader project.
+- [LoveRetro/NextUI](https://github.com/LoveRetro/NextUI), for creating an excellent launcher for the TrimUI Brick.
 - <a href="https://github.com/josegonzalez" target="_blank" rel="noopener noreferrer"><img src="https://github.com/josegonzalez.png" alt="@josegonzalez" width="18" height="18" style="border-radius:50%"> josegonzalez</a>, for minui-list and countless other tools.
 - [UncleJunVIP/nextui-pak-store](https://github.com/UncleJunVIP/nextui-pak-store) for the Pak Store
 - [Immediate-Mode-UI/Nuklear](https://github.com/Immediate-Mode-UI/Nuklear), for the Nuklear UI framework powering the overlay, browser, and font menus.
