@@ -5,7 +5,7 @@
     "description": "Read PDF, CBZ/ZIP & CBR/RAR comic archives, EPUB, MOBI, and plain text files with smooth navigation, zoom, rotation, and mirroring. SDLReader is a lightweight, cross-platform viewer optimized for TrimUI devices (Brick, Smart Pro, Smart Pro S) running NextUI, built on SDL2 and MuPDF.",
     "author": "Helaas",
     "repo_url": "https://github.com/Helaas/SDLReader-brick",
-    "release_filename": "SDLReader.pak.zip",
+    "release_filename": "SDLReader.pakz",
     "changelog": {
         "v2.2.2": "Smart Pro S support, and bugfix for final ebook pages being unreachable after changing font size.",
         "v2.2.1": "TXT & EPUB performance improvements and bug fixes.",
