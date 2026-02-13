@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Export TG5040 bundle - creates a complete distribution package
+# Export TG5050 bundle - creates a complete distribution package
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BUNDLE_DIR="$SCRIPT_DIR/pak"
 
-echo "Exporting TG5040 bundle..."
+echo "Exporting TG5050 bundle..."
 echo "Project root: $PROJECT_ROOT"
 echo "Bundle destination: $BUNDLE_DIR"
 
@@ -53,14 +53,14 @@ if [ -f "$PROJECT_ROOT/bin/sdl_reader_cli" ]; then
     echo "Copying sdl_reader_cli binary..."
     cp "$PROJECT_ROOT/bin/sdl_reader_cli" "$BUNDLE_DIR/bin/"
 else
-    echo "Warning: sdl_reader_cli not found in bin/ - did you run 'make tg5040'?"
+    echo "Warning: sdl_reader_cli not found in bin/ - did you run 'make tg5050'?"
 fi
 
 # Generate library bundle using make_bundle.sh
 echo "Generating library dependencies..."
 cd "$PROJECT_ROOT"
 export BIN="./bin/sdl_reader_cli"
-export DEST="./ports/tg5040/pak/lib"
+export DEST="./ports/tg5050/pak/lib"
 if [ -f "$SCRIPT_DIR/make_bundle.sh" ]; then
     bash "$SCRIPT_DIR/make_bundle.sh"
 else
@@ -103,7 +103,7 @@ cd "$BUNDLE_DIR"
 zip -9 -r "$PROJECT_ROOT/SDLReader.pak.zip" .
 
 echo ""
-echo "TG5040 bundle exported successfully to: $BUNDLE_DIR"
+echo "TG5050 bundle exported successfully to: $BUNDLE_DIR"
 echo "Zipped bundle: $PROJECT_ROOT/SDLReader.pak.zip"
 echo "Bundle contents:"
 find "$BUNDLE_DIR" -type f | sort

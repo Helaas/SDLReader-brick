@@ -108,7 +108,7 @@ private:
     int m_gridColumns{1};
     int m_lastWindowWidth{0};
     int m_lastWindowHeight{0};
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     static constexpr int THUMBNAIL_MAX_DIM = 150;
 #else
     static constexpr int THUMBNAIL_MAX_DIM = 200;
@@ -126,6 +126,14 @@ private:
     bool m_waitingForInitialRepeat;
     bool m_leftHeld{false};
     bool m_rightHeld{false};
+
+    // Track whether each direction was set by a physical D-pad button press.
+    // Prevents the analog stick axis handler from clearing held state that was
+    // set by a D-pad button (the two input sources share m_dpad*Held).
+    bool m_dpadUpButtonDown{false};
+    bool m_dpadDownButtonDown{false};
+    bool m_leftButtonDown{false};
+    bool m_rightButtonDown{false};
     Sint16 m_leftStickX{0};
     Sint16 m_leftStickY{0};
     Uint32 m_lastHorizontalScrollTime{0};
@@ -134,7 +142,7 @@ private:
     static constexpr Uint32 SCROLL_REPEAT_DELAY_MS = 50;       // Delay between repeats
     static constexpr Uint32 THUMBNAIL_SCROLL_DELAY_FACTOR = 2; // Slow down thumbnail view repeat speed
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     std::unique_ptr<PowerHandler> m_powerHandler;
     bool m_inFakeSleep{false};
     static constexpr Uint32 POWER_MESSAGE_DURATION_MS = 4000;
@@ -194,7 +202,7 @@ private:
     void setupNuklearStyle();
     void renderListViewNuklear(float viewHeight, int windowWidth);
     void renderThumbnailViewNuklear(float viewHeight, int windowWidth);
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     void showPowerMessage(const std::string& message);
     void renderPowerMessageOverlay(float windowWidth, float windowHeight);
 #endif

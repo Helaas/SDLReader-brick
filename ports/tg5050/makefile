@@ -1,16 +1,20 @@
-# TG5040-specific Makefile
-# This Makefile contains the build configuration specific to the TG5040 platform
+# TG5050-specific Makefile
+# This Makefile contains the build configuration specific to the TG5050 platform (TrimUI Smart Pro S)
+# The TG5050 shares the same hardware interface as the TG5040, so power handler code is reused.
 
-# Determine base path - if we're in ports/tg5040, use relative paths, otherwise use full paths
+# Determine base path - if we're in ports/tg5050, use relative paths, otherwise use full paths
 ifneq ($(wildcard ../../src),)
-  # We're being called from ports/tg5040 directory
+  # We're being called from ports/tg5050 directory
   BASE_PATH := .
   WORKSPACE_PATH := ../..
 else
   # We're being called from workspace root
-  BASE_PATH := ports/tg5040
+  BASE_PATH := ports/tg5050
   WORKSPACE_PATH := .
 endif
+
+# Shared TrimUI include/source from TG5040 (power handler, etc.)
+TG5040_PORT_PATH := $(WORKSPACE_PATH)/ports/tg5040
 
 # Toolchain configuration
 CROSS_COMPILE ?=
@@ -25,20 +29,20 @@ SDL2_INCLUDE := $(PREFIX)/include/SDL2
 
 # Compiler and flags
 CXX      ?= $(if $(CROSS_COMPILE),$(CROSS_COMPILE)g++,g++)
-TG_INCLUDE_DIR := $(BASE_PATH)/include
-CXXFLAGS = -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTRIMUI_PLATFORM\
+TG_INCLUDE_DIR := $(TG5040_PORT_PATH)/include
+CXXFLAGS = -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTRIMUI_PLATFORM -DPLATFORM_POWER_DEVICE_PATH='"/dev/input/event2"'\
             -I$(WORKSPACE_PATH)/src -I$(WORKSPACE_PATH)/include -I$(TG_INCLUDE_DIR) -I$(BASE_PATH)/mupdf/include \
-            -I$(BASE_PATH)/nuklear-tg5040 -I$(BASE_PATH)/nuklear-tg5040/demo/sdl_renderer \
+            -I$(BASE_PATH)/nuklear-tg5050 -I$(BASE_PATH)/nuklear-tg5050/demo/sdl_renderer \
             -I/usr/local/libarchive-minimal/include -I$(WEBP_PREFIX)/include -D_REENTRANT -I$(SDL2_INCLUDE)
 
 # Source directories
 SRC_DIR = $(WORKSPACE_PATH)/src
 CLI_DIR = $(WORKSPACE_PATH)/cli
-TG_SRC_DIR = $(BASE_PATH)/src
+TG_SRC_DIR = $(TG5040_PORT_PATH)/src
 
 # Output locations
 BIN_DIR  := $(WORKSPACE_PATH)/bin
-BUILD_DIR  := $(WORKSPACE_PATH)/build/tg5040
+BUILD_DIR  := $(WORKSPACE_PATH)/build/tg5050
 TARGET   := $(BUILD_DIR)/sdl_reader_cli
 
 # Source files: Combine all .cpp files from src/ and cli/, excluding Linux-specific files
@@ -49,7 +53,7 @@ SRCS = $(SRC_FILES) $(wildcard $(CLI_DIR)/*.cpp)
 # Transforms src/file.cpp into build/file.o and cli/file.cpp into build/file.o
 OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS))) \
        $(patsubst $(CLI_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(CLI_DIR)/%,$(SRCS))) \
-       $(BUILD_DIR)/tg5040_power_handler.o
+       $(BUILD_DIR)/tg5050_power_handler.o
 
 # Path to minimal libarchive static library
 LIBARCHIVE_MINIMAL := /usr/local/libarchive-minimal/lib/libarchive.a
@@ -95,13 +99,13 @@ check-libarchive:
 # Setup Nuklear GUI library (header-only) if it doesn't exist
 setup-nuklear:
 	@cd $(BASE_PATH) && \
-	if [ ! -d "nuklear-tg5040" ]; then \
-		echo "Setting up Nuklear GUI library (v4.12.8) for TG5040..."; \
-		rm -rf nuklear-tg5040; \
-		git clone --depth 1 --branch 4.12.8 https://github.com/Immediate-Mode-UI/Nuklear.git nuklear-tg5040; \
-		echo "Nuklear repository cloned for TG5040"; \
+	if [ ! -d "nuklear-tg5050" ]; then \
+		echo "Setting up Nuklear GUI library (v4.12.8) for TG5050..."; \
+		rm -rf nuklear-tg5050; \
+		git clone --depth 1 --branch 4.12.8 https://github.com/Immediate-Mode-UI/Nuklear.git nuklear-tg5050; \
+		echo "Nuklear repository cloned for TG5050"; \
 	else \
-		echo "Nuklear repository already present for TG5040"; \
+		echo "Nuklear repository already present for TG5050"; \
 	fi
 
 # Setup MuPDF repository if it doesn't exist
@@ -229,9 +233,9 @@ build-mupdf: build-libarchive build-webp
 		USE_ZXINGCPP=no \
 		USE_SYSTEM_LCMS2=no
 
-# Export complete TG5040 bundle for distribution
+# Export complete TG5050 bundle for distribution
 export-bundle: $(TARGET)
-	@echo "Exporting TG5040 bundle..."
+	@echo "Exporting TG5050 bundle..."
 	@cd $(BASE_PATH) && ./export_bundle.sh
 
 # Ensure bin/ exists before linking
@@ -258,8 +262,8 @@ $(BUILD_DIR)/%.o: $(CLI_DIR)/%.cpp | $(BUILD_DIR)
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Compile TG5040-specific sources
-$(BUILD_DIR)/tg5040_power_handler.o: $(TG_SRC_DIR)/power_handler.cpp | $(BUILD_DIR)
+# Compile TG5050 power handler (shared from TG5040 port)
+$(BUILD_DIR)/tg5050_power_handler.o: $(TG_SRC_DIR)/power_handler.cpp | $(BUILD_DIR)
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
@@ -298,7 +302,7 @@ clean-webp:
 # Clean Nuklear checkout
 clean-nuklear:
 	@echo "Removing Nuklear checkout..."
-	rm -rf $(BASE_PATH)/nuklear-tg5040
+	rm -rf $(BASE_PATH)/nuklear-tg5050
 
 # Deep clean - removes everything including downloaded dependencies
 clean-all: clean clean-mupdf clean-libarchive clean-webp clean-nuklear

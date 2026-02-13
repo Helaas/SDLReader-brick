@@ -1,0 +1,30 @@
+# Docker Development Environment Makefile for TG5050
+# This Makefile manages the Docker-based development environment
+# For the main application build, use the regular Makefile
+# For docker-compose workflow, see docker-compose.yml in this directory
+
+.PHONY: shell pull clean
+
+IMAGE_NAME=ghcr.io/loveretro/tg5050-toolchain:latest
+WORKSPACE_DIR := $(abspath ../..)
+
+CONTAINER_NAME=$(shell docker ps -f "ancestor=$(IMAGE_NAME)" --format "{{.Names}}" | head -n 1)
+BOLD=$(shell tput bold)
+NORM=$(shell tput sgr0)
+
+pull:
+	$(info $(BOLD)Pulling $(IMAGE_NAME)...$(NORM))
+	docker pull $(IMAGE_NAME)
+
+shell: pull
+ifeq ($(strip $(CONTAINER_NAME)),)
+	$(info $(BOLD)Starting $(IMAGE_NAME)...$(NORM))
+	docker run -it --rm -v "$(WORKSPACE_DIR)":/workspace $(IMAGE_NAME) /bin/bash
+else
+	$(info $(BOLD)Connecting to running $(IMAGE_NAME)...$(NORM))
+	docker exec -it $(CONTAINER_NAME) /bin/bash
+endif
+
+clean:
+	$(info $(BOLD)Removing local cache for $(IMAGE_NAME)...$(NORM))
+	docker rmi $(IMAGE_NAME) || true

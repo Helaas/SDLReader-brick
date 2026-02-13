@@ -292,7 +292,7 @@ void RenderManager::renderOverlayBadge(const std::string& text, int textWidth, i
     SDL_Texture* previousTarget = SDL_GetRenderTarget(sdlRenderer);
 
     std::unique_ptr<SDL_Texture, MySDLTextureDeleter> badgeTexture(
-        SDL_CreateTexture(sdlRenderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_TARGET,
+        SDL_CreateTexture(sdlRenderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET,
                           badgeWidth, badgeHeight));
     if (!badgeTexture)
     {
@@ -848,7 +848,8 @@ void RenderManager::renderEdgeTurnProgressIndicator(App* app, NavigationManager*
     bool dpadHeld = dpadLeftHeld || dpadRightHeld || dpadUpHeld || dpadDownHeld;
     float maxEdgeHold = std::max({edgeTurnHoldRight, edgeTurnHoldLeft, edgeTurnHoldUp, edgeTurnHoldDown});
 
-    // Get scroll limits to check if content is scrollable
+    // Get scroll limits - only show progress bar when content is scrollable
+    // (when page fits on screen, page changes are instant so no bar is needed)
     int pageWidth = viewportManager->getPageWidth();
     int pageHeight = viewportManager->getPageHeight();
     int maxScrollX = std::max(0, (pageWidth - windowWidth) / 2);

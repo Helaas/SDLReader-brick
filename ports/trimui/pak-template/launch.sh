@@ -32,25 +32,6 @@ exec 2>&1
 echo "=== Launching $PAK_NAME at $(date) ==="
 echo "Arguments: $*"
 
-# Build PATH entries for platform / architecture specific binaries if they exist
-PATH_PREFIX=""
-maybe_append_path() {
-    [ -d "$1" ] || return 0
-    if [ -z "$PATH_PREFIX" ]; then
-        PATH_PREFIX="$1"
-    else
-        PATH_PREFIX="$PATH_PREFIX:$1"
-    fi
-}
-
-maybe_append_path "$BIN_DIR/${PLATFORM:-}"
-maybe_append_path "$BIN_DIR/${architecture:-}"
-maybe_append_path "$BIN_DIR/shared"
-
-if [ -n "$PATH_PREFIX" ]; then
-    export PATH="$PATH_PREFIX:$PATH"
-fi
-
 # Configure default library and state directories for the reader
 if [ -z "${SDL_READER_DEFAULT_DIR-}" ]; then
     export SDL_READER_DEFAULT_DIR="/mnt/SDCARD"

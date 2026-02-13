@@ -6,7 +6,7 @@
 #include "options_manager.h"
 #include "renderer.h"
 #include "text_renderer.h"
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
 #include "power_handler.h"
 #include "power_events.h"
 #endif
@@ -27,7 +27,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     SDL_Window* localWindow = window;
     SDL_Renderer* localSDLRenderer = renderer;
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     // Initialize power handler
     m_powerHandler = std::make_unique<PowerHandler>();
 
@@ -132,7 +132,6 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
         if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
         {
             m_optionsManager->installFontLoader(muDoc->getContext());
-            std::cout << "DEBUG: Custom font loader installed before opening document" << std::endl;
 
             // Apply saved CSS configuration BEFORE opening document
             // Generate CSS even for "Document Default" to apply reading style colors
@@ -156,7 +155,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
         throw std::runtime_error("Failed to open document: " + filename);
     }
 
-#ifndef TG5040_PLATFORM
+#ifndef TRIMUI_PLATFORM
     // Set max render size for downsampling - allow for meaningful zoom levels on non-TG5040 platforms
     // Use 4x window size to enable proper zooming while TG5040 has no limit
     if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))
@@ -231,7 +230,6 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     // Set up font apply callback AFTER all initialization is complete
     m_guiManager->setFontApplyCallback([this](const FontConfig& config)
                                        {
-        std::cout << "DEBUG: Font apply callback triggered" << std::endl;
         applyFontConfiguration(config); });
 
     // Set up font close callback to trigger redraw
@@ -243,7 +241,6 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     // Set up page jump callback
     m_guiManager->setPageJumpCallback([this](int pageNumber)
                                       {
-        std::cout << "DEBUG: Page jump callback triggered to page " << (pageNumber + 1) << std::endl;
         m_navigationManager->goToPage(pageNumber, m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(),
                                       [this]() { markDirty(); },
                                       [this]() { updateScaleDisplayTime(); },
@@ -281,7 +278,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
 App::~App()
 {
     std::cout.flush();
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     if (m_powerHandler)
     {
         std::cout.flush();
@@ -316,7 +313,7 @@ void App::run()
 {
     m_prevTick = SDL_GetTicks();
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     // Start power button monitoring
     if (!m_powerHandler->start())
     {
@@ -338,7 +335,7 @@ void App::run()
 
         while (SDL_PollEvent(&event) != 0)
         {
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
             if (m_powerMessageEventType != 0 && event.type == m_powerMessageEventType)
             {
                 handlePowerMessageEvent(event);
@@ -470,7 +467,7 @@ void App::run()
     }
 }
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
 void App::handlePowerMessageEvent(const SDL_Event& event)
 {
     std::unique_ptr<std::string> message(static_cast<std::string*>(event.user.data1));
@@ -977,6 +974,7 @@ void App::updateInputState(const SDL_Event& event)
         switch (event.cbutton.button)
         {
         case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+            m_dpadRightButtonDown = true;
             if (!m_dpadRightHeld)
             { // Only on true initial press
                 m_dpadRightHeld = true;
@@ -984,6 +982,7 @@ void App::updateInputState(const SDL_Event& event)
             }
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+            m_dpadLeftButtonDown = true;
             if (!m_dpadLeftHeld)
             { // Only on true initial press
                 m_dpadLeftHeld = true;
@@ -991,6 +990,7 @@ void App::updateInputState(const SDL_Event& event)
             }
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_UP:
+            m_dpadUpButtonDown = true;
             if (!m_dpadUpHeld)
             { // Only on true initial press
                 m_dpadUpHeld = true;
@@ -998,6 +998,7 @@ void App::updateInputState(const SDL_Event& event)
             }
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+            m_dpadDownButtonDown = true;
             if (!m_dpadDownHeld)
             { // Only on true initial press
                 m_dpadDownHeld = true;
@@ -1012,6 +1013,7 @@ void App::updateInputState(const SDL_Event& event)
         switch (event.cbutton.button)
         {
         case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+            m_dpadRightButtonDown = false;
             m_dpadRightHeld = false;
             if (m_edgeTurnHoldRight > 0.0f)
             {
@@ -1021,6 +1023,7 @@ void App::updateInputState(const SDL_Event& event)
             markDirty();
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+            m_dpadLeftButtonDown = false;
             m_dpadLeftHeld = false;
             if (m_edgeTurnHoldLeft > 0.0f)
             {
@@ -1030,6 +1033,7 @@ void App::updateInputState(const SDL_Event& event)
             markDirty();
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_UP:
+            m_dpadUpButtonDown = false;
             m_dpadUpHeld = false;
             if (m_edgeTurnHoldUp > 0.0f)
             {
@@ -1039,6 +1043,7 @@ void App::updateInputState(const SDL_Event& event)
             markDirty();
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+            m_dpadDownButtonDown = false;
             m_dpadDownHeld = false;
             if (m_edgeTurnHoldDown > 0.0f)
             {
@@ -1081,8 +1086,10 @@ void App::updateInputState(const SDL_Event& event)
         };
 
         bool releasedAny = false;
-        auto handleRelease = [&](bool desired, bool& state, float& hold, float& cooldown)
+        auto handleRelease = [&](bool desired, bool& state, float& hold, float& cooldown, bool buttonDown)
         {
+            // Don't let analog stick clear held state if a D-pad button is physically pressed
+            if (buttonDown) return;
             if (!desired && state)
             {
                 state = false;
@@ -1104,10 +1111,10 @@ void App::updateInputState(const SDL_Event& event)
         handlePress(downActive, m_dpadDownHeld, [this]()
                     { handleDpadNudgeDown(); });
 
-        handleRelease(rightActive, m_dpadRightHeld, m_edgeTurnHoldRight, m_edgeTurnCooldownRight);
-        handleRelease(leftActive, m_dpadLeftHeld, m_edgeTurnHoldLeft, m_edgeTurnCooldownLeft);
-        handleRelease(upActive, m_dpadUpHeld, m_edgeTurnHoldUp, m_edgeTurnCooldownUp);
-        handleRelease(downActive, m_dpadDownHeld, m_edgeTurnHoldDown, m_edgeTurnCooldownDown);
+        handleRelease(rightActive, m_dpadRightHeld, m_edgeTurnHoldRight, m_edgeTurnCooldownRight, m_dpadRightButtonDown);
+        handleRelease(leftActive, m_dpadLeftHeld, m_edgeTurnHoldLeft, m_edgeTurnCooldownLeft, m_dpadLeftButtonDown);
+        handleRelease(upActive, m_dpadUpHeld, m_edgeTurnHoldUp, m_edgeTurnCooldownUp, m_dpadUpButtonDown);
+        handleRelease(downActive, m_dpadDownHeld, m_edgeTurnHoldDown, m_edgeTurnCooldownDown, m_dpadDownButtonDown);
 
         if (releasedAny)
         {
@@ -1179,7 +1186,16 @@ void App::refreshPageCountFromDocument()
     }
 
     int currentPage = m_navigationManager->getCurrentPage();
-    if (currentPage >= docPageCount)
+
+    // If we parked on page 0 after a CSS reopen, restore the desired page
+    // now that the real page count is known.
+    if (m_pendingPageRestore >= 0)
+    {
+        currentPage = std::min(m_pendingPageRestore, docPageCount - 1);
+        m_pendingPageRestore = -1;
+        m_navigationManager->setCurrentPage(currentPage);
+    }
+    else if (currentPage >= docPageCount)
     {
         currentPage = docPageCount - 1;
         m_navigationManager->setCurrentPage(currentPage);
@@ -1218,10 +1234,6 @@ void App::applyPendingFontChange()
     {
         return; // No pending font change
     }
-
-    std::cout << "DEBUG: Applying pending font change - " << m_pendingFontConfig.fontName
-              << " at " << m_pendingFontConfig.fontSize << "pt, style: "
-              << static_cast<int>(m_pendingFontConfig.readingStyle) << std::endl;
 
     // Check if font, size, or style actually changed
     bool fontChanged = (m_pendingFontConfig.fontName != m_cachedConfig.fontName);
@@ -1275,8 +1287,6 @@ void App::applyPendingFontChange()
     if (m_optionsManager)
     {
         std::string css = m_optionsManager->generateCSS(m_pendingFontConfig);
-        std::cout << "DEBUG: Generated CSS: " << css << std::endl;
-
         if (auto textDoc = dynamic_cast<TextDocument*>(m_document.get()))
         {
             textDoc->setFontConfig(m_pendingFontConfig);
@@ -1341,15 +1351,25 @@ void App::applyPendingFontChange()
                 // Use the much safer reopening method
                 if (muDoc->reopenWithCSS(css))
                 {
-                    // Restore state after reopening with bounds checking
+                    // After reopening with new CSS the page count is only an
+                    // estimate (based on file size).  Navigating to the old page
+                    // number can trigger "invalid page number" exceptions if the
+                    // new styling produces fewer pages.  Park on page 0 and let
+                    // refreshPageCountFromDocument() restore the position once
+                    // the async page count finalises.
                     int pageCount = m_document->getPageCount();
-                    if (currentPage >= 0 && currentPage < pageCount)
+                    if (muDoc->isPageCountEstimated())
+                    {
+                        m_pendingPageRestore = currentPage;
+                        m_navigationManager->setCurrentPage(0);
+                    }
+                    else if (currentPage >= 0 && currentPage < pageCount)
                     {
                         m_navigationManager->setCurrentPage(currentPage);
                     }
                     else
                     {
-                        m_navigationManager->setCurrentPage(0); // Fallback to first page
+                        m_navigationManager->setCurrentPage(std::max(0, pageCount - 1));
                     }
 
                     // Restore scale with reasonable bounds
@@ -1366,14 +1386,17 @@ void App::applyPendingFontChange()
                     m_viewportManager->setScrollX(currentScrollX);
                     m_viewportManager->setScrollY(currentScrollY);
 
-                    // Update page count after reopening
+                    // Update page count after reopening - pass the actual
+                    // estimated status so navigation isn't prematurely capped
+                    // before the async page count thread finishes.
+                    bool isEstimated = muDoc->isPageCountEstimated();
                     m_navigationManager->setPageCount(pageCount);
-                    m_navigationManager->setDisplayPageCount(pageCount, false);
+                    m_navigationManager->setDisplayPageCount(pageCount, isEstimated);
 
                     // Update GUI manager's page count for the font menu display
                     if (m_guiManager)
                     {
-                        m_guiManager->setPageCount(pageCount, false);
+                        m_guiManager->setPageCount(pageCount, isEstimated);
                     }
 
                     // Clamp scroll to ensure it's within bounds
@@ -1699,11 +1722,6 @@ bool App::updateHeldPanning(float dt)
             }
             else
             {
-                if ((m_dpadLeftHeld || m_keyboardLeftHeld) && m_edgeTurnHoldLeft > 0.0f)
-                {
-                    printf("DEBUG: Left edge-turn timer stopped (scrollX=%d, threshold=%d, held=%s)\n",
-                           m_viewportManager->getScrollX(), maxX - edgeTolerance, (m_dpadLeftHeld || m_keyboardLeftHeld) ? "YES" : "NO");
-                }
                 m_edgeTurnHoldLeft = 0.0f;
             }
         }
@@ -1843,10 +1861,6 @@ bool App::updateHeldPanning(float dt)
     else if (scrollingOccurred)
     {
         // Reset vertical edge-turn timers if actively scrolling
-        if (m_edgeTurnHoldUp > 0.0f || m_edgeTurnHoldDown > 0.0f)
-        {
-            printf("DEBUG: Resetting vertical edge-turn timers due to active scrolling\n");
-        }
         m_edgeTurnHoldUp = 0.0f;
         m_edgeTurnHoldDown = 0.0f;
     }
@@ -1916,10 +1930,6 @@ void App::handleDpadNudgeRight()
 {
     const int maxX = m_viewportManager->getMaxScrollX();
 
-    printf("DEBUG: Right nudge called - maxX=%d, scrollX=%d, condition=%s, inScrollTimeout=%s\n",
-           maxX, m_viewportManager->getScrollX(), (maxX == 0 || m_viewportManager->getScrollX() <= (-maxX + 2)) ? "AT_EDGE" : "NOT_AT_EDGE",
-           m_navigationManager->isInScrollTimeout() ? "YES" : "NO");
-
     // Right nudge while already at right edge
     if (maxX == 0 || m_viewportManager->getScrollX() <= (-maxX + 2)) // Use same tolerance as edge-turn system
     {
@@ -1931,7 +1941,6 @@ void App::handleDpadNudgeRight()
             {
                 if (m_navigationManager->getCurrentPage() < m_navigationManager->getPageCount() - 1 && !m_navigationManager->isInPageChangeCooldown())
                 {
-                    printf("DEBUG: Immediate page change via nudge (fit-to-width)\n");
                     m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
                                                       { markDirty(); }, [this]()
                                                       { updateScaleDisplayTime(); }, [this]()
@@ -1946,11 +1955,9 @@ void App::handleDpadNudgeRight()
         else
         {
             // For zoomed pages (maxX > 0): defer to progress bar system
-            printf("DEBUG: Zoomed page at edge - deferring to progress bar system\n");
         }
         return;
     }
-    printf("DEBUG: Normal scroll - moving right\n");
     m_viewportManager->setScrollX(m_viewportManager->getScrollX() - 50);
     m_viewportManager->clampScroll();
 }
@@ -1958,9 +1965,6 @@ void App::handleDpadNudgeRight()
 void App::handleDpadNudgeLeft()
 {
     const int maxX = m_viewportManager->getMaxScrollX();
-
-    printf("DEBUG: Left nudge called - maxX=%d, scrollX=%d, condition=%s\n",
-           maxX, m_viewportManager->getScrollX(), (maxX == 0 || m_viewportManager->getScrollX() >= (maxX - 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
 
     // Left nudge while already at left edge
     if (maxX == 0 || m_viewportManager->getScrollX() >= (maxX - 2)) // Use same tolerance as edge-turn system
@@ -1996,9 +2000,6 @@ void App::handleDpadNudgeDown()
 {
     const int maxY = m_viewportManager->getMaxScrollY();
 
-    printf("DEBUG: Down nudge called - maxY=%d, scrollY=%d, condition=%s\n",
-           maxY, m_viewportManager->getScrollY(), (maxY == 0 || m_viewportManager->getScrollY() <= (-maxY + 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
-
     // Down nudge while already at bottom edge
     if (maxY == 0 || m_viewportManager->getScrollY() <= (-maxY + 2)) // Use same tolerance as edge-turn system
     {
@@ -2032,9 +2033,6 @@ void App::handleDpadNudgeDown()
 void App::handleDpadNudgeUp()
 {
     const int maxY = m_viewportManager->getMaxScrollY();
-
-    printf("DEBUG: Up nudge called - maxY=%d, scrollY=%d, condition=%s\n",
-           maxY, m_viewportManager->getScrollY(), (maxY == 0 || m_viewportManager->getScrollY() >= (maxY - 2)) ? "AT_EDGE" : "NOT_AT_EDGE");
 
     // Up nudge while already at top edge
     if (maxY == 0 || m_viewportManager->getScrollY() >= (maxY - 2)) // Use same tolerance as edge-turn system
@@ -2084,9 +2082,6 @@ void App::applyFontConfiguration(const FontConfig& config)
         std::cerr << "Cannot apply font configuration: no document loaded" << std::endl;
         return;
     }
-
-    std::cout << "DEBUG: Scheduling deferred font change - " << config.fontName
-              << " at " << config.fontSize << "pt" << std::endl;
 
     // Cancel any ongoing prerendering to speed up font application
     if (auto muDoc = dynamic_cast<MuPdfDocument*>(m_document.get()))

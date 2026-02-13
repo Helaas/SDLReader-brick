@@ -45,7 +45,11 @@ private:
     void flushEvents();
 
     static constexpr int POWER_KEY_CODE = 116;
+#ifdef PLATFORM_POWER_DEVICE_PATH
+    static constexpr const char* DEVICE_PATH = PLATFORM_POWER_DEVICE_PATH;
+#else
     static constexpr const char* DEVICE_PATH = "/dev/input/event1";
+#endif
     static constexpr const char* PLATFORM_SUSPEND_PATH_PRIMARY = "/mnt/SDCARD/SYSTEM/bin/suspend";
     static constexpr const char* PLATFORM_SUSPEND_PATH_SECONDARY = "/mnt/SDCARD/System/bin/suspend";
     static constexpr auto SHORT_PRESS_MAX = std::chrono::milliseconds(2000);

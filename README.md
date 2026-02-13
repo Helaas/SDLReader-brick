@@ -1,6 +1,6 @@
 # SDL Reader
 
-SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and MuPDF. It supports viewing PDF, CBZ/ZIP & CBR/RAR comic archives, EPUB books, MOBI e-books, and plain text files with intuitive navigation, zooming, rotation, and mirroring features. Optimized for embedded devices like the TrimUI Brick and TrimUI Smart Pro running [NextUI](https://github.com/LoveRetro/NextUI). It also runs on desktop platforms including macOS, Linux, and is a work in progress as Wii U homebrew.
+SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and MuPDF. It supports viewing PDF, CBZ/ZIP & CBR/RAR comic archives, EPUB books, MOBI e-books, and plain text files with intuitive navigation, zooming, rotation, and mirroring features. Optimized for embedded devices like the TrimUI Brick, TrimUI Smart Pro, and TrimUI Smart Pro S running [NextUI](https://github.com/LoveRetro/NextUI). It also runs on desktop platforms including macOS, Linux, and is a work in progress as Wii U homebrew.
 
 ## Table of Contents
 * [Features](#features)
@@ -8,7 +8,7 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 * [TrimUI Control Scheme](#trimui-control-scheme)
 * [Build Instructions](#build-instructions)
 * [Usage](#usage)
-* [TG5040 Deployment](#tg5040-deployment)
+* [TrimUI Deployment](#trimui-deployment)
 * [User Inputs](#user-inputs)
 * [Project Structure](#project-structure)
 * [Architecture](#architecture)
@@ -66,6 +66,7 @@ This project supports multiple platforms with a unified build system.
 
 ### Supported Platforms
 - **TG5040** - TrimUI Brick and TrimUI Smart Pro - Embedded Linux devices (default)
+- **TG5050** - TrimUI Smart Pro S - Embedded Linux device
 - **macOS** - Desktop development and testing
 - **Wii U** - Nintendo Wii U homebrew (requires devkitPro)
 - **Linux** - Desktop Linux distributions (tested on Ubuntu 24.04)
@@ -77,12 +78,15 @@ make
 
 # Build for specific platform
 make tg5040    # TG5040 embedded device (TrimUI Brick and Smart Pro)
+make tg5050    # TG5050 embedded device (TrimUI Smart Pro S)
 make mac       # macOS
 make wiiu      # Wii U (requires devkitPro environment)
 make linux     # Linux desktop
 
-# Export TG5040 distribution bundle
+# Export distribution bundles
 make export-tg5040    # Build and create complete TG5040 package
+make export-tg5050    # Build and create complete TG5050 package
+make export-trimui    # Build and create complete pakz for both TG5040 and TG5050
 
 # List available platforms
 make list-platforms
@@ -99,6 +103,12 @@ make help
 #### TG5040 (Embedded Linux)
 * Prebuilt cross-compilation toolchain container: `ghcr.io/loveretro/tg5040-toolchain`
 * Docker environment available (see `ports/tg5040/` for Compose/Makefile helpers)
+* **Limited external dependencies**: MuPDF & libarchive built automatically for optimal bundle size
+
+#### TG5050 (Embedded Linux)
+* Prebuilt cross-compilation toolchain container: `ghcr.io/loveretro/tg5050-toolchain`
+* Docker environment available (see `ports/tg5050/` for Compose/Makefile helpers)
+* **Shares power management code** with TG5040 (identical hardware interface)
 * **Limited external dependencies**: MuPDF & libarchive built automatically for optimal bundle size
 
 #### macOS
@@ -149,7 +159,10 @@ All `make` targets download MuPDF 1.26.7 and apply `webp-upstream-697749.patch` 
 
 ## Platform-Specific Features
 
-### TG5040 Embedded Device (TrimUI Brick & Smart Pro)
+### TrimUI Embedded Devices (TG5040 & TG5050)
+
+The TG5040 (TrimUI Brick & Smart Pro) and TG5050 (TrimUI Smart Pro S) share the same feature set:
+
 - **Advanced Power Management**: NextUI-compatible power button integration
   - Short press: Intelligent sleep with fallback to fake sleep mode
   - Fake sleep: Black screen with input blocking when hardware sleep unavailable
@@ -157,13 +170,12 @@ All `make` targets download MuPDF 1.26.7 and apply `webp-upstream-697749.patch` 
   - Long press (2+ seconds): Safe shutdown
   - Smart error handling: No immediate errors, 30-second timeout before user notification
   - Event flushing on wake to prevent phantom button presses
-- **Device-specific Input**: `/dev/input/event1` monitoring for power events
 - **System Integration**: NextUI-compatible suspend/shutdown scripts
 - **Bundle Export**: Complete distribution package creation
   - Self-contained bundle with all dependencies
   - Automated library bundling and RPATH setup
   - Includes utilities (jq, minui-list) and resources
-  - Ready for device deployment via `make export-tg5040`
+  - Ready for device deployment via `make export-tg5040`,  `make export-tg5050` or `make export-trimui`
 
 ### macOS
 - **Desktop Environment**: Standard desktop window management
@@ -268,22 +280,24 @@ Full license texts are provided in [`fonts/LICENSES.md`](fonts/LICENSES.md). Kee
 
 SDL Reader keeps a lightweight `reading_history.json` file in the reader state directory (`$SDL_READER_STATE_DIR`, defaulting to `$HOME/reading_history.json`). Every time you change pages, the current document path and page number are persisted so the next launch resumes automatically. The history remembers the most recent 50 documents. Delete the file if you want to reset all progress.
 
-## TG5040 Deployment
+## TrimUI Deployment
 
-For TG5040 (Trimui Brick) deployment, use the bundle export system:
+For TrimUI device deployment, use the bundle export system. The TG5040 and TG5050 ports produce identical bundle structures.
 
 ### Creating Distribution Package
 ```bash
-# Build and create complete distribution bundle
+# TG5040 (TrimUI Brick & Smart Pro)
 make export-tg5040
 
-# Or build first, then export
-make tg5040
-make export-tg5040
+# TG5050 (TrimUI Smart Pro S)
+make export-tg5050
+
+# Pakz for both TG5040 and TG5050
+make export-trimui
 ```
 
 ### Bundle Contents
-The exported bundle at `ports/tg5040/pak/` contains:
+The exported bundle at `ports/tg5040/pak/` (or `ports/tg5050/pak/`) contains:
 - **bin/**: `sdl_reader_cli` (legacy utilities such as `jq` and `minui-list` are preserved if you copy them in before exporting)
 - **lib/**: All shared library dependencies with proper RPATH setup
 - **fonts/**: All bundled font files ready for the runtime picker
@@ -292,11 +306,11 @@ The exported bundle at `ports/tg5040/pak/` contains:
 - **README.md / pak.json**: Copied for reference inside the bundle
 
 ### Deployment to Device
-1. Copy the entire `ports/tg5040/pak/` directory to your TG5040 device
+1. Copy the entire `ports/tg5040/pak/` (or `ports/tg5050/pak/`) directory to your TrimUI device
 2. Ensure the package has executable permissions
 3. Run via the launch script or execute binaries directly
 
-The bundle is completely self-contained and includes all necessary dependencies for the TG5040 platform.
+The bundle is completely self-contained and includes all necessary dependencies for the target platform.
 
 ## User Inputs
 The SDL Reader supports the following keyboard, mouse, and game controller inputs:
@@ -449,23 +463,25 @@ SDLReader-brick/
 ├── config.json.example           # Sample runtime configuration
 ├── reading_history.json          # Runtime cache (stored in the reader state directory)
 └── ports/                        # Platform-specific builds
-    ├── tg5040/                   # TG5040 embedded device
+    ├── tg5040/                   # TG5040 embedded device (TrimUI Brick & Smart Pro)
     │   ├── Makefile              # TG5040 build configuration
     │   ├── Makefile.docker       # Docker environment (pulls ghcr.io/loveretro/tg5040-toolchain)
     │   ├── docker-compose.yml    # Docker Compose setup (prebuilt toolchain)
     │   ├── Dockerfile            # Thin wrapper for the GHCR toolchain image
     │   ├── export_bundle.sh      # Bundle export script
-    │   ├── make_bundle2.sh       # Library dependency bundler
+    │   ├── make_bundle.sh        # Library dependency bundler
     │   ├── pak/                  # Distribution bundle (created by export)
-    │   │   ├── bin/              # Executables (sdl_reader_cli + optional utilities)
-    │   │   ├── lib/              # Shared libraries and dependencies
-    │   │   ├── fonts/            # Font files
-    │   │   ├── res/              # Other resources (if any)
-    │   │   └── launch.sh         # Main launcher script
-    │   ├── include/              # TG5040-specific headers
-    │   │   └── power_handler.h   # Power management for TG5040
-    │   └── src/                  # TG5040-specific source code
+    │   ├── include/              # TrimUI-specific headers (shared with TG5050)
+    │   │   └── power_handler.h   # Power management for TrimUI devices
+    │   └── src/                  # TrimUI-specific source code (shared with TG5050)
     │       └── power_handler.cpp # Power button handling implementation
+    ├── tg5050/                   # TG5050 embedded device (TrimUI Smart Pro S)
+    │   ├── Makefile              # TG5050 build configuration
+    │   ├── Makefile.docker       # Docker environment (pulls ghcr.io/loveretro/tg5050-toolchain)
+    │   ├── docker-compose.yml    # Docker Compose setup (prebuilt toolchain)
+    │   ├── Dockerfile            # Thin wrapper for the GHCR toolchain image
+    │   ├── export_bundle.sh      # Bundle export script
+    │   └── make_bundle.sh        # Library dependency bundler
     ├── mac/                      # macOS desktop
     │   └── Makefile              # macOS build configuration
     ├── linux/                    # Linux desktop
@@ -477,11 +493,11 @@ SDLReader-brick/
 
 ### Development Workflow
 - **Cross-platform code**: Modify files in `src/`, `include/`, `cli/`
-- **Platform-specific code**: Use conditional compilation (`#ifdef TG5040_PLATFORM`) or create port-specific implementations in `ports/{platform}/`
-- **Power management**: TG5040 includes hardware-specific power button handling and suspend/resume functionality
+- **Platform-specific code**: Use conditional compilation (`#ifdef TRIMUI_PLATFORM`) or create port-specific implementations in `ports/{platform}/`
+- **Power management**: TrimUI devices (TG5040/TG5050) share hardware-specific power button handling and suspend/resume functionality in `ports/tg5040/`
 - **Build system**: Each platform has its own Makefile in `ports/{platform}/`
-- **Docker development**: Use `ports/tg5040/docker-compose.yml` to pull `ghcr.io/loveretro/tg5040-toolchain` (workspace mounts at `/workspace`)
-- **TG5040 distribution**: Use `make export-tg5040` to create complete deployment package
+- **Docker development**: Use `ports/tg5040/docker-compose.yml` or `ports/tg5050/docker-compose.yml` for the respective toolchain
+- **TrimUI distribution**: Use `make export-tg5040` or `make export-tg5050` to create complete deployment packages for a device, or `make export-trimui` to create a single package for both platforms
 
 ## Architecture
 
@@ -490,14 +506,13 @@ For detailed information about the multi-platform design, conditional compilatio
 Key architectural highlights:
 - **Clean separation** between shared and platform-specific code
 - **Conditional compilation** for platform-specific features
-- **Port-specific implementations** for hardware integration (e.g., TG5040 power management)
+- **Port-specific implementations** for hardware integration (e.g., TrimUI power management shared across TG5040/TG5050)
 - **Unified build system** with platform-specific Makefiles
 - **Scalable design** for easy addition of new platforms
 
 # Acknowledgements
-- <a href="https://github.com/hito16" target="_blank" rel="noopener noreferrer"><img src="https://github.com/hito16.png" alt="@hito16" width="18" height="18" style="border-radius:50%"> hito16</a>, for starting the original SDl Reader project.
-- [rofl0r/SDLBook](https://github.com/rofl0r/SDLBook), for inspiring hito16.
-- [LoveRetro/NextUI](https://github.com/LoveRetro/NextUI), for creating an excellent OS for the TrimUI Brick.
+- <a href="https://github.com/hito16" target="_blank" rel="noopener noreferrer"><img src="https://github.com/hito16.png" alt="@hito16" width="18" height="18" style="border-radius:50%"> hito16</a>, for starting the original SDL Reader project.
+- [LoveRetro/NextUI](https://github.com/LoveRetro/NextUI), for creating an excellent launcher for the TrimUI Brick.
 - <a href="https://github.com/josegonzalez" target="_blank" rel="noopener noreferrer"><img src="https://github.com/josegonzalez.png" alt="@josegonzalez" width="18" height="18" style="border-radius:50%"> josegonzalez</a>, for minui-list and countless other tools.
 - [UncleJunVIP/nextui-pak-store](https://github.com/UncleJunVIP/nextui-pak-store) for the Pak Store
 - [Immediate-Mode-UI/Nuklear](https://github.com/Immediate-Mode-UI/Nuklear), for the Nuklear UI framework powering the overlay, browser, and font menus.

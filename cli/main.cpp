@@ -29,7 +29,7 @@ int main(int argc, char* argv[])
     SDL_Renderer* renderer = nullptr;
     int returnCode = 0;
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     constexpr int kDefaultWindowWidth = 800;
     constexpr int kDefaultWindowHeight = 600;
 #else

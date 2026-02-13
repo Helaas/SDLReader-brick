@@ -12,7 +12,7 @@ using GuiManagerType = GuiManager;
 #include "renderer.h"
 #include "text_renderer.h"
 #include "viewport_manager.h"
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
 #include "power_handler.h"
 #endif
 
@@ -108,7 +108,7 @@ private:
 
     // Event Handling
     void handleEvent(const SDL_Event& event);
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     void handlePowerMessageEvent(const SDL_Event& event);
 #endif
     void processInputAction(const InputActionData& actionData);
@@ -157,11 +157,19 @@ private:
     float m_lastTouchX{0.0f};
     float m_lastTouchY{0.0f};
 
-    // D-pad held state for continuous input
+    // D-pad held state for continuous input (shared by D-pad buttons and analog stick)
     bool m_dpadLeftHeld{false};
     bool m_dpadRightHeld{false};
     bool m_dpadUpHeld{false};
     bool m_dpadDownHeld{false};
+
+    // Track whether each direction was set by a physical D-pad button press.
+    // Prevents the analog stick axis handler from clearing held state that was
+    // set by a D-pad button (the two input sources share m_dpad*Held).
+    bool m_dpadRightButtonDown{false};
+    bool m_dpadLeftButtonDown{false};
+    bool m_dpadUpButtonDown{false};
+    bool m_dpadDownButtonDown{false};
     bool m_keyboardLeftHeld{false};
     bool m_keyboardRightHeld{false};
     bool m_keyboardUpHeld{false};
@@ -188,7 +196,7 @@ private:
     // Mutex to protect document access from multiple threads
     mutable std::mutex m_documentMutex;
 
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
     std::unique_ptr<PowerHandler> m_powerHandler;
     Uint32 m_powerMessageEventType{0};
 #endif
@@ -199,6 +207,11 @@ private:
     // Deferred font configuration change to avoid thread safety issues
     bool m_pendingFontChange{false};
     FontConfig m_pendingFontConfig;
+
+    // After a CSS-based reopen, the page count is estimated from file size and
+    // may be higher than the actual count.  We park on page 0 until the async
+    // page count finalises, then navigate to min(desired, newCount-1).
+    int m_pendingPageRestore{-1};
 
     // Cached configuration to avoid repeated file reads
     FontConfig m_cachedConfig;

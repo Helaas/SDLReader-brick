@@ -25,16 +25,17 @@ Comic Book RAR (CBR) support is implemented through:
 SDLReader is designed as a cross-platform document reader with a clean separation between shared functionality and platform-specific features.
 
 ### Supported Platforms
-- **TG5040** - Trimui Brick embedded Linux device with custom power management
-- **macOS** - Desktop development and testing environment  
+- **TG5040** - TrimUI Brick & Smart Pro embedded Linux devices with custom power management
+- **TG5050** - TrimUI Smart Pro S embedded Linux device (shares power management with TG5040)
+- **macOS** - Desktop development and testing environment
 - **Linux** - Desktop Linux distributions (tested on Ubuntu 24.04)
 - **Wii U** - Nintendo homebrew with console-specific features
 
 ## Platform Characteristics
 
-### TG5040 (Trimui Brick)
-**Type**: Embedded Linux handheld device  
-**Role**: Primary target platform with custom hardware integration  
+### TG5040 (TrimUI Brick & Smart Pro)
+**Type**: Embedded Linux handheld device
+**Role**: Primary target platform with custom hardware integration
 **Key Features**:
 - Advanced power button handling (`/dev/input/event1`)
 - NextUI-compatible suspend/resume power management
@@ -46,8 +47,22 @@ SDLReader is designed as a cross-platform document reader with a clean separatio
 
 **Build Characteristics**:
 - Cross-compilation required
-- Docker-based development environment
-- Platform flag: `-DTG5040_PLATFORM`
+- Docker-based development environment (`ghcr.io/loveretro/tg5040-toolchain`)
+- Platform flag: `-DTRIMUI_PLATFORM`
+- Self-built MuPDF with libarchive for CBR support
+- NextUI system integration scripts
+
+### TG5050 (TrimUI Smart Pro S)
+**Type**: Embedded Linux handheld device
+**Role**: Secondary TrimUI target with identical software stack
+**Key Features**:
+- Same feature set as TG5040 (identical hardware interface)
+- Shares power management code from `ports/tg5040/`
+
+**Build Characteristics**:
+- Cross-compilation required
+- Docker-based development environment (`ghcr.io/loveretro/tg5050-toolchain`)
+- Platform flag: `-DTRIMUI_PLATFORM` (shared with TG5040)
 - Self-built MuPDF with libarchive for CBR support
 - NextUI system integration scripts
 
@@ -108,7 +123,7 @@ Core functionality that works across all platforms:
 
 ### Platform-Specific Components (`ports/{platform}/`)
 Platform-specific implementations and optimizations:
-- **TG5040**: Embedded Linux with hardware power management and Trimui Brick integration
+- **TG5040/TG5050**: Embedded Linux with hardware power management and TrimUI integration
 - **macOS**: Desktop development and testing environment
 - **Linux**: Desktop Linux with standard package management and development tools
 - **Wii U**: Nintendo homebrew with console-specific features
@@ -118,7 +133,7 @@ Platform-specific implementations and optimizations:
 The codebase uses `#ifdef` directives to include platform-specific code:
 
 ```cpp
-#ifdef TG5040_PLATFORM
+#ifdef TRIMUI_PLATFORM
 #include "power_handler.h"  // TG5040-specific power management
 #endif
 ```
@@ -142,7 +157,7 @@ The power management system demonstrates the port-specific architecture:
   - Smart error handling: Only shows errors after 30 seconds of failed attempts
   - Event flushing on wake to prevent phantom button presses
   - Manual wake from fake sleep via power button
-- **Integration**: Compiled only when `TG5040_PLATFORM` is defined
+- **Integration**: Compiled only when `TRIMUI_PLATFORM` is defined
 - **Callback System**: GUI integration for fake sleep mode and error display
 
 ### Other Platforms
@@ -191,7 +206,7 @@ Each platform maintains its own MuPDF build:
 - **pkg-config**: Standard library detection
 - **Dependencies**: apt packages (libarchive-dev, etc.)
 
-#### TG5040
+#### TG5040 / TG5050
 - **Cross-Compilation**: Docker environment with proper toolchain
 - **Static Linking**: Embedded Linux compatibility
 - **Dependencies**: Bundled libraries in container
@@ -205,7 +220,7 @@ Each platform maintains its own MuPDF build:
 
 ### Main Makefile (`Makefile`)
 - Dispatches builds to platform-specific Makefiles
-- Provides unified interface (`make tg5040`, `make mac`, `make linux`, `make wiiu`)
+- Provides unified interface (`make tg5040`, `make tg5050`, `make mac`, `make linux`, `make wiiu`)
 - Handles cross-platform cleaning and help
 
 ### Platform Makefiles (`ports/{platform}/Makefile`)
@@ -217,12 +232,21 @@ Each platform maintains its own MuPDF build:
 ### Example Build Processes
 
 #### TG5040 Build
-1. Sets `-DTG5040_PLATFORM` compiler flag
+1. Sets `-DTRIMUI_PLATFORM` compiler flag
 2. Includes `ports/tg5040/include` in header search path
 3. Compiles `ports/tg5040/src/power_handler.cpp` as `tg5040_power_handler.o`
 4. **MuPDF Setup**: Automatically downloads and builds MuPDF with libarchive
 5. Links with embedded Linux libraries (SDL2, SDL2_image, custom MuPDF)
 6. Sets up Docker cross-compilation environment
+7. Configures NextUI-compatible system integration
+
+#### TG5050 Build
+1. Sets `-DTRIMUI_PLATFORM` compiler flag (same as TG5040)
+2. Includes `ports/tg5040/include` in header search path (shared power handler)
+3. Compiles `ports/tg5040/src/power_handler.cpp` as `tg5050_power_handler.o`
+4. **MuPDF Setup**: Automatically downloads and builds MuPDF with libarchive
+5. Links with embedded Linux libraries (SDL2, SDL2_image, custom MuPDF)
+6. Sets up Docker cross-compilation environment (`ghcr.io/loveretro/tg5050-toolchain`)
 7. Configures NextUI-compatible system integration
 
 #### Linux Build  

@@ -1,0 +1,10 @@
+# SDLReader Docker Development Environment for TG5050
+# For Docker-specific build tasks, see Makefile.docker
+services:
+  dev:
+    image: ghcr.io/loveretro/tg5050-toolchain:latest
+    pull_policy: always
+    volumes:
+      - ../../:/workspace
+    stdin_open: true
+    tty: true
