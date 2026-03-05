@@ -9,7 +9,7 @@ STAGING_DIR="$SCRIPT_DIR/staging"
 TEMPLATE_DIR="$SCRIPT_DIR/pak-template"
 OUTPUT_FILE="$PROJECT_ROOT/SDLReader.pakz"
 
-PLATFORMS="tg5040 tg5050"
+PLATFORMS="tg5040 tg5050 my355"
 
 echo "==================================================================="
 echo "Exporting TrimUI .pakz bundle..."

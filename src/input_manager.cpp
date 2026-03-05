@@ -1,4 +1,7 @@
 #include "input_manager.h"
+#ifdef PLATFORM_MY355
+#include "platform_my355.h"
+#endif
 #include <algorithm>
 #include <iostream>
 
@@ -27,10 +30,20 @@ InputActionData InputManager::processEvent(const SDL_Event& event)
         break;
 
     case SDL_KEYDOWN:
+#ifdef PLATFORM_MY355
+        // MY355 sends buttons as both keyboard scancodes and controller events.
+        // Filter keyboard events for button scancodes to prevent double-processing.
+        if (isMy355ButtonScancode(event.key.keysym.scancode))
+            break;
+#endif
         actionData = processKeyDown(event);
         break;
 
     case SDL_KEYUP:
+#ifdef PLATFORM_MY355
+        if (isMy355ButtonScancode(event.key.keysym.scancode))
+            break;
+#endif
         actionData = processKeyUp(event);
         break;
 

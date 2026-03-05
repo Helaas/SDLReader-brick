@@ -2,6 +2,9 @@
 #include "options_manager.h"
 #include "path_utils.h"
 #include "mupdf_locking.h"
+#ifdef PLATFORM_MY355
+#include "platform_my355.h"
+#endif
 
 #ifndef NK_INCLUDE_FIXED_TYPES
 #define NK_INCLUDE_FIXED_TYPES
@@ -2255,6 +2258,12 @@ void FileBrowser::handleEvent(const SDL_Event& event)
     switch (event.type)
     {
     case SDL_KEYDOWN:
+#ifdef PLATFORM_MY355
+        // MY355 sends buttons as both keyboard scancodes and controller events.
+        // Filter keyboard events for button scancodes to prevent double-processing.
+        if (isMy355ButtonScancode(event.key.keysym.scancode))
+            break;
+#endif
         switch (event.key.keysym.sym)
         {
         case SDLK_ESCAPE:
@@ -2328,6 +2337,10 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         break;
 
     case SDL_KEYUP:
+#ifdef PLATFORM_MY355
+        if (isMy355ButtonScancode(event.key.keysym.scancode))
+            break;
+#endif
         switch (event.key.keysym.sym)
         {
         case SDLK_UP:

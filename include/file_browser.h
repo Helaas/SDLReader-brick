@@ -108,7 +108,9 @@ private:
     int m_gridColumns{1};
     int m_lastWindowWidth{0};
     int m_lastWindowHeight{0};
-#ifdef TRIMUI_PLATFORM
+#ifdef PLATFORM_MY355
+    static constexpr int THUMBNAIL_MAX_DIM = 120;
+#elif defined(TRIMUI_PLATFORM)
     static constexpr int THUMBNAIL_MAX_DIM = 150;
 #else
     static constexpr int THUMBNAIL_MAX_DIM = 200;

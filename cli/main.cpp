@@ -29,7 +29,10 @@ int main(int argc, char* argv[])
     SDL_Renderer* renderer = nullptr;
     int returnCode = 0;
 
-#ifdef TRIMUI_PLATFORM
+#ifdef PLATFORM_MY355
+    constexpr int kDefaultWindowWidth = 640;
+    constexpr int kDefaultWindowHeight = 480;
+#elif defined(TRIMUI_PLATFORM)
     constexpr int kDefaultWindowWidth = 800;
     constexpr int kDefaultWindowHeight = 600;
 #else
