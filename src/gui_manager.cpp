@@ -641,7 +641,11 @@ void GuiManager::renderFontMenu()
 
         // Controller hints at the top of the window for quick reference
         nk_layout_row_dynamic(m_ctx, 20, 1);
+#ifdef PLATFORM_MY355
+        nk_label_colored(m_ctx, "A: Select | B: Close | Y: Apply | Menu: Cancel", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+#else
         nk_label_colored(m_ctx, "D-Pad: Navigate | A: Select | B: Close | Y: Apply | Menu: Cancel", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+#endif
         nk_layout_row_dynamic(m_ctx, 10, 1);
 
         // Store original styles for highlighting focused widgets
@@ -2919,11 +2923,10 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
             m_leftStickY = event.caxis.value;
         }
 
-        const Sint16 AXIS_DEAD_ZONE = 8000;
-        bool upActive = m_leftStickY < -AXIS_DEAD_ZONE;
-        bool downActive = m_leftStickY > AXIS_DEAD_ZONE;
-        bool leftActive = m_leftStickX < -AXIS_DEAD_ZONE;
-        bool rightActive = m_leftStickX > AXIS_DEAD_ZONE;
+        bool upActive = m_leftStickY < -CONTROLLER_AXIS_DEAD_ZONE;
+        bool downActive = m_leftStickY > CONTROLLER_AXIS_DEAD_ZONE;
+        bool leftActive = m_leftStickX < -CONTROLLER_AXIS_DEAD_ZONE;
+        bool rightActive = m_leftStickX > CONTROLLER_AXIS_DEAD_ZONE;
 
         bool consumed = false;
 

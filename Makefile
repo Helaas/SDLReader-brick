@@ -21,7 +21,7 @@ ifeq ($(origin PLATFORM), undefined)
   endif
 endif
 
-.PHONY: all clean clean-local help list-platforms export-tg5040 export-tg5050 export-my355 export-trimui \
+.PHONY: all clean clean-local help list-platforms export-tg5040 export-tg5050 export-my355 export-trimui export-all \
        export-tg5040-in-docker export-tg5050-in-docker export-my355-in-docker export-trimui-in-docker $(AVAILABLE_PLATFORMS)
 
 all: $(PLATFORM)
@@ -126,6 +126,10 @@ else
 	@$(MAKE) export-trimui-in-docker
 endif
 
+# Alias for exporting all NextUI device bundles into SDLReader.pakz.
+export-all:
+	@$(MAKE) export-trimui
+
 mac:
 	@echo "Building for macOS..."
 	$(MAKE) -C ports/mac
@@ -172,6 +176,7 @@ help:
 	@echo "  make tg5050     - Build for TG5050 (TrimUI Smart Pro S)"
 	@echo "  make my355      - Build for MY355 (Miyoo Flip)"
 	@echo "  make export-trimui - Build and export SDLReader.pakz (TG5040 + TG5050 + MY355)"
+	@echo "  make export-all - Alias for export-trimui (TG5040 + TG5050 + MY355)"
 	@echo "  make export-tg5040 - Build and export TG5040-only bundle"
 	@echo "  make export-tg5050 - Build and export TG5050-only bundle"
 	@echo "  make export-my355  - Build and export MY355-only bundle"

@@ -2106,8 +2106,13 @@ void FileBrowser::render()
         m_lastContentHeight = contentHeight;
 
         nk_layout_row_dynamic(m_ctx, helpTextHeight, 1);
+#ifdef PLATFORM_MY355
+        nk_label_colored(m_ctx, "A: Select | B: Back | X: Toggle View | Menu: Quit",
+                         NK_TEXT_LEFT, nk_rgb(180, 180, 180));
+#else
         nk_label_colored(m_ctx, "D-Pad: Navigate | A: Select | B: Back | X: Toggle View | Menu: Quit",
                          NK_TEXT_LEFT, nk_rgb(180, 180, 180));
+#endif
 
         if (m_thumbnailView)
         {
@@ -2526,11 +2531,10 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             break;
         }
 
-        const Sint16 AXIS_DEAD_ZONE = 8000;
-        const bool upActive = m_leftStickY < -AXIS_DEAD_ZONE;
-        const bool downActive = m_leftStickY > AXIS_DEAD_ZONE;
-        const bool leftActive = m_leftStickX < -AXIS_DEAD_ZONE;
-        const bool rightActive = m_leftStickX > AXIS_DEAD_ZONE;
+        const bool upActive = m_leftStickY < -CONTROLLER_AXIS_DEAD_ZONE;
+        const bool downActive = m_leftStickY > CONTROLLER_AXIS_DEAD_ZONE;
+        const bool leftActive = m_leftStickX < -CONTROLLER_AXIS_DEAD_ZONE;
+        const bool rightActive = m_leftStickX > CONTROLLER_AXIS_DEAD_ZONE;
 
         if (upActive && !m_dpadUpHeld)
         {
