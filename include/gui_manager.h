@@ -185,7 +185,7 @@ private:
 #ifdef PLATFORM_MY355
     static constexpr Uint32 NAV_INITIAL_DELAY_MS = 220; // Initial delay before repeat starts
     static constexpr Uint32 NAV_REPEAT_DELAY_MS = 130;  // Delay between repeats
-    static constexpr Sint16 CONTROLLER_AXIS_DEAD_ZONE = 12000;
+    static constexpr Sint16 CONTROLLER_AXIS_DEAD_ZONE = 13000;
 #else
     static constexpr Uint32 NAV_INITIAL_DELAY_MS = 100; // Initial delay before repeat starts
     static constexpr Uint32 NAV_REPEAT_DELAY_MS = 50;   // Delay between repeats

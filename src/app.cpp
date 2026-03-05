@@ -1066,7 +1066,11 @@ void App::updateInputState(const SDL_Event& event)
             break;
         }
 
+#ifdef PLATFORM_MY355
+        const Sint16 AXIS_DEAD_ZONE = 13000;
+#else
         const Sint16 AXIS_DEAD_ZONE = 8000;
+#endif
         const bool rightActive = m_leftStickX > AXIS_DEAD_ZONE;
         const bool leftActive = m_leftStickX < -AXIS_DEAD_ZONE;
         const bool upActive = m_leftStickY < -AXIS_DEAD_ZONE;

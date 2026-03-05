@@ -651,7 +651,11 @@ InputActionData InputManager::processControllerAxis(const SDL_Event& event)
         return actionData;
     }
 
+#ifdef PLATFORM_MY355
+    const Sint16 AXIS_DEAD_ZONE = 13000;
+#else
     const Sint16 AXIS_DEAD_ZONE = 8000;
+#endif
     Uint32 now = SDL_GetTicks();
 
     switch (event.caxis.axis)
@@ -699,12 +703,12 @@ InputActionData InputManager::processControllerAxis(const SDL_Event& event)
     case SDL_CONTROLLER_AXIS_LEFTX:
         m_leftStickX = event.caxis.value;
         updateDpadFromAnalog(m_leftStickX > AXIS_DEAD_ZONE, m_leftStickX < -AXIS_DEAD_ZONE,
-                             m_leftStickY < -AXIS_DEAD_ZONE, m_leftStickY > AXIS_DEAD_ZONE);
+                             m_leftStickY<-AXIS_DEAD_ZONE, m_leftStickY> AXIS_DEAD_ZONE);
         break;
     case SDL_CONTROLLER_AXIS_LEFTY:
         m_leftStickY = event.caxis.value;
         updateDpadFromAnalog(m_leftStickX > AXIS_DEAD_ZONE, m_leftStickX < -AXIS_DEAD_ZONE,
-                             m_leftStickY < -AXIS_DEAD_ZONE, m_leftStickY > AXIS_DEAD_ZONE);
+                             m_leftStickY<-AXIS_DEAD_ZONE, m_leftStickY> AXIS_DEAD_ZONE);
         break;
 
     case SDL_CONTROLLER_AXIS_RIGHTX:
@@ -772,7 +776,8 @@ void InputManager::updateDpadFromAnalog(bool rightActive, bool leftActive, bool 
         else if (!desired && state)
         {
             // Don't let analog stick clear held state if a D-pad button is physically pressed
-            if (buttonDown) return;
+            if (buttonDown)
+                return;
             state = false;
             if (hold > 0.0f)
             {
