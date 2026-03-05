@@ -10,6 +10,9 @@
 #include "power_handler.h"
 #include "power_events.h"
 #endif
+#ifdef PLATFORM_MY355
+#include "platform_my355.h"
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -470,6 +473,16 @@ void App::handlePowerMessageEvent(const SDL_Event& event)
 
 void App::handleEvent(const SDL_Event& event)
 {
+#ifdef PLATFORM_MY355
+    // my355 emits physical buttons as both keyboard scancodes and controller events.
+    // Ignore keyboard-side button scancodes here to prevent double-processing in UI/app layers.
+    if ((event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) &&
+        isMy355ButtonScancode(event.key.keysym.scancode))
+    {
+        return;
+    }
+#endif
+
     // Let GUI handle the event first
     bool guiHandled = false;
     if (m_guiManager)

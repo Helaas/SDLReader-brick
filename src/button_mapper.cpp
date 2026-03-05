@@ -12,7 +12,12 @@ void ButtonMapper::initializePlatformMappings()
     m_buttonMap[SDL_CONTROLLER_BUTTON_LEFTSHOULDER] = LogicalButton::PagePrevious;
     m_buttonMap[SDL_CONTROLLER_BUTTON_RIGHTSHOULDER] = LogicalButton::PageNext;
     m_buttonMap[SDL_CONTROLLER_BUTTON_BACK] = LogicalButton::Options;
+#ifdef PLATFORM_MY355
+    // On my355, the Menu key is reported as GUIDE and should toggle settings, not quit.
+    m_buttonMap[SDL_CONTROLLER_BUTTON_GUIDE] = LogicalButton::Menu;
+#else
     m_buttonMap[SDL_CONTROLLER_BUTTON_GUIDE] = LogicalButton::Quit;
+#endif
     m_buttonMap[SDL_CONTROLLER_BUTTON_DPAD_UP] = LogicalButton::DPadUp;
     m_buttonMap[SDL_CONTROLLER_BUTTON_DPAD_DOWN] = LogicalButton::DPadDown;
     m_buttonMap[SDL_CONTROLLER_BUTTON_DPAD_LEFT] = LogicalButton::DPadLeft;

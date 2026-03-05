@@ -22,7 +22,16 @@
 // Include the SDL renderer implementation
 #include "demo/sdl_renderer/nuklear_sdl_renderer.h"
 
-#ifdef TRIMUI_PLATFORM
+#if defined(PLATFORM_MY355)
+// my355 reports face buttons in swapped order (same behavior as other NextUI devices).
+// Keep GUI semantics aligned with physical labels:
+// - Physical A -> SDL_CONTROLLER_BUTTON_B
+// - Physical B -> SDL_CONTROLLER_BUTTON_A
+// - Physical Y -> SDL_CONTROLLER_BUTTON_X
+static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_B;
+static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_A;
+static constexpr SDL_GameControllerButton kApplySettingsButton = SDL_CONTROLLER_BUTTON_X;
+#elif defined(TRIMUI_PLATFORM)
 static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_B;
 static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_A;
 static constexpr SDL_GameControllerButton kApplySettingsButton = SDL_CONTROLLER_BUTTON_X; // Physical Y
