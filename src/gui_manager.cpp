@@ -1154,7 +1154,7 @@ void GuiManager::renderFontMenu()
         rememberWidgetBounds(WIDGET_EDGE_PROGRESS_INFO_BUTTON);
         if (m_mainScreenFocusIndex == WIDGET_EDGE_PROGRESS_INFO_BUTTON || edgeInfoHovered)
         {
-            showInfoTooltip(WIDGET_EDGE_PROGRESS_INFO_BUTTON, "When enabled, panning at page edges changes pages instantly.\nWhen disabled, hold at the edge for 300ms.");
+            showInfoTooltip(WIDGET_EDGE_PROGRESS_INFO_BUTTON, "When enabled, panning at page edges\nchanges pages instantly.\nWhen disabled, hold at the edge for 300ms.");
         }
 
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
