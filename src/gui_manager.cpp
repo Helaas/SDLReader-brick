@@ -610,14 +610,20 @@ void GuiManager::renderFontMenu()
     int windowWidth, windowHeight;
     SDL_GetWindowSize(m_window, &windowWidth, &windowHeight);
 
-    // Center the window and make it appropriately sized
-    float centerX = windowWidth * 0.5f;
-    float centerY = windowHeight * 0.5f;
-    float windowW = 680.0f;
-    float windowH = 750.0f;
+    // Center the settings window and clamp it to the current viewport.
+    constexpr float kPreferredWindowW = 680.0f;
+    constexpr float kPreferredWindowH = 750.0f;
+    constexpr float kWindowMargin = 12.0f;
+
+    const float availableW = std::max(1.0f, static_cast<float>(windowWidth) - (2.0f * kWindowMargin));
+    const float availableH = std::max(1.0f, static_cast<float>(windowHeight) - (2.0f * kWindowMargin));
+    const float windowW = std::min(kPreferredWindowW, availableW);
+    const float windowH = std::min(kPreferredWindowH, availableH);
+    const float windowX = std::max(0.0f, (static_cast<float>(windowWidth) - windowW) * 0.5f);
+    const float windowY = std::max(0.0f, (static_cast<float>(windowHeight) - windowH) * 0.5f);
 
     // Create settings window with scrollbar support
-    if (nk_begin(m_ctx, "Settings", nk_rect(centerX - windowW / 2, centerY - windowH / 2, windowW, windowH),
+    if (nk_begin(m_ctx, "Settings", nk_rect(windowX, windowY, windowW, windowH),
                  NK_WINDOW_BORDER | NK_WINDOW_TITLE))
     {
         // Set initial focus to enable keyboard navigation

@@ -114,12 +114,15 @@ void PowerHandler::setPreSleepCallback(PreSleepCallback callback)
 void PowerHandler::threadMain()
 {
     struct input_event ev;
-    auto press_time = std::chrono::steady_clock::time_point{};
+    m_powerButtonDown = false;
+    m_longPressHandled = false;
+    m_powerPressTime = std::chrono::steady_clock::time_point{};
 
     std::cout << "Power handler thread started" << std::endl;
 
     while (m_running.load())
     {
+        checkLongPressWhileHeld();
         ssize_t bytes_read = read(m_device_fd, &ev, sizeof(ev));
 
         if (bytes_read == sizeof(ev))
@@ -128,7 +131,8 @@ void PowerHandler::threadMain()
             // Accept both KEY_POWER and code 102 for compatibility
             if (ev.type == EV_KEY && (ev.code == POWER_KEY_CODE || ev.code == 102))
             {
-                handlePowerButtonEvent(ev, press_time);
+                handlePowerButtonEvent(ev);
+                checkLongPressWhileHeld();
             }
         }
         else if (bytes_read < 0)
@@ -143,6 +147,7 @@ void PowerHandler::threadMain()
                 {
                     tryDeepSleep();
                 }
+                checkLongPressWhileHeld();
             }
             else
             {
@@ -165,7 +170,26 @@ void PowerHandler::threadMain()
     }
 }
 
-void PowerHandler::handlePowerButtonEvent(const input_event& ev, std::chrono::steady_clock::time_point& press_time)
+void PowerHandler::checkLongPressWhileHeld()
+{
+    if (!m_powerButtonDown || m_longPressHandled || m_powerPressTime == std::chrono::steady_clock::time_point{})
+    {
+        return;
+    }
+
+    auto now = std::chrono::steady_clock::now();
+    auto duration = now - m_powerPressTime;
+    if (duration >= SHORT_PRESS_MAX)
+    {
+        auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+        std::cout << "PowerHandler: Long press detected while holding (" << duration_ms << "ms) - shutting down" << std::endl;
+        m_longPressHandled = true;
+        m_powerButtonDown = false;
+        requestShutdown();
+    }
+}
+
+void PowerHandler::handlePowerButtonEvent(const input_event& ev)
 {
     auto now = std::chrono::steady_clock::now();
     if (m_resume_ignore_until != std::chrono::steady_clock::time_point{} &&
@@ -174,7 +198,9 @@ void PowerHandler::handlePowerButtonEvent(const input_event& ev, std::chrono::st
         // Ignore any button activity immediately after resuming from a real sleep.
         if (ev.value == 0)
         {
-            press_time = std::chrono::steady_clock::time_point{};
+            m_powerButtonDown = false;
+            m_longPressHandled = false;
+            m_powerPressTime = std::chrono::steady_clock::time_point{};
         }
         return;
     }
@@ -191,25 +217,28 @@ void PowerHandler::handlePowerButtonEvent(const input_event& ev, std::chrono::st
             // Wake from fake sleep
             std::cout << "Waking from fake sleep mode" << std::endl;
             exitFakeSleep();
-            press_time = std::chrono::steady_clock::time_point{}; // Don't register this as a new press
+            m_powerButtonDown = false;
+            m_longPressHandled = false;
+            m_powerPressTime = std::chrono::steady_clock::time_point{}; // Don't register this as a new press
         }
         else
         {
             // Normal press
             std::cout << "Power button pressed" << std::endl;
-            press_time = now;
+            m_powerButtonDown = true;
+            m_longPressHandled = false;
+            m_powerPressTime = now;
         }
     }
-    else if (ev.value == 0 && press_time != std::chrono::steady_clock::time_point{})
+    else if (ev.value == 0 && m_powerPressTime != std::chrono::steady_clock::time_point{})
     {
         // Button released after a valid press
-        auto duration = now - press_time;
+        auto duration = now - m_powerPressTime;
         auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
-        press_time = std::chrono::steady_clock::time_point{};
 
         std::cout << "PowerHandler: Power button released after " << duration_ms << "ms" << std::endl;
 
-        if (duration < SHORT_PRESS_MAX)
+        if (!m_longPressHandled && duration < SHORT_PRESS_MAX)
         {
             // Short press - try to sleep
             std::cout << "PowerHandler: Short press detected - calling attemptSleep()" << std::endl;
@@ -219,17 +248,15 @@ void PowerHandler::handlePowerButtonEvent(const input_event& ev, std::chrono::st
         {
             std::cout << "PowerHandler: Long press detected (duration >= " << SHORT_PRESS_MAX.count() << "ms)" << std::endl;
         }
+
+        m_powerButtonDown = false;
+        m_longPressHandled = false;
+        m_powerPressTime = std::chrono::steady_clock::time_point{};
     }
-    else if (ev.value == 2 && press_time != std::chrono::steady_clock::time_point{})
+    else if (ev.value == 2)
     {
-        // Button held down
-        auto duration = now - press_time;
-        if (duration >= SHORT_PRESS_MAX)
-        {
-            std::cout << "Long press detected - shutting down" << std::endl;
-            requestShutdown();
-            press_time = std::chrono::steady_clock::time_point{};
-        }
+        // Repeat events are optional on some kernels; keep support but don't rely on it.
+        checkLongPressWhileHeld();
     }
 }
 

@@ -34,7 +34,8 @@ public:
 
 private:
     void threadMain();
-    void handlePowerButtonEvent(const input_event& ev, std::chrono::steady_clock::time_point& press_time);
+    void handlePowerButtonEvent(const input_event& ev);
+    void checkLongPressWhileHeld();
     void attemptSleep();
     void enterFakeSleep();
     void exitFakeSleep();
@@ -55,6 +56,9 @@ private:
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_in_fake_sleep{false};
     int m_device_fd{-1};
+    bool m_powerButtonDown{false};
+    bool m_longPressHandled{false};
+    std::chrono::steady_clock::time_point m_powerPressTime;
     std::chrono::steady_clock::time_point m_fake_sleep_start_time;
     std::chrono::steady_clock::time_point m_resume_ignore_until;
     ErrorCallback m_errorCallback;
