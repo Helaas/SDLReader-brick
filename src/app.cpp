@@ -277,35 +277,18 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
 
 App::~App()
 {
-    std::cout.flush();
 #ifdef TRIMUI_PLATFORM
     if (m_powerHandler)
     {
-        std::cout.flush();
         m_powerHandler->stop();
-        std::cout.flush();
     }
 #endif
-    // Explicitly destroy managers in controlled order to debug which one hangs
-    std::cout.flush();
     m_renderManager.reset();
-
-    std::cout.flush();
     m_navigationManager.reset();
-
-    std::cout.flush();
     m_viewportManager.reset();
-
-    std::cout.flush();
     m_inputManager.reset();
-
-    std::cout.flush();
     m_guiManager.reset();
-
-    std::cout.flush();
     m_document.reset();
-
-    std::cout.flush();
     m_optionsManager.reset();
 }
 

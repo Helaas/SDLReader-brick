@@ -4,7 +4,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
-#include <iostream>
+#include "debug_log.h"
 #include <linux/input.h>
 #include <sys/ioctl.h>
 #include <thread>
@@ -29,11 +29,11 @@ bool PowerHandler::start()
     m_device_fd = open(DEVICE_PATH, O_RDONLY | O_NONBLOCK);
     if (m_device_fd < 0)
     {
-        std::cerr << "Failed to open input device: " << DEVICE_PATH << std::endl;
+        DEBUG_ERR("Failed to open input device: " << DEVICE_PATH);
         return false;
     }
 
-    std::cout << "Power handler started on device: " << DEVICE_PATH << std::endl;
+    DEBUG_LOG("Power handler started on device: " << DEVICE_PATH);
     flushEvents();
 
     m_running.store(true);
@@ -84,7 +84,7 @@ void PowerHandler::threadMain()
     struct input_event ev;
     auto press_time = std::chrono::steady_clock::time_point{};
 
-    std::cout << "Power handler thread started" << std::endl;
+    DEBUG_LOG("Power handler thread started");
 
     while (m_running.load())
     {
@@ -113,7 +113,7 @@ void PowerHandler::threadMain()
             }
             else
             {
-                std::cerr << "Device read error: " << strerror(errno) << std::endl;
+                DEBUG_ERR("Device read error: " << strerror(errno));
                 if (!reopenDevice())
                 {
                     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -123,7 +123,7 @@ void PowerHandler::threadMain()
         else
         {
             // EOF - device disconnected
-            std::cout << "Device disconnected, reopening..." << std::endl;
+            DEBUG_LOG("Device disconnected, reopening...");
             if (!reopenDevice())
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -156,14 +156,14 @@ void PowerHandler::handlePowerButtonEvent(const input_event& ev, std::chrono::st
         if (m_in_fake_sleep.load())
         {
             // Wake from fake sleep
-            std::cout << "Waking from fake sleep mode" << std::endl;
+            DEBUG_LOG("Waking from fake sleep mode");
             exitFakeSleep();
             press_time = std::chrono::steady_clock::time_point{}; // Don't register this as a new press
         }
         else
         {
             // Normal press
-            std::cout << "Power button pressed" << std::endl;
+            DEBUG_LOG("Power button pressed");
             press_time = now;
         }
     }
@@ -171,20 +171,19 @@ void PowerHandler::handlePowerButtonEvent(const input_event& ev, std::chrono::st
     {
         // Button released after a valid press
         auto duration = now - press_time;
-        auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
         press_time = std::chrono::steady_clock::time_point{};
 
-        std::cout << "PowerHandler: Power button released after " << duration_ms << "ms" << std::endl;
+        DEBUG_LOG("PowerHandler: Power button released after " << std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() << "ms");
 
         if (duration < SHORT_PRESS_MAX)
         {
             // Short press - try to sleep
-            std::cout << "PowerHandler: Short press detected - calling attemptSleep()" << std::endl;
+            DEBUG_LOG("PowerHandler: Short press detected - calling attemptSleep()");
             attemptSleep();
         }
         else
         {
-            std::cout << "PowerHandler: Long press detected (duration >= " << SHORT_PRESS_MAX.count() << "ms)" << std::endl;
+            DEBUG_LOG("PowerHandler: Long press detected (duration >= " << SHORT_PRESS_MAX.count() << "ms)");
         }
     }
     else if (ev.value == 2 && press_time != std::chrono::steady_clock::time_point{})
@@ -193,7 +192,7 @@ void PowerHandler::handlePowerButtonEvent(const input_event& ev, std::chrono::st
         auto duration = now - press_time;
         if (duration >= SHORT_PRESS_MAX)
         {
-            std::cout << "Long press detected - shutting down" << std::endl;
+            DEBUG_LOG("Long press detected - shutting down");
             requestShutdown();
             press_time = std::chrono::steady_clock::time_point{};
         }
@@ -202,7 +201,7 @@ void PowerHandler::handlePowerButtonEvent(const input_event& ev, std::chrono::st
 
 void PowerHandler::attemptSleep()
 {
-    std::cout << "PowerHandler: Attempting sleep..." << std::endl;
+    DEBUG_LOG("PowerHandler: Attempting sleep...");
 
     // First, check if any UI windows are open and close them
     if (m_preSleepCallback)
@@ -210,18 +209,18 @@ void PowerHandler::attemptSleep()
         bool uiWasClosed = m_preSleepCallback();
         if (uiWasClosed)
         {
-            std::cout << "PowerHandler: UI windows were closed, entering fake sleep and attempting real sleep" << std::endl;
+            DEBUG_LOG("PowerHandler: UI windows were closed, entering fake sleep and attempting real sleep");
             // Continue to sleep logic below instead of returning
         }
     }
 
     bool sleepSuccess = requestSleep();
-    std::cout << "PowerHandler: requestSleep() returned: " << (sleepSuccess ? "true" : "false") << std::endl;
+    DEBUG_LOG("PowerHandler: requestSleep() returned: " << (sleepSuccess ? "true" : "false"));
 
     if (sleepSuccess)
     {
         // Real sleep succeeded
-        std::cout << "PowerHandler: Real sleep successful" << std::endl;
+        DEBUG_LOG("PowerHandler: Real sleep successful");
         // Ignore power button events briefly after resume so the wake button release
         // does not immediately trigger another suspend request.
         m_resume_ignore_until = std::chrono::steady_clock::now() + POST_RESUME_IGNORE_DURATION;
@@ -235,22 +234,22 @@ void PowerHandler::attemptSleep()
     else
     {
         // Real sleep failed - enter fake sleep mode
-        std::cout << "PowerHandler: Real sleep failed - entering fake sleep mode" << std::endl;
+        DEBUG_LOG("PowerHandler: Real sleep failed - entering fake sleep mode");
         enterFakeSleep();
     }
 }
 
 void PowerHandler::enterFakeSleep()
 {
-    std::cout << "PowerHandler: Entering fake sleep mode..." << std::endl;
+    DEBUG_LOG("PowerHandler: Entering fake sleep mode...");
     m_in_fake_sleep.store(true);
     m_fake_sleep_start_time = std::chrono::steady_clock::now(); // Track when fake sleep started
 
-    std::cout << "PowerHandler: Calling sleep mode callback with true..." << std::endl;
+    DEBUG_LOG("PowerHandler: Calling sleep mode callback with true...");
     if (m_sleepModeCallback)
     {
         m_sleepModeCallback(true); // Enable fake sleep (black screen, disable inputs)
-        std::cout << "PowerHandler: Sleep mode callback executed successfully" << std::endl;
+        DEBUG_LOG("PowerHandler: Sleep mode callback executed successfully");
 
         // Give the main thread time to render the black screen
         // This helps ensure the screen actually goes black before we continue
@@ -258,30 +257,30 @@ void PowerHandler::enterFakeSleep()
     }
     else
     {
-        std::cout << "PowerHandler: ERROR - No sleep mode callback registered!" << std::endl;
+        DEBUG_LOG("PowerHandler: ERROR - No sleep mode callback registered!");
     }
 
-    std::cout << "PowerHandler: Entered fake sleep mode - screen should be off, inputs disabled" << std::endl;
+    DEBUG_LOG("PowerHandler: Entered fake sleep mode - screen should be off, inputs disabled");
 }
 
 void PowerHandler::exitFakeSleep()
 {
-    std::cout << "PowerHandler: Exiting fake sleep mode..." << std::endl;
+    DEBUG_LOG("PowerHandler: Exiting fake sleep mode...");
     m_in_fake_sleep.store(false);
 
-    std::cout << "PowerHandler: Calling sleep mode callback with false..." << std::endl;
+    DEBUG_LOG("PowerHandler: Calling sleep mode callback with false...");
     if (m_sleepModeCallback)
     {
         m_sleepModeCallback(false); // Disable fake sleep (restore screen, enable inputs)
-        std::cout << "PowerHandler: Sleep mode callback executed successfully" << std::endl;
+        DEBUG_LOG("PowerHandler: Sleep mode callback executed successfully");
     }
     else
     {
-        std::cout << "PowerHandler: ERROR - No sleep mode callback registered!" << std::endl;
+        DEBUG_LOG("PowerHandler: ERROR - No sleep mode callback registered!");
     }
 
     flushEvents(); // Flush any accumulated events
-    std::cout << "PowerHandler: Exited fake sleep mode - screen should be restored, inputs enabled" << std::endl;
+    DEBUG_LOG("PowerHandler: Exited fake sleep mode - screen should be restored, inputs enabled");
 }
 
 void PowerHandler::tryDeepSleep()
@@ -295,11 +294,11 @@ void PowerHandler::tryDeepSleep()
     {
         last_attempt = now;
 
-        std::cout << "Attempting deep sleep from fake sleep mode..." << std::endl;
+        DEBUG_LOG("Attempting deep sleep from fake sleep mode...");
         if (requestSleep())
         {
             // Deep sleep succeeded - exit fake sleep
-            std::cout << "Deep sleep successful - exiting fake sleep mode" << std::endl;
+            DEBUG_LOG("Deep sleep successful - exiting fake sleep mode");
             error_shown = false; // Reset error flag for next time
             exitFakeSleep();
         }
@@ -309,7 +308,7 @@ void PowerHandler::tryDeepSleep()
             auto time_in_fake_sleep = now - m_fake_sleep_start_time;
             if (time_in_fake_sleep >= std::chrono::seconds(30) && !error_shown)
             {
-                std::cout << "Deep sleep has failed for 30+ seconds, showing error to user" << std::endl;
+                DEBUG_LOG("Deep sleep has failed for 30+ seconds, showing error to user");
                 if (m_errorCallback)
                 {
                     m_errorCallback("Suspend failed. Please try again in a few seconds.");
@@ -336,13 +335,13 @@ void PowerHandler::flushEvents()
 
     if (flush_count > 0)
     {
-        std::cout << "Flushed " << flush_count << " stale input events" << std::endl;
+        DEBUG_LOG("Flushed " << flush_count << " stale input events");
     }
 }
 
 bool PowerHandler::requestSleep()
 {
-    std::cout << "Attempting to suspend device..." << std::endl;
+    DEBUG_LOG("Attempting to suspend device...");
 
     auto tryPlatformSuspend = [](const char* path) -> bool
     {
@@ -353,19 +352,19 @@ bool PowerHandler::requestSleep()
 
         if (access(path, X_OK) == 0)
         {
-            std::cout << "Using platform suspend script: " << path << std::endl;
+            DEBUG_LOG("Using platform suspend script: " << path);
             int result = system(path);
             if (result == 0)
             {
-                std::cout << "Platform suspend successful" << std::endl;
+                DEBUG_LOG("Platform suspend successful");
                 return true;
             }
 
-            std::cout << "Platform suspend script failed with result: " << result << std::endl;
+            DEBUG_LOG("Platform suspend script failed with result: " << result);
             return false;
         }
 
-        std::cout << "Platform suspend script not available (" << path << " not executable)" << std::endl;
+        DEBUG_LOG("Platform suspend script not available (" << path << " not executable)");
         return false;
     };
 
@@ -378,45 +377,45 @@ bool PowerHandler::requestSleep()
     // Method 2: Direct system suspend
     if (access("/sys/power/state", W_OK) == 0)
     {
-        std::cout << "Using direct system suspend" << std::endl;
+        DEBUG_LOG("Using direct system suspend");
         int result = system("echo mem > /sys/power/state 2>/dev/null");
         if (result == 0)
         {
-            std::cout << "Suspend successful" << std::endl;
+            DEBUG_LOG("Suspend successful");
             return true;
         }
         else
         {
-            std::cout << "Direct system suspend failed with result: " << result << std::endl;
+            DEBUG_LOG("Direct system suspend failed with result: " << result);
         }
     }
     else
     {
-        std::cout << "Direct system suspend not available (/sys/power/state not writable)" << std::endl;
+        DEBUG_LOG("Direct system suspend not available (/sys/power/state not writable)");
     }
 
     // Method 3: Try freeze mode as fallback
     if (access("/sys/power/state", W_OK) == 0)
     {
-        std::cout << "Trying freeze mode suspend" << std::endl;
+        DEBUG_LOG("Trying freeze mode suspend");
         int result = system("echo freeze > /sys/power/state 2>/dev/null");
         if (result == 0)
         {
-            std::cout << "Freeze suspend successful" << std::endl;
+            DEBUG_LOG("Freeze suspend successful");
             return true;
         }
         else
         {
-            std::cout << "Freeze mode suspend failed with result: " << result << std::endl;
+            DEBUG_LOG("Freeze mode suspend failed with result: " << result);
         }
     }
     else
     {
-        std::cout << "Freeze mode suspend not available (/sys/power/state not writable)" << std::endl;
+        DEBUG_LOG("Freeze mode suspend not available (/sys/power/state not writable)");
     }
 
-    std::cout << "Warning: No working suspend method found - will use fake sleep mode" << std::endl;
-    std::cerr << "INFO: Could not suspend device - falling back to fake sleep mode" << std::endl;
+    DEBUG_LOG("Warning: No working suspend method found - will use fake sleep mode");
+    DEBUG_ERR("INFO: Could not suspend device - falling back to fake sleep mode");
 
     return false;
 }
@@ -424,7 +423,7 @@ bool PowerHandler::requestSleep()
 void PowerHandler::requestShutdown()
 {
     //  Manual shutdown sequence (NextUI-style)
-    std::cout << "Attempting to shutdown device..." << std::endl;
+    DEBUG_LOG("Attempting to shutdown device...");
 
     // Display shutdown message on GUI
     if (m_errorCallback)
@@ -447,7 +446,7 @@ void PowerHandler::requestShutdown()
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
     // Kill the application
-    std::cout << "Exiting application..." << std::endl;
+    DEBUG_LOG("Exiting application...");
     std::exit(0);
 }
 
@@ -464,11 +463,11 @@ bool PowerHandler::reopenDevice()
     m_device_fd = open(DEVICE_PATH, O_RDONLY | O_NONBLOCK);
     if (m_device_fd < 0)
     {
-        std::cerr << "Failed to reopen input device: " << DEVICE_PATH << " - " << strerror(errno) << std::endl;
+        DEBUG_ERR("Failed to reopen input device: " << DEVICE_PATH << " - " << strerror(errno));
         return false;
     }
 
-    std::cout << "Power handler device reopened successfully: " << DEVICE_PATH << std::endl;
+    DEBUG_LOG("Power handler device reopened successfully: " << DEVICE_PATH);
     flushEvents(); // Use the simplified flush function
 
     return true;
