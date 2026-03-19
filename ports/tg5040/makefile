@@ -26,7 +26,8 @@ SDL2_INCLUDE := $(PREFIX)/include/SDL2
 # Compiler and flags
 CXX      ?= $(if $(CROSS_COMPILE),$(CROSS_COMPILE)g++,g++)
 TG_INCLUDE_DIR := $(BASE_PATH)/include
-CXXFLAGS = -std=c++17 -Wall -Wextra -g -O3 -DNDEBUG -DTRIMUI_PLATFORM\
+CXXFLAGS = -std=c++17 -Wall -Wextra -Os -DNDEBUG -DTRIMUI_PLATFORM \
+            -ffunction-sections -fdata-sections \
             -I$(WORKSPACE_PATH)/src -I$(WORKSPACE_PATH)/include -I$(TG_INCLUDE_DIR) -I$(BASE_PATH)/mupdf/include \
             -I$(BASE_PATH)/nuklear-tg5040 -I$(BASE_PATH)/nuklear-tg5040/demo/sdl_renderer \
             -I/usr/local/libarchive-minimal/include -I$(WEBP_PREFIX)/include -D_REENTRANT -I$(SDL2_INCLUDE)
@@ -207,8 +208,8 @@ $(WEBP_LIB):
 build-mupdf: build-libarchive build-webp
 	@echo "Building MuPDF with custom libarchive support for CBR/CBZ files, WebP support, and HTML engine..."
 	@cd $(BASE_PATH)/mupdf && $(MAKE) libs \
-		CFLAGS="-std=c17 -D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0 -DHAVE_LIBARCHIVE -DHAVE_WEBP -Iinclude -I$(WEBP_PREFIX)/include -I$(GUMBO_INCLUDE)" \
-		CXXFLAGS="-std=c++17 -D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0 -DHAVE_LIBARCHIVE -DHAVE_WEBP -Iinclude -I$(WEBP_PREFIX)/include -I$(GUMBO_INCLUDE)" \
+		XCFLAGS="-D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0 -DHAVE_LIBARCHIVE -DHAVE_WEBP -I$(WEBP_PREFIX)/include -I$(GUMBO_INCLUDE) -DTOFU_CJK_EXT" \
+		XCXXFLAGS="-D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0 -DHAVE_LIBARCHIVE -DHAVE_WEBP -I$(WEBP_PREFIX)/include -I$(GUMBO_INCLUDE) -DTOFU_CJK_EXT" \
 		HAVE_LIBARCHIVE=yes \
 		HAVE_WEBP=yes \
 		mujs=no \
@@ -245,7 +246,7 @@ $(BUILD_DIR):
 # Link final binary - depends on minimal libarchive being built
 $(TARGET): $(OBJS) $(LIBARCHIVE_MINIMAL) | $(BIN_DIR)
 	@echo "Linking sdl_reader_cli with minimal libarchive..."
-	$(CXX) $(OBJS) $(LIBS) -Wl,-rpath,'$$ORIGIN/../lib' -o $@
+	$(CXX) $(OBJS) $(LIBS) -Wl,-rpath,'$$ORIGIN/../lib' -Wl,--gc-sections -o $@
 	@echo "Binary built successfully: $@"
 
 # Compile source files into object files in the build directory

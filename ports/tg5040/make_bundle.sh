@@ -64,13 +64,7 @@ copy_one() {
     return 0
   fi
 
-  # copy the soname/symlink itself
-  if [ ! -e "$LIBDIR/$base" ]; then
-    cp -u "$src" "$LIBDIR/" || true
-    echo "Copied: $base"
-  fi
-
-  # if it’s a symlink, also copy the real file it points to
+  # If source is a symlink, copy the real file and create a symlink for the soname
   if [ -L "$src" ]; then
     local tgt
     tgt="$(readlink -f "$src")"
@@ -78,7 +72,16 @@ copy_one() {
     tgtbase="$(basename "$tgt")"
     if [ ! -e "$LIBDIR/$tgtbase" ]; then
       cp -u "$tgt" "$LIBDIR/" || true
-      echo "Copied target: $tgtbase"
+      echo "Copied: $tgtbase"
+    fi
+    if [ ! -e "$LIBDIR/$base" ]; then
+      ln -s "$tgtbase" "$LIBDIR/$base"
+      echo "Linked: $base -> $tgtbase"
+    fi
+  else
+    if [ ! -e "$LIBDIR/$base" ]; then
+      cp -u "$src" "$LIBDIR/" || true
+      echo "Copied: $base"
     fi
   fi
 }
@@ -121,9 +124,16 @@ if [[ "${PRUNE_LIBS:-0}" -eq 1 ]]; then
   rm -f "$LIBDIR"/libicu*.so* "$LIBDIR"/libxml2*.so* || true
 fi
 
-# Size trim (optional)
-strip "$BINDIR/sdl_reader_cli" 2>/dev/null || true
-strip --strip-unneeded "$LIBDIR"/*.so* 2>/dev/null || true
+# Size trim
+STRIP_CMD="${CROSS_COMPILE:-}strip"
+if ! command -v "$STRIP_CMD" >/dev/null 2>&1; then
+  STRIP_CMD="strip"
+fi
+echo "Using strip: $STRIP_CMD"
+echo "Binary size before strip: $(stat -c%s "$BINDIR/sdl_reader_cli" 2>/dev/null || stat -f%z "$BINDIR/sdl_reader_cli") bytes"
+"$STRIP_CMD" "$BINDIR/sdl_reader_cli"
+echo "Binary size after strip: $(stat -c%s "$BINDIR/sdl_reader_cli" 2>/dev/null || stat -f%z "$BINDIR/sdl_reader_cli") bytes"
+"$STRIP_CMD" --strip-unneeded "$LIBDIR"/*.so* 2>/dev/null || true
 
 echo "DONE. Bundle ready: $DEST"
 ls -la "$DEST" "$BINDIR" "$LIBDIR" || true

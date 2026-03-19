@@ -21,8 +21,11 @@ ifeq ($(origin PLATFORM), undefined)
   endif
 endif
 
+ADB ?= adb
+
 .PHONY: all clean clean-local help list-platforms export-tg5040 export-tg5050 export-my355 export-trimui export-all \
-       export-tg5040-in-docker export-tg5050-in-docker export-my355-in-docker export-trimui-in-docker $(AVAILABLE_PLATFORMS)
+       export-tg5040-in-docker export-tg5050-in-docker export-my355-in-docker export-trimui-in-docker \
+       deploy deploy-platform $(AVAILABLE_PLATFORMS)
 
 all: $(PLATFORM)
 
@@ -130,6 +133,85 @@ endif
 export-all:
 	@$(MAKE) export-trimui
 
+# ADB deploy - auto-detect platform and push SDLReader.pak to device
+deploy:
+	@echo "Detecting platform..."
+	@SERIAL="$(ADB_SERIAL)"; \
+	if [ -z "$$SERIAL" ]; then \
+		SERIAL=$$($(ADB) devices | awk 'NR>1 && $$2=="device" {print $$1; exit}'); \
+	fi; \
+	if [ -z "$$SERIAL" ]; then \
+		echo "Error: No online adb device found."; \
+		exit 1; \
+	fi; \
+	ADB_CMD="$(ADB) -s $$SERIAL"; \
+	FINGERPRINT=$$($$ADB_CMD shell ' \
+		cat /proc/device-tree/compatible 2>/dev/null; \
+		echo; \
+		cat /proc/device-tree/model 2>/dev/null; \
+		echo; \
+		uname -a 2>/dev/null' 2>/dev/null | tr '\000' '\n' | tr -d '\r'); \
+	case "$$FINGERPRINT" in \
+		*rk3566*|*miyoo-355*) PLATFORM=my355 ;; \
+		*allwinner,a523*|*sun55iw3*) PLATFORM=tg5050 ;; \
+		*allwinner,a133*|*sun50iw*) PLATFORM=tg5040 ;; \
+		*allwinner*) \
+			if printf '%s' "$$FINGERPRINT" | grep -qi 'a523'; then \
+				PLATFORM=tg5050; \
+			else \
+				PLATFORM=tg5040; \
+			fi \
+			;; \
+		*) \
+			echo "Error: Could not detect a supported platform from adb fingerprint."; \
+			echo "  Serial: $$SERIAL"; \
+			echo "  Fingerprint: $$(printf '%s' "$$FINGERPRINT" | head -c 240)"; \
+			exit 1; \
+			;; \
+	esac; \
+	echo "Detected adb serial: $$SERIAL"; \
+	echo "Detected platform: $$PLATFORM"; \
+	$(MAKE) deploy-platform PLATFORM=$$PLATFORM SERIAL=$$SERIAL
+
+deploy-platform:
+	@if [ -z "$(PLATFORM)" ] || [ -z "$(SERIAL)" ]; then \
+		echo "Error: deploy-platform requires PLATFORM and SERIAL."; \
+		exit 1; \
+	fi
+	@$(MAKE) $(PLATFORM)
+	@echo "Creating SDLReader.pak bundle for $(PLATFORM)..."
+	@PAK_DIR="build/$(PLATFORM)/SDLReader.pak"; \
+	rm -rf "$$PAK_DIR"; \
+	mkdir -p "$$PAK_DIR/bin" "$$PAK_DIR/lib" "$$PAK_DIR/fonts" "$$PAK_DIR/res"; \
+	cp "build/$(PLATFORM)/sdl_reader_cli" "$$PAK_DIR/bin/"; \
+	chmod +x "$$PAK_DIR/bin/sdl_reader_cli"; \
+	cp ports/trimui/pak-template/launch.sh "$$PAK_DIR/"; \
+	chmod +x "$$PAK_DIR/launch.sh"; \
+	cp pak.json "$$PAK_DIR/"; \
+	cp -a fonts/. "$$PAK_DIR/fonts/"; \
+	if [ -f ports/trimui/pak-template/res/docs.pdf ]; then \
+		cp ports/trimui/pak-template/res/docs.pdf "$$PAK_DIR/res/"; \
+	fi; \
+	echo "  Bundling libraries and stripping binary via Docker..."; \
+	TOOLCHAIN="ghcr.io/loveretro/$(PLATFORM)-toolchain:latest"; \
+	MAKEFILE=$$([ "$(PLATFORM)" = "my355" ] && echo "ports/my355/makefile" || echo "ports/$(PLATFORM)/Makefile"); \
+	docker run --rm -v "$(CURDIR)":/workspace "$$TOOLCHAIN" \
+		/bin/bash -c "cd /workspace && \
+		TEMP=\$$(mktemp -d) && \
+		BIN=./build/$(PLATFORM)/sdl_reader_cli DEST=\$$TEMP PRUNE_LIBS=1 \
+			bash ports/$(PLATFORM)/make_bundle.sh > /dev/null 2>&1 && \
+		cp -aL \$$TEMP/lib/* $$PAK_DIR/lib/ && \
+		strip $$PAK_DIR/bin/sdl_reader_cli && \
+		strip --strip-unneeded $$PAK_DIR/lib/*.so* 2>/dev/null; \
+		rm -rf \$$TEMP"; \
+	echo "  PAK ready at $$PAK_DIR"
+	@ADB_CMD="$(ADB) -s $(SERIAL)"; \
+	TOOLS_DIR="/mnt/SDCARD/Tools/$(PLATFORM)/SDLReader.pak"; \
+	echo "Deploying SDLReader.pak to $$TOOLS_DIR..."; \
+	$$ADB_CMD shell "rm -rf '$$TOOLS_DIR' && mkdir -p '/mnt/SDCARD/Tools/$(PLATFORM)'"; \
+	$$ADB_CMD push "build/$(PLATFORM)/SDLReader.pak" "/mnt/SDCARD/Tools/$(PLATFORM)/"; \
+	echo "Deploy complete."
+
 mac:
 	@echo "Building for macOS..."
 	$(MAKE) -C ports/mac
@@ -185,6 +267,9 @@ help:
 	@echo "  make mac        - Build for macOS"
 	@echo "  make wiiu       - Build for Wii U"
 	@echo "  make linux      - Build for Linux"
+	@echo ""
+	@echo "Deploy:"
+	@echo "  make deploy     - Detect adb device, build, and push SDLReader.pak"
 	@echo ""
 	@echo "Other:"
 	@echo "  make clean      - Clean build artifacts"
