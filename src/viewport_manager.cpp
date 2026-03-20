@@ -1,4 +1,5 @@
 #include "viewport_manager.h"
+#include "platform_constants.h"
 #include "document.h"
 #include "mupdf_document.h"
 #include "renderer.h"
@@ -754,6 +755,5 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
 
 bool ViewportManager::isNextRenderLikelyExpensive(int lastRenderDuration) const
 {
-    static constexpr int EXPENSIVE_RENDER_THRESHOLD_MS = 200;
-    return lastRenderDuration > EXPENSIVE_RENDER_THRESHOLD_MS;
+    return static_cast<Uint32>(lastRenderDuration) > PlatformConstants::EXPENSIVE_RENDER_THRESHOLD_MS;
 }

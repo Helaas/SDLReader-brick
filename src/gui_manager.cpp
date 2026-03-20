@@ -413,7 +413,7 @@ void GuiManager::render()
     {
         Uint32 currentTime = SDL_GetTicks();
         const Uint32 elapsed = (m_lastNavigationTime <= currentTime) ? (currentTime - m_lastNavigationTime) : 0;
-        const Uint32 targetDelay = m_waitingForInitialNavigationRepeat ? NAV_INITIAL_DELAY_MS : NAV_REPEAT_DELAY_MS;
+        const Uint32 targetDelay = m_waitingForInitialNavigationRepeat ? PlatformConstants::INPUT_INITIAL_DELAY_MS : PlatformConstants::INPUT_REPEAT_DELAY_MS;
 
         if (m_lastNavigationTime == 0 || elapsed >= targetDelay)
         {
@@ -2932,10 +2932,10 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
             m_leftStickY = event.caxis.value;
         }
 
-        bool upActive = m_leftStickY < -CONTROLLER_AXIS_DEAD_ZONE;
-        bool downActive = m_leftStickY > CONTROLLER_AXIS_DEAD_ZONE;
-        bool leftActive = m_leftStickX < -CONTROLLER_AXIS_DEAD_ZONE;
-        bool rightActive = m_leftStickX > CONTROLLER_AXIS_DEAD_ZONE;
+        bool upActive = m_leftStickY < -PlatformConstants::AXIS_DEAD_ZONE;
+        bool downActive = m_leftStickY > PlatformConstants::AXIS_DEAD_ZONE;
+        bool leftActive = m_leftStickX < -PlatformConstants::AXIS_DEAD_ZONE;
+        bool rightActive = m_leftStickX > PlatformConstants::AXIS_DEAD_ZONE;
 
         bool consumed = false;
 

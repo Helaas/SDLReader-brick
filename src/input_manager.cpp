@@ -1,4 +1,5 @@
 #include "input_manager.h"
+#include "platform_constants.h"
 #ifdef PLATFORM_MY355
 #include "platform_my355.h"
 #endif
@@ -651,11 +652,6 @@ InputActionData InputManager::processControllerAxis(const SDL_Event& event)
         return actionData;
     }
 
-#ifdef PLATFORM_MY355
-    const Sint16 AXIS_DEAD_ZONE = 13000;
-#else
-    const Sint16 AXIS_DEAD_ZONE = 8000;
-#endif
     Uint32 now = SDL_GetTicks();
 
     switch (event.caxis.axis)
@@ -702,24 +698,24 @@ InputActionData InputManager::processControllerAxis(const SDL_Event& event)
 
     case SDL_CONTROLLER_AXIS_LEFTX:
         m_leftStickX = event.caxis.value;
-        updateDpadFromAnalog(m_leftStickX > AXIS_DEAD_ZONE, m_leftStickX < -AXIS_DEAD_ZONE,
-                             m_leftStickY<-AXIS_DEAD_ZONE, m_leftStickY> AXIS_DEAD_ZONE);
+        updateDpadFromAnalog(m_leftStickX > PlatformConstants::AXIS_DEAD_ZONE, m_leftStickX < -PlatformConstants::AXIS_DEAD_ZONE,
+                             m_leftStickY<-PlatformConstants::AXIS_DEAD_ZONE, m_leftStickY> PlatformConstants::AXIS_DEAD_ZONE);
         break;
     case SDL_CONTROLLER_AXIS_LEFTY:
         m_leftStickY = event.caxis.value;
-        updateDpadFromAnalog(m_leftStickX > AXIS_DEAD_ZONE, m_leftStickX < -AXIS_DEAD_ZONE,
-                             m_leftStickY<-AXIS_DEAD_ZONE, m_leftStickY> AXIS_DEAD_ZONE);
+        updateDpadFromAnalog(m_leftStickX > PlatformConstants::AXIS_DEAD_ZONE, m_leftStickX < -PlatformConstants::AXIS_DEAD_ZONE,
+                             m_leftStickY<-PlatformConstants::AXIS_DEAD_ZONE, m_leftStickY> PlatformConstants::AXIS_DEAD_ZONE);
         break;
 
     case SDL_CONTROLLER_AXIS_RIGHTX:
         if (!isInScrollTimeout())
         {
-            if (event.caxis.value < -AXIS_DEAD_ZONE)
+            if (event.caxis.value < -PlatformConstants::AXIS_DEAD_ZONE)
             {
                 actionData.action = InputAction::MoveRight;
                 actionData.intValue = 20;
             }
-            else if (event.caxis.value > AXIS_DEAD_ZONE)
+            else if (event.caxis.value > PlatformConstants::AXIS_DEAD_ZONE)
             {
                 actionData.action = InputAction::MoveLeft;
                 actionData.intValue = 20;
@@ -730,12 +726,12 @@ InputActionData InputManager::processControllerAxis(const SDL_Event& event)
     case SDL_CONTROLLER_AXIS_RIGHTY:
         if (!isInScrollTimeout())
         {
-            if (event.caxis.value < -AXIS_DEAD_ZONE)
+            if (event.caxis.value < -PlatformConstants::AXIS_DEAD_ZONE)
             {
                 actionData.action = InputAction::MoveUp;
                 actionData.intValue = 20;
             }
-            else if (event.caxis.value > AXIS_DEAD_ZONE)
+            else if (event.caxis.value > PlatformConstants::AXIS_DEAD_ZONE)
             {
                 actionData.action = InputAction::MoveDown;
                 actionData.intValue = 20;

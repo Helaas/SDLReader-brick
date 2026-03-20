@@ -3,6 +3,7 @@
 
 #include "button_mapper.h"
 #include "options_manager.h"
+#include "platform_constants.h"
 #include <SDL.h>
 #include <array>
 #include <functional>
@@ -182,15 +183,6 @@ private:
     bool m_downHeld = false;
     Uint32 m_lastNavigationTime = 0;
     bool m_waitingForInitialNavigationRepeat = false;
-#ifdef PLATFORM_MY355
-    static constexpr Uint32 NAV_INITIAL_DELAY_MS = 220; // Initial delay before repeat starts
-    static constexpr Uint32 NAV_REPEAT_DELAY_MS = 130;  // Delay between repeats
-    static constexpr Sint16 CONTROLLER_AXIS_DEAD_ZONE = 13000;
-#else
-    static constexpr Uint32 NAV_INITIAL_DELAY_MS = 100; // Initial delay before repeat starts
-    static constexpr Uint32 NAV_REPEAT_DELAY_MS = 50;   // Delay between repeats
-    static constexpr Sint16 CONTROLLER_AXIS_DEAD_ZONE = 8000;
-#endif
     Sint16 m_leftStickX = 0;
     Sint16 m_leftStickY = 0;
     bool m_leftStickUpActive = false;

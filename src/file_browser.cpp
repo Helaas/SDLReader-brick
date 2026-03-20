@@ -1952,7 +1952,7 @@ std::string FileBrowser::run()
         if ((m_dpadUpHeld || m_dpadDownHeld) && !m_entries.empty())
         {
             const Uint32 elapsed = (m_lastScrollTime <= currentTime) ? (currentTime - m_lastScrollTime) : 0;
-            Uint32 baseDelay = m_waitingForInitialRepeat ? SCROLL_INITIAL_DELAY_MS : SCROLL_REPEAT_DELAY_MS;
+            Uint32 baseDelay = m_waitingForInitialRepeat ? PlatformConstants::INPUT_INITIAL_DELAY_MS : PlatformConstants::INPUT_REPEAT_DELAY_MS;
             if (m_thumbnailView)
             {
                 baseDelay *= THUMBNAIL_SCROLL_DELAY_FACTOR;
@@ -1980,7 +1980,7 @@ std::string FileBrowser::run()
                                        ? (currentTime - m_lastHorizontalScrollTime)
                                        : 0;
             Uint32 baseDelay =
-                m_waitingForInitialHorizontalRepeat ? SCROLL_INITIAL_DELAY_MS : SCROLL_REPEAT_DELAY_MS;
+                m_waitingForInitialHorizontalRepeat ? PlatformConstants::INPUT_INITIAL_DELAY_MS : PlatformConstants::INPUT_REPEAT_DELAY_MS;
             if (m_thumbnailView)
             {
                 baseDelay *= THUMBNAIL_SCROLL_DELAY_FACTOR;
@@ -2531,10 +2531,10 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             break;
         }
 
-        const bool upActive = m_leftStickY < -CONTROLLER_AXIS_DEAD_ZONE;
-        const bool downActive = m_leftStickY > CONTROLLER_AXIS_DEAD_ZONE;
-        const bool leftActive = m_leftStickX < -CONTROLLER_AXIS_DEAD_ZONE;
-        const bool rightActive = m_leftStickX > CONTROLLER_AXIS_DEAD_ZONE;
+        const bool upActive = m_leftStickY < -PlatformConstants::AXIS_DEAD_ZONE;
+        const bool downActive = m_leftStickY > PlatformConstants::AXIS_DEAD_ZONE;
+        const bool leftActive = m_leftStickX < -PlatformConstants::AXIS_DEAD_ZONE;
+        const bool rightActive = m_leftStickX > PlatformConstants::AXIS_DEAD_ZONE;
 
         if (upActive && !m_dpadUpHeld)
         {

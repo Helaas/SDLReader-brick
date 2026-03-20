@@ -126,7 +126,7 @@ void NavigationManager::handlePageJumpInput(char digit)
         return;
 
     // Check if we're still within timeout
-    if (SDL_GetTicks() - m_state.pageJumpStartTime > NavigationState::PAGE_JUMP_TIMEOUT)
+    if (SDL_GetTicks() - m_state.pageJumpStartTime > PlatformConstants::PAGE_JUMP_TIMEOUT)
     {
         cancelPageJumpInput();
         return;
@@ -214,7 +214,7 @@ bool NavigationManager::isInScrollTimeout() const
 
 bool NavigationManager::isNextRenderLikelyExpensive() const
 {
-    return m_state.lastRenderDuration > NavigationState::EXPENSIVE_RENDER_THRESHOLD_MS;
+    return m_state.lastRenderDuration > PlatformConstants::EXPENSIVE_RENDER_THRESHOLD_MS;
 }
 
 void NavigationManager::printNavigationState() const

@@ -214,7 +214,6 @@ private:
     // Constants
     static constexpr Uint32 PAGE_CHANGE_COOLDOWN_MS = 200;
     static constexpr Uint32 SCROLL_TIMEOUT_MS = 100;
-    static constexpr Uint32 PAGE_JUMP_TIMEOUT = 5000;
     static constexpr Uint32 TRIGGER_COMBO_GRACE_MS = 150;
     static constexpr float EDGE_TURN_THRESHOLD = 1.5f;
     static constexpr float EDGE_TURN_COOLDOWN_TIME = 0.5f;
