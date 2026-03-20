@@ -61,7 +61,7 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 ## Miyoo Flip Control Scheme
 ![Miyoo Flip Controls](.github/resources/my355%20controls.png)
 
-## TrimUI Smart Pro Control Scheme
+## TrimUI Smart Pro (S) Control Scheme
 ![Smart Pro Controls](.github/resources/smart%20pro%20controls.png)
 
 ## Build Instructions
