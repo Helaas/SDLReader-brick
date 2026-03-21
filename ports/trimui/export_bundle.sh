@@ -9,7 +9,7 @@ STAGING_DIR="$SCRIPT_DIR/staging"
 TEMPLATE_DIR="$SCRIPT_DIR/pak-template"
 OUTPUT_FILE="$PROJECT_ROOT/SDLReader.pakz"
 
-PLATFORMS="tg5040 tg5050"
+PLATFORMS="tg5040 tg5050 my355"
 
 echo "==================================================================="
 echo "Exporting TrimUI .pakz bundle..."
@@ -30,7 +30,7 @@ bundle_libs() {
     if command -v ldd >/dev/null 2>&1; then
         local temp_dir
         temp_dir=$(mktemp -d)
-        BIN="./build/$platform/sdl_reader_cli" DEST="$temp_dir" \
+        BIN="./build/$platform/sdl_reader_cli" DEST="$temp_dir" PRUNE_LIBS=1 \
             bash "$PROJECT_ROOT/ports/$platform/make_bundle.sh" > /dev/null 2>&1
         cp -a "$temp_dir/lib/"* "$pak_dir/lib/"
         rm -rf "$temp_dir"
@@ -39,7 +39,7 @@ bundle_libs() {
         docker run --rm -v "$PROJECT_ROOT":/workspace "ghcr.io/loveretro/${platform}-toolchain:latest" \
             /bin/bash -c "cd /workspace && \
             TEMP=\$(mktemp -d) && \
-            BIN=./build/$platform/sdl_reader_cli DEST=\$TEMP bash ports/$platform/make_bundle.sh > /dev/null 2>&1 && \
+            BIN=./build/$platform/sdl_reader_cli DEST=\$TEMP PRUNE_LIBS=1 bash ports/$platform/make_bundle.sh > /dev/null 2>&1 && \
             mkdir -p ports/trimui/staging/Tools/$platform/SDLReader.pak/lib && \
             cp -a \$TEMP/lib/* ports/trimui/staging/Tools/$platform/SDLReader.pak/lib/ && \
             rm -rf \$TEMP"
@@ -64,6 +64,23 @@ for platform in $PLATFORMS; do
         echo "Run 'make $platform' first"
         exit 1
     fi
+
+    # Strip binary (needs cross-strip when run from host)
+    strip_binary() {
+        local bin="$1"
+        local plat="$2"
+        local size_before size_after
+        size_before=$(stat -c%s "$bin" 2>/dev/null || stat -f%z "$bin")
+        if command -v ldd >/dev/null 2>&1; then
+            strip "$bin"
+        else
+            docker run --rm -v "$PROJECT_ROOT":/workspace "ghcr.io/loveretro/${plat}-toolchain:latest" \
+                strip "/workspace/${bin#$PROJECT_ROOT/}"
+        fi
+        size_after=$(stat -c%s "$bin" 2>/dev/null || stat -f%z "$bin")
+        echo "  Stripped binary: $((size_before / 1048576))MB -> $((size_after / 1048576))MB"
+    }
+    strip_binary "$PAK_DIR/bin/sdl_reader_cli" "$platform"
 
     # Libraries
     bundle_libs "$platform" "$PAK_DIR"
@@ -104,7 +121,7 @@ fi
 
 rm -f "$OUTPUT_FILE"
 cd "$STAGING_DIR"
-zip -9 -r "$OUTPUT_FILE" . > /dev/null
+zip -9 -r -y "$OUTPUT_FILE" . > /dev/null
 
 echo ""
 echo "==================================================================="

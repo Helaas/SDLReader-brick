@@ -1,6 +1,7 @@
 #ifndef FILE_BROWSER_H
 #define FILE_BROWSER_H
 
+#include "platform_constants.h"
 #include <SDL.h>
 #include <cstddef>
 #include <condition_variable>
@@ -108,7 +109,9 @@ private:
     int m_gridColumns{1};
     int m_lastWindowWidth{0};
     int m_lastWindowHeight{0};
-#ifdef TRIMUI_PLATFORM
+#ifdef PLATFORM_MY355
+    static constexpr int THUMBNAIL_MAX_DIM = 120;
+#elif defined(TRIMUI_PLATFORM)
     static constexpr int THUMBNAIL_MAX_DIM = 150;
 #else
     static constexpr int THUMBNAIL_MAX_DIM = 200;
@@ -138,8 +141,6 @@ private:
     Sint16 m_leftStickY{0};
     Uint32 m_lastHorizontalScrollTime{0};
     bool m_waitingForInitialHorizontalRepeat{false};
-    static constexpr Uint32 SCROLL_INITIAL_DELAY_MS = 100;     // Initial delay before repeat starts
-    static constexpr Uint32 SCROLL_REPEAT_DELAY_MS = 50;       // Delay between repeats
     static constexpr Uint32 THUMBNAIL_SCROLL_DELAY_FACTOR = 2; // Slow down thumbnail view repeat speed
 
 #ifdef TRIMUI_PLATFORM

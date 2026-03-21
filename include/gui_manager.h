@@ -3,6 +3,7 @@
 
 #include "button_mapper.h"
 #include "options_manager.h"
+#include "platform_constants.h"
 #include <SDL.h>
 #include <array>
 #include <functional>
@@ -171,15 +172,17 @@ private:
     bool m_styleDropdownCancelRequested = false;
 
     Uint32 m_lastButtonPressTime = 0;
+#ifdef PLATFORM_MY355
+    static constexpr Uint32 BUTTON_DEBOUNCE_MS = 150;
+#else
     static constexpr Uint32 BUTTON_DEBOUNCE_MS = 100;
+#endif
 
     // Hold state for continuous navigation
     bool m_upHeld = false;
     bool m_downHeld = false;
     Uint32 m_lastNavigationTime = 0;
     bool m_waitingForInitialNavigationRepeat = false;
-    static constexpr Uint32 NAV_INITIAL_DELAY_MS = 100; // Initial delay before repeat starts
-    static constexpr Uint32 NAV_REPEAT_DELAY_MS = 50;   // Delay between repeats
     Sint16 m_leftStickX = 0;
     Sint16 m_leftStickY = 0;
     bool m_leftStickUpActive = false;

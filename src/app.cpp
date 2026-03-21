@@ -10,6 +10,10 @@
 #include "power_handler.h"
 #include "power_events.h"
 #endif
+#include "platform_constants.h"
+#ifdef PLATFORM_MY355
+#include "platform_my355.h"
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -229,8 +233,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
 
     // Set up font apply callback AFTER all initialization is complete
     m_guiManager->setFontApplyCallback([this](const FontConfig& config)
-                                       {
-        applyFontConfiguration(config); });
+                                       { applyFontConfiguration(config); });
 
     // Set up font close callback to trigger redraw
     m_guiManager->setFontCloseCallback([this]()
@@ -240,11 +243,10 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
 
     // Set up page jump callback
     m_guiManager->setPageJumpCallback([this](int pageNumber)
-                                      {
-        m_navigationManager->goToPage(pageNumber, m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(),
-                                      [this]() { markDirty(); },
-                                      [this]() { updateScaleDisplayTime(); },
-                                      [this]() { updatePageDisplayTime(); }); });
+                                      { m_navigationManager->goToPage(pageNumber, m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
+                                                                      { markDirty(); }, [this]()
+                                                                      { updateScaleDisplayTime(); }, [this]()
+                                                                      { updatePageDisplayTime(); }); });
 
     // Initialize page information in GUI manager
     m_guiManager->setPageCount(m_navigationManager->getDisplayPageCount(), pageCountEstimated);
@@ -277,35 +279,18 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
 
 App::~App()
 {
-    std::cout.flush();
 #ifdef TRIMUI_PLATFORM
     if (m_powerHandler)
     {
-        std::cout.flush();
         m_powerHandler->stop();
-        std::cout.flush();
     }
 #endif
-    // Explicitly destroy managers in controlled order to debug which one hangs
-    std::cout.flush();
     m_renderManager.reset();
-
-    std::cout.flush();
     m_navigationManager.reset();
-
-    std::cout.flush();
     m_viewportManager.reset();
-
-    std::cout.flush();
     m_inputManager.reset();
-
-    std::cout.flush();
     m_guiManager.reset();
-
-    std::cout.flush();
     m_document.reset();
-
-    std::cout.flush();
     m_optionsManager.reset();
 }
 
@@ -487,6 +472,16 @@ void App::handlePowerMessageEvent(const SDL_Event& event)
 
 void App::handleEvent(const SDL_Event& event)
 {
+#ifdef PLATFORM_MY355
+    // my355 emits physical buttons as both keyboard scancodes and controller events.
+    // Ignore keyboard-side button scancodes here to prevent double-processing in UI/app layers.
+    if ((event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) &&
+        isMy355ButtonScancode(event.key.keysym.scancode))
+    {
+        return;
+    }
+#endif
+
     // Let GUI handle the event first
     bool guiHandled = false;
     if (m_guiManager)
@@ -1070,11 +1065,10 @@ void App::updateInputState(const SDL_Event& event)
             break;
         }
 
-        const Sint16 AXIS_DEAD_ZONE = 8000;
-        const bool rightActive = m_leftStickX > AXIS_DEAD_ZONE;
-        const bool leftActive = m_leftStickX < -AXIS_DEAD_ZONE;
-        const bool upActive = m_leftStickY < -AXIS_DEAD_ZONE;
-        const bool downActive = m_leftStickY > AXIS_DEAD_ZONE;
+        const bool rightActive = m_leftStickX > PlatformConstants::AXIS_DEAD_ZONE;
+        const bool leftActive = m_leftStickX < -PlatformConstants::AXIS_DEAD_ZONE;
+        const bool upActive = m_leftStickY < -PlatformConstants::AXIS_DEAD_ZONE;
+        const bool downActive = m_leftStickY > PlatformConstants::AXIS_DEAD_ZONE;
 
         auto handlePress = [&](bool desired, bool& state, const std::function<void()>& nudgeFn)
         {
@@ -1089,7 +1083,8 @@ void App::updateInputState(const SDL_Event& event)
         auto handleRelease = [&](bool desired, bool& state, float& hold, float& cooldown, bool buttonDown)
         {
             // Don't let analog stick clear held state if a D-pad button is physically pressed
-            if (buttonDown) return;
+            if (buttonDown)
+                return;
             if (!desired && state)
             {
                 state = false;

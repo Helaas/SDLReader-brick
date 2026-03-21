@@ -12,6 +12,14 @@
 
 # Compiler
 CXX = clang++
+UNAME_M := $(shell uname -m)
+APPLE_CPU := $(shell sysctl -n machdep.cpu.brand_string 2>/dev/null | awk '{print tolower($$1 "-" $$2)}')
+
+ifeq ($(UNAME_M),arm64)
+  CPU_TUNE_FLAGS := $(if $(APPLE_CPU),-mcpu=$(APPLE_CPU),-mcpu=native)
+else
+  CPU_TUNE_FLAGS := -march=native
+endif
 
 # Source directories
 SRC_DIR = ../../src
@@ -48,7 +56,8 @@ SANITIZE ?=
 # -I$(SRC_DIR): Include path for project's own header files (e.g., app.h, document.h)
 # -I$(NUKLEAR_DIR): Include path for Nuklear headers
 # -I$(NUKLEAR_DIR)/demo/sdl_renderer: Include path for Nuklear SDL renderer backend
-CXXFLAGS = -std=c++17 -Wall -Wextra -g -Imupdf/include -I$(SRC_DIR) -I../../include -I$(NUKLEAR_DIR) -I$(NUKLEAR_DIR)/demo/sdl_renderer
+# -$(CPU_TUNE_FLAGS): Request host-native CPU tuning on macOS
+CXXFLAGS = -std=c++17 -Wall -Wextra -g $(CPU_TUNE_FLAGS) -Imupdf/include -I$(SRC_DIR) -I../../include -I$(NUKLEAR_DIR) -I$(NUKLEAR_DIR)/demo/sdl_renderer
 LDFLAGS  =
 
 ifeq ($(SANITIZE),address)
@@ -118,15 +127,6 @@ setup-mupdf:
 	@if [ ! -d "mupdf" ]; then \
 		echo "Cloning MuPDF repository with submodules..."; \
 		git clone --depth 1 --branch 1.26.7 --recurse-submodules https://github.com/ArtifexSoftware/mupdf.git; \
-		echo "Setting up MuPDF for CBR and WebP support..."; \
-		echo "USE_LIBARCHIVE=yes" > mupdf/user.make; \
-		echo "HAVE_WEBP=yes" >> mupdf/user.make; \
-		echo "XCFLAGS += -DHAVE_LIBARCHIVE -I/opt/homebrew/opt/libarchive/include" >> mupdf/user.make; \
-		echo "XCFLAGS += -DHAVE_WEBP -I/opt/homebrew/opt/webp/include" >> mupdf/user.make; \
-		echo "SYS_LIBARCHIVE_CFLAGS := -I/opt/homebrew/opt/libarchive/include" >> mupdf/user.make; \
-		echo "SYS_LIBARCHIVE_LIBS := -L/opt/homebrew/opt/libarchive/lib -larchive" >> mupdf/user.make; \
-		echo "SYS_WEBP_CFLAGS := -I/opt/homebrew/opt/webp/include" >> mupdf/user.make; \
-		echo "SYS_WEBP_LIBS := -L/opt/homebrew/opt/webp/lib -lwebp -lwebpdemux" >> mupdf/user.make; \
 		echo "Downloading and applying WebP patch..."; \
 		if [ ! -f webp-upstream-697749.patch ]; then \
 			curl -o webp-upstream-697749.patch \
@@ -136,6 +136,17 @@ setup-mupdf:
 	else \
 		echo "MuPDF repository already exists"; \
 	fi
+	@echo "Setting up MuPDF for CBR, WebP, and host-native CPU tuning..."; \
+	echo "USE_LIBARCHIVE=yes" > mupdf/user.make; \
+	echo "HAVE_WEBP=yes" >> mupdf/user.make; \
+	echo "XCFLAGS += $(CPU_TUNE_FLAGS) -DHAVE_LIBARCHIVE -I/opt/homebrew/opt/libarchive/include" >> mupdf/user.make; \
+	echo "XCFLAGS += -DHAVE_WEBP -I/opt/homebrew/opt/webp/include" >> mupdf/user.make; \
+	echo "XCXXFLAGS += $(CPU_TUNE_FLAGS) -DHAVE_LIBARCHIVE -I/opt/homebrew/opt/libarchive/include" >> mupdf/user.make; \
+	echo "XCXXFLAGS += -DHAVE_WEBP -I/opt/homebrew/opt/webp/include" >> mupdf/user.make; \
+	echo "SYS_LIBARCHIVE_CFLAGS := -I/opt/homebrew/opt/libarchive/include" >> mupdf/user.make; \
+	echo "SYS_LIBARCHIVE_LIBS := -L/opt/homebrew/opt/libarchive/lib -larchive" >> mupdf/user.make; \
+	echo "SYS_WEBP_CFLAGS := -I/opt/homebrew/opt/webp/include" >> mupdf/user.make; \
+	echo "SYS_WEBP_LIBS := -L/opt/homebrew/opt/webp/lib -lwebp -lwebpdemux" >> mupdf/user.make
 
 # Build MuPDF with libarchive and WebP support
 build-mupdf:

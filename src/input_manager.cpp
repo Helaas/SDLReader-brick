@@ -1,4 +1,8 @@
 #include "input_manager.h"
+#include "platform_constants.h"
+#ifdef PLATFORM_MY355
+#include "platform_my355.h"
+#endif
 #include <algorithm>
 #include <iostream>
 
@@ -27,10 +31,20 @@ InputActionData InputManager::processEvent(const SDL_Event& event)
         break;
 
     case SDL_KEYDOWN:
+#ifdef PLATFORM_MY355
+        // MY355 sends buttons as both keyboard scancodes and controller events.
+        // Filter keyboard events for button scancodes to prevent double-processing.
+        if (isMy355ButtonScancode(event.key.keysym.scancode))
+            break;
+#endif
         actionData = processKeyDown(event);
         break;
 
     case SDL_KEYUP:
+#ifdef PLATFORM_MY355
+        if (isMy355ButtonScancode(event.key.keysym.scancode))
+            break;
+#endif
         actionData = processKeyUp(event);
         break;
 
@@ -638,7 +652,6 @@ InputActionData InputManager::processControllerAxis(const SDL_Event& event)
         return actionData;
     }
 
-    const Sint16 AXIS_DEAD_ZONE = 8000;
     Uint32 now = SDL_GetTicks();
 
     switch (event.caxis.axis)
@@ -685,24 +698,24 @@ InputActionData InputManager::processControllerAxis(const SDL_Event& event)
 
     case SDL_CONTROLLER_AXIS_LEFTX:
         m_leftStickX = event.caxis.value;
-        updateDpadFromAnalog(m_leftStickX > AXIS_DEAD_ZONE, m_leftStickX < -AXIS_DEAD_ZONE,
-                             m_leftStickY < -AXIS_DEAD_ZONE, m_leftStickY > AXIS_DEAD_ZONE);
+        updateDpadFromAnalog(m_leftStickX > PlatformConstants::AXIS_DEAD_ZONE, m_leftStickX < -PlatformConstants::AXIS_DEAD_ZONE,
+                             m_leftStickY<-PlatformConstants::AXIS_DEAD_ZONE, m_leftStickY> PlatformConstants::AXIS_DEAD_ZONE);
         break;
     case SDL_CONTROLLER_AXIS_LEFTY:
         m_leftStickY = event.caxis.value;
-        updateDpadFromAnalog(m_leftStickX > AXIS_DEAD_ZONE, m_leftStickX < -AXIS_DEAD_ZONE,
-                             m_leftStickY < -AXIS_DEAD_ZONE, m_leftStickY > AXIS_DEAD_ZONE);
+        updateDpadFromAnalog(m_leftStickX > PlatformConstants::AXIS_DEAD_ZONE, m_leftStickX < -PlatformConstants::AXIS_DEAD_ZONE,
+                             m_leftStickY<-PlatformConstants::AXIS_DEAD_ZONE, m_leftStickY> PlatformConstants::AXIS_DEAD_ZONE);
         break;
 
     case SDL_CONTROLLER_AXIS_RIGHTX:
         if (!isInScrollTimeout())
         {
-            if (event.caxis.value < -AXIS_DEAD_ZONE)
+            if (event.caxis.value < -PlatformConstants::AXIS_DEAD_ZONE)
             {
                 actionData.action = InputAction::MoveRight;
                 actionData.intValue = 20;
             }
-            else if (event.caxis.value > AXIS_DEAD_ZONE)
+            else if (event.caxis.value > PlatformConstants::AXIS_DEAD_ZONE)
             {
                 actionData.action = InputAction::MoveLeft;
                 actionData.intValue = 20;
@@ -713,12 +726,12 @@ InputActionData InputManager::processControllerAxis(const SDL_Event& event)
     case SDL_CONTROLLER_AXIS_RIGHTY:
         if (!isInScrollTimeout())
         {
-            if (event.caxis.value < -AXIS_DEAD_ZONE)
+            if (event.caxis.value < -PlatformConstants::AXIS_DEAD_ZONE)
             {
                 actionData.action = InputAction::MoveUp;
                 actionData.intValue = 20;
             }
-            else if (event.caxis.value > AXIS_DEAD_ZONE)
+            else if (event.caxis.value > PlatformConstants::AXIS_DEAD_ZONE)
             {
                 actionData.action = InputAction::MoveDown;
                 actionData.intValue = 20;
@@ -759,7 +772,8 @@ void InputManager::updateDpadFromAnalog(bool rightActive, bool leftActive, bool 
         else if (!desired && state)
         {
             // Don't let analog stick clear held state if a D-pad button is physically pressed
-            if (buttonDown) return;
+            if (buttonDown)
+                return;
             state = false;
             if (hold > 0.0f)
             {

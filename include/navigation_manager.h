@@ -1,6 +1,7 @@
 #ifndef NAVIGATION_MANAGER_H
 #define NAVIGATION_MANAGER_H
 
+#include "platform_constants.h"
 #include <SDL.h>
 #include <algorithm>
 #include <functional>
@@ -28,12 +29,10 @@ struct NavigationState
 
     // Page change cooldown to prevent rapid page flipping
     Uint32 lastPageChangeTime = 0;
-    Uint32 lastRenderDuration = 300; // Default to 300ms if no render time measured yet
+    Uint32 lastRenderDuration = PlatformConstants::DEFAULT_RENDER_DURATION_MS;
 
     // Constants
-    static constexpr Uint32 PAGE_JUMP_TIMEOUT = 5000;            // 5 seconds
-    static constexpr Uint32 PAGE_CHANGE_COOLDOWN = 300;          // 300ms cooldown after page change
-    static constexpr Uint32 EXPENSIVE_RENDER_THRESHOLD_MS = 200; // Show immediate indicator if last render took > 200ms
+    static constexpr Uint32 PAGE_CHANGE_COOLDOWN = 300; // 300ms cooldown after page change
 };
 
 /**

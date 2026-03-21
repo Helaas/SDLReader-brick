@@ -1,6 +1,7 @@
 #ifndef RENDER_MANAGER_H
 #define RENDER_MANAGER_H
 
+#include "platform_constants.h"
 #include <SDL.h>
 #include <memory>
 #include <mutex>
@@ -23,7 +24,7 @@ class NavigationManager;
 struct RenderState
 {
     bool needsRedraw = true;         // Flag to indicate when screen needs to be redrawn
-    Uint32 lastRenderDuration = 300; // Last render time in milliseconds (default 300ms)
+    Uint32 lastRenderDuration = PlatformConstants::DEFAULT_RENDER_DURATION_MS;
 
     // UI display timers
     Uint32 scaleDisplayTime = 0;

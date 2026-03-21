@@ -103,7 +103,9 @@ LogicalButton ButtonMapper::mapJoystickButton(int joystickButton) const
 
 const char* ButtonMapper::getPlatformName() const
 {
-#ifdef TRIMUI_PLATFORM
+#ifdef PLATFORM_MY355
+    return "MY355";
+#elif defined(TRIMUI_PLATFORM)
     return "TG5040";
 #else
     return "Desktop";

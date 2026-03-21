@@ -23,7 +23,6 @@ fi
 # - system dynamic loader
 # - system SDL2 (use device's SDL2 which has the right KMSDRM/fbcon backends)
 # - ICU libraries (not needed with our minimal libarchive build)
-# If the device also provides SDL2_ttf, you can optionally add ^libSDL2_ttf-2\.0\.so\. here too.
 EXCL_REGEX='(^ld-linux-|^libc\.so\.|^libpthread\.so\.|^libm\.so\.|^librt\.so\.|^libdl\.so\.|^libnsl\.so\.|^libresolv\.so\.|^libSDL2-2\.0\.so\.|^libicu)'
 
 SYSROOT_SRC=()
@@ -116,7 +115,7 @@ for real in "$LIBDIR"/*.so*; do
   fi
 done
 
-# Optional: prune heavy libs you likely don't need on the Brick (set PRUNE_LIBS=1)
+# Optional: prune heavy libs you likely don't need (set PRUNE_LIBS=1)
 if [[ "${PRUNE_LIBS:-0}" -eq 1 ]]; then
   rm -f "$LIBDIR"/libpulse*.so* "$LIBDIR"/libsystemd*.so* "$LIBDIR"/libdbus-1*.so* || true
   rm -f "$LIBDIR"/libX*.so* "$LIBDIR"/libSM*.so* "$LIBDIR"/libICE*.so* "$LIBDIR"/libwayland-*.so* || true

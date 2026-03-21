@@ -201,10 +201,8 @@ public:
 
     // Timing constants
 #ifdef TRIMUI_PLATFORM
-    static constexpr int ZOOM_THROTTLE_MS = 30;
     static constexpr int ZOOM_DEBOUNCE_MS = 250;
 #else
-    static constexpr int ZOOM_THROTTLE_MS = 25;
     static constexpr int ZOOM_DEBOUNCE_MS = 75;
 #endif
     static constexpr int ZOOM_PROCESSING_MIN_DISPLAY_MS = 300;

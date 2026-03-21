@@ -1,16 +1,20 @@
-# TG5040-specific Makefile
-# This Makefile contains the build configuration specific to the TG5040 platform
+# MY355-specific Makefile
+# This Makefile contains the build configuration specific to the MY355 platform (Miyoo Flip)
+# The MY355 uses a different power handler with dynamic device discovery and direct sysfs suspend.
 
-# Determine base path - if we're in ports/tg5040, use relative paths, otherwise use full paths
+# Determine base path - if we're in ports/my355, use relative paths, otherwise use full paths
 ifneq ($(wildcard ../../src),)
-  # We're being called from ports/tg5040 directory
+  # We're being called from ports/my355 directory
   BASE_PATH := .
   WORKSPACE_PATH := ../..
 else
   # We're being called from workspace root
-  BASE_PATH := ports/tg5040
+  BASE_PATH := ports/my355
   WORKSPACE_PATH := .
 endif
+
+# MY355-specific include/source paths
+MY355_PORT_PATH := $(WORKSPACE_PATH)/ports/my355
 
 # Toolchain configuration
 CROSS_COMPILE ?=
@@ -25,21 +29,22 @@ SDL2_INCLUDE := $(PREFIX)/include/SDL2
 
 # Compiler and flags
 CXX      ?= $(if $(CROSS_COMPILE),$(CROSS_COMPILE)g++,g++)
-TG_INCLUDE_DIR := $(BASE_PATH)/include
-CXXFLAGS = -std=c++17 -Wall -Wextra -Os -DNDEBUG -DTRIMUI_PLATFORM \
+MY355_INCLUDE_DIR := $(MY355_PORT_PATH)/include
+CXXFLAGS = -std=c++17 -Wall -Wextra -Os -DNDEBUG -DTRIMUI_PLATFORM -DPLATFORM_MY355 \
+            -mcpu=cortex-a55 -mtune=cortex-a55 \
             -ffunction-sections -fdata-sections \
-            -I$(WORKSPACE_PATH)/src -I$(WORKSPACE_PATH)/include -I$(TG_INCLUDE_DIR) -I$(BASE_PATH)/mupdf/include \
-            -I$(BASE_PATH)/nuklear-tg5040 -I$(BASE_PATH)/nuklear-tg5040/demo/sdl_renderer \
+            -I$(WORKSPACE_PATH)/src -I$(WORKSPACE_PATH)/include -I$(MY355_INCLUDE_DIR) -I$(BASE_PATH)/mupdf/include \
+            -I$(BASE_PATH)/nuklear-my355 -I$(BASE_PATH)/nuklear-my355/demo/sdl_renderer \
             -I/usr/local/libarchive-minimal/include -I$(WEBP_PREFIX)/include -D_REENTRANT -I$(SDL2_INCLUDE)
 
 # Source directories
 SRC_DIR = $(WORKSPACE_PATH)/src
 CLI_DIR = $(WORKSPACE_PATH)/cli
-TG_SRC_DIR = $(BASE_PATH)/src
+MY355_SRC_DIR = $(MY355_PORT_PATH)/src
 
 # Output locations
 BIN_DIR  := $(WORKSPACE_PATH)/bin
-BUILD_DIR  := $(WORKSPACE_PATH)/build/tg5040
+BUILD_DIR  := $(WORKSPACE_PATH)/build/my355
 TARGET   := $(BUILD_DIR)/sdl_reader_cli
 
 # Source files: Combine all .cpp files from src/ and cli/, excluding Linux-specific files
@@ -50,7 +55,7 @@ SRCS = $(SRC_FILES) $(wildcard $(CLI_DIR)/*.cpp)
 # Transforms src/file.cpp into build/file.o and cli/file.cpp into build/file.o
 OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS))) \
        $(patsubst $(CLI_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(CLI_DIR)/%,$(SRCS))) \
-       $(BUILD_DIR)/tg5040_power_handler.o
+       $(BUILD_DIR)/my355_power_handler.o
 
 # Path to minimal libarchive static library
 LIBARCHIVE_MINIMAL := /usr/local/libarchive-minimal/lib/libarchive.a
@@ -90,19 +95,19 @@ check-libarchive:
 		echo "Run 'make build-libarchive' first or 'make all' to build everything"; \
 		exit 1; \
 	else \
-		echo "✓ Minimal libarchive found at $(LIBARCHIVE_MINIMAL)"; \
+		echo "Minimal libarchive found at $(LIBARCHIVE_MINIMAL)"; \
 	fi
 
 # Setup Nuklear GUI library (header-only) if it doesn't exist
 setup-nuklear:
 	@cd $(BASE_PATH) && \
-	if [ ! -d "nuklear-tg5040" ]; then \
-		echo "Setting up Nuklear GUI library (v4.12.8) for TG5040..."; \
-		rm -rf nuklear-tg5040; \
-		git clone --depth 1 --branch 4.12.8 https://github.com/Immediate-Mode-UI/Nuklear.git nuklear-tg5040; \
-		echo "Nuklear repository cloned for TG5040"; \
+	if [ ! -d "nuklear-my355" ]; then \
+		echo "Setting up Nuklear GUI library (v4.12.8) for MY355..."; \
+		rm -rf nuklear-my355; \
+		git clone --depth 1 --branch 4.12.8 https://github.com/Immediate-Mode-UI/Nuklear.git nuklear-my355; \
+		echo "Nuklear repository cloned for MY355"; \
 	else \
-		echo "Nuklear repository already present for TG5040"; \
+		echo "Nuklear repository already present for MY355"; \
 	fi
 
 # Setup MuPDF repository if it doesn't exist
@@ -139,11 +144,6 @@ setup-mupdf:
 	cd $(BASE_PATH)/mupdf && sed -i 's/-std=c++20/-std=c++17/g' Makelists
 
 # Build minimal libarchive without ICU/XML dependencies
-# This creates a custom static libarchive build that excludes:
-# - ICU libraries (libicudata, libicui18n, libicuuc)
-# - XML2 library support
-# - Internationalization features
-# This results in a much smaller bundle while maintaining CBR/CBZ functionality
 build-libarchive: $(LIBARCHIVE_MINIMAL)
 
 $(LIBARCHIVE_MINIMAL):
@@ -230,9 +230,9 @@ build-mupdf: build-libarchive build-webp
 		USE_ZXINGCPP=no \
 		USE_SYSTEM_LCMS2=no
 
-# Export complete TG5040 bundle for distribution
+# Export complete MY355 bundle for distribution
 export-bundle: $(TARGET)
-	@echo "Exporting TG5040 bundle..."
+	@echo "Exporting MY355 bundle..."
 	@cd $(BASE_PATH) && ./export_bundle.sh
 
 # Ensure bin/ exists before linking
@@ -250,7 +250,6 @@ $(TARGET): $(OBJS) $(LIBARCHIVE_MINIMAL) | $(BIN_DIR)
 	@echo "Binary built successfully: $@"
 
 # Compile source files into object files in the build directory
-# This rule handles both src/ and cli/ cpp files
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
@@ -259,8 +258,8 @@ $(BUILD_DIR)/%.o: $(CLI_DIR)/%.cpp | $(BUILD_DIR)
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# Compile TG5040-specific sources
-$(BUILD_DIR)/tg5040_power_handler.o: $(TG_SRC_DIR)/power_handler.cpp | $(BUILD_DIR)
+# Compile MY355 power handler (MY355-specific, NOT shared from TG5040)
+$(BUILD_DIR)/my355_power_handler.o: $(MY355_SRC_DIR)/power_handler.cpp | $(BUILD_DIR)
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
@@ -299,7 +298,7 @@ clean-webp:
 # Clean Nuklear checkout
 clean-nuklear:
 	@echo "Removing Nuklear checkout..."
-	rm -rf $(BASE_PATH)/nuklear-tg5040
+	rm -rf $(BASE_PATH)/nuklear-my355
 
 # Deep clean - removes everything including downloaded dependencies
 clean-all: clean clean-mupdf clean-libarchive clean-webp clean-nuklear

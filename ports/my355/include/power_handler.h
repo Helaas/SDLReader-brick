@@ -3,7 +3,6 @@
 #include <atomic>
 #include <chrono>
 #include <functional>
-#include <string>
 #include <thread>
 
 struct input_event;
@@ -35,7 +34,8 @@ public:
 
 private:
     void threadMain();
-    void handlePowerButtonEvent(const input_event& ev, std::chrono::steady_clock::time_point& press_time);
+    void handlePowerButtonEvent(const input_event& ev);
+    void checkLongPressWhileHeld();
     void attemptSleep();
     void enterFakeSleep();
     void exitFakeSleep();
@@ -45,14 +45,10 @@ private:
     bool reopenDevice();
     void flushEvents();
 
+    // Find the input device with KEY_POWER capability using EVIOCGBIT ioctl
+    int findPowerDevice();
+
     static constexpr int POWER_KEY_CODE = 116;
-#ifdef PLATFORM_POWER_DEVICE_PATH
-    static constexpr const char* DEVICE_PATH = PLATFORM_POWER_DEVICE_PATH;
-#else
-    static constexpr const char* DEVICE_PATH = "/dev/input/event1";
-#endif
-    static constexpr const char* PLATFORM_SUSPEND_PATH_PRIMARY = "/mnt/SDCARD/SYSTEM/bin/suspend";
-    static constexpr const char* PLATFORM_SUSPEND_PATH_SECONDARY = "/mnt/SDCARD/System/bin/suspend";
     static constexpr auto SHORT_PRESS_MAX = std::chrono::milliseconds(2000);
     static constexpr auto POST_RESUME_IGNORE_DURATION = std::chrono::milliseconds(500);
 
@@ -60,6 +56,9 @@ private:
     std::atomic<bool> m_running{false};
     std::atomic<bool> m_in_fake_sleep{false};
     int m_device_fd{-1};
+    bool m_powerButtonDown{false};
+    bool m_longPressHandled{false};
+    std::chrono::steady_clock::time_point m_powerPressTime;
     std::chrono::steady_clock::time_point m_fake_sleep_start_time;
     std::chrono::steady_clock::time_point m_resume_ignore_until;
     ErrorCallback m_errorCallback;

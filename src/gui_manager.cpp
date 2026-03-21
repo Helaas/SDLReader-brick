@@ -22,7 +22,16 @@
 // Include the SDL renderer implementation
 #include "demo/sdl_renderer/nuklear_sdl_renderer.h"
 
-#ifdef TRIMUI_PLATFORM
+#if defined(PLATFORM_MY355)
+// my355 reports face buttons in swapped order (same behavior as other NextUI devices).
+// Keep GUI semantics aligned with physical labels:
+// - Physical A -> SDL_CONTROLLER_BUTTON_B
+// - Physical B -> SDL_CONTROLLER_BUTTON_A
+// - Physical Y -> SDL_CONTROLLER_BUTTON_X
+static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_B;
+static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_A;
+static constexpr SDL_GameControllerButton kApplySettingsButton = SDL_CONTROLLER_BUTTON_X;
+#elif defined(TRIMUI_PLATFORM)
 static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_B;
 static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_A;
 static constexpr SDL_GameControllerButton kApplySettingsButton = SDL_CONTROLLER_BUTTON_X; // Physical Y
@@ -404,7 +413,7 @@ void GuiManager::render()
     {
         Uint32 currentTime = SDL_GetTicks();
         const Uint32 elapsed = (m_lastNavigationTime <= currentTime) ? (currentTime - m_lastNavigationTime) : 0;
-        const Uint32 targetDelay = m_waitingForInitialNavigationRepeat ? NAV_INITIAL_DELAY_MS : NAV_REPEAT_DELAY_MS;
+        const Uint32 targetDelay = m_waitingForInitialNavigationRepeat ? PlatformConstants::INPUT_INITIAL_DELAY_MS : PlatformConstants::INPUT_REPEAT_DELAY_MS;
 
         if (m_lastNavigationTime == 0 || elapsed >= targetDelay)
         {
@@ -610,14 +619,20 @@ void GuiManager::renderFontMenu()
     int windowWidth, windowHeight;
     SDL_GetWindowSize(m_window, &windowWidth, &windowHeight);
 
-    // Center the window and make it appropriately sized
-    float centerX = windowWidth * 0.5f;
-    float centerY = windowHeight * 0.5f;
-    float windowW = 680.0f;
-    float windowH = 750.0f;
+    // Center the settings window and clamp it to the current viewport.
+    constexpr float kPreferredWindowW = 680.0f;
+    constexpr float kPreferredWindowH = 750.0f;
+    constexpr float kWindowMargin = 12.0f;
+
+    const float availableW = std::max(1.0f, static_cast<float>(windowWidth) - (2.0f * kWindowMargin));
+    const float availableH = std::max(1.0f, static_cast<float>(windowHeight) - (2.0f * kWindowMargin));
+    const float windowW = std::min(kPreferredWindowW, availableW);
+    const float windowH = std::min(kPreferredWindowH, availableH);
+    const float windowX = std::max(0.0f, (static_cast<float>(windowWidth) - windowW) * 0.5f);
+    const float windowY = std::max(0.0f, (static_cast<float>(windowHeight) - windowH) * 0.5f);
 
     // Create settings window with scrollbar support
-    if (nk_begin(m_ctx, "Settings", nk_rect(centerX - windowW / 2, centerY - windowH / 2, windowW, windowH),
+    if (nk_begin(m_ctx, "Settings", nk_rect(windowX, windowY, windowW, windowH),
                  NK_WINDOW_BORDER | NK_WINDOW_TITLE))
     {
         // Set initial focus to enable keyboard navigation
@@ -635,7 +650,11 @@ void GuiManager::renderFontMenu()
 
         // Controller hints at the top of the window for quick reference
         nk_layout_row_dynamic(m_ctx, 20, 1);
+#ifdef PLATFORM_MY355
+        nk_label_colored(m_ctx, "A: Select | B: Close | Y: Apply | Menu: Cancel", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+#else
         nk_label_colored(m_ctx, "D-Pad: Navigate | A: Select | B: Close | Y: Apply | Menu: Cancel", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+#endif
         nk_layout_row_dynamic(m_ctx, 10, 1);
 
         // Store original styles for highlighting focused widgets
@@ -1135,7 +1154,7 @@ void GuiManager::renderFontMenu()
         rememberWidgetBounds(WIDGET_EDGE_PROGRESS_INFO_BUTTON);
         if (m_mainScreenFocusIndex == WIDGET_EDGE_PROGRESS_INFO_BUTTON || edgeInfoHovered)
         {
-            showInfoTooltip(WIDGET_EDGE_PROGRESS_INFO_BUTTON, "When enabled, panning at page edges changes pages instantly.\nWhen disabled, hold at the edge for 300ms.");
+            showInfoTooltip(WIDGET_EDGE_PROGRESS_INFO_BUTTON, "When enabled, panning at page edges\nchanges pages instantly.\nWhen disabled, hold at the edge for 300ms.");
         }
 
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
@@ -2913,11 +2932,10 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
             m_leftStickY = event.caxis.value;
         }
 
-        const Sint16 AXIS_DEAD_ZONE = 8000;
-        bool upActive = m_leftStickY < -AXIS_DEAD_ZONE;
-        bool downActive = m_leftStickY > AXIS_DEAD_ZONE;
-        bool leftActive = m_leftStickX < -AXIS_DEAD_ZONE;
-        bool rightActive = m_leftStickX > AXIS_DEAD_ZONE;
+        bool upActive = m_leftStickY < -PlatformConstants::AXIS_DEAD_ZONE;
+        bool downActive = m_leftStickY > PlatformConstants::AXIS_DEAD_ZONE;
+        bool leftActive = m_leftStickX < -PlatformConstants::AXIS_DEAD_ZONE;
+        bool rightActive = m_leftStickX > PlatformConstants::AXIS_DEAD_ZONE;
 
         bool consumed = false;
 
