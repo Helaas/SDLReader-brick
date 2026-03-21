@@ -121,7 +121,7 @@ fi
 
 rm -f "$OUTPUT_FILE"
 cd "$STAGING_DIR"
-zip -9 -r -y "$OUTPUT_FILE" . > /dev/null
+zip -9 -r "$OUTPUT_FILE" . > /dev/null
 
 echo ""
 echo "==================================================================="
