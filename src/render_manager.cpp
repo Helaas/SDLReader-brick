@@ -826,10 +826,11 @@ void RenderManager::showErrorMessage(const std::string& message)
 void RenderManager::renderEdgeTurnProgressIndicator(App* app, NavigationManager* navigationManager,
                                                     ViewportManager* viewportManager, int windowWidth, int windowHeight)
 {
-    // Check if edge progress bar is disabled - if so, don't render it
-    if (app->isEdgeProgressBarDisabled())
+    (void) viewportManager;
+
+    if (!app->shouldShowEdgeTurnProgressBar())
     {
-        return; // Progress bar disabled, don't render
+        return;
     }
 
     // Get edge turn state from app
@@ -848,13 +849,6 @@ void RenderManager::renderEdgeTurnProgressIndicator(App* app, NavigationManager*
     bool dpadHeld = dpadLeftHeld || dpadRightHeld || dpadUpHeld || dpadDownHeld;
     float maxEdgeHold = std::max({edgeTurnHoldRight, edgeTurnHoldLeft, edgeTurnHoldUp, edgeTurnHoldDown});
 
-    // Get scroll limits - only show progress bar when content is scrollable
-    // (when page fits on screen, page changes are instant so no bar is needed)
-    int pageWidth = viewportManager->getPageWidth();
-    int pageHeight = viewportManager->getPageHeight();
-    int maxScrollX = std::max(0, (pageWidth - windowWidth) / 2);
-    int maxScrollY = std::max(0, (pageHeight - windowHeight) / 2);
-
     // Check if there are valid pages to navigate to in each direction
     int currentPage = navigationManager->getCurrentPage();
     int pageCount = navigationManager->getPageCount();
@@ -863,22 +857,20 @@ void RenderManager::renderEdgeTurnProgressIndicator(App* app, NavigationManager*
     bool canGoUp = currentPage > 0;
     bool canGoDown = currentPage < pageCount - 1;
 
-    // Only show progress bar when content doesn't fit in the movement direction
-    // AND there's a valid page to navigate to
     bool validDirection = false;
-    if (dpadRightHeld && edgeTurnHoldRight > 0.0f && canGoRight && maxScrollX > 0)
+    if (dpadRightHeld && edgeTurnHoldRight > 0.0f && canGoRight)
     {
         validDirection = true;
     }
-    if (dpadLeftHeld && edgeTurnHoldLeft > 0.0f && canGoLeft && maxScrollX > 0)
+    if (dpadLeftHeld && edgeTurnHoldLeft > 0.0f && canGoLeft)
     {
         validDirection = true;
     }
-    if (dpadDownHeld && edgeTurnHoldDown > 0.0f && canGoDown && maxScrollY > 0)
+    if (dpadDownHeld && edgeTurnHoldDown > 0.0f && canGoDown)
     {
         validDirection = true;
     }
-    if (dpadUpHeld && edgeTurnHoldUp > 0.0f && canGoUp && maxScrollY > 0)
+    if (dpadUpHeld && edgeTurnHoldUp > 0.0f && canGoUp)
     {
         validDirection = true;
     }

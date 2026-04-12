@@ -79,6 +79,7 @@ public:
     {
         m_buttonMapper = mapper;
     }
+    void setShowFileBrowserImageSettingVisible(bool visible);
 
     void showNumberPad();
     void hideNumberPad();
@@ -86,6 +87,7 @@ public:
 private:
     bool m_initialized = false;
     bool m_showFontMenu = false;
+    bool m_showFileBrowserImageSettingVisible = true;
     SDL_Window* m_window = nullptr;
     SDL_Renderer* m_renderer = nullptr;
     nk_context* m_ctx = nullptr;
@@ -122,8 +124,12 @@ private:
         WIDGET_READING_STYLE_DROPDOWN,
         WIDGET_ZOOM_STEP_INPUT,
         WIDGET_ZOOM_STEP_SLIDER,
-        WIDGET_EDGE_PROGRESS_CHECKBOX,
-        WIDGET_EDGE_PROGRESS_INFO_BUTTON,
+        WIDGET_FILE_BROWSER_IMAGES_CHECKBOX,
+        WIDGET_FILE_BROWSER_IMAGES_INFO_BUTTON,
+        WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER,
+        WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON,
+        WIDGET_DISABLE_AUTO_EDGE_TURNS_CHECKBOX,
+        WIDGET_DISABLE_AUTO_EDGE_TURNS_INFO_BUTTON,
         WIDGET_MINIMAP_CHECKBOX,
         WIDGET_MINIMAP_INFO_BUTTON,
         WIDGET_PAGE_INDICATOR_CHECKBOX,
@@ -197,6 +203,7 @@ private:
     std::array<WidgetBounds, WIDGET_COUNT> m_widgetBounds{};
     bool m_focusScrollPending = false;
     bool m_scrollToTopPending = false;
+    int m_activeSliderWidget = -1;
     std::vector<PendingTooltip> m_pendingTooltips;
     float m_windowClipY = 0.0f;
     float m_windowClipHeight = 0.0f;
@@ -219,7 +226,12 @@ private:
     void showInfoTooltip(MainScreenWidget widget, const char* text);
     bool moveFocusInGroup(const MainScreenWidget* group, size_t count, int direction);
     bool handleHorizontalNavigation(int direction);
+    void clearSliderDpadAdjustMode();
+    bool isSliderWidget(MainScreenWidget widget) const;
+    bool isSliderDpadAdjustModeActive() const;
     bool isInfoWidget(MainScreenWidget widget) const;
+    bool isWidgetVisible(MainScreenWidget widget) const;
+    int nextVisibleWidgetIndex(int startIndex, int direction) const;
     bool stepFocusVertical(int direction);
     void renderPendingTooltips();
 };

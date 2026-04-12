@@ -421,6 +421,7 @@ void GuiManager::render()
             {
                 if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
                 {
+                    clearSliderDpadAdjustMode();
                     m_mainScreenFocusIndex = WIDGET_RESET_BUTTON;
                 }
                 else
@@ -438,6 +439,7 @@ void GuiManager::render()
             {
                 if (m_mainScreenFocusIndex == WIDGET_RESET_BUTTON)
                 {
+                    clearSliderDpadAdjustMode();
                     m_mainScreenFocusIndex = WIDGET_FONT_DROPDOWN;
                     scrollSettingsToTop();
                 }
@@ -498,10 +500,23 @@ void GuiManager::toggleFontMenu()
     m_styleDropdownOpen = false;
     m_styleDropdownSelectRequested = false;
     m_styleDropdownCancelRequested = false;
+    clearSliderDpadAdjustMode();
     m_mainScreenFocusIndex = WIDGET_FONT_DROPDOWN;
     m_scrollToTopPending = true;
     requestFocusScroll();
     std::cout << "Font menu opened" << std::endl;
+}
+
+void GuiManager::setShowFileBrowserImageSettingVisible(bool visible)
+{
+    m_showFileBrowserImageSettingVisible = visible;
+    if (!visible &&
+        (m_mainScreenFocusIndex == WIDGET_FILE_BROWSER_IMAGES_CHECKBOX ||
+         m_mainScreenFocusIndex == WIDGET_FILE_BROWSER_IMAGES_INFO_BUTTON))
+    {
+        clearSliderDpadAdjustMode();
+        m_mainScreenFocusIndex = WIDGET_FONT_DROPDOWN;
+    }
 }
 
 void GuiManager::setCurrentFontConfig(const FontConfig& config)
@@ -1072,6 +1087,81 @@ void GuiManager::renderFontMenu()
 
         nk_layout_row_dynamic(m_ctx, 15, 1); // Spacing
 
+        // Shared toggle styling for settings rows
+        struct nk_style_toggle originalToggleStyle = m_ctx->style.checkbox;
+        const struct nk_color focusBorderColor = nk_rgb(0, 190, 255);
+        const struct nk_color focusCursorColor = nk_rgb(0, 180, 255);
+        const struct nk_color focusBackground = nk_rgba(70, 75, 85, 255);
+
+        auto configureInfoGlyphStyle = [&](struct nk_style_button& style, bool focused)
+        {
+            style.normal = nk_style_item_color(nk_rgba(0, 0, 0, 0));
+            style.hover = style.normal;
+            style.active = style.normal;
+            style.border = 0.0f;
+            style.rounding = 0.0f;
+            style.padding = nk_vec2(0.0f, 0.0f);
+            style.text_normal = nk_rgba(180, 200, 255, 255);
+            style.text_hover = nk_rgba(210, 225, 255, 255);
+            style.text_active = nk_rgba(235, 240, 255, 255);
+            if (focused)
+            {
+                style.text_normal = nk_rgb(0, 220, 255);
+                style.text_hover = nk_rgb(0, 235, 255);
+                style.text_active = nk_rgb(0, 250, 255);
+            }
+        };
+
+        if (m_showFileBrowserImageSettingVisible)
+        {
+            // === FILE BROWSER SECTION ===
+            nk_layout_row_dynamic(m_ctx, 25, 1);
+            nk_label(m_ctx, "File Browser", NK_TEXT_LEFT);
+
+            nk_layout_row_dynamic(m_ctx, 1, 1);
+            bounds = nk_widget_bounds(m_ctx);
+            canvas = nk_window_get_canvas(m_ctx);
+            nk_stroke_line(canvas, bounds.x, bounds.y, bounds.x + bounds.w, bounds.y, 1.0f, nk_rgb(100, 100, 100));
+
+            nk_layout_row_template_begin(m_ctx, 25);
+            nk_layout_row_template_push_dynamic(m_ctx);
+            nk_layout_row_template_push_static(m_ctx, 32);
+            nk_layout_row_template_end(m_ctx);
+
+            if (m_mainScreenFocusIndex == WIDGET_FILE_BROWSER_IMAGES_CHECKBOX)
+            {
+                m_ctx->style.checkbox.normal = nk_style_item_color(focusBackground);
+                m_ctx->style.checkbox.hover = nk_style_item_color(focusBackground);
+                m_ctx->style.checkbox.cursor_normal = nk_style_item_color(focusCursorColor);
+                m_ctx->style.checkbox.cursor_hover = nk_style_item_color(focusCursorColor);
+                m_ctx->style.checkbox.border = 2.0f;
+                m_ctx->style.checkbox.border_color = focusBorderColor;
+            }
+
+            nk_bool showImages = m_tempConfig.showImagesInFileBrowser ? nk_true : nk_false;
+            if (nk_checkbox_label(m_ctx, "Show Images in File Browser", &showImages))
+            {
+                m_tempConfig.showImagesInFileBrowser = (showImages == nk_true);
+            }
+            rememberWidgetBounds(WIDGET_FILE_BROWSER_IMAGES_CHECKBOX);
+            m_ctx->style.checkbox = originalToggleStyle;
+
+            struct nk_style_button fileBrowserImageInfoStyle = m_ctx->style.button;
+            configureInfoGlyphStyle(fileBrowserImageInfoStyle, m_mainScreenFocusIndex == WIDGET_FILE_BROWSER_IMAGES_INFO_BUTTON);
+            nk_button_label_styled(m_ctx, &fileBrowserImageInfoStyle, "(?)");
+            bool fileBrowserImageInfoHovered = nk_widget_is_hovered(m_ctx);
+            rememberWidgetBounds(WIDGET_FILE_BROWSER_IMAGES_INFO_BUTTON);
+            if (m_mainScreenFocusIndex == WIDGET_FILE_BROWSER_IMAGES_INFO_BUTTON || fileBrowserImageInfoHovered)
+            {
+                showInfoTooltip(WIDGET_FILE_BROWSER_IMAGES_INFO_BUTTON,
+                                "Show standalone image files in browse mode.\n"
+                                "Supported formats: PNG, JPEG, GIF, BMP,\n"
+                                "TIFF, and WebP.");
+            }
+
+            nk_layout_row_dynamic(m_ctx, 15, 1); // Spacing
+        }
+
         // === PAGE NAVIGATION SECTION ===
         nk_layout_row_dynamic(m_ctx, 25, 1);
         nk_label(m_ctx, "Page Navigation", NK_TEXT_LEFT);
@@ -1097,18 +1187,54 @@ void GuiManager::renderFontMenu()
 
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
-        // Edge Progress Bar checkbox + info button
+        char edgeTurnDurationLabel[96];
+        std::snprintf(edgeTurnDurationLabel, sizeof(edgeTurnDurationLabel), "Edge Turn Hold Duration (%d ms)", m_tempConfig.edgeTurnHoldDurationMs);
+        nk_layout_row_dynamic(m_ctx, 20, 1);
+        nk_label(m_ctx, edgeTurnDurationLabel, NK_TEXT_LEFT);
+
         nk_layout_row_template_begin(m_ctx, 25);
         nk_layout_row_template_push_dynamic(m_ctx);
         nk_layout_row_template_push_static(m_ctx, 32);
         nk_layout_row_template_end(m_ctx);
 
-        // Highlight checkbox if focused
-        struct nk_style_toggle originalToggleStyle = m_ctx->style.checkbox;
-        const struct nk_color focusBorderColor = nk_rgb(0, 190, 255);
-        const struct nk_color focusCursorColor = nk_rgb(0, 180, 255);
-        const struct nk_color focusBackground = nk_rgba(70, 75, 85, 255);
-        if (m_mainScreenFocusIndex == WIDGET_EDGE_PROGRESS_CHECKBOX)
+        if (m_mainScreenFocusIndex == WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER)
+        {
+            m_ctx->style.slider.normal = nk_style_item_color(accentColor());
+            m_ctx->style.slider.hover = nk_style_item_color(accentHoverColor());
+            m_ctx->style.slider.active = nk_style_item_color(accentActiveColor());
+            m_ctx->style.slider.cursor_normal = nk_style_item_color(accentColor());
+            m_ctx->style.slider.cursor_hover = nk_style_item_color(accentHoverColor());
+            m_ctx->style.slider.cursor_active = nk_style_item_color(accentActiveColor());
+        }
+
+        float edgeTurnHoldDuration = static_cast<float>(m_tempConfig.edgeTurnHoldDurationMs);
+        if (nk_slider_float(m_ctx, 0.0f, &edgeTurnHoldDuration, 1000.0f, 50.0f))
+        {
+            m_tempConfig.edgeTurnHoldDurationMs = static_cast<int>(edgeTurnHoldDuration);
+        }
+        rememberWidgetBounds(WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER);
+        m_ctx->style.slider = originalSliderStyle;
+
+        struct nk_style_button edgeTurnDurationInfoStyle = m_ctx->style.button;
+        configureInfoGlyphStyle(edgeTurnDurationInfoStyle, m_mainScreenFocusIndex == WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON);
+        nk_button_label_styled(m_ctx, &edgeTurnDurationInfoStyle, "(?)");
+        bool edgeTurnDurationInfoHovered = nk_widget_is_hovered(m_ctx);
+        rememberWidgetBounds(WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON);
+        if (m_mainScreenFocusIndex == WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON || edgeTurnDurationInfoHovered)
+        {
+            showInfoTooltip(WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON,
+                            "How long to hold at a page edge before turning.\n"
+                            "Set to 0 ms for instant edge turns.");
+        }
+
+        nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
+
+        nk_layout_row_template_begin(m_ctx, 25);
+        nk_layout_row_template_push_dynamic(m_ctx);
+        nk_layout_row_template_push_static(m_ctx, 32);
+        nk_layout_row_template_end(m_ctx);
+
+        if (m_mainScreenFocusIndex == WIDGET_DISABLE_AUTO_EDGE_TURNS_CHECKBOX)
         {
             m_ctx->style.checkbox.normal = nk_style_item_color(focusBackground);
             m_ctx->style.checkbox.hover = nk_style_item_color(focusBackground);
@@ -1118,43 +1244,25 @@ void GuiManager::renderFontMenu()
             m_ctx->style.checkbox.border_color = focusBorderColor;
         }
 
-        nk_bool disableEdgeBar = m_tempConfig.disableEdgeProgressBar ? nk_true : nk_false;
-        if (nk_checkbox_label(m_ctx, "Disable Edge Progress Bar", &disableEdgeBar))
+        nk_bool disableAutomaticEdgeTurns = m_tempConfig.disableAutomaticEdgePageTurns ? nk_true : nk_false;
+        if (nk_checkbox_label(m_ctx, "Disable Automatic Edge Page Turns", &disableAutomaticEdgeTurns))
         {
-            m_tempConfig.disableEdgeProgressBar = (disableEdgeBar == nk_true);
+            m_tempConfig.disableAutomaticEdgePageTurns = (disableAutomaticEdgeTurns == nk_true);
         }
-        rememberWidgetBounds(WIDGET_EDGE_PROGRESS_CHECKBOX);
-
-        // Restore checkbox style
+        rememberWidgetBounds(WIDGET_DISABLE_AUTO_EDGE_TURNS_CHECKBOX);
         m_ctx->style.checkbox = originalToggleStyle;
 
-        // Info button for edge progress description - render as text glyph with no button chrome
-        auto configureInfoGlyphStyle = [&](struct nk_style_button& style, bool focused)
+        struct nk_style_button disableAutoEdgeTurnInfoStyle = m_ctx->style.button;
+        configureInfoGlyphStyle(disableAutoEdgeTurnInfoStyle, m_mainScreenFocusIndex == WIDGET_DISABLE_AUTO_EDGE_TURNS_INFO_BUTTON);
+        nk_button_label_styled(m_ctx, &disableAutoEdgeTurnInfoStyle, "(?)");
+        bool disableAutoEdgeTurnInfoHovered = nk_widget_is_hovered(m_ctx);
+        rememberWidgetBounds(WIDGET_DISABLE_AUTO_EDGE_TURNS_INFO_BUTTON);
+        if (m_mainScreenFocusIndex == WIDGET_DISABLE_AUTO_EDGE_TURNS_INFO_BUTTON || disableAutoEdgeTurnInfoHovered)
         {
-            style.normal = nk_style_item_color(nk_rgba(0, 0, 0, 0));
-            style.hover = style.normal;
-            style.active = style.normal;
-            style.border = 0.0f;
-            style.rounding = 0.0f;
-            style.padding = nk_vec2(0.0f, 0.0f);
-            style.text_normal = nk_rgba(180, 200, 255, 255);
-            style.text_hover = nk_rgba(210, 225, 255, 255);
-            style.text_active = nk_rgba(235, 240, 255, 255);
-            if (focused)
-            {
-                style.text_normal = nk_rgb(0, 220, 255);
-                style.text_hover = nk_rgb(0, 235, 255);
-                style.text_active = nk_rgb(0, 250, 255);
-            }
-        };
-        struct nk_style_button edgeInfoStyle = m_ctx->style.button;
-        configureInfoGlyphStyle(edgeInfoStyle, m_mainScreenFocusIndex == WIDGET_EDGE_PROGRESS_INFO_BUTTON);
-        nk_button_label_styled(m_ctx, &edgeInfoStyle, "(?)");
-        bool edgeInfoHovered = nk_widget_is_hovered(m_ctx);
-        rememberWidgetBounds(WIDGET_EDGE_PROGRESS_INFO_BUTTON);
-        if (m_mainScreenFocusIndex == WIDGET_EDGE_PROGRESS_INFO_BUTTON || edgeInfoHovered)
-        {
-            showInfoTooltip(WIDGET_EDGE_PROGRESS_INFO_BUTTON, "When enabled, panning at page edges\nchanges pages instantly.\nWhen disabled, hold at the edge for 300ms.");
+            showInfoTooltip(WIDGET_DISABLE_AUTO_EDGE_TURNS_INFO_BUTTON,
+                            "When enabled, pushing into a page edge never\n"
+                            "turns the page automatically. Use shoulder\n"
+                            "buttons or other page-turn controls instead.");
         }
 
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
@@ -1448,9 +1556,6 @@ void GuiManager::renderFontMenu()
             {
                 // Update current config
                 m_currentConfig = m_tempConfig;
-
-                // Save config to file
-                m_optionsManager.saveConfig(m_currentConfig);
 
                 // Call callback to apply changes
                 m_fontApplyCallback(m_currentConfig);
@@ -2339,6 +2444,7 @@ bool GuiManager::handleKeyboardNavigation(const SDL_Event& event)
             // Navigate up - wrap from top to bottom
             if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
             {
+                clearSliderDpadAdjustMode();
                 m_mainScreenFocusIndex = WIDGET_APPLY_BUTTON;
                 requestFocusScroll();
             }
@@ -2362,6 +2468,7 @@ bool GuiManager::handleKeyboardNavigation(const SDL_Event& event)
             // Navigate down - move to next widget (same as numpad logic)
             if (m_mainScreenFocusIndex == WIDGET_RESET_BUTTON)
             {
+                clearSliderDpadAdjustMode();
                 m_mainScreenFocusIndex = WIDGET_FONT_DROPDOWN;
                 requestFocusScroll();
                 scrollSettingsToTop();
@@ -2395,15 +2502,24 @@ bool GuiManager::handleKeyboardNavigation(const SDL_Event& event)
             if (event.key.keysym.mod & KMOD_SHIFT)
             {
                 // Shift+Tab for previous widget
-                m_mainScreenFocusIndex = (m_mainScreenFocusIndex - 1 + WIDGET_COUNT) % WIDGET_COUNT;
-                requestFocusScroll();
+                int nextIndex = nextVisibleWidgetIndex(m_mainScreenFocusIndex, -1);
+                if (nextIndex != m_mainScreenFocusIndex)
+                {
+                    clearSliderDpadAdjustMode();
+                    m_mainScreenFocusIndex = nextIndex;
+                }
             }
             else
             {
                 // Tab for next widget
-                m_mainScreenFocusIndex = (m_mainScreenFocusIndex + 1) % WIDGET_COUNT;
-                requestFocusScroll();
+                int nextIndex = nextVisibleWidgetIndex(m_mainScreenFocusIndex, 1);
+                if (nextIndex != m_mainScreenFocusIndex)
+                {
+                    clearSliderDpadAdjustMode();
+                    m_mainScreenFocusIndex = nextIndex;
+                }
             }
+            requestFocusScroll();
             return true;
         case SDLK_RETURN:
         case SDLK_SPACE:
@@ -2470,6 +2586,10 @@ void GuiManager::adjustFocusedWidget(int direction)
         snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_tempConfig.zoomStep);
         std::cout << "[DEBUG] Zoom step adjusted to: " << m_tempConfig.zoomStep << std::endl;
         break;
+    case WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER:
+        m_tempConfig.edgeTurnHoldDurationMs = std::clamp(m_tempConfig.edgeTurnHoldDurationMs + (direction * 50), 0, 1000);
+        std::cout << "[DEBUG] Edge turn hold duration adjusted to: " << m_tempConfig.edgeTurnHoldDurationMs << std::endl;
+        break;
     default:
         // Other widgets don't respond to left/right adjustment
         std::cout << "[DEBUG] Widget " << m_mainScreenFocusIndex << " is not adjustable" << std::endl;
@@ -2533,10 +2653,27 @@ void GuiManager::activateFocusedWidget()
             m_styleDropdownSelectRequested = true;
         }
         break;
-    case WIDGET_EDGE_PROGRESS_CHECKBOX:
-        // Toggle checkbox
-        m_tempConfig.disableEdgeProgressBar = !m_tempConfig.disableEdgeProgressBar;
-        std::cout << "[DEBUG] Toggle Edge Progress Bar: " << (m_tempConfig.disableEdgeProgressBar ? "disabled" : "enabled") << std::endl;
+    case WIDGET_FONT_SIZE_SLIDER:
+    case WIDGET_ZOOM_STEP_SLIDER:
+    case WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER:
+        if (isSliderDpadAdjustModeActive())
+        {
+            clearSliderDpadAdjustMode();
+            std::cout << "[DEBUG] Slider adjust mode disabled for widget " << m_mainScreenFocusIndex << std::endl;
+        }
+        else
+        {
+            m_activeSliderWidget = m_mainScreenFocusIndex;
+            std::cout << "[DEBUG] Slider adjust mode enabled for widget " << m_mainScreenFocusIndex << std::endl;
+        }
+        break;
+    case WIDGET_FILE_BROWSER_IMAGES_CHECKBOX:
+        m_tempConfig.showImagesInFileBrowser = !m_tempConfig.showImagesInFileBrowser;
+        std::cout << "[DEBUG] Toggle File Browser Images: " << (m_tempConfig.showImagesInFileBrowser ? "enabled" : "disabled") << std::endl;
+        break;
+    case WIDGET_DISABLE_AUTO_EDGE_TURNS_CHECKBOX:
+        m_tempConfig.disableAutomaticEdgePageTurns = !m_tempConfig.disableAutomaticEdgePageTurns;
+        std::cout << "[DEBUG] Toggle Automatic Edge Page Turns: " << (m_tempConfig.disableAutomaticEdgePageTurns ? "disabled" : "enabled") << std::endl;
         break;
     case WIDGET_MINIMAP_CHECKBOX:
         // Toggle checkbox
@@ -2578,7 +2715,6 @@ void GuiManager::activateFocusedWidget()
         if (hasValidFont && m_fontApplyCallback)
         {
             m_currentConfig = m_tempConfig;
-            m_optionsManager.saveConfig(m_currentConfig);
             m_fontApplyCallback(m_currentConfig);
         }
         break;
@@ -2623,6 +2759,11 @@ bool GuiManager::moveFocusInGroup(const MainScreenWidget* group, size_t count, i
             {
                 return false;
             }
+            if (!isWidgetVisible(group[nextIndex]))
+            {
+                return false;
+            }
+            clearSliderDpadAdjustMode();
             m_mainScreenFocusIndex = group[nextIndex];
             requestFocusScroll();
             return true;
@@ -2633,9 +2774,43 @@ bool GuiManager::moveFocusInGroup(const MainScreenWidget* group, size_t count, i
 
 bool GuiManager::isInfoWidget(MainScreenWidget widget) const
 {
-    return widget == WIDGET_EDGE_PROGRESS_INFO_BUTTON || widget == WIDGET_MINIMAP_INFO_BUTTON ||
+    return widget == WIDGET_FILE_BROWSER_IMAGES_INFO_BUTTON ||
+           widget == WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON ||
+           widget == WIDGET_DISABLE_AUTO_EDGE_TURNS_INFO_BUTTON ||
+           widget == WIDGET_MINIMAP_INFO_BUTTON ||
            widget == WIDGET_PAGE_INDICATOR_INFO_BUTTON || widget == WIDGET_ZOOM_OVERLAY_INFO_BUTTON ||
            widget == WIDGET_KEEP_PANNING_INFO_BUTTON;
+}
+
+bool GuiManager::isWidgetVisible(MainScreenWidget widget) const
+{
+    switch (widget)
+    {
+    case WIDGET_FILE_BROWSER_IMAGES_CHECKBOX:
+    case WIDGET_FILE_BROWSER_IMAGES_INFO_BUTTON:
+        return m_showFileBrowserImageSettingVisible;
+    default:
+        return true;
+    }
+}
+
+int GuiManager::nextVisibleWidgetIndex(int startIndex, int direction) const
+{
+    if (direction == 0)
+    {
+        return startIndex;
+    }
+
+    int index = startIndex;
+    for (int count = 0; count < WIDGET_COUNT; ++count)
+    {
+        index = (index + direction + WIDGET_COUNT) % WIDGET_COUNT;
+        if (isWidgetVisible(static_cast<MainScreenWidget>(index)))
+        {
+            return index;
+        }
+    }
+    return startIndex;
 }
 
 bool GuiManager::stepFocusVertical(int direction)
@@ -2655,8 +2830,9 @@ bool GuiManager::stepFocusVertical(int direction)
         }
 
         MainScreenWidget candidate = static_cast<MainScreenWidget>(nextIndex);
-        if (!isInfoWidget(candidate))
+        if (isWidgetVisible(candidate) && !isInfoWidget(candidate))
         {
+            clearSliderDpadAdjustMode();
             m_mainScreenFocusIndex = nextIndex;
             requestFocusScroll();
             return true;
@@ -2666,9 +2842,21 @@ bool GuiManager::stepFocusVertical(int direction)
 
 bool GuiManager::handleHorizontalNavigation(int direction)
 {
-    static constexpr MainScreenWidget kEdgeInfoGroup[] = {
-        WIDGET_EDGE_PROGRESS_CHECKBOX,
-        WIDGET_EDGE_PROGRESS_INFO_BUTTON};
+    if (isSliderDpadAdjustModeActive())
+    {
+        adjustFocusedWidget(direction);
+        return true;
+    }
+
+    static constexpr MainScreenWidget kFileBrowserImagesGroup[] = {
+        WIDGET_FILE_BROWSER_IMAGES_CHECKBOX,
+        WIDGET_FILE_BROWSER_IMAGES_INFO_BUTTON};
+    static constexpr MainScreenWidget kEdgeTurnDurationGroup[] = {
+        WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER,
+        WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON};
+    static constexpr MainScreenWidget kDisableAutoEdgeTurnGroup[] = {
+        WIDGET_DISABLE_AUTO_EDGE_TURNS_CHECKBOX,
+        WIDGET_DISABLE_AUTO_EDGE_TURNS_INFO_BUTTON};
     static constexpr MainScreenWidget kMinimapInfoGroup[] = {
         WIDGET_MINIMAP_CHECKBOX,
         WIDGET_MINIMAP_INFO_BUTTON};
@@ -2690,7 +2878,15 @@ bool GuiManager::handleHorizontalNavigation(int direction)
         WIDGET_CLOSE_BUTTON,
         WIDGET_RESET_BUTTON};
 
-    if (moveFocusInGroup(kEdgeInfoGroup, sizeof(kEdgeInfoGroup) / sizeof(kEdgeInfoGroup[0]), direction))
+    if (moveFocusInGroup(kFileBrowserImagesGroup, sizeof(kFileBrowserImagesGroup) / sizeof(kFileBrowserImagesGroup[0]), direction))
+    {
+        return true;
+    }
+    if (moveFocusInGroup(kEdgeTurnDurationGroup, sizeof(kEdgeTurnDurationGroup) / sizeof(kEdgeTurnDurationGroup[0]), direction))
+    {
+        return true;
+    }
+    if (moveFocusInGroup(kDisableAutoEdgeTurnGroup, sizeof(kDisableAutoEdgeTurnGroup) / sizeof(kDisableAutoEdgeTurnGroup[0]), direction))
     {
         return true;
     }
@@ -2719,6 +2915,30 @@ bool GuiManager::handleHorizontalNavigation(int direction)
         return true;
     }
     return false;
+}
+
+void GuiManager::clearSliderDpadAdjustMode()
+{
+    m_activeSliderWidget = -1;
+}
+
+bool GuiManager::isSliderWidget(MainScreenWidget widget) const
+{
+    return widget == WIDGET_FONT_SIZE_SLIDER ||
+           widget == WIDGET_ZOOM_STEP_SLIDER ||
+           widget == WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER;
+}
+
+bool GuiManager::isSliderDpadAdjustModeActive() const
+{
+    if (m_activeSliderWidget < 0 || m_activeSliderWidget >= WIDGET_COUNT)
+    {
+        return false;
+    }
+
+    MainScreenWidget activeWidget = static_cast<MainScreenWidget>(m_activeSliderWidget);
+    MainScreenWidget focusedWidget = static_cast<MainScreenWidget>(m_mainScreenFocusIndex);
+    return isSliderWidget(activeWidget) && activeWidget == focusedWidget;
 }
 
 bool GuiManager::handleControllerInput(const SDL_Event& event)
@@ -2768,6 +2988,7 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
         {
             if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
             {
+                clearSliderDpadAdjustMode();
                 m_mainScreenFocusIndex = WIDGET_APPLY_BUTTON;
                 requestFocusScroll();
             }
@@ -2832,6 +3053,7 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
         {
             if (m_mainScreenFocusIndex == WIDGET_RESET_BUTTON)
             {
+                clearSliderDpadAdjustMode();
                 m_mainScreenFocusIndex = WIDGET_FONT_DROPDOWN;
                 requestFocusScroll();
                 scrollSettingsToTop();
@@ -3081,9 +3303,6 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
                     // Update current config
                     m_currentConfig = m_tempConfig;
 
-                    // Save config to file
-                    m_optionsManager.saveConfig(m_currentConfig);
-
                     // Call callback to apply changes
                     m_fontApplyCallback(m_currentConfig);
                 }
@@ -3166,6 +3385,7 @@ void GuiManager::closeFontMenu()
     m_styleDropdownOpen = false;
     m_styleDropdownSelectRequested = false;
     m_styleDropdownCancelRequested = false;
+    clearSliderDpadAdjustMode();
     m_focusScrollPending = false;
 
     m_tempConfig = m_currentConfig;

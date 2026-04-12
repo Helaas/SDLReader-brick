@@ -5,6 +5,7 @@
 #include "navigation_manager.h"
 #include "options_manager.h"
 #include "renderer.h"
+#include "supported_file_types.h"
 #include "text_renderer.h"
 #ifdef TRIMUI_PLATFORM
 #include "power_handler.h"
@@ -23,8 +24,8 @@
 // --- App Class ---
 
 // Constructor now accepts pre-initialized SDL_Window* and SDL_Renderer*
-App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer)
-    : m_running(true)
+App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer, AppLaunchOptions launchOptions)
+    : m_running(true), m_launchOptions(launchOptions)
 {
 
     // Store window and renderer for RenderManager initialization
@@ -104,30 +105,15 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     // Apply saved settings to navigation manager
     m_navigationManager->setKeepPanningPosition(savedConfig.keepPanningPosition);
 
-    // Determine document type based on file extension
-    // MuPDF supports PDF, CBZ, ZIP (with images), XPS, EPUB, and other formats
-    std::string lowercaseFilename = filename;
-    std::transform(lowercaseFilename.begin(), lowercaseFilename.end(),
-                   lowercaseFilename.begin(), ::tolower);
+    const SupportedFileTypes::DocumentKind documentKind = SupportedFileTypes::classifyDocumentPath(filename);
 
-    bool isTxt = lowercaseFilename.size() >= 4 && lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".txt";
-    bool isMuPdfType = (lowercaseFilename.size() >= 4 &&
-                        (lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".pdf" ||
-                         lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".cbz" ||
-                         lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".cbr" ||
-                         lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".rar" ||
-                         lowercaseFilename.substr(lowercaseFilename.size() - 4) == ".zip")) ||
-                       (lowercaseFilename.size() >= 5 &&
-                        (lowercaseFilename.substr(lowercaseFilename.size() - 5) == ".epub" ||
-                         lowercaseFilename.substr(lowercaseFilename.size() - 5) == ".mobi"));
-
-    if (isTxt)
+    if (documentKind == SupportedFileTypes::DocumentKind::Text)
     {
         auto txtDoc = std::make_unique<TextDocument>();
         txtDoc->setFontConfig(savedConfig);
         m_document = std::move(txtDoc);
     }
-    else if (isMuPdfType)
+    else if (documentKind == SupportedFileTypes::DocumentKind::MuPdf)
     {
         m_document = std::make_unique<MuPdfDocument>();
 
@@ -151,7 +137,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     else
     {
         throw std::runtime_error("Unsupported file format: " + filename +
-                                 " (supported: .pdf, .cbz, .cbr, .rar, .zip, .epub, .mobi, .txt)");
+                                 " (supported: " + SupportedFileTypes::getSupportedExtensionList() + ")");
     }
 
     if (!m_document->open(filename))
@@ -227,6 +213,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     {
         throw std::runtime_error("Failed to initialize GUI manager");
     }
+    m_guiManager->setShowFileBrowserImageSettingVisible(!m_launchOptions.forceShowImagesInFileBrowser);
 
     // Connect button mapper to GUI manager for platform-specific button handling
     m_guiManager->setButtonMapper(&m_inputManager->getButtonMapper());
@@ -1223,6 +1210,16 @@ void App::loadDocument()
     // m_viewportManager->clampScroll();
 }
 
+bool App::saveConfigWithRuntimeOverrides(const FontConfig& config)
+{
+    FontConfig persistedConfig = config;
+    if (m_launchOptions.forceShowImagesInFileBrowser)
+    {
+        persistedConfig.showImagesInFileBrowser = m_cachedConfig.showImagesInFileBrowser;
+    }
+    return m_optionsManager->saveConfig(persistedConfig);
+}
+
 void App::applyPendingFontChange()
 {
     if (!m_pendingFontChange)
@@ -1235,7 +1232,9 @@ void App::applyPendingFontChange()
     bool sizeChanged = (m_pendingFontConfig.fontSize != m_cachedConfig.fontSize);
     bool styleChanged = (m_pendingFontConfig.readingStyle != m_cachedConfig.readingStyle);
     bool zoomStepChanged = (m_pendingFontConfig.zoomStep != m_cachedConfig.zoomStep);
-    bool edgeProgressBarChanged = (m_pendingFontConfig.disableEdgeProgressBar != m_cachedConfig.disableEdgeProgressBar);
+    bool showImagesChanged = (m_pendingFontConfig.showImagesInFileBrowser != m_cachedConfig.showImagesInFileBrowser);
+    bool edgeTurnHoldChanged = (m_pendingFontConfig.edgeTurnHoldDurationMs != m_cachedConfig.edgeTurnHoldDurationMs);
+    bool disableAutomaticEdgeTurnsChanged = (m_pendingFontConfig.disableAutomaticEdgePageTurns != m_cachedConfig.disableAutomaticEdgePageTurns);
     bool minimapChanged = (m_pendingFontConfig.showDocumentMinimap != m_cachedConfig.showDocumentMinimap);
     bool keepPanningChanged = (m_pendingFontConfig.keepPanningPosition != m_cachedConfig.keepPanningPosition);
     bool pageOverlayChanged = (m_pendingFontConfig.showPageIndicatorOverlay != m_cachedConfig.showPageIndicatorOverlay);
@@ -1246,10 +1245,11 @@ void App::applyPendingFontChange()
         std::cout << "No font/size/style change detected - skipping document reopen" << std::endl;
 
         // Even if font/size/style didn't change, we still need to save other setting changes
-        if (zoomStepChanged || edgeProgressBarChanged || minimapChanged || keepPanningChanged || pageOverlayChanged || scaleOverlayChanged)
+        if (zoomStepChanged || showImagesChanged || edgeTurnHoldChanged || disableAutomaticEdgeTurnsChanged ||
+            minimapChanged || keepPanningChanged || pageOverlayChanged || scaleOverlayChanged)
         {
-            std::cout << "Zoom step, edge progress bar, minimap, overlays, or panning setting changed - saving config" << std::endl;
-            m_optionsManager->saveConfig(m_pendingFontConfig);
+            std::cout << "Runtime setting changed - saving config" << std::endl;
+            saveConfigWithRuntimeOverrides(m_pendingFontConfig);
             refreshCachedConfig(); // Update cache after save
 
             if (zoomStepChanged)
@@ -1305,7 +1305,7 @@ void App::applyPendingFontChange()
                 m_navigationManager->setCurrentPage(std::max(0, newCount - 1));
             }
 
-            m_optionsManager->saveConfig(m_pendingFontConfig);
+            saveConfigWithRuntimeOverrides(m_pendingFontConfig);
             refreshCachedConfig();
 
             uint8_t bgR, bgG, bgB;
@@ -1398,7 +1398,7 @@ void App::applyPendingFontChange()
                     m_viewportManager->clampScroll();
 
                     // Save the configuration
-                    m_optionsManager->saveConfig(m_pendingFontConfig);
+                    saveConfigWithRuntimeOverrides(m_pendingFontConfig);
 
                     // Refresh cached config after saving
                     refreshCachedConfig();
@@ -1512,14 +1512,10 @@ void App::closeGameControllers()
 bool App::updateHeldPanning(float dt)
 {
     bool changed = false;
-
-    // Get the effective edge turn threshold based on cached configuration
-    // If edge progress bar is disabled, use a very small threshold (0.001f) for instant page turns
-    // We use 0.001f instead of 0.0f to avoid the condition timer >= threshold being always true
-    // when both are 0.0f (since timer starts at 0.0f)
-    // Otherwise, use the default threshold (0.300f)
-    float effectiveEdgeTurnThreshold = m_cachedConfig.disableEdgeProgressBar ? 0.001f : m_edgeTurnThreshold;
-    bool instantPageTurns = m_cachedConfig.disableEdgeProgressBar;
+    const bool automaticEdgeTurnsDisabled = m_cachedConfig.disableAutomaticEdgePageTurns;
+    const float configuredEdgeTurnThreshold = static_cast<float>(std::max(0, m_cachedConfig.edgeTurnHoldDurationMs)) / 1000.0f;
+    const bool instantPageTurns = !automaticEdgeTurnsDisabled && configuredEdgeTurnThreshold <= 0.0f;
+    const float effectiveEdgeTurnThreshold = instantPageTurns ? 0.001f : configuredEdgeTurnThreshold;
 
     float dx = 0.0f, dy = 0.0f;
 
@@ -1602,6 +1598,24 @@ bool App::updateHeldPanning(float dt)
     float oldEdgeTurnHoldLeft = m_edgeTurnHoldLeft;
     float oldEdgeTurnHoldUp = m_edgeTurnHoldUp;
     float oldEdgeTurnHoldDown = m_edgeTurnHoldDown;
+
+    if (automaticEdgeTurnsDisabled)
+    {
+        m_edgeTurnHoldRight = 0.0f;
+        m_edgeTurnHoldLeft = 0.0f;
+        m_edgeTurnHoldUp = 0.0f;
+        m_edgeTurnHoldDown = 0.0f;
+
+        if (m_edgeTurnHoldRight != oldEdgeTurnHoldRight ||
+            m_edgeTurnHoldLeft != oldEdgeTurnHoldLeft ||
+            m_edgeTurnHoldUp != oldEdgeTurnHoldUp ||
+            m_edgeTurnHoldDown != oldEdgeTurnHoldDown)
+        {
+            markDirty();
+        }
+
+        return changed;
+    }
 
     // Reset edge-turn timers during scroll timeout to prevent accumulated time from previous page
     if (inScrollTimeout || inStabilizationPeriod)
@@ -1924,11 +1938,17 @@ bool App::updateHeldPanning(float dt)
 void App::handleDpadNudgeRight()
 {
     const int maxX = m_viewportManager->getMaxScrollX();
+    const bool automaticEdgeTurnsDisabled = m_cachedConfig.disableAutomaticEdgePageTurns;
+    const bool instantEdgeTurns = m_cachedConfig.edgeTurnHoldDurationMs <= 0;
 
     // Right nudge while already at right edge
     if (maxX == 0 || m_viewportManager->getScrollX() <= (-maxX + 2)) // Use same tolerance as edge-turn system
     {
-        if (maxX == 0)
+        if (automaticEdgeTurnsDisabled)
+        {
+            return;
+        }
+        if (maxX == 0 && instantEdgeTurns)
         {
             // Page fits horizontally (fit-to-width): allow immediate page change via nudge
             // The progress bar system will also work in parallel for sustained holds
@@ -1960,11 +1980,17 @@ void App::handleDpadNudgeRight()
 void App::handleDpadNudgeLeft()
 {
     const int maxX = m_viewportManager->getMaxScrollX();
+    const bool automaticEdgeTurnsDisabled = m_cachedConfig.disableAutomaticEdgePageTurns;
+    const bool instantEdgeTurns = m_cachedConfig.edgeTurnHoldDurationMs <= 0;
 
     // Left nudge while already at left edge
     if (maxX == 0 || m_viewportManager->getScrollX() >= (maxX - 2)) // Use same tolerance as edge-turn system
     {
-        if (maxX == 0)
+        if (automaticEdgeTurnsDisabled)
+        {
+            return;
+        }
+        if (maxX == 0 && instantEdgeTurns)
         {
             // Page fits horizontally (fit-to-width): allow immediate page change via nudge
             // The progress bar system will also work in parallel for sustained holds
@@ -1994,11 +2020,17 @@ void App::handleDpadNudgeLeft()
 void App::handleDpadNudgeDown()
 {
     const int maxY = m_viewportManager->getMaxScrollY();
+    const bool automaticEdgeTurnsDisabled = m_cachedConfig.disableAutomaticEdgePageTurns;
+    const bool instantEdgeTurns = m_cachedConfig.edgeTurnHoldDurationMs <= 0;
 
     // Down nudge while already at bottom edge
     if (maxY == 0 || m_viewportManager->getScrollY() <= (-maxY + 2)) // Use same tolerance as edge-turn system
     {
-        if (maxY == 0)
+        if (automaticEdgeTurnsDisabled)
+        {
+            return;
+        }
+        if (maxY == 0 && instantEdgeTurns)
         {
             // Page fits vertically (fit-to-width): allow immediate page change via nudge
             // The progress bar system will also work in parallel for sustained holds
@@ -2028,11 +2060,17 @@ void App::handleDpadNudgeDown()
 void App::handleDpadNudgeUp()
 {
     const int maxY = m_viewportManager->getMaxScrollY();
+    const bool automaticEdgeTurnsDisabled = m_cachedConfig.disableAutomaticEdgePageTurns;
+    const bool instantEdgeTurns = m_cachedConfig.edgeTurnHoldDurationMs <= 0;
 
     // Up nudge while already at top edge
     if (maxY == 0 || m_viewportManager->getScrollY() >= (maxY - 2)) // Use same tolerance as edge-turn system
     {
-        if (maxY == 0)
+        if (automaticEdgeTurnsDisabled)
+        {
+            return;
+        }
+        if (maxY == 0 && instantEdgeTurns)
         {
             // Page fits vertically (fit-to-width): allow immediate page change via nudge
             // The progress bar system will also work in parallel for sustained holds

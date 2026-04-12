@@ -34,7 +34,8 @@ public:
      * @param startPath Initial directory to browse (empty string uses default library root)
      * @return true if successful
      */
-    bool initialize(SDL_Window* window, SDL_Renderer* renderer, const std::string& startPath = std::string());
+    bool initialize(SDL_Window* window, SDL_Renderer* renderer, const std::string& startPath = std::string(),
+                    bool showImagesInFileBrowser = false);
 
     /**
      * @brief Run the file browser main loop
@@ -96,6 +97,7 @@ private:
     bool m_running;
     std::string m_defaultRoot;
     bool m_lockToDefaultRoot{false};
+    bool m_showImagesInFileBrowser{false};
     std::string m_currentPath;
     std::vector<FileEntry> m_entries;
     int m_selectedIndex;

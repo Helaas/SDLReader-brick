@@ -24,6 +24,11 @@ using GuiManagerType = GuiManager;
 #include <string>
 #include <vector>
 
+struct AppLaunchOptions
+{
+    bool forceShowImagesInFileBrowser{false};
+};
+
 class App
 {
 public:
@@ -48,7 +53,7 @@ public:
     };
 
     // Constructor now accepts pre-initialized SDL_Window* and SDL_Renderer*
-    App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer);
+    App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer, AppLaunchOptions launchOptions = {});
     ~App();
 
     void run();
@@ -78,7 +83,7 @@ public:
     }
     float getEdgeTurnThreshold() const
     {
-        return m_edgeTurnThreshold;
+        return static_cast<float>(std::max(0, m_cachedConfig.edgeTurnHoldDurationMs)) / 1000.0f;
     }
     bool isDpadLeftHeld() const
     {
@@ -96,9 +101,9 @@ public:
     {
         return m_dpadDownHeld;
     }
-    bool isEdgeProgressBarDisabled() const
+    bool shouldShowEdgeTurnProgressBar() const
     {
-        return m_cachedConfig.disableEdgeProgressBar;
+        return !m_cachedConfig.disableAutomaticEdgePageTurns && m_cachedConfig.edgeTurnHoldDurationMs > 0;
     }
 
 private:
@@ -123,6 +128,7 @@ private:
     // Font management
     void toggleFontMenu();
     void applyFontConfiguration(const FontConfig& config);
+    bool saveConfigWithRuntimeOverrides(const FontConfig& config);
 
     // Game controller management
     void initializeGameControllers();
@@ -141,6 +147,7 @@ private:
     Uint64 m_prevTick{0};
 
     bool m_running;
+    AppLaunchOptions m_launchOptions;
 
     // Core managers
     std::unique_ptr<Document> m_document;
@@ -182,7 +189,6 @@ private:
     float m_edgeTurnHoldLeft{0.0f};
     float m_edgeTurnHoldUp{0.0f};
     float m_edgeTurnHoldDown{0.0f};
-    float m_edgeTurnThreshold{0.300f}; // seconds to hold at edge before page turn
     float m_edgeTurnCooldownRight{0.0f};
     float m_edgeTurnCooldownLeft{0.0f};
     float m_edgeTurnCooldownUp{0.0f};
@@ -221,6 +227,8 @@ private:
         if (m_renderManager)
         {
             m_renderManager->setShowMinimap(m_cachedConfig.showDocumentMinimap);
+            m_renderManager->setShowPageIndicatorOverlay(m_cachedConfig.showPageIndicatorOverlay);
+            m_renderManager->setShowScaleOverlay(m_cachedConfig.showScaleOverlay);
         }
     }
 

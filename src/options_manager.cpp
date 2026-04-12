@@ -31,8 +31,10 @@ std::string configToJson(const FontConfig& config)
     oss << "  \"fontName\": \"" << config.fontName << "\",\n";
     oss << "  \"fontSize\": " << config.fontSize << ",\n";
     oss << "  \"zoomStep\": " << config.zoomStep << ",\n";
+    oss << "  \"showImagesInFileBrowser\": " << (config.showImagesInFileBrowser ? "true" : "false") << ",\n";
     oss << "  \"readingStyle\": " << static_cast<int>(config.readingStyle) << ",\n";
-    oss << "  \"disableEdgeProgressBar\": " << (config.disableEdgeProgressBar ? "true" : "false") << ",\n";
+    oss << "  \"edgeTurnHoldDurationMs\": " << config.edgeTurnHoldDurationMs << ",\n";
+    oss << "  \"disableAutomaticEdgePageTurns\": " << (config.disableAutomaticEdgePageTurns ? "true" : "false") << ",\n";
     oss << "  \"showDocumentMinimap\": " << (config.showDocumentMinimap ? "true" : "false") << ",\n";
     oss << "  \"keepPanningPosition\": " << (config.keepPanningPosition ? "true" : "false") << ",\n";
     oss << "  \"showPageIndicatorOverlay\": " << (config.showPageIndicatorOverlay ? "true" : "false") << ",\n";
@@ -131,8 +133,35 @@ FontConfig jsonToConfig(const std::string& json)
     config.fontName = findStringValue("fontName");
     config.fontSize = findIntValue("fontSize");
     config.zoomStep = findIntValue("zoomStep");
+    config.showImagesInFileBrowser = findBoolValue("showImagesInFileBrowser");
     config.readingStyle = static_cast<ReadingStyle>(findIntValue("readingStyle"));
-    config.disableEdgeProgressBar = findBoolValue("disableEdgeProgressBar");
+
+    const bool hasEdgeTurnHoldDuration = json.find("\"edgeTurnHoldDurationMs\"") != std::string::npos;
+    const bool hasDisableAutomaticEdgeTurns = json.find("\"disableAutomaticEdgePageTurns\"") != std::string::npos;
+    const bool hasLegacyDisableEdgeProgressBar = json.find("\"disableEdgeProgressBar\"") != std::string::npos;
+
+    if (hasEdgeTurnHoldDuration)
+    {
+        config.edgeTurnHoldDurationMs = std::clamp(findIntValue("edgeTurnHoldDurationMs"), 0, 1000);
+    }
+    else if (hasLegacyDisableEdgeProgressBar)
+    {
+        config.edgeTurnHoldDurationMs = findBoolValue("disableEdgeProgressBar") ? 0 : 300;
+    }
+    else
+    {
+        config.edgeTurnHoldDurationMs = 300;
+    }
+
+    if (hasDisableAutomaticEdgeTurns)
+    {
+        config.disableAutomaticEdgePageTurns = findBoolValue("disableAutomaticEdgePageTurns");
+    }
+    else
+    {
+        config.disableAutomaticEdgePageTurns = false;
+    }
+
     if (json.find("\"showDocumentMinimap\"") != std::string::npos)
     {
         config.showDocumentMinimap = findBoolValue("showDocumentMinimap");

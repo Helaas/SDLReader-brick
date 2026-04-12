@@ -2,6 +2,7 @@
 #include "options_manager.h"
 #include "path_utils.h"
 #include "mupdf_locking.h"
+#include "supported_file_types.h"
 #ifdef PLATFORM_MY355
 #include "platform_my355.h"
 #endif
@@ -315,10 +316,12 @@ FileBrowser::~FileBrowser()
     s_lastThumbnailView = m_thumbnailView;
 }
 
-bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const std::string& startPath)
+bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const std::string& startPath,
+                             bool showImagesInFileBrowser)
 {
     m_window = window;
     m_renderer = renderer;
+    m_showImagesInFileBrowser = showImagesInFileBrowser;
     m_currentPath = startPath.empty() ? m_defaultRoot : startPath;
 
     m_ctx = nk_sdl_init(m_window, m_renderer);
@@ -720,19 +723,7 @@ void FileBrowser::tryRestoreSelection(const std::string& directoryPath)
 
 bool FileBrowser::isSupportedFile(const std::string& filename) const
 {
-    std::string lower = filename;
-    std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
-
-    return (lower.size() >= 4 &&
-            (lower.substr(lower.size() - 4) == ".pdf" ||
-             lower.substr(lower.size() - 4) == ".cbz" ||
-             lower.substr(lower.size() - 4) == ".cbr" ||
-             lower.substr(lower.size() - 4) == ".rar" ||
-             lower.substr(lower.size() - 4) == ".zip" ||
-             lower.substr(lower.size() - 4) == ".txt")) ||
-           (lower.size() >= 5 &&
-            (lower.substr(lower.size() - 5) == ".epub" ||
-             lower.substr(lower.size() - 5) == ".mobi"));
+    return SupportedFileTypes::isSupportedFileBrowserPath(filename, m_showImagesInFileBrowser);
 }
 
 void FileBrowser::clearThumbnailCache()
@@ -2916,6 +2907,8 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
             Comic,
             Epub,
             Mobi,
+            Text,
+            Image,
             Other
         };
 
@@ -2926,18 +2919,12 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
                 return entry.isParentLink ? EntryCategory::ParentDirectory : EntryCategory::Directory;
             }
 
-            std::string lower = entry.name;
-            std::transform(lower.begin(), lower.end(), lower.begin(),
-                           [](unsigned char ch)
-                           { return static_cast<char>(std::tolower(ch)); });
-
-            const size_t dotPos = lower.find_last_of('.');
-            if (dotPos == std::string::npos)
+            const std::string ext = SupportedFileTypes::getLowercaseExtension(entry.name);
+            if (ext.empty())
             {
                 return EntryCategory::Other;
             }
 
-            const std::string ext = lower.substr(dotPos);
             if (ext == ".pdf")
             {
                 return EntryCategory::Pdf;
@@ -2953,6 +2940,14 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
             if (ext == ".mobi")
             {
                 return EntryCategory::Mobi;
+            }
+            if (ext == ".txt")
+            {
+                return EntryCategory::Text;
+            }
+            if (SupportedFileTypes::isStandaloneImageFile(entry.name))
+            {
+                return EntryCategory::Image;
             }
             return EntryCategory::Other;
         };
@@ -3006,6 +3001,18 @@ void FileBrowser::renderListViewNuklear(float viewHeight, int windowWidth)
                         nk_rgba(190, 230, 235, 255),
                         nk_rgba(100, 190, 205, 255),
                         nk_rgb(25, 45, 55)};
+            case EntryCategory::Text:
+                return {nk_rgb(200, 180, 95),
+                        nk_rgba(180, 155, 80, 255),
+                        nk_rgba(245, 235, 180, 255),
+                        nk_rgba(190, 165, 85, 255),
+                        nk_rgb(45, 35, 15)};
+            case EntryCategory::Image:
+                return {nk_rgb(110, 170, 255),
+                        nk_rgba(85, 130, 220, 255),
+                        nk_rgba(210, 230, 255, 255),
+                        nk_rgba(90, 140, 225, 255),
+                        nk_rgb(240, 246, 255)};
             case EntryCategory::Other:
             default:
                 return {nk_rgb(90, 140, 255),

@@ -3,9 +3,9 @@
 #include "options_manager.h"
 #include "path_utils.h"
 #include "renderer.h"
+#include "supported_file_types.h"
 #include <SDL.h>
 #include <SDL_ttf.h>
-#include <cstring>
 #include <iostream>
 #include <memory>
 
@@ -41,26 +41,48 @@ int main(int argc, char* argv[])
     constexpr int kDefaultWindowHeight = 960;
 #endif
 
-    // Check for --browse flag
     bool browseMode = false;
+    bool forceShowImagesInFileBrowser = false;
     std::string documentPath;
 
-    if (argc == 2)
+    for (int i = 1; i < argc; ++i)
     {
-        if (std::strcmp(argv[1], "--browse") == 0 || std::strcmp(argv[1], "-b") == 0)
+        std::string arg = argv[i];
+        if (arg == "--browse" || arg == "-b")
         {
             browseMode = true;
         }
+        else if (arg == "--show-filebrowser-images")
+        {
+            forceShowImagesInFileBrowser = true;
+        }
+        else if (!arg.empty() && arg.front() == '-')
+        {
+            std::cerr << "Unknown option: " << arg << std::endl;
+            std::cerr << "Usage: " << argv[0] << " <document_file> [--show-filebrowser-images]" << std::endl;
+            std::cerr << "       " << argv[0] << " --browse [--show-filebrowser-images]" << std::endl;
+            std::cerr << "Supported formats: " << SupportedFileTypes::getSupportedFormatHelpText() << std::endl;
+            return 1;
+        }
+        else if (documentPath.empty())
+        {
+            documentPath = arg;
+        }
         else
         {
-            documentPath = argv[1];
+            std::cerr << "Only one document path may be provided." << std::endl;
+            std::cerr << "Usage: " << argv[0] << " <document_file> [--show-filebrowser-images]" << std::endl;
+            std::cerr << "       " << argv[0] << " --browse [--show-filebrowser-images]" << std::endl;
+            std::cerr << "Supported formats: " << SupportedFileTypes::getSupportedFormatHelpText() << std::endl;
+            return 1;
         }
     }
-    else if (argc != 2)
+
+    if ((browseMode && !documentPath.empty()) || (!browseMode && documentPath.empty()))
     {
-        std::cerr << "Usage: " << argv[0] << " <document_file>" << std::endl;
-        std::cerr << "       " << argv[0] << " --browse" << std::endl;
-        std::cerr << "Supported formats: PDF (.pdf), Comic Book Archives (.cbz, .cbr, .rar, .zip), EPUB (.epub), MOBI (.mobi)" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " <document_file> [--show-filebrowser-images]" << std::endl;
+        std::cerr << "       " << argv[0] << " --browse [--show-filebrowser-images]" << std::endl;
+        std::cerr << "Supported formats: " << SupportedFileTypes::getSupportedFormatHelpText() << std::endl;
         return 1;
     }
 
@@ -122,8 +144,9 @@ int main(int argc, char* argv[])
             OptionsManager optionsManager;
             FontConfig config = optionsManager.loadConfig();
             std::string startPath = config.lastBrowseDirectory.empty() ? getDefaultLibraryRoot() : config.lastBrowseDirectory;
+            const bool showImagesInFileBrowser = config.showImagesInFileBrowser || forceShowImagesInFileBrowser;
 
-            if (!browser->initialize(window, renderer, startPath))
+            if (!browser->initialize(window, renderer, startPath, showImagesInFileBrowser))
             {
                 std::cerr << "Failed to initialize file browser" << std::endl;
                 cleanupSDL(window, renderer);
@@ -157,7 +180,7 @@ int main(int argc, char* argv[])
         std::cout.flush();
         try
         {
-            App app(documentPath, window, renderer);
+            App app(documentPath, window, renderer, AppLaunchOptions{forceShowImagesInFileBrowser});
             std::cout << "Main: App instance created, calling run()" << std::endl;
             std::cout.flush();
             app.run();

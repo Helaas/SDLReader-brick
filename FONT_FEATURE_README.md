@@ -9,13 +9,13 @@ This implementation adds a comprehensive font and reading-style menu to SDL Read
 - **Reading Styles**: Built-in color themes (Default, Sepia, Dark, High Contrast, Paper Texture, Soft Gray, Night) applied via CSS
 - **Font Size Control**: Numeric input and slider for font size (8-72pt)
 - **On-screen Number Pad**: Controller-friendly page jump widget triggered from the menu's "Number Pad" button
-- **Persistent Settings**: Saves configuration to `config.json` (font, size, style, zoom step, last browse directory) and auto-applies on startup
+- **Persistent Settings**: Saves configuration to `config.json` (font, size, style, zoom step, file-browser image visibility, edge-turn behavior, last browse directory) and auto-applies on startup
 - **CSS Generation**: Automatically generates and applies user CSS via MuPDF's `fz_set_user_css`, including `@font-face` declarations
 
 ## How to Use
 
 1. **Add Fonts**: Place your `.ttf` or `.otf` font files in the `fonts/` directory (optional—curated fonts ship in-tree) and they’ll appear in the Options → Font & Reading Style picker
-2. **Launch a Document**: Open a file directly or start the built-in browser with `./bin/sdl_reader_cli --browse`
+2. **Launch a Document**: Open a file directly or start the built-in browser with `./bin/sdl_reader_cli --browse` (optionally add `--show-filebrowser-images` to force standalone images visible in the browser for that session)
 3. **Open the Menu**: Press `M` on keyboard, `Start` on desktop controllers, or the TrimUI Brick/Smart Pro Menu button (joystick button 10)
 4. **Select Font**: Choose from the dropdown list of discovered fonts; the preview updates instantly
 5. **Pick a Reading Style**: Choose a theme for background/text colors; defaults to "Document Default"
@@ -58,6 +58,9 @@ Settings are stored in `config.json` inside the reader state directory (`$SDL_RE
   "fontSize": 16,
   "zoomStep": 10,
   "readingStyle": 0,
+  "showImagesInFileBrowser": false,
+  "edgeTurnHoldDurationMs": 300,
+  "disableAutomaticEdgePageTurns": false,
   "showDocumentMinimap": true,
   "lastBrowseDirectory": "/path/to/library"
 }
@@ -70,7 +73,9 @@ Key configuration fields:
 - `fontSize`: Baseline font size (in points) applied via generated CSS.
 - `zoomStep`: Controller zoom increment/decrement percentage.
 - `readingStyle`: Numeric theme selector (see style table in the main README).
-- `disableEdgeProgressBar`: Set to `true` to skip the edge nudge delay when turning pages.
+- `showImagesInFileBrowser`: Includes supported standalone images in the built-in browser when enabled.
+- `edgeTurnHoldDurationMs`: Delay before D-pad edge presses turn pages. Set to `0` for instant edge turns.
+- `disableAutomaticEdgePageTurns`: Disables automatic page turns at panning edges entirely.
 - `showDocumentMinimap`: Set to `false` to hide the minimap overlay when zoomed in.
 - `lastBrowseDirectory`: Last directory opened by the Nuklear file browser.
 
@@ -104,7 +109,8 @@ body {
 ## Supported Formats
 
 - **Font Files**: TTF, OTF
-- **Document Types**: EPUB, MOBI, TXT (any format supporting CSS via MuPDF)
+- **CSS-styled Document Types**: EPUB, MOBI, TXT
+- **Other viewer-supported formats**: PDF, CBZ/CBR/ZIP/RAR, and standalone PNG/JPG/JPEG/GIF/BMP/TIFF/WebP images
 - **Font Sources**: Local files in `/fonts` directory
 
 ## Limitations

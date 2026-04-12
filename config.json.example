@@ -4,7 +4,9 @@
   "fontSize": 16,
   "zoomStep": 10,
   "readingStyle": 0,
-  "disableEdgeProgressBar": false,
+  "showImagesInFileBrowser": false,
+  "edgeTurnHoldDurationMs": 300,
+  "disableAutomaticEdgePageTurns": false,
   "showDocumentMinimap": true,
   "keepPanningPosition": false,
   "lastBrowseDirectory": "/path/to/library"

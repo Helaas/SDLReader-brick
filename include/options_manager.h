@@ -41,9 +41,11 @@ struct FontConfig
     std::string fontName;                                      // Display name of selected font
     int fontSize = 12;                                         // Font size in points
     int zoomStep = 10;                                         // Zoom increment/decrement step
+    bool showImagesInFileBrowser = false;                      // Display standalone image files in the file browser
     std::string lastBrowseDirectory = getDefaultLibraryRoot(); // Last browsed directory for file browser
     ReadingStyle readingStyle = ReadingStyle::Default;         // Reading style/theme
-    bool disableEdgeProgressBar = false;                       // Disable edge nudge progress bar for instant page turns
+    int edgeTurnHoldDurationMs = 300;                          // Hold duration before edge turns trigger (0 = instant)
+    bool disableAutomaticEdgePageTurns = false;                // Disable directional page turns at page edges
     bool showDocumentMinimap = true;                           // Display minimap overlay when zoomed in
     bool keepPanningPosition = false;                          // Keep panning position when changing pages (vs. align to top)
     bool showPageIndicatorOverlay = true;                      // Display page indicator overlay when page changes
@@ -53,9 +55,9 @@ struct FontConfig
     FontConfig() = default;
 
     // Constructor with parameters
-    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10, const std::string& browseDir = getDefaultLibraryRoot(), ReadingStyle style = ReadingStyle::Default, bool disableEdgeBar = false, bool showMinimap = true, bool keepPanning = false)
+    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10, const std::string& browseDir = getDefaultLibraryRoot(), ReadingStyle style = ReadingStyle::Default, int edgeTurnHoldMs = 300, bool disableAutomaticEdgeTurns = false, bool showMinimap = true, bool keepPanning = false)
         : fontPath(path), fontName(name), fontSize(size), zoomStep(zoom), lastBrowseDirectory(browseDir), readingStyle(style),
-          disableEdgeProgressBar(disableEdgeBar), showDocumentMinimap(showMinimap), keepPanningPosition(keepPanning)
+          edgeTurnHoldDurationMs(edgeTurnHoldMs), disableAutomaticEdgePageTurns(disableAutomaticEdgeTurns), showDocumentMinimap(showMinimap), keepPanningPosition(keepPanning)
     {
     }
 };
