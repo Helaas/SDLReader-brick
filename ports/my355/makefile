@@ -101,10 +101,11 @@ check-libarchive:
 # Setup Nuklear GUI library (header-only) if it doesn't exist
 setup-nuklear:
 	@cd $(BASE_PATH) && \
-	if [ ! -d "nuklear-my355" ]; then \
+	if [ ! -f "nuklear-my355/nuklear.h" ] || [ ! -f "nuklear-my355/demo/sdl_renderer/nuklear_sdl_renderer.h" ]; then \
 		echo "Setting up Nuklear GUI library (v4.12.8) for MY355..."; \
 		rm -rf nuklear-my355; \
-		git clone --depth 1 --branch 4.12.8 https://github.com/Immediate-Mode-UI/Nuklear.git nuklear-my355; \
+		git clone --depth 1 --branch 4.12.8 https://github.com/Immediate-Mode-UI/Nuklear.git nuklear-my355 || { echo "Failed to clone Nuklear for MY355"; exit 1; }; \
+		test -f "nuklear-my355/nuklear.h" && test -f "nuklear-my355/demo/sdl_renderer/nuklear_sdl_renderer.h" || { echo "Nuklear checkout is incomplete for MY355"; exit 1; }; \
 		echo "Nuklear repository cloned for MY355"; \
 	else \
 		echo "Nuklear repository already present for MY355"; \

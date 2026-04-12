@@ -96,10 +96,11 @@ check-libarchive:
 # Setup Nuklear GUI library (header-only) if it doesn't exist
 setup-nuklear:
 	@cd $(BASE_PATH) && \
-	if [ ! -d "nuklear-tg5040" ]; then \
+	if [ ! -f "nuklear-tg5040/nuklear.h" ] || [ ! -f "nuklear-tg5040/demo/sdl_renderer/nuklear_sdl_renderer.h" ]; then \
 		echo "Setting up Nuklear GUI library (v4.12.8) for TG5040..."; \
 		rm -rf nuklear-tg5040; \
-		git clone --depth 1 --branch 4.12.8 https://github.com/Immediate-Mode-UI/Nuklear.git nuklear-tg5040; \
+		git clone --depth 1 --branch 4.12.8 https://github.com/Immediate-Mode-UI/Nuklear.git nuklear-tg5040 || { echo "Failed to clone Nuklear for TG5040"; exit 1; }; \
+		test -f "nuklear-tg5040/nuklear.h" && test -f "nuklear-tg5040/demo/sdl_renderer/nuklear_sdl_renderer.h" || { echo "Nuklear checkout is incomplete for TG5040"; exit 1; }; \
 		echo "Nuklear repository cloned for TG5040"; \
 	else \
 		echo "Nuklear repository already present for TG5040"; \
