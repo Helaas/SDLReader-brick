@@ -3086,6 +3086,52 @@ bool GuiManager::stepFocusVertical(int direction)
         return false;
     }
 
+    static constexpr MainScreenWidget kInfoVerticalOrder[] = {
+        WIDGET_FILE_BROWSER_IMAGES_INFO_BUTTON,
+        WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON,
+        WIDGET_EDGE_PAGE_TURNS_MODE_INFO_BUTTON,
+        WIDGET_KEEP_PANNING_INFO_BUTTON,
+        WIDGET_MINIMAP_INFO_BUTTON,
+        WIDGET_PAGE_INDICATOR_INFO_BUTTON,
+        WIDGET_ZOOM_OVERLAY_INFO_BUTTON};
+
+    MainScreenWidget focusedWidget = static_cast<MainScreenWidget>(m_mainScreenFocusIndex);
+    if (isInfoWidget(focusedWidget))
+    {
+        int infoOrderIndex = -1;
+        for (size_t i = 0; i < sizeof(kInfoVerticalOrder) / sizeof(kInfoVerticalOrder[0]); ++i)
+        {
+            if (kInfoVerticalOrder[i] == focusedWidget)
+            {
+                infoOrderIndex = static_cast<int>(i);
+                break;
+            }
+        }
+
+        if (infoOrderIndex >= 0)
+        {
+            constexpr int kInfoOrderCount = static_cast<int>(sizeof(kInfoVerticalOrder) / sizeof(kInfoVerticalOrder[0]));
+            int nextInfoIndex = infoOrderIndex;
+            while (true)
+            {
+                nextInfoIndex += direction;
+                if (nextInfoIndex < 0 || nextInfoIndex >= kInfoOrderCount)
+                {
+                    break;
+                }
+
+                MainScreenWidget candidate = kInfoVerticalOrder[nextInfoIndex];
+                if (isWidgetVisible(candidate))
+                {
+                    clearSliderDpadAdjustMode();
+                    m_mainScreenFocusIndex = static_cast<int>(candidate);
+                    requestFocusScroll();
+                    return true;
+                }
+            }
+        }
+    }
+
     static constexpr MainScreenWidget kVerticalOrder[] = {
         WIDGET_FONT_DROPDOWN,
         WIDGET_FONT_SIZE_INPUT,
@@ -3174,12 +3220,23 @@ bool GuiManager::handleHorizontalNavigation(int direction)
         return true;
     }
 
+    MainScreenWidget focusedWidget = static_cast<MainScreenWidget>(m_mainScreenFocusIndex);
+    if (focusedWidget == WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER)
+    {
+        adjustFocusedWidget(direction);
+        return true;
+    }
+    if (focusedWidget == WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON)
+    {
+        clearSliderDpadAdjustMode();
+        m_mainScreenFocusIndex = WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER;
+        requestFocusScroll();
+        return true;
+    }
+
     static constexpr MainScreenWidget kFileBrowserImagesGroup[] = {
         WIDGET_FILE_BROWSER_IMAGES_CHECKBOX,
         WIDGET_FILE_BROWSER_IMAGES_INFO_BUTTON};
-    static constexpr MainScreenWidget kEdgeTurnDurationGroup[] = {
-        WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON,
-        WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER};
     static constexpr MainScreenWidget kEdgePageTurnsModeGroup[] = {
         WIDGET_EDGE_PAGE_TURNS_MODE_DROPDOWN,
         WIDGET_EDGE_PAGE_TURNS_MODE_INFO_BUTTON};
@@ -3205,10 +3262,6 @@ bool GuiManager::handleHorizontalNavigation(int direction)
         WIDGET_RESET_BUTTON};
 
     if (moveFocusInGroup(kFileBrowserImagesGroup, sizeof(kFileBrowserImagesGroup) / sizeof(kFileBrowserImagesGroup[0]), direction))
-    {
-        return true;
-    }
-    if (moveFocusInGroup(kEdgeTurnDurationGroup, sizeof(kEdgeTurnDurationGroup) / sizeof(kEdgeTurnDurationGroup[0]), direction))
     {
         return true;
     }
