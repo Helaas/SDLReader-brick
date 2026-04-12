@@ -128,6 +128,7 @@ The TG5050 build (TrimUI Smart Pro S) includes:
 - **Nuklear UI Stack**: Built-in browser launched via `--browse`, font & reading-style menu, controller number pad, and persisted `reading_history.json`
   - Toggle the new thumbnail grid with the **X** button for cover previews rendered asynchronously.
   - Standalone image files can be shown from Settings → File Browser or forced at launch with `--show-filebrowser-images`.
+  - Use `--filebrowser-thumbnail-view` to open the browser in the thumbnail grid for the current launch while still allowing `X` to switch views.
   - Control edge-turn delay/disable behavior and the zoom minimap overlay via `config.json`.
 - **Advanced Hardware Power Management**: NextUI-compatible power button handling (shared with TG5040)
   - Power button monitoring via `/dev/input/event1`

@@ -220,14 +220,18 @@ After building, you can either launch straight into a document or drop into the 
 
 # Force standalone image files to appear in browse mode for this session
 ./bin/sdl_reader_cli --browse --show-filebrowser-images
+
+# Start browse mode in the thumbnail grid for this session
+./bin/sdl_reader_cli --browse --filebrowser-thumbnail-view
 ```
 
 When using `--browse`, SDL Reader will remember the last directory you visited (stored in `config.json`) and automatically resume the last page you read for each document (stored in `reading_history.json`). Both files live in the reader state directory (`$SDL_READER_STATE_DIR`, defaulting to `$HOME`).
 
-Standalone image files are hidden in the file browser by default. Enable them in Settings → File Browser, set `"showImagesInFileBrowser": true` in `config.json`, or pass `--show-filebrowser-images` to force them visible for the current launch only.
+Standalone image files are hidden in the file browser by default. Enable them in Settings → File Browser, set `"showImagesInFileBrowser": true` in `config.json`, or pass `--show-filebrowser-images` to force them visible for the current launch only. Pass `--filebrowser-thumbnail-view` to make browse mode start in the thumbnail grid for the current launch; you can still press `X` to switch views afterward.
 
 ### File Browser Enhancements
 - Press `X` (or the controller `X` button) to toggle a high-performance thumbnail grid that previews covers and caches results in the background.
+- Pass `--filebrowser-thumbnail-view` if you want browse mode to open in the thumbnail grid without changing any saved preference.
 - Thumbnails are generated asynchronously so scrolling stays responsive even on large folders.
 - The browser respects `SDL_READER_DEFAULT_DIR`; set this environment variable to confine browsing to a specific root directory.
 - Standalone images use the same thumbnail pipeline as documents when image entries are enabled.
@@ -271,7 +275,7 @@ SDL Reader uses a `config.json` file (stored under `$SDL_READER_STATE_DIR`, defa
 - **showDocumentMinimap**: Toggle the zoomed-in minimap overlay; set to `false` to hide it.
 - **State directory override**: Set `SDL_READER_STATE_DIR` to relocate `config.json`, `reading_history.json`, and other runtime assets. Defaults to your `$HOME` directory.
 - **Environment override**: Set `SDL_READER_DEFAULT_DIR` to control the starting directory for the browser. If unset, the reader defaults to `$HOME`.
-- **CLI override**: `--show-filebrowser-images` forces image visibility in the file browser for the current run, hides that setting from the in-app menu, and does not write the override back to `config.json`.
+- **CLI overrides**: `--show-filebrowser-images` forces image visibility in the file browser for the current run, hides that setting from the in-app menu, and does not write the override back to `config.json`. `--filebrowser-thumbnail-view` starts browse mode in the thumbnail grid for the current run only; users can still toggle back to list view with `X`.
 
 | `readingStyle` | Theme          | Background | Text Color |
 | :------------- | :------------- | :--------- | :--------- |

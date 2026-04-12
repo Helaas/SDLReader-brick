@@ -317,11 +317,14 @@ FileBrowser::~FileBrowser()
 }
 
 bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const std::string& startPath,
-                             bool showImagesInFileBrowser)
+                             FileBrowserLaunchOptions launchOptions)
 {
     m_window = window;
     m_renderer = renderer;
-    m_showImagesInFileBrowser = showImagesInFileBrowser;
+    m_showImagesInFileBrowser = launchOptions.showImagesInFileBrowser;
+    m_thumbnailView = launchOptions.startInThumbnailView ? true : s_lastThumbnailView;
+    m_gridColumns = 1;
+    resetSelectionScrollTargets();
     m_currentPath = startPath.empty() ? m_defaultRoot : startPath;
 
     m_ctx = nk_sdl_init(m_window, m_renderer);

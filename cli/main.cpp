@@ -43,7 +43,14 @@ int main(int argc, char* argv[])
 
     bool browseMode = false;
     bool forceShowImagesInFileBrowser = false;
+    bool startFileBrowserInThumbnailView = false;
     std::string documentPath;
+    auto printUsage = [argv]()
+    {
+        std::cerr << "Usage: " << argv[0] << " <document_file> [--show-filebrowser-images] [--filebrowser-thumbnail-view]" << std::endl;
+        std::cerr << "       " << argv[0] << " --browse [--show-filebrowser-images] [--filebrowser-thumbnail-view]" << std::endl;
+        std::cerr << "Supported formats: " << SupportedFileTypes::getSupportedFormatHelpText() << std::endl;
+    };
 
     for (int i = 1; i < argc; ++i)
     {
@@ -56,12 +63,14 @@ int main(int argc, char* argv[])
         {
             forceShowImagesInFileBrowser = true;
         }
+        else if (arg == "--filebrowser-thumbnail-view")
+        {
+            startFileBrowserInThumbnailView = true;
+        }
         else if (!arg.empty() && arg.front() == '-')
         {
             std::cerr << "Unknown option: " << arg << std::endl;
-            std::cerr << "Usage: " << argv[0] << " <document_file> [--show-filebrowser-images]" << std::endl;
-            std::cerr << "       " << argv[0] << " --browse [--show-filebrowser-images]" << std::endl;
-            std::cerr << "Supported formats: " << SupportedFileTypes::getSupportedFormatHelpText() << std::endl;
+            printUsage();
             return 1;
         }
         else if (documentPath.empty())
@@ -71,18 +80,14 @@ int main(int argc, char* argv[])
         else
         {
             std::cerr << "Only one document path may be provided." << std::endl;
-            std::cerr << "Usage: " << argv[0] << " <document_file> [--show-filebrowser-images]" << std::endl;
-            std::cerr << "       " << argv[0] << " --browse [--show-filebrowser-images]" << std::endl;
-            std::cerr << "Supported formats: " << SupportedFileTypes::getSupportedFormatHelpText() << std::endl;
+            printUsage();
             return 1;
         }
     }
 
     if ((browseMode && !documentPath.empty()) || (!browseMode && documentPath.empty()))
     {
-        std::cerr << "Usage: " << argv[0] << " <document_file> [--show-filebrowser-images]" << std::endl;
-        std::cerr << "       " << argv[0] << " --browse [--show-filebrowser-images]" << std::endl;
-        std::cerr << "Supported formats: " << SupportedFileTypes::getSupportedFormatHelpText() << std::endl;
+        printUsage();
         return 1;
     }
 
@@ -144,9 +149,11 @@ int main(int argc, char* argv[])
             OptionsManager optionsManager;
             FontConfig config = optionsManager.loadConfig();
             std::string startPath = config.lastBrowseDirectory.empty() ? getDefaultLibraryRoot() : config.lastBrowseDirectory;
-            const bool showImagesInFileBrowser = config.showImagesInFileBrowser || forceShowImagesInFileBrowser;
+            FileBrowserLaunchOptions browserLaunchOptions;
+            browserLaunchOptions.showImagesInFileBrowser = config.showImagesInFileBrowser || forceShowImagesInFileBrowser;
+            browserLaunchOptions.startInThumbnailView = startFileBrowserInThumbnailView;
 
-            if (!browser->initialize(window, renderer, startPath, showImagesInFileBrowser))
+            if (!browser->initialize(window, renderer, startPath, browserLaunchOptions))
             {
                 std::cerr << "Failed to initialize file browser" << std::endl;
                 cleanupSDL(window, renderer);
