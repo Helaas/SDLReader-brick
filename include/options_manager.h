@@ -32,6 +32,13 @@ enum class ReadingStyle
     NightMode     // Very dark mode optimized for night reading
 };
 
+enum class EdgePageTurnsMode
+{
+    Automatic = 0, // Current hold/instant edge-turn behavior
+    DoubleTap,     // Require a second press at the edge to turn the page
+    Disable        // Never turn pages automatically at edges
+};
+
 /**
  * @brief Font configuration settings
  */
@@ -45,7 +52,7 @@ struct FontConfig
     std::string lastBrowseDirectory = getDefaultLibraryRoot(); // Last browsed directory for file browser
     ReadingStyle readingStyle = ReadingStyle::Default;         // Reading style/theme
     int edgeTurnHoldDurationMs = 300;                          // Hold duration before edge turns trigger (0 = instant)
-    bool disableAutomaticEdgePageTurns = false;                // Disable directional page turns at page edges
+    EdgePageTurnsMode edgePageTurnsMode = EdgePageTurnsMode::Automatic; // Behavior for directional page turns at page edges
     bool showDocumentMinimap = true;                           // Display minimap overlay when zoomed in
     bool keepPanningPosition = false;                          // Keep panning position when changing pages (vs. align to top)
     bool showPageIndicatorOverlay = true;                      // Display page indicator overlay when page changes
@@ -55,9 +62,9 @@ struct FontConfig
     FontConfig() = default;
 
     // Constructor with parameters
-    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10, const std::string& browseDir = getDefaultLibraryRoot(), ReadingStyle style = ReadingStyle::Default, int edgeTurnHoldMs = 300, bool disableAutomaticEdgeTurns = false, bool showMinimap = true, bool keepPanning = false)
+    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10, const std::string& browseDir = getDefaultLibraryRoot(), ReadingStyle style = ReadingStyle::Default, int edgeTurnHoldMs = 300, EdgePageTurnsMode edgePageTurns = EdgePageTurnsMode::Automatic, bool showMinimap = true, bool keepPanning = false)
         : fontPath(path), fontName(name), fontSize(size), zoomStep(zoom), lastBrowseDirectory(browseDir), readingStyle(style),
-          edgeTurnHoldDurationMs(edgeTurnHoldMs), disableAutomaticEdgePageTurns(disableAutomaticEdgeTurns), showDocumentMinimap(showMinimap), keepPanningPosition(keepPanning)
+          edgeTurnHoldDurationMs(edgeTurnHoldMs), edgePageTurnsMode(edgePageTurns), showDocumentMinimap(showMinimap), keepPanningPosition(keepPanning)
     {
     }
 };
@@ -148,6 +155,19 @@ public:
      * @return Vector of all reading style enum values
      */
     static std::vector<ReadingStyle> getAllReadingStyles();
+
+    /**
+     * @brief Get display name for an edge page turns mode
+     * @param mode The edge page turns mode enum value
+     * @return Human-readable name for the mode
+     */
+    static const char* getEdgePageTurnsModeName(EdgePageTurnsMode mode);
+
+    /**
+     * @brief Get all available edge page turns modes
+     * @return Vector of all edge page turns mode enum values
+     */
+    static std::vector<EdgePageTurnsMode> getAllEdgePageTurnsModes();
 
     /**
      * @brief Get the background color for a reading style

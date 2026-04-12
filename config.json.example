@@ -6,7 +6,7 @@
   "readingStyle": 0,
   "showImagesInFileBrowser": false,
   "edgeTurnHoldDurationMs": 300,
-  "disableAutomaticEdgePageTurns": false,
+  "edgePageTurnsMode": "automatic",
   "showDocumentMinimap": true,
   "keepPanningPosition": false,
   "lastBrowseDirectory": "/path/to/library"

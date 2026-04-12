@@ -103,10 +103,20 @@ public:
     }
     bool shouldShowEdgeTurnProgressBar() const
     {
-        return !m_cachedConfig.disableAutomaticEdgePageTurns && m_cachedConfig.edgeTurnHoldDurationMs > 0;
+        return m_cachedConfig.edgePageTurnsMode == EdgePageTurnsMode::Automatic &&
+               m_cachedConfig.edgeTurnHoldDurationMs > 0;
     }
 
 private:
+    enum class EdgeDirection
+    {
+        None = 0,
+        Right,
+        Left,
+        Up,
+        Down
+    };
+
     // Document Management
     void loadDocument();
     void refreshPageCountFromDocument();
@@ -139,6 +149,19 @@ private:
     void handleDpadNudgeLeft();
     void handleDpadNudgeUp();
     void handleDpadNudgeDown();
+    bool performEdgeTurn(EdgeDirection direction);
+    bool handleDoubleTapEdgePress(EdgeDirection direction);
+    bool canTurnPageInDirection(EdgeDirection direction) const;
+    bool isDirectionAtTurnEdge(EdgeDirection direction) const;
+    bool isEligibleEdgeTurnDirection(EdgeDirection direction) const;
+    void armDoubleTapEdgeTurnDirection(EdgeDirection direction);
+    void clearDoubleTapEdgeTurnState();
+    void clearDoubleTapEdgeTurnStateIfInvalid();
+    void resetEdgeTurnHolds();
+    void resetEdgeTurnProgressForDirection(EdgeDirection direction, bool startCooldown);
+    float& edgeTurnHoldForDirection(EdgeDirection direction);
+    float& edgeTurnCooldownForDirection(EdgeDirection direction);
+    const float& edgeTurnHoldForDirection(EdgeDirection direction) const;
 
     // Pan speed (pixels per second)
     float m_dpadPanSpeed{600.0f};
@@ -194,6 +217,7 @@ private:
     float m_edgeTurnCooldownUp{0.0f};
     float m_edgeTurnCooldownDown{0.0f};
     float m_edgeTurnCooldownDuration{0.5f}; // seconds to wait before allowing edge-turn again
+    EdgeDirection m_doubleTapArmedDirection{EdgeDirection::None};
 
     // Game controller support
     SDL_GameController* m_gameController{nullptr};
@@ -224,6 +248,8 @@ private:
     void refreshCachedConfig()
     {
         m_cachedConfig = m_optionsManager->loadConfig();
+        resetEdgeTurnHolds();
+        clearDoubleTapEdgeTurnState();
         if (m_renderManager)
         {
             m_renderManager->setShowMinimap(m_cachedConfig.showDocumentMinimap);

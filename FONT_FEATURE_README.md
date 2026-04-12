@@ -60,7 +60,7 @@ Settings are stored in `config.json` inside the reader state directory (`$SDL_RE
   "readingStyle": 0,
   "showImagesInFileBrowser": false,
   "edgeTurnHoldDurationMs": 300,
-  "disableAutomaticEdgePageTurns": false,
+  "edgePageTurnsMode": "automatic",
   "showDocumentMinimap": true,
   "lastBrowseDirectory": "/path/to/library"
 }
@@ -74,8 +74,8 @@ Key configuration fields:
 - `zoomStep`: Controller zoom increment/decrement percentage.
 - `readingStyle`: Numeric theme selector (see style table in the main README).
 - `showImagesInFileBrowser`: Includes supported standalone images in the built-in browser when enabled.
-- `edgeTurnHoldDurationMs`: Delay before D-pad edge presses turn pages. Set to `0` for instant edge turns.
-- `disableAutomaticEdgePageTurns`: Disables automatic page turns at panning edges entirely.
+- `edgeTurnHoldDurationMs`: Delay before D-pad edge presses turn pages when `edgePageTurnsMode` is `automatic`. Set to `0` for instant edge turns.
+- `edgePageTurnsMode`: Edge-turn behavior at page boundaries. Use `automatic`, `doubleTap`, or `disable`.
 - `showDocumentMinimap`: Set to `false` to hide the minimap overlay when zoomed in.
 - `lastBrowseDirectory`: Last directory opened by the Nuklear file browser.
 

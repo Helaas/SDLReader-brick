@@ -898,38 +898,26 @@ void App::updateInputState(const SDL_Event& event)
         {
         case SDLK_RIGHT:
             m_keyboardRightHeld = false;
-            if (m_edgeTurnHoldRight > 0.0f)
-            {
-                m_edgeTurnCooldownRight = SDL_GetTicks() / 1000.0f;
-            }
-            m_edgeTurnHoldRight = 0.0f;
+            resetEdgeTurnProgressForDirection(EdgeDirection::Right, true);
+            armDoubleTapEdgeTurnDirection(EdgeDirection::Right);
             markDirty();
             break;
         case SDLK_LEFT:
             m_keyboardLeftHeld = false;
-            if (m_edgeTurnHoldLeft > 0.0f)
-            {
-                m_edgeTurnCooldownLeft = SDL_GetTicks() / 1000.0f;
-            }
-            m_edgeTurnHoldLeft = 0.0f;
+            resetEdgeTurnProgressForDirection(EdgeDirection::Left, true);
+            armDoubleTapEdgeTurnDirection(EdgeDirection::Left);
             markDirty();
             break;
         case SDLK_UP:
             m_keyboardUpHeld = false;
-            if (m_edgeTurnHoldUp > 0.0f)
-            {
-                m_edgeTurnCooldownUp = SDL_GetTicks() / 1000.0f;
-            }
-            m_edgeTurnHoldUp = 0.0f;
+            resetEdgeTurnProgressForDirection(EdgeDirection::Up, true);
+            armDoubleTapEdgeTurnDirection(EdgeDirection::Up);
             markDirty();
             break;
         case SDLK_DOWN:
             m_keyboardDownHeld = false;
-            if (m_edgeTurnHoldDown > 0.0f)
-            {
-                m_edgeTurnCooldownDown = SDL_GetTicks() / 1000.0f;
-            }
-            m_edgeTurnHoldDown = 0.0f;
+            resetEdgeTurnProgressForDirection(EdgeDirection::Down, true);
+            armDoubleTapEdgeTurnDirection(EdgeDirection::Down);
             markDirty();
             break;
         }
@@ -997,41 +985,29 @@ void App::updateInputState(const SDL_Event& event)
         case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
             m_dpadRightButtonDown = false;
             m_dpadRightHeld = false;
-            if (m_edgeTurnHoldRight > 0.0f)
-            {
-                m_edgeTurnCooldownRight = SDL_GetTicks() / 1000.0f;
-            }
-            m_edgeTurnHoldRight = 0.0f;
+            resetEdgeTurnProgressForDirection(EdgeDirection::Right, true);
+            armDoubleTapEdgeTurnDirection(EdgeDirection::Right);
             markDirty();
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
             m_dpadLeftButtonDown = false;
             m_dpadLeftHeld = false;
-            if (m_edgeTurnHoldLeft > 0.0f)
-            {
-                m_edgeTurnCooldownLeft = SDL_GetTicks() / 1000.0f;
-            }
-            m_edgeTurnHoldLeft = 0.0f;
+            resetEdgeTurnProgressForDirection(EdgeDirection::Left, true);
+            armDoubleTapEdgeTurnDirection(EdgeDirection::Left);
             markDirty();
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_UP:
             m_dpadUpButtonDown = false;
             m_dpadUpHeld = false;
-            if (m_edgeTurnHoldUp > 0.0f)
-            {
-                m_edgeTurnCooldownUp = SDL_GetTicks() / 1000.0f;
-            }
-            m_edgeTurnHoldUp = 0.0f;
+            resetEdgeTurnProgressForDirection(EdgeDirection::Up, true);
+            armDoubleTapEdgeTurnDirection(EdgeDirection::Up);
             markDirty();
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
             m_dpadDownButtonDown = false;
             m_dpadDownHeld = false;
-            if (m_edgeTurnHoldDown > 0.0f)
-            {
-                m_edgeTurnCooldownDown = SDL_GetTicks() / 1000.0f;
-            }
-            m_edgeTurnHoldDown = 0.0f;
+            resetEdgeTurnProgressForDirection(EdgeDirection::Down, true);
+            armDoubleTapEdgeTurnDirection(EdgeDirection::Down);
             markDirty();
             break;
         }
@@ -1067,7 +1043,7 @@ void App::updateInputState(const SDL_Event& event)
         };
 
         bool releasedAny = false;
-        auto handleRelease = [&](bool desired, bool& state, float& hold, float& cooldown, bool buttonDown)
+        auto handleRelease = [&](bool desired, bool& state, EdgeDirection direction, bool buttonDown)
         {
             // Don't let analog stick clear held state if a D-pad button is physically pressed
             if (buttonDown)
@@ -1075,11 +1051,8 @@ void App::updateInputState(const SDL_Event& event)
             if (!desired && state)
             {
                 state = false;
-                if (hold > 0.0f)
-                {
-                    cooldown = SDL_GetTicks() / 1000.0f;
-                }
-                hold = 0.0f;
+                resetEdgeTurnProgressForDirection(direction, true);
+                armDoubleTapEdgeTurnDirection(direction);
                 releasedAny = true;
             }
         };
@@ -1093,10 +1066,10 @@ void App::updateInputState(const SDL_Event& event)
         handlePress(downActive, m_dpadDownHeld, [this]()
                     { handleDpadNudgeDown(); });
 
-        handleRelease(rightActive, m_dpadRightHeld, m_edgeTurnHoldRight, m_edgeTurnCooldownRight, m_dpadRightButtonDown);
-        handleRelease(leftActive, m_dpadLeftHeld, m_edgeTurnHoldLeft, m_edgeTurnCooldownLeft, m_dpadLeftButtonDown);
-        handleRelease(upActive, m_dpadUpHeld, m_edgeTurnHoldUp, m_edgeTurnCooldownUp, m_dpadUpButtonDown);
-        handleRelease(downActive, m_dpadDownHeld, m_edgeTurnHoldDown, m_edgeTurnCooldownDown, m_dpadDownButtonDown);
+        handleRelease(rightActive, m_dpadRightHeld, EdgeDirection::Right, m_dpadRightButtonDown);
+        handleRelease(leftActive, m_dpadLeftHeld, EdgeDirection::Left, m_dpadLeftButtonDown);
+        handleRelease(upActive, m_dpadUpHeld, EdgeDirection::Up, m_dpadUpButtonDown);
+        handleRelease(downActive, m_dpadDownHeld, EdgeDirection::Down, m_dpadDownButtonDown);
 
         if (releasedAny)
         {
@@ -1234,7 +1207,7 @@ void App::applyPendingFontChange()
     bool zoomStepChanged = (m_pendingFontConfig.zoomStep != m_cachedConfig.zoomStep);
     bool showImagesChanged = (m_pendingFontConfig.showImagesInFileBrowser != m_cachedConfig.showImagesInFileBrowser);
     bool edgeTurnHoldChanged = (m_pendingFontConfig.edgeTurnHoldDurationMs != m_cachedConfig.edgeTurnHoldDurationMs);
-    bool disableAutomaticEdgeTurnsChanged = (m_pendingFontConfig.disableAutomaticEdgePageTurns != m_cachedConfig.disableAutomaticEdgePageTurns);
+    bool edgePageTurnsModeChanged = (m_pendingFontConfig.edgePageTurnsMode != m_cachedConfig.edgePageTurnsMode);
     bool minimapChanged = (m_pendingFontConfig.showDocumentMinimap != m_cachedConfig.showDocumentMinimap);
     bool keepPanningChanged = (m_pendingFontConfig.keepPanningPosition != m_cachedConfig.keepPanningPosition);
     bool pageOverlayChanged = (m_pendingFontConfig.showPageIndicatorOverlay != m_cachedConfig.showPageIndicatorOverlay);
@@ -1245,7 +1218,7 @@ void App::applyPendingFontChange()
         std::cout << "No font/size/style change detected - skipping document reopen" << std::endl;
 
         // Even if font/size/style didn't change, we still need to save other setting changes
-        if (zoomStepChanged || showImagesChanged || edgeTurnHoldChanged || disableAutomaticEdgeTurnsChanged ||
+        if (zoomStepChanged || showImagesChanged || edgeTurnHoldChanged || edgePageTurnsModeChanged ||
             minimapChanged || keepPanningChanged || pageOverlayChanged || scaleOverlayChanged)
         {
             std::cout << "Runtime setting changed - saving config" << std::endl;
@@ -1509,12 +1482,290 @@ void App::closeGameControllers()
     }
 }
 
+float& App::edgeTurnHoldForDirection(EdgeDirection direction)
+{
+    switch (direction)
+    {
+    case EdgeDirection::Right:
+        return m_edgeTurnHoldRight;
+    case EdgeDirection::Left:
+        return m_edgeTurnHoldLeft;
+    case EdgeDirection::Up:
+        return m_edgeTurnHoldUp;
+    case EdgeDirection::Down:
+        return m_edgeTurnHoldDown;
+    case EdgeDirection::None:
+        break;
+    }
+
+    throw std::logic_error("Invalid edge-turn direction");
+}
+
+const float& App::edgeTurnHoldForDirection(EdgeDirection direction) const
+{
+    switch (direction)
+    {
+    case EdgeDirection::Right:
+        return m_edgeTurnHoldRight;
+    case EdgeDirection::Left:
+        return m_edgeTurnHoldLeft;
+    case EdgeDirection::Up:
+        return m_edgeTurnHoldUp;
+    case EdgeDirection::Down:
+        return m_edgeTurnHoldDown;
+    case EdgeDirection::None:
+        break;
+    }
+
+    throw std::logic_error("Invalid edge-turn direction");
+}
+
+float& App::edgeTurnCooldownForDirection(EdgeDirection direction)
+{
+    switch (direction)
+    {
+    case EdgeDirection::Right:
+        return m_edgeTurnCooldownRight;
+    case EdgeDirection::Left:
+        return m_edgeTurnCooldownLeft;
+    case EdgeDirection::Up:
+        return m_edgeTurnCooldownUp;
+    case EdgeDirection::Down:
+        return m_edgeTurnCooldownDown;
+    case EdgeDirection::None:
+        break;
+    }
+
+    throw std::logic_error("Invalid edge-turn direction");
+}
+
+void App::resetEdgeTurnHolds()
+{
+    m_edgeTurnHoldRight = 0.0f;
+    m_edgeTurnHoldLeft = 0.0f;
+    m_edgeTurnHoldUp = 0.0f;
+    m_edgeTurnHoldDown = 0.0f;
+}
+
+void App::resetEdgeTurnProgressForDirection(EdgeDirection direction, bool startCooldown)
+{
+    if (direction == EdgeDirection::None)
+    {
+        return;
+    }
+
+    float& hold = edgeTurnHoldForDirection(direction);
+    if (startCooldown && hold > 0.0f)
+    {
+        edgeTurnCooldownForDirection(direction) = SDL_GetTicks() / 1000.0f;
+    }
+    hold = 0.0f;
+}
+
+bool App::canTurnPageInDirection(EdgeDirection direction) const
+{
+    if (!m_navigationManager)
+    {
+        return false;
+    }
+
+    const int currentPage = m_navigationManager->getCurrentPage();
+    const int pageCount = m_navigationManager->getPageCount();
+
+    switch (direction)
+    {
+    case EdgeDirection::Right:
+    case EdgeDirection::Down:
+        return currentPage < pageCount - 1;
+    case EdgeDirection::Left:
+    case EdgeDirection::Up:
+        return currentPage > 0;
+    case EdgeDirection::None:
+        return false;
+    }
+
+    return false;
+}
+
+bool App::isDirectionAtTurnEdge(EdgeDirection direction) const
+{
+    if (!m_viewportManager)
+    {
+        return false;
+    }
+
+    constexpr int kEdgeTolerance = 2;
+    const int maxX = m_viewportManager->getMaxScrollX();
+    const int maxY = m_viewportManager->getMaxScrollY();
+
+    switch (direction)
+    {
+    case EdgeDirection::Right:
+        return maxX == 0 || m_viewportManager->getScrollX() <= (-maxX + kEdgeTolerance);
+    case EdgeDirection::Left:
+        return maxX == 0 || m_viewportManager->getScrollX() >= (maxX - kEdgeTolerance);
+    case EdgeDirection::Down:
+        return maxY == 0 || m_viewportManager->getScrollY() <= (-maxY + kEdgeTolerance);
+    case EdgeDirection::Up:
+        return maxY == 0 || m_viewportManager->getScrollY() >= (maxY - kEdgeTolerance);
+    case EdgeDirection::None:
+        return false;
+    }
+
+    return false;
+}
+
+bool App::isEligibleEdgeTurnDirection(EdgeDirection direction) const
+{
+    return canTurnPageInDirection(direction) && isDirectionAtTurnEdge(direction);
+}
+
+void App::armDoubleTapEdgeTurnDirection(EdgeDirection direction)
+{
+    if (m_cachedConfig.edgePageTurnsMode != EdgePageTurnsMode::DoubleTap ||
+        direction == EdgeDirection::None)
+    {
+        return;
+    }
+
+    const float currentTime = SDL_GetTicks() / 1000.0f;
+    const float directionCooldown = edgeTurnCooldownForDirection(direction);
+    const bool inCooldown = directionCooldown > 0.0f &&
+                            (currentTime - directionCooldown < m_edgeTurnCooldownDuration);
+
+    if (inCooldown)
+    {
+        clearDoubleTapEdgeTurnStateIfInvalid();
+        return;
+    }
+
+    if (isEligibleEdgeTurnDirection(direction))
+    {
+        m_doubleTapArmedDirection = direction;
+    }
+    else if (m_doubleTapArmedDirection == direction)
+    {
+        clearDoubleTapEdgeTurnState();
+    }
+}
+
+void App::clearDoubleTapEdgeTurnState()
+{
+    m_doubleTapArmedDirection = EdgeDirection::None;
+}
+
+void App::clearDoubleTapEdgeTurnStateIfInvalid()
+{
+    if (m_doubleTapArmedDirection != EdgeDirection::None &&
+        !isEligibleEdgeTurnDirection(m_doubleTapArmedDirection))
+    {
+        clearDoubleTapEdgeTurnState();
+    }
+}
+
+bool App::performEdgeTurn(EdgeDirection direction)
+{
+    if (direction == EdgeDirection::None ||
+        !m_document || !m_navigationManager || !m_viewportManager ||
+        !canTurnPageInDirection(direction) || m_navigationManager->isInPageChangeCooldown())
+    {
+        return false;
+    }
+
+    float currentTime = SDL_GetTicks() / 1000.0f;
+    float& directionCooldown = edgeTurnCooldownForDirection(direction);
+    const bool inCooldown = directionCooldown > 0.0f &&
+                            (currentTime - directionCooldown < m_edgeTurnCooldownDuration);
+    if (inCooldown)
+    {
+        return false;
+    }
+
+    const bool moveToNextPage = direction == EdgeDirection::Right || direction == EdgeDirection::Down;
+    if (moveToNextPage)
+    {
+        m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
+                                          { markDirty(); }, [this]()
+                                          { updateScaleDisplayTime(); }, [this]()
+                                          {
+                                              updatePageDisplayTime();
+                                              m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
+    }
+    else
+    {
+        m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
+                                              { markDirty(); }, [this]()
+                                              { updateScaleDisplayTime(); }, [this]()
+                                              {
+                                                  updatePageDisplayTime();
+                                                  m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
+    }
+
+    switch (direction)
+    {
+    case EdgeDirection::Right:
+        m_viewportManager->setScrollX(m_viewportManager->getMaxScrollX());
+        break;
+    case EdgeDirection::Left:
+        m_viewportManager->setScrollX(-m_viewportManager->getMaxScrollX());
+        break;
+    case EdgeDirection::Down:
+        m_viewportManager->setScrollY(m_viewportManager->getMaxScrollY());
+        break;
+    case EdgeDirection::Up:
+        m_viewportManager->setScrollY(-m_viewportManager->getMaxScrollY());
+        break;
+    case EdgeDirection::None:
+        break;
+    }
+
+    m_viewportManager->clampScroll();
+    directionCooldown = currentTime;
+    resetEdgeTurnHolds();
+    clearDoubleTapEdgeTurnState();
+    return true;
+}
+
+bool App::handleDoubleTapEdgePress(EdgeDirection direction)
+{
+    if (m_cachedConfig.edgePageTurnsMode != EdgePageTurnsMode::DoubleTap ||
+        direction == EdgeDirection::None)
+    {
+        return false;
+    }
+
+    if (m_doubleTapArmedDirection != EdgeDirection::None &&
+        m_doubleTapArmedDirection != direction)
+    {
+        clearDoubleTapEdgeTurnState();
+    }
+
+    if (!isEligibleEdgeTurnDirection(direction))
+    {
+        if (m_doubleTapArmedDirection == direction)
+        {
+            clearDoubleTapEdgeTurnState();
+        }
+        return false;
+    }
+
+    if (m_doubleTapArmedDirection == direction)
+    {
+        clearDoubleTapEdgeTurnState();
+        return performEdgeTurn(direction);
+    }
+
+    return false;
+}
+
 bool App::updateHeldPanning(float dt)
 {
     bool changed = false;
-    const bool automaticEdgeTurnsDisabled = m_cachedConfig.disableAutomaticEdgePageTurns;
+    const EdgePageTurnsMode edgePageTurnsMode = m_cachedConfig.edgePageTurnsMode;
+    const bool automaticEdgeTurns = edgePageTurnsMode == EdgePageTurnsMode::Automatic;
+    const bool doubleTapEdgeTurns = edgePageTurnsMode == EdgePageTurnsMode::DoubleTap;
     const float configuredEdgeTurnThreshold = static_cast<float>(std::max(0, m_cachedConfig.edgeTurnHoldDurationMs)) / 1000.0f;
-    const bool instantPageTurns = !automaticEdgeTurnsDisabled && configuredEdgeTurnThreshold <= 0.0f;
+    const bool instantPageTurns = automaticEdgeTurns && configuredEdgeTurnThreshold <= 0.0f;
     const float effectiveEdgeTurnThreshold = instantPageTurns ? 0.001f : configuredEdgeTurnThreshold;
 
     float dx = 0.0f, dy = 0.0f;
@@ -1599,12 +1850,17 @@ bool App::updateHeldPanning(float dt)
     float oldEdgeTurnHoldUp = m_edgeTurnHoldUp;
     float oldEdgeTurnHoldDown = m_edgeTurnHoldDown;
 
-    if (automaticEdgeTurnsDisabled)
+    if (!automaticEdgeTurns)
     {
-        m_edgeTurnHoldRight = 0.0f;
-        m_edgeTurnHoldLeft = 0.0f;
-        m_edgeTurnHoldUp = 0.0f;
-        m_edgeTurnHoldDown = 0.0f;
+        resetEdgeTurnHolds();
+        if (doubleTapEdgeTurns)
+        {
+            clearDoubleTapEdgeTurnStateIfInvalid();
+        }
+        else
+        {
+            clearDoubleTapEdgeTurnState();
+        }
 
         if (m_edgeTurnHoldRight != oldEdgeTurnHoldRight ||
             m_edgeTurnHoldLeft != oldEdgeTurnHoldLeft ||
@@ -1644,19 +1900,13 @@ bool App::updateHeldPanning(float dt)
         else
         {
             // Hard reset during scroll timeout
-            m_edgeTurnHoldRight = 0.0f;
-            m_edgeTurnHoldLeft = 0.0f;
-            m_edgeTurnHoldUp = 0.0f;
-            m_edgeTurnHoldDown = 0.0f;
+            resetEdgeTurnHolds();
         }
     }
     else if (scrollingOccurred)
     {
         // Reset edge-turn timers if user is actively scrolling - only start timer when stationary at edge
-        m_edgeTurnHoldRight = 0.0f;
-        m_edgeTurnHoldLeft = 0.0f;
-        m_edgeTurnHoldUp = 0.0f;
-        m_edgeTurnHoldDown = 0.0f;
+        resetEdgeTurnHolds();
     }
     else
     {
@@ -1738,48 +1988,12 @@ bool App::updateHeldPanning(float dt)
 
     if (m_edgeTurnHoldRight >= effectiveEdgeTurnThreshold)
     {
-        // Check cooldown before allowing page change
-        float currentTime = SDL_GetTicks() / 1000.0f;
-        bool inCooldown = (m_edgeTurnCooldownRight > 0.0f) &&
-                          (currentTime - m_edgeTurnCooldownRight < m_edgeTurnCooldownDuration);
-
-        if (!inCooldown && m_navigationManager->getCurrentPage() < m_navigationManager->getPageCount() - 1 && !m_navigationManager->isInPageChangeCooldown())
-        {
-            m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
-                                              { markDirty(); }, [this]()
-                                              { updateScaleDisplayTime(); }, [this]()
-                                              {
-                                                  updatePageDisplayTime();
-                                                  m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
-            m_viewportManager->setScrollX(m_viewportManager->getMaxScrollX()); // appear at left edge
-            m_viewportManager->clampScroll();
-            // Set cooldown timestamp to prevent immediate re-triggering while button is still held
-            m_edgeTurnCooldownRight = SDL_GetTicks() / 1000.0f;
-            changed = true;
-        }
+        changed = performEdgeTurn(EdgeDirection::Right) || changed;
         m_edgeTurnHoldRight = 0.0f;
     }
     else if (m_edgeTurnHoldLeft >= effectiveEdgeTurnThreshold)
     {
-        // Check cooldown before allowing page change
-        float currentTime = SDL_GetTicks() / 1000.0f;
-        bool inCooldown = (m_edgeTurnCooldownLeft > 0.0f) &&
-                          (currentTime - m_edgeTurnCooldownLeft < m_edgeTurnCooldownDuration);
-
-        if (!inCooldown && m_navigationManager->getCurrentPage() > 0 && !m_navigationManager->isInPageChangeCooldown())
-        {
-            m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
-                                                  { markDirty(); }, [this]()
-                                                  { updateScaleDisplayTime(); }, [this]()
-                                                  {
-                                                      updatePageDisplayTime();
-                                                      m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
-            m_viewportManager->setScrollX(-m_viewportManager->getMaxScrollX()); // appear at right edge
-            m_viewportManager->clampScroll();
-            // Set cooldown timestamp to prevent immediate re-triggering while button is still held
-            m_edgeTurnCooldownLeft = SDL_GetTicks() / 1000.0f;
-            changed = true;
-        }
+        changed = performEdgeTurn(EdgeDirection::Left) || changed;
         m_edgeTurnHoldLeft = 0.0f;
     }
 
@@ -1876,50 +2090,12 @@ bool App::updateHeldPanning(float dt)
 
     if (m_edgeTurnHoldDown >= effectiveEdgeTurnThreshold)
     {
-        // Check cooldown before allowing page change
-        float currentTime = SDL_GetTicks() / 1000.0f;
-        bool inCooldown = (m_edgeTurnCooldownDown > 0.0f) &&
-                          (currentTime - m_edgeTurnCooldownDown < m_edgeTurnCooldownDuration);
-
-        if (!inCooldown && m_navigationManager->getCurrentPage() < m_navigationManager->getPageCount() - 1 && !m_navigationManager->isInPageChangeCooldown())
-        {
-            m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
-                                              { markDirty(); }, [this]()
-                                              { updateScaleDisplayTime(); }, [this]()
-                                              {
-                                                  updatePageDisplayTime();
-                                                  m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
-            // Land at the top edge of the new page so motion feels continuous downward
-            m_viewportManager->setScrollY(m_viewportManager->getMaxScrollY());
-            m_viewportManager->clampScroll();
-            // Set cooldown timestamp to prevent immediate re-triggering while button is still held
-            m_edgeTurnCooldownDown = SDL_GetTicks() / 1000.0f;
-            changed = true;
-        }
+        changed = performEdgeTurn(EdgeDirection::Down) || changed;
         m_edgeTurnHoldDown = 0.0f;
     }
     else if (m_edgeTurnHoldUp >= effectiveEdgeTurnThreshold)
     {
-        // Check cooldown before allowing page change
-        float currentTime = SDL_GetTicks() / 1000.0f;
-        bool inCooldown = (m_edgeTurnCooldownUp > 0.0f) &&
-                          (currentTime - m_edgeTurnCooldownUp < m_edgeTurnCooldownDuration);
-
-        if (!inCooldown && m_navigationManager->getCurrentPage() > 0 && !m_navigationManager->isInPageChangeCooldown())
-        {
-            m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
-                                                  { markDirty(); }, [this]()
-                                                  { updateScaleDisplayTime(); }, [this]()
-                                                  {
-                                                      updatePageDisplayTime();
-                                                      m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
-            // Land at the bottom edge of the previous page
-            m_viewportManager->setScrollY(-m_viewportManager->getMaxScrollY());
-            m_viewportManager->clampScroll();
-            // Set cooldown timestamp to prevent immediate re-triggering while button is still held
-            m_edgeTurnCooldownUp = SDL_GetTicks() / 1000.0f;
-            changed = true;
-        }
+        changed = performEdgeTurn(EdgeDirection::Up) || changed;
         m_edgeTurnHoldUp = 0.0f;
     }
 
@@ -1938,13 +2114,18 @@ bool App::updateHeldPanning(float dt)
 void App::handleDpadNudgeRight()
 {
     const int maxX = m_viewportManager->getMaxScrollX();
-    const bool automaticEdgeTurnsDisabled = m_cachedConfig.disableAutomaticEdgePageTurns;
-    const bool instantEdgeTurns = m_cachedConfig.edgeTurnHoldDurationMs <= 0;
+    const bool automaticEdgeTurns = m_cachedConfig.edgePageTurnsMode == EdgePageTurnsMode::Automatic;
+    const bool instantEdgeTurns = automaticEdgeTurns && m_cachedConfig.edgeTurnHoldDurationMs <= 0;
+
+    if (handleDoubleTapEdgePress(EdgeDirection::Right))
+    {
+        return;
+    }
 
     // Right nudge while already at right edge
-    if (maxX == 0 || m_viewportManager->getScrollX() <= (-maxX + 2)) // Use same tolerance as edge-turn system
+    if (isDirectionAtTurnEdge(EdgeDirection::Right))
     {
-        if (automaticEdgeTurnsDisabled)
+        if (!automaticEdgeTurns)
         {
             return;
         }
@@ -1954,17 +2135,7 @@ void App::handleDpadNudgeRight()
             // The progress bar system will also work in parallel for sustained holds
             if (m_edgeTurnHoldRight == 0.0f) // Only if no progress bar is currently running
             {
-                if (m_navigationManager->getCurrentPage() < m_navigationManager->getPageCount() - 1 && !m_navigationManager->isInPageChangeCooldown())
-                {
-                    m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
-                                                      { markDirty(); }, [this]()
-                                                      { updateScaleDisplayTime(); }, [this]()
-                                                      {
-                                                          updatePageDisplayTime();
-                                                          m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
-                    m_viewportManager->setScrollX(m_viewportManager->getMaxScrollX()); // appear at left edge of new page
-                    m_viewportManager->clampScroll();
-                }
+                performEdgeTurn(EdgeDirection::Right);
             }
         }
         else
@@ -1975,18 +2146,24 @@ void App::handleDpadNudgeRight()
     }
     m_viewportManager->setScrollX(m_viewportManager->getScrollX() - 50);
     m_viewportManager->clampScroll();
+    clearDoubleTapEdgeTurnStateIfInvalid();
 }
 
 void App::handleDpadNudgeLeft()
 {
     const int maxX = m_viewportManager->getMaxScrollX();
-    const bool automaticEdgeTurnsDisabled = m_cachedConfig.disableAutomaticEdgePageTurns;
-    const bool instantEdgeTurns = m_cachedConfig.edgeTurnHoldDurationMs <= 0;
+    const bool automaticEdgeTurns = m_cachedConfig.edgePageTurnsMode == EdgePageTurnsMode::Automatic;
+    const bool instantEdgeTurns = automaticEdgeTurns && m_cachedConfig.edgeTurnHoldDurationMs <= 0;
+
+    if (handleDoubleTapEdgePress(EdgeDirection::Left))
+    {
+        return;
+    }
 
     // Left nudge while already at left edge
-    if (maxX == 0 || m_viewportManager->getScrollX() >= (maxX - 2)) // Use same tolerance as edge-turn system
+    if (isDirectionAtTurnEdge(EdgeDirection::Left))
     {
-        if (automaticEdgeTurnsDisabled)
+        if (!automaticEdgeTurns)
         {
             return;
         }
@@ -1996,17 +2173,7 @@ void App::handleDpadNudgeLeft()
             // The progress bar system will also work in parallel for sustained holds
             if (m_edgeTurnHoldLeft == 0.0f) // Only if no progress bar is currently running
             {
-                if (m_navigationManager->getCurrentPage() > 0 && !m_navigationManager->isInPageChangeCooldown())
-                {
-                    m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
-                                                          { markDirty(); }, [this]()
-                                                          { updateScaleDisplayTime(); }, [this]()
-                                                          {
-                                                              updatePageDisplayTime();
-                                                              m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
-                    m_viewportManager->setScrollX(-m_viewportManager->getMaxScrollX()); // appear at right edge of prev page
-                    m_viewportManager->clampScroll();
-                }
+                performEdgeTurn(EdgeDirection::Left);
             }
         }
         // For zoomed pages (maxX > 0): always defer to progress bar system
@@ -2015,18 +2182,24 @@ void App::handleDpadNudgeLeft()
     }
     m_viewportManager->setScrollX(m_viewportManager->getScrollX() + 50);
     m_viewportManager->clampScroll();
+    clearDoubleTapEdgeTurnStateIfInvalid();
 }
 
 void App::handleDpadNudgeDown()
 {
     const int maxY = m_viewportManager->getMaxScrollY();
-    const bool automaticEdgeTurnsDisabled = m_cachedConfig.disableAutomaticEdgePageTurns;
-    const bool instantEdgeTurns = m_cachedConfig.edgeTurnHoldDurationMs <= 0;
+    const bool automaticEdgeTurns = m_cachedConfig.edgePageTurnsMode == EdgePageTurnsMode::Automatic;
+    const bool instantEdgeTurns = automaticEdgeTurns && m_cachedConfig.edgeTurnHoldDurationMs <= 0;
+
+    if (handleDoubleTapEdgePress(EdgeDirection::Down))
+    {
+        return;
+    }
 
     // Down nudge while already at bottom edge
-    if (maxY == 0 || m_viewportManager->getScrollY() <= (-maxY + 2)) // Use same tolerance as edge-turn system
+    if (isDirectionAtTurnEdge(EdgeDirection::Down))
     {
-        if (automaticEdgeTurnsDisabled)
+        if (!automaticEdgeTurns)
         {
             return;
         }
@@ -2036,17 +2209,7 @@ void App::handleDpadNudgeDown()
             // The progress bar system will also work in parallel for sustained holds
             if (m_edgeTurnHoldDown == 0.0f) // Only if no progress bar is currently running
             {
-                if (m_navigationManager->getCurrentPage() < m_navigationManager->getPageCount() - 1 && !m_navigationManager->isInPageChangeCooldown())
-                {
-                    m_navigationManager->goToNextPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
-                                                      { markDirty(); }, [this]()
-                                                      { updateScaleDisplayTime(); }, [this]()
-                                                      {
-                                                          updatePageDisplayTime();
-                                                          m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
-                    m_viewportManager->setScrollY(m_viewportManager->getMaxScrollY()); // appear at top edge of new page
-                    m_viewportManager->clampScroll();
-                }
+                performEdgeTurn(EdgeDirection::Down);
             }
         }
         // For zoomed pages (maxY > 0): always defer to progress bar system
@@ -2055,18 +2218,24 @@ void App::handleDpadNudgeDown()
     }
     m_viewportManager->setScrollY(m_viewportManager->getScrollY() - 50);
     m_viewportManager->clampScroll();
+    clearDoubleTapEdgeTurnStateIfInvalid();
 }
 
 void App::handleDpadNudgeUp()
 {
     const int maxY = m_viewportManager->getMaxScrollY();
-    const bool automaticEdgeTurnsDisabled = m_cachedConfig.disableAutomaticEdgePageTurns;
-    const bool instantEdgeTurns = m_cachedConfig.edgeTurnHoldDurationMs <= 0;
+    const bool automaticEdgeTurns = m_cachedConfig.edgePageTurnsMode == EdgePageTurnsMode::Automatic;
+    const bool instantEdgeTurns = automaticEdgeTurns && m_cachedConfig.edgeTurnHoldDurationMs <= 0;
+
+    if (handleDoubleTapEdgePress(EdgeDirection::Up))
+    {
+        return;
+    }
 
     // Up nudge while already at top edge
-    if (maxY == 0 || m_viewportManager->getScrollY() >= (maxY - 2)) // Use same tolerance as edge-turn system
+    if (isDirectionAtTurnEdge(EdgeDirection::Up))
     {
-        if (automaticEdgeTurnsDisabled)
+        if (!automaticEdgeTurns)
         {
             return;
         }
@@ -2076,17 +2245,7 @@ void App::handleDpadNudgeUp()
             // The progress bar system will also work in parallel for sustained holds
             if (m_edgeTurnHoldUp == 0.0f) // Only if no progress bar is currently running
             {
-                if (m_navigationManager->getCurrentPage() > 0 && !m_navigationManager->isInPageChangeCooldown())
-                {
-                    m_navigationManager->goToPreviousPage(m_document.get(), m_viewportManager.get(), makeSetCurrentPageCallback(), [this]()
-                                                          { markDirty(); }, [this]()
-                                                          { updateScaleDisplayTime(); }, [this]()
-                                                          {
-                                                              updatePageDisplayTime();
-                                                              m_readingHistoryManager->updateLastPage(m_documentPath, m_navigationManager->getCurrentPage()); });
-                    m_viewportManager->setScrollY(-m_viewportManager->getMaxScrollY()); // appear at bottom edge of prev page
-                    m_viewportManager->clampScroll();
-                }
+                performEdgeTurn(EdgeDirection::Up);
             }
         }
         // For zoomed pages (maxY > 0): always defer to progress bar system
@@ -2095,6 +2254,7 @@ void App::handleDpadNudgeUp()
     }
     m_viewportManager->setScrollY(m_viewportManager->getScrollY() + 50);
     m_viewportManager->clampScroll();
+    clearDoubleTapEdgeTurnStateIfInvalid();
 }
 
 // Utility methods moved to convenience methods in header
@@ -2133,6 +2293,8 @@ std::function<void(int)> App::makeSetCurrentPageCallback()
 {
     return [this](int page)
     {
+        resetEdgeTurnHolds();
+        clearDoubleTapEdgeTurnState();
         if (m_guiManager)
         {
             m_guiManager->setCurrentPage(page);

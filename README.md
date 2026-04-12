@@ -27,7 +27,7 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 * Custom font picker with reading style themes, MuPDF-backed CSS injection, controller-friendly navigation, hold-to-scroll, inline tooltips, info glyphs, and persistent highlights.
 * On-screen number pad for page jumps when navigating with a controller.
 * Automatic reading history tracking with resume-on-open for the last 50 documents.
-* Page navigation (next/previous page) with **Smart Edge Navigation**: directional edge turns support a configurable hold duration, instant turning, or a fully disabled mode to prevent accidental flips while panning.
+* Page navigation (next/previous page) with **Smart Edge Navigation**: directional edge turns support a configurable hold duration, instant turning, double-tap turning, or a fully disabled mode to prevent accidental flips while panning.
 * Quick page jumping (±10 pages) and arbitrary page entry.
 * Zoom in/out, fit-to-width, high-maximum zoom levels, optimized downsampling paths, and improved caching for smoother zoom/pan performance (notably on TrimUI Brick/Smart Pro devices).
 * Page rotation (90° increments) and horizontal/vertical mirroring.
@@ -259,7 +259,7 @@ SDL Reader uses a `config.json` file (stored under `$SDL_READER_STATE_DIR`, defa
      "readingStyle": 0,
      "showImagesInFileBrowser": false,
      "edgeTurnHoldDurationMs": 300,
-     "disableAutomaticEdgePageTurns": false,
+     "edgePageTurnsMode": "automatic",
      "showDocumentMinimap": true,
      "lastBrowseDirectory": "/path/to/library"
    }
@@ -273,8 +273,8 @@ SDL Reader uses a `config.json` file (stored under `$SDL_READER_STATE_DIR`, defa
 - **readingStyle**: Numeric identifier for the active reading theme (see table below)
 - **lastBrowseDirectory**: Directory the file browser should open by default when launched with `--browse`
 - **showImagesInFileBrowser**: When `true`, the file browser includes supported standalone image files. Default: `false`.
-- **edgeTurnHoldDurationMs**: Hold time in milliseconds before a directional page-edge press turns the page. `0` means instant page turns. Default: `300`.
-- **disableAutomaticEdgePageTurns**: When `true`, pushing into a page edge with the D-pad never turns the page automatically. Use shoulder buttons or other page-turn controls instead. Default: `false`.
+- **edgeTurnHoldDurationMs**: Hold time in milliseconds before a directional page-edge press turns the page when `edgePageTurnsMode` is `automatic`. `0` means instant page turns. Default: `300`.
+- **edgePageTurnsMode**: Controls how directional presses behave at page edges. Use `automatic`, `doubleTap`, or `disable`. Default: `automatic`.
 - **showDocumentMinimap**: Toggle the zoomed-in minimap overlay; set to `false` to hide it.
 - **State directory override**: Set `SDL_READER_STATE_DIR` to relocate `config.json`, `reading_history.json`, and other runtime assets. Defaults to your `$HOME` directory.
 - **Environment override**: Set `SDL_READER_DEFAULT_DIR` to control the starting directory for the browser. If unset, the reader defaults to `$HOME`.
@@ -472,11 +472,11 @@ SDL Reader includes an intelligent edge navigation system for smooth page turnin
 
 ### Edge-Turn Modes
 You can choose between three behaviors for directional presses at page edges:
-- **Hold with progress bar**: Set `edgeTurnHoldDurationMs` above `0` to keep the current delayed edge-turn behavior.
-- **Instant page turns**: Set `edgeTurnHoldDurationMs` to `0` to turn pages immediately with no progress bar.
-- **Do nothing at the edge**: Set `disableAutomaticEdgePageTurns` to `true` to suppress both the progress bar and automatic page turns while panning.
-- **Via Settings Menu**: Open Settings (Menu button on TG5040, `M` key on desktop) → Page Navigation.
-- **Via config.json**: Set `"edgeTurnHoldDurationMs"` and `"disableAutomaticEdgePageTurns"` in your configuration file.
+- **Automatic**: Set `edgePageTurnsMode` to `automatic`. Use `edgeTurnHoldDurationMs` above `0` to keep the delayed edge-turn behavior with a progress bar, or set it to `0` for instant page turns.
+- **Double Tap**: Set `edgePageTurnsMode` to `doubleTap` to require a second directional press at the edge before the page turns.
+- **Disable**: Set `edgePageTurnsMode` to `disable` to suppress both the progress bar and automatic page turns while panning.
+- **Via Settings Menu**: Open Settings (Menu button on TG5040, `M` key on desktop) → Page Navigation → Panning.
+- **Via config.json**: Set `"edgeTurnHoldDurationMs"` and `"edgePageTurnsMode"` in your configuration file.
 
 ### When It Activates
 - **Fully Visible Page**: When the page already fits entirely within the window, holding a direction can immediately begin the edge-turn timer

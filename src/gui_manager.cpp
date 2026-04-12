@@ -207,6 +207,18 @@ GuiManager::GuiManager()
             break;
         }
     }
+
+    auto edgePageTurnsModes = OptionsManager::getAllEdgePageTurnsModes();
+    m_selectedEdgePageTurnsModeIndex = 0;
+    for (size_t i = 0; i < edgePageTurnsModes.size(); ++i)
+    {
+        if (edgePageTurnsModes[i] == m_currentConfig.edgePageTurnsMode)
+        {
+            m_selectedEdgePageTurnsModeIndex = static_cast<int>(i);
+            break;
+        }
+    }
+    m_edgePageTurnsModeDropdownHighlightedIndex = m_selectedEdgePageTurnsModeIndex;
 }
 
 GuiManager::~GuiManager()
@@ -494,12 +506,16 @@ void GuiManager::toggleFontMenu()
     setCurrentFontConfig(m_currentConfig);
     m_fontDropdownHighlightedIndex = m_selectedFontIndex;
     m_styleDropdownHighlightedIndex = m_selectedStyleIndex;
+    m_edgePageTurnsModeDropdownHighlightedIndex = m_selectedEdgePageTurnsModeIndex;
     m_fontDropdownOpen = false;
     m_fontDropdownSelectRequested = false;
     m_fontDropdownCancelRequested = false;
     m_styleDropdownOpen = false;
     m_styleDropdownSelectRequested = false;
     m_styleDropdownCancelRequested = false;
+    m_edgePageTurnsModeDropdownOpen = false;
+    m_edgePageTurnsModeDropdownSelectRequested = false;
+    m_edgePageTurnsModeDropdownCancelRequested = false;
     clearSliderDpadAdjustMode();
     m_mainScreenFocusIndex = WIDGET_FONT_DROPDOWN;
     m_scrollToTopPending = true;
@@ -552,6 +568,18 @@ void GuiManager::setCurrentFontConfig(const FontConfig& config)
         }
     }
     m_styleDropdownHighlightedIndex = m_selectedStyleIndex;
+
+    auto edgePageTurnsModes = OptionsManager::getAllEdgePageTurnsModes();
+    m_selectedEdgePageTurnsModeIndex = 0;
+    for (size_t i = 0; i < edgePageTurnsModes.size(); ++i)
+    {
+        if (edgePageTurnsModes[i] == config.edgePageTurnsMode)
+        {
+            m_selectedEdgePageTurnsModeIndex = static_cast<int>(i);
+            break;
+        }
+    }
+    m_edgePageTurnsModeDropdownHighlightedIndex = m_selectedEdgePageTurnsModeIndex;
 }
 
 bool GuiManager::wantsCaptureMouse() const
@@ -1187,8 +1215,19 @@ void GuiManager::renderFontMenu()
 
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
+        nk_layout_row_dynamic(m_ctx, 20, 1);
+        nk_label(m_ctx, "Panning", NK_TEXT_LEFT);
+
+        nk_layout_row_dynamic(m_ctx, 1, 1);
+        bounds = nk_widget_bounds(m_ctx);
+        canvas = nk_window_get_canvas(m_ctx);
+        nk_stroke_line(canvas, bounds.x, bounds.y, bounds.x + bounds.w, bounds.y, 1.0f, nk_rgb(100, 100, 100));
+
+        nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
+
+        const bool edgeTurnThresholdEnabled = m_tempConfig.edgePageTurnsMode == EdgePageTurnsMode::Automatic;
         char edgeTurnDurationLabel[96];
-        std::snprintf(edgeTurnDurationLabel, sizeof(edgeTurnDurationLabel), "Edge Turn Hold Duration (%d ms)", m_tempConfig.edgeTurnHoldDurationMs);
+        std::snprintf(edgeTurnDurationLabel, sizeof(edgeTurnDurationLabel), "Edge Turn Threshold (%d ms)", m_tempConfig.edgeTurnHoldDurationMs);
         nk_layout_row_dynamic(m_ctx, 20, 1);
         nk_label(m_ctx, edgeTurnDurationLabel, NK_TEXT_LEFT);
 
@@ -1197,7 +1236,12 @@ void GuiManager::renderFontMenu()
         nk_layout_row_template_push_static(m_ctx, 32);
         nk_layout_row_template_end(m_ctx);
 
-        if (m_mainScreenFocusIndex == WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER)
+        if (!edgeTurnThresholdEnabled)
+        {
+            nk_widget_disable_begin(m_ctx);
+        }
+
+        if (m_mainScreenFocusIndex == WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER && edgeTurnThresholdEnabled)
         {
             m_ctx->style.slider.normal = nk_style_item_color(accentColor());
             m_ctx->style.slider.hover = nk_style_item_color(accentHoverColor());
@@ -1213,6 +1257,10 @@ void GuiManager::renderFontMenu()
             m_tempConfig.edgeTurnHoldDurationMs = static_cast<int>(edgeTurnHoldDuration);
         }
         rememberWidgetBounds(WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER);
+        if (!edgeTurnThresholdEnabled)
+        {
+            nk_widget_disable_end(m_ctx);
+        }
         m_ctx->style.slider = originalSliderStyle;
 
         struct nk_style_button edgeTurnDurationInfoStyle = m_ctx->style.button;
@@ -1223,18 +1271,153 @@ void GuiManager::renderFontMenu()
         if (m_mainScreenFocusIndex == WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON || edgeTurnDurationInfoHovered)
         {
             showInfoTooltip(WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON,
-                            "How long to hold at a page edge before turning.\n"
+                            "How long to hold at a page edge before turning when\n"
+                            "Edge Page Turns Mode is Automatic.\n"
                             "Set to 0 ms for instant edge turns.");
         }
 
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
+
+        auto edgePageTurnsModes = OptionsManager::getAllEdgePageTurnsModes();
+        if (m_selectedEdgePageTurnsModeIndex < 0 || m_selectedEdgePageTurnsModeIndex >= (int) edgePageTurnsModes.size())
+        {
+            m_selectedEdgePageTurnsModeIndex = 0;
+        }
+
+        nk_layout_row_dynamic(m_ctx, 20, 1);
+        nk_label(m_ctx, "Edge Page Turns Mode:", NK_TEXT_LEFT);
 
         nk_layout_row_template_begin(m_ctx, 25);
         nk_layout_row_template_push_dynamic(m_ctx);
         nk_layout_row_template_push_static(m_ctx, 32);
         nk_layout_row_template_end(m_ctx);
 
-        if (m_mainScreenFocusIndex == WIDGET_DISABLE_AUTO_EDGE_TURNS_CHECKBOX)
+        if (m_mainScreenFocusIndex == WIDGET_EDGE_PAGE_TURNS_MODE_DROPDOWN)
+        {
+            m_ctx->style.combo.button.normal = nk_style_item_color(accentColor());
+            m_ctx->style.combo.button.hover = nk_style_item_color(accentHoverColor());
+            m_ctx->style.combo.button.active = nk_style_item_color(accentActiveColor());
+            m_ctx->style.combo.normal = nk_style_item_color(accentColor());
+            m_ctx->style.combo.hover = nk_style_item_color(accentHoverColor());
+            m_ctx->style.combo.active = nk_style_item_color(accentActiveColor());
+        }
+
+        const char* currentEdgePageTurnsMode = OptionsManager::getEdgePageTurnsModeName(edgePageTurnsModes[m_selectedEdgePageTurnsModeIndex]);
+        if (m_edgePageTurnsModeDropdownHighlightedIndex < 0 || m_edgePageTurnsModeDropdownHighlightedIndex >= (int) edgePageTurnsModes.size())
+        {
+            m_edgePageTurnsModeDropdownHighlightedIndex =
+                (m_selectedEdgePageTurnsModeIndex >= 0 && m_selectedEdgePageTurnsModeIndex < (int) edgePageTurnsModes.size()) ? m_selectedEdgePageTurnsModeIndex : 0;
+        }
+
+        bool forceEdgePageTurnsModeOpen = m_edgePageTurnsModeDropdownOpen ||
+                                          m_edgePageTurnsModeDropdownSelectRequested ||
+                                          m_edgePageTurnsModeDropdownCancelRequested;
+        bool edgePageTurnsComboOpened = nk_combo_begin_label_controller(m_ctx, currentEdgePageTurnsMode, nk_vec2(nk_widget_width(m_ctx), 200), forceEdgePageTurnsModeOpen);
+        rememberWidgetBounds(WIDGET_EDGE_PAGE_TURNS_MODE_DROPDOWN);
+        if (edgePageTurnsComboOpened)
+        {
+            ensureDropdownHighlightVisible(m_edgePageTurnsModeDropdownHighlightedIndex, static_cast<int>(edgePageTurnsModes.size()));
+            nk_layout_row_dynamic(m_ctx, kDropdownItemHeight, 1);
+            for (size_t i = 0; i < edgePageTurnsModes.size(); ++i)
+            {
+                m_ctx->style.selectable = originalSelectableStyle;
+
+                bool isHighlighted = m_edgePageTurnsModeDropdownOpen &&
+                                     (m_edgePageTurnsModeDropdownHighlightedIndex == static_cast<int>(i));
+                if (isHighlighted)
+                {
+                    m_ctx->style.selectable.normal = nk_style_item_color(accentColor());
+                    m_ctx->style.selectable.hover = nk_style_item_color(accentHoverColor());
+                    m_ctx->style.selectable.pressed = nk_style_item_color(accentActiveColor());
+                    m_ctx->style.selectable.text_normal = nk_rgb(255, 255, 255);
+                    m_ctx->style.selectable.text_hover = nk_rgb(255, 255, 255);
+                    m_ctx->style.selectable.text_pressed = nk_rgb(255, 255, 255);
+                }
+
+                nk_bool isSelected = (m_selectedEdgePageTurnsModeIndex == static_cast<int>(i));
+                nk_bool selectionChanged = nk_selectable_label(m_ctx, OptionsManager::getEdgePageTurnsModeName(edgePageTurnsModes[i]), NK_TEXT_LEFT, &isSelected);
+                if (selectionChanged && isSelected)
+                {
+                    m_selectedEdgePageTurnsModeIndex = static_cast<int>(i);
+                    m_tempConfig.edgePageTurnsMode = edgePageTurnsModes[i];
+                    m_edgePageTurnsModeDropdownHighlightedIndex = m_selectedEdgePageTurnsModeIndex;
+                    if (m_tempConfig.edgePageTurnsMode != EdgePageTurnsMode::Automatic)
+                    {
+                        clearSliderDpadAdjustMode();
+                    }
+                    nk_combo_close(m_ctx);
+                    m_edgePageTurnsModeDropdownOpen = false;
+                    m_edgePageTurnsModeDropdownSelectRequested = false;
+                    m_edgePageTurnsModeDropdownCancelRequested = false;
+                }
+            }
+
+            if (m_edgePageTurnsModeDropdownSelectRequested)
+            {
+                if (m_edgePageTurnsModeDropdownHighlightedIndex >= 0 && m_edgePageTurnsModeDropdownHighlightedIndex < (int) edgePageTurnsModes.size())
+                {
+                    int chosenIndex = m_edgePageTurnsModeDropdownHighlightedIndex;
+                    m_selectedEdgePageTurnsModeIndex = chosenIndex;
+                    m_tempConfig.edgePageTurnsMode = edgePageTurnsModes[chosenIndex];
+                    if (m_tempConfig.edgePageTurnsMode != EdgePageTurnsMode::Automatic)
+                    {
+                        clearSliderDpadAdjustMode();
+                    }
+                }
+                nk_combo_close(m_ctx);
+                m_edgePageTurnsModeDropdownOpen = false;
+                m_edgePageTurnsModeDropdownSelectRequested = false;
+                m_edgePageTurnsModeDropdownHighlightedIndex = m_selectedEdgePageTurnsModeIndex;
+            }
+
+            if (m_edgePageTurnsModeDropdownCancelRequested)
+            {
+                nk_combo_close(m_ctx);
+                m_edgePageTurnsModeDropdownOpen = false;
+                m_edgePageTurnsModeDropdownCancelRequested = false;
+                m_edgePageTurnsModeDropdownHighlightedIndex = m_selectedEdgePageTurnsModeIndex;
+            }
+
+            nk_combo_end(m_ctx);
+            m_ctx->style.selectable = originalSelectableStyle;
+        }
+        else
+        {
+            if (m_edgePageTurnsModeDropdownOpen || m_edgePageTurnsModeDropdownSelectRequested || m_edgePageTurnsModeDropdownCancelRequested)
+            {
+                m_edgePageTurnsModeDropdownOpen = false;
+                m_edgePageTurnsModeDropdownSelectRequested = false;
+                m_edgePageTurnsModeDropdownCancelRequested = false;
+                m_edgePageTurnsModeDropdownHighlightedIndex = m_selectedEdgePageTurnsModeIndex;
+            }
+            m_ctx->style.selectable = originalSelectableStyle;
+        }
+
+        m_ctx->style.combo = originalComboStyle;
+
+        struct nk_style_button edgePageTurnsModeInfoStyle = m_ctx->style.button;
+        configureInfoGlyphStyle(edgePageTurnsModeInfoStyle, m_mainScreenFocusIndex == WIDGET_EDGE_PAGE_TURNS_MODE_INFO_BUTTON);
+        nk_button_label_styled(m_ctx, &edgePageTurnsModeInfoStyle, "(?)");
+        bool edgePageTurnsModeInfoHovered = nk_widget_is_hovered(m_ctx);
+        rememberWidgetBounds(WIDGET_EDGE_PAGE_TURNS_MODE_INFO_BUTTON);
+        if (m_mainScreenFocusIndex == WIDGET_EDGE_PAGE_TURNS_MODE_INFO_BUTTON || edgePageTurnsModeInfoHovered)
+        {
+            showInfoTooltip(WIDGET_EDGE_PAGE_TURNS_MODE_INFO_BUTTON,
+                            "Choose how directional presses behave at page edges.\n"
+                            "Automatic uses the threshold above.\n"
+                            "Double Tap turns the page on a second press.\n"
+                            "Disable requires shoulder buttons or other page turns.");
+        }
+
+        nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
+
+        // Keep Panning Position checkbox + info button
+        nk_layout_row_template_begin(m_ctx, 25);
+        nk_layout_row_template_push_dynamic(m_ctx);
+        nk_layout_row_template_push_static(m_ctx, 32);
+        nk_layout_row_template_end(m_ctx);
+
+        if (m_mainScreenFocusIndex == WIDGET_KEEP_PANNING_CHECKBOX)
         {
             m_ctx->style.checkbox.normal = nk_style_item_color(focusBackground);
             m_ctx->style.checkbox.hover = nk_style_item_color(focusBackground);
@@ -1244,25 +1427,25 @@ void GuiManager::renderFontMenu()
             m_ctx->style.checkbox.border_color = focusBorderColor;
         }
 
-        nk_bool disableAutomaticEdgeTurns = m_tempConfig.disableAutomaticEdgePageTurns ? nk_true : nk_false;
-        if (nk_checkbox_label(m_ctx, "Disable Automatic Edge Page Turns", &disableAutomaticEdgeTurns))
+        nk_bool keepPanning = m_tempConfig.keepPanningPosition ? nk_true : nk_false;
+        if (nk_checkbox_label(m_ctx, "Keep Panning Position on Page Change", &keepPanning))
         {
-            m_tempConfig.disableAutomaticEdgePageTurns = (disableAutomaticEdgeTurns == nk_true);
+            m_tempConfig.keepPanningPosition = (keepPanning == nk_true);
         }
-        rememberWidgetBounds(WIDGET_DISABLE_AUTO_EDGE_TURNS_CHECKBOX);
+        rememberWidgetBounds(WIDGET_KEEP_PANNING_CHECKBOX);
         m_ctx->style.checkbox = originalToggleStyle;
 
-        struct nk_style_button disableAutoEdgeTurnInfoStyle = m_ctx->style.button;
-        configureInfoGlyphStyle(disableAutoEdgeTurnInfoStyle, m_mainScreenFocusIndex == WIDGET_DISABLE_AUTO_EDGE_TURNS_INFO_BUTTON);
-        nk_button_label_styled(m_ctx, &disableAutoEdgeTurnInfoStyle, "(?)");
-        bool disableAutoEdgeTurnInfoHovered = nk_widget_is_hovered(m_ctx);
-        rememberWidgetBounds(WIDGET_DISABLE_AUTO_EDGE_TURNS_INFO_BUTTON);
-        if (m_mainScreenFocusIndex == WIDGET_DISABLE_AUTO_EDGE_TURNS_INFO_BUTTON || disableAutoEdgeTurnInfoHovered)
+        struct nk_style_button panningInfoStyle = m_ctx->style.button;
+        configureInfoGlyphStyle(panningInfoStyle, m_mainScreenFocusIndex == WIDGET_KEEP_PANNING_INFO_BUTTON);
+        nk_button_label_styled(m_ctx, &panningInfoStyle, "(?)");
+        bool panningInfoHovered = nk_widget_is_hovered(m_ctx);
+        rememberWidgetBounds(WIDGET_KEEP_PANNING_INFO_BUTTON);
+        if (m_mainScreenFocusIndex == WIDGET_KEEP_PANNING_INFO_BUTTON || panningInfoHovered)
         {
-            showInfoTooltip(WIDGET_DISABLE_AUTO_EDGE_TURNS_INFO_BUTTON,
-                            "When enabled, pushing into a page edge never\n"
-                            "turns the page automatically. Use shoulder\n"
-                            "buttons or other page-turn controls instead.");
+            showInfoTooltip(WIDGET_KEEP_PANNING_INFO_BUTTON,
+                            "When enabled, panning position is preserved when\n"
+                            "changing pages (useful for zoomed reading).\n"
+                            "When disabled, pages always start at the top.");
         }
 
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
@@ -1381,49 +1564,6 @@ void GuiManager::renderFontMenu()
         {
             showInfoTooltip(WIDGET_ZOOM_OVERLAY_INFO_BUTTON,
                             "Show the zoom level badge\nwhen you change scale or rotate the page.");
-        }
-
-        nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
-
-        // Keep Panning Position checkbox + info button
-        nk_layout_row_template_begin(m_ctx, 25);
-        nk_layout_row_template_push_dynamic(m_ctx);
-        nk_layout_row_template_push_static(m_ctx, 32);
-        nk_layout_row_template_end(m_ctx);
-
-        // Highlight checkbox if focused
-        if (m_mainScreenFocusIndex == WIDGET_KEEP_PANNING_CHECKBOX)
-        {
-            m_ctx->style.checkbox.normal = nk_style_item_color(focusBackground);
-            m_ctx->style.checkbox.hover = nk_style_item_color(focusBackground);
-            m_ctx->style.checkbox.cursor_normal = nk_style_item_color(focusCursorColor);
-            m_ctx->style.checkbox.cursor_hover = nk_style_item_color(focusCursorColor);
-            m_ctx->style.checkbox.border = 2.0f;
-            m_ctx->style.checkbox.border_color = focusBorderColor;
-        }
-
-        nk_bool keepPanning = m_tempConfig.keepPanningPosition ? nk_true : nk_false;
-        if (nk_checkbox_label(m_ctx, "Keep Panning Position on Page Change", &keepPanning))
-        {
-            m_tempConfig.keepPanningPosition = (keepPanning == nk_true);
-        }
-        rememberWidgetBounds(WIDGET_KEEP_PANNING_CHECKBOX);
-
-        // Restore checkbox style
-        m_ctx->style.checkbox = originalToggleStyle;
-
-        // Info button for keep panning description uses same glyph styling
-        struct nk_style_button panningInfoStyle = m_ctx->style.button;
-        configureInfoGlyphStyle(panningInfoStyle, m_mainScreenFocusIndex == WIDGET_KEEP_PANNING_INFO_BUTTON);
-        nk_button_label_styled(m_ctx, &panningInfoStyle, "(?)");
-        bool panningInfoHovered = nk_widget_is_hovered(m_ctx);
-        rememberWidgetBounds(WIDGET_KEEP_PANNING_INFO_BUTTON);
-        if (m_mainScreenFocusIndex == WIDGET_KEEP_PANNING_INFO_BUTTON || panningInfoHovered)
-        {
-            showInfoTooltip(WIDGET_KEEP_PANNING_INFO_BUTTON,
-                            "When enabled, panning position is preserved when\n"
-                            "changing pages (useful for zoomed reading).\n"
-                            "When disabled, pages always start at the top.");
         }
 
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
@@ -2438,6 +2578,48 @@ bool GuiManager::handleKeyboardNavigation(const SDL_Event& event)
             }
         }
 
+        if (m_edgePageTurnsModeDropdownOpen)
+        {
+            auto allModes = OptionsManager::getAllEdgePageTurnsModes();
+            int modeCount = static_cast<int>(allModes.size());
+            if (modeCount == 0)
+            {
+                m_edgePageTurnsModeDropdownHighlightedIndex = 0;
+            }
+
+            switch (event.key.keysym.sym)
+            {
+            case SDLK_UP:
+                if (modeCount > 0)
+                {
+                    m_edgePageTurnsModeDropdownHighlightedIndex = (m_edgePageTurnsModeDropdownHighlightedIndex - 1 + modeCount) % modeCount;
+                    std::cout << "[DEBUG] Keyboard edge page turns dropdown UP - highlight: " << m_edgePageTurnsModeDropdownHighlightedIndex << std::endl;
+                }
+                return true;
+            case SDLK_DOWN:
+                if (modeCount > 0)
+                {
+                    m_edgePageTurnsModeDropdownHighlightedIndex = (m_edgePageTurnsModeDropdownHighlightedIndex + 1) % modeCount;
+                    std::cout << "[DEBUG] Keyboard edge page turns dropdown DOWN - highlight: " << m_edgePageTurnsModeDropdownHighlightedIndex << std::endl;
+                }
+                return true;
+            case SDLK_RETURN:
+            case SDLK_SPACE:
+                std::cout << "[DEBUG] Keyboard confirm edge page turns dropdown index " << m_edgePageTurnsModeDropdownHighlightedIndex << std::endl;
+                m_edgePageTurnsModeDropdownSelectRequested = true;
+                return true;
+            case SDLK_ESCAPE:
+                std::cout << "[DEBUG] Keyboard cancel edge page turns dropdown" << std::endl;
+                m_edgePageTurnsModeDropdownCancelRequested = true;
+                return true;
+            case SDLK_LEFT:
+            case SDLK_RIGHT:
+                return true;
+            default:
+                break;
+            }
+        }
+
         switch (event.key.keysym.sym)
         {
         case SDLK_UP:
@@ -2587,8 +2769,11 @@ void GuiManager::adjustFocusedWidget(int direction)
         std::cout << "[DEBUG] Zoom step adjusted to: " << m_tempConfig.zoomStep << std::endl;
         break;
     case WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER:
-        m_tempConfig.edgeTurnHoldDurationMs = std::clamp(m_tempConfig.edgeTurnHoldDurationMs + (direction * 50), 0, 1000);
-        std::cout << "[DEBUG] Edge turn hold duration adjusted to: " << m_tempConfig.edgeTurnHoldDurationMs << std::endl;
+        if (m_tempConfig.edgePageTurnsMode == EdgePageTurnsMode::Automatic)
+        {
+            m_tempConfig.edgeTurnHoldDurationMs = std::clamp(m_tempConfig.edgeTurnHoldDurationMs + (direction * 50), 0, 1000);
+            std::cout << "[DEBUG] Edge turn hold duration adjusted to: " << m_tempConfig.edgeTurnHoldDurationMs << std::endl;
+        }
         break;
     default:
         // Other widgets don't respond to left/right adjustment
@@ -2653,10 +2838,41 @@ void GuiManager::activateFocusedWidget()
             m_styleDropdownSelectRequested = true;
         }
         break;
+    case WIDGET_EDGE_PAGE_TURNS_MODE_DROPDOWN:
+        if (!m_edgePageTurnsModeDropdownOpen)
+        {
+            auto allModes = OptionsManager::getAllEdgePageTurnsModes();
+            if (!allModes.empty())
+            {
+                std::cout << "[DEBUG] Opening edge page turns mode dropdown" << std::endl;
+                m_edgePageTurnsModeDropdownOpen = true;
+                m_edgePageTurnsModeDropdownSelectRequested = false;
+                m_edgePageTurnsModeDropdownCancelRequested = false;
+                if (m_selectedEdgePageTurnsModeIndex >= 0 && m_selectedEdgePageTurnsModeIndex < (int) allModes.size())
+                {
+                    m_edgePageTurnsModeDropdownHighlightedIndex = m_selectedEdgePageTurnsModeIndex;
+                }
+                else
+                {
+                    m_edgePageTurnsModeDropdownHighlightedIndex = 0;
+                }
+            }
+        }
+        else
+        {
+            std::cout << "[DEBUG] Confirming selection from edge page turns mode dropdown" << std::endl;
+            m_edgePageTurnsModeDropdownSelectRequested = true;
+        }
+        break;
     case WIDGET_FONT_SIZE_SLIDER:
     case WIDGET_ZOOM_STEP_SLIDER:
     case WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER:
-        if (isSliderDpadAdjustModeActive())
+        if (m_mainScreenFocusIndex == WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER &&
+            m_tempConfig.edgePageTurnsMode != EdgePageTurnsMode::Automatic)
+        {
+            clearSliderDpadAdjustMode();
+        }
+        else if (isSliderDpadAdjustModeActive())
         {
             clearSliderDpadAdjustMode();
             std::cout << "[DEBUG] Slider adjust mode disabled for widget " << m_mainScreenFocusIndex << std::endl;
@@ -2670,10 +2886,6 @@ void GuiManager::activateFocusedWidget()
     case WIDGET_FILE_BROWSER_IMAGES_CHECKBOX:
         m_tempConfig.showImagesInFileBrowser = !m_tempConfig.showImagesInFileBrowser;
         std::cout << "[DEBUG] Toggle File Browser Images: " << (m_tempConfig.showImagesInFileBrowser ? "enabled" : "disabled") << std::endl;
-        break;
-    case WIDGET_DISABLE_AUTO_EDGE_TURNS_CHECKBOX:
-        m_tempConfig.disableAutomaticEdgePageTurns = !m_tempConfig.disableAutomaticEdgePageTurns;
-        std::cout << "[DEBUG] Toggle Automatic Edge Page Turns: " << (m_tempConfig.disableAutomaticEdgePageTurns ? "disabled" : "enabled") << std::endl;
         break;
     case WIDGET_MINIMAP_CHECKBOX:
         // Toggle checkbox
@@ -2724,8 +2936,10 @@ void GuiManager::activateFocusedWidget()
         m_tempConfig = FontConfig();
         m_selectedFontIndex = 0;
         m_selectedStyleIndex = 0;
+        m_selectedEdgePageTurnsModeIndex = 0;
         m_fontDropdownHighlightedIndex = m_selectedFontIndex;
         m_styleDropdownHighlightedIndex = m_selectedStyleIndex;
+        m_edgePageTurnsModeDropdownHighlightedIndex = m_selectedEdgePageTurnsModeIndex;
         snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_tempConfig.fontSize);
         snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_tempConfig.zoomStep);
         strcpy(m_pageJumpInput, "1");
@@ -2776,7 +2990,7 @@ bool GuiManager::isInfoWidget(MainScreenWidget widget) const
 {
     return widget == WIDGET_FILE_BROWSER_IMAGES_INFO_BUTTON ||
            widget == WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON ||
-           widget == WIDGET_DISABLE_AUTO_EDGE_TURNS_INFO_BUTTON ||
+           widget == WIDGET_EDGE_PAGE_TURNS_MODE_INFO_BUTTON ||
            widget == WIDGET_MINIMAP_INFO_BUTTON ||
            widget == WIDGET_PAGE_INDICATOR_INFO_BUTTON || widget == WIDGET_ZOOM_OVERLAY_INFO_BUTTON ||
            widget == WIDGET_KEEP_PANNING_INFO_BUTTON;
@@ -2854,9 +3068,9 @@ bool GuiManager::handleHorizontalNavigation(int direction)
     static constexpr MainScreenWidget kEdgeTurnDurationGroup[] = {
         WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER,
         WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON};
-    static constexpr MainScreenWidget kDisableAutoEdgeTurnGroup[] = {
-        WIDGET_DISABLE_AUTO_EDGE_TURNS_CHECKBOX,
-        WIDGET_DISABLE_AUTO_EDGE_TURNS_INFO_BUTTON};
+    static constexpr MainScreenWidget kEdgePageTurnsModeGroup[] = {
+        WIDGET_EDGE_PAGE_TURNS_MODE_DROPDOWN,
+        WIDGET_EDGE_PAGE_TURNS_MODE_INFO_BUTTON};
     static constexpr MainScreenWidget kMinimapInfoGroup[] = {
         WIDGET_MINIMAP_CHECKBOX,
         WIDGET_MINIMAP_INFO_BUTTON};
@@ -2886,7 +3100,7 @@ bool GuiManager::handleHorizontalNavigation(int direction)
     {
         return true;
     }
-    if (moveFocusInGroup(kDisableAutoEdgeTurnGroup, sizeof(kDisableAutoEdgeTurnGroup) / sizeof(kDisableAutoEdgeTurnGroup[0]), direction))
+    if (moveFocusInGroup(kEdgePageTurnsModeGroup, sizeof(kEdgePageTurnsModeGroup) / sizeof(kEdgePageTurnsModeGroup[0]), direction))
     {
         return true;
     }
@@ -2967,6 +3181,23 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
             return true;
         }
 
+        if (m_edgePageTurnsModeDropdownOpen)
+        {
+            auto allModes = OptionsManager::getAllEdgePageTurnsModes();
+            int modeCount = static_cast<int>(allModes.size());
+            if (modeCount == 0)
+            {
+                m_edgePageTurnsModeDropdownHighlightedIndex = 0;
+            }
+
+            if (modeCount > 0)
+            {
+                m_edgePageTurnsModeDropdownHighlightedIndex = (m_edgePageTurnsModeDropdownHighlightedIndex - 1 + modeCount) % modeCount;
+                std::cout << "[DEBUG] Controller edge page turns dropdown UP - highlight: " << m_edgePageTurnsModeDropdownHighlightedIndex << std::endl;
+            }
+            return true;
+        }
+
         if (m_styleDropdownOpen)
         {
             auto allStyles = OptionsManager::getAllReadingStyles();
@@ -2980,6 +3211,23 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
             {
                 m_styleDropdownHighlightedIndex = (m_styleDropdownHighlightedIndex - 1 + styleCount) % styleCount;
                 std::cout << "[DEBUG] Controller style dropdown UP - highlight: " << m_styleDropdownHighlightedIndex << std::endl;
+            }
+            return true;
+        }
+
+        if (m_edgePageTurnsModeDropdownOpen)
+        {
+            auto allModes = OptionsManager::getAllEdgePageTurnsModes();
+            int modeCount = static_cast<int>(allModes.size());
+            if (modeCount == 0)
+            {
+                m_edgePageTurnsModeDropdownHighlightedIndex = 0;
+            }
+
+            if (modeCount > 0)
+            {
+                m_edgePageTurnsModeDropdownHighlightedIndex = (m_edgePageTurnsModeDropdownHighlightedIndex + 1) % modeCount;
+                std::cout << "[DEBUG] Controller edge page turns dropdown DOWN - highlight: " << m_edgePageTurnsModeDropdownHighlightedIndex << std::endl;
             }
             return true;
         }
@@ -3076,7 +3324,7 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
 
     auto handleDpadLeftPress = [&]() -> bool
     {
-        if (m_fontDropdownOpen || m_styleDropdownOpen)
+        if (m_fontDropdownOpen || m_styleDropdownOpen || m_edgePageTurnsModeDropdownOpen)
         {
             return true; // Ignore left/right while dropdowns are open
         }
@@ -3095,7 +3343,7 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
 
     auto handleDpadRightPress = [&]() -> bool
     {
-        if (m_fontDropdownOpen || m_styleDropdownOpen)
+        if (m_fontDropdownOpen || m_styleDropdownOpen || m_edgePageTurnsModeDropdownOpen)
         {
             return true; // Ignore left/right while dropdowns are open
         }
@@ -3259,6 +3507,30 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
             }
         }
 
+        if (m_edgePageTurnsModeDropdownOpen)
+        {
+            switch (event.cbutton.button)
+            {
+            case SDL_CONTROLLER_BUTTON_DPAD_UP:
+                return handleDpadUpPress();
+            case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+                return handleDpadDownPress();
+            case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+            case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+                return handleDpadLeftPress();
+            case kAcceptButton:
+                std::cout << "[DEBUG] Controller A - confirm edge page turns dropdown index " << m_edgePageTurnsModeDropdownHighlightedIndex << std::endl;
+                m_edgePageTurnsModeDropdownSelectRequested = true;
+                return true;
+            case kCancelButton:
+                std::cout << "[DEBUG] Controller B - cancel edge page turns dropdown" << std::endl;
+                m_edgePageTurnsModeDropdownCancelRequested = true;
+                return true;
+            default:
+                break;
+            }
+        }
+
         // Handle main screen navigation using our custom system
         if (m_showFontMenu)
         {
@@ -3385,6 +3657,9 @@ void GuiManager::closeFontMenu()
     m_styleDropdownOpen = false;
     m_styleDropdownSelectRequested = false;
     m_styleDropdownCancelRequested = false;
+    m_edgePageTurnsModeDropdownOpen = false;
+    m_edgePageTurnsModeDropdownSelectRequested = false;
+    m_edgePageTurnsModeDropdownCancelRequested = false;
     clearSliderDpadAdjustMode();
     m_focusScrollPending = false;
 
@@ -3404,6 +3679,18 @@ void GuiManager::closeFontMenu()
         }
     }
     m_styleDropdownHighlightedIndex = m_selectedStyleIndex;
+
+    auto edgePageTurnsModes = OptionsManager::getAllEdgePageTurnsModes();
+    m_selectedEdgePageTurnsModeIndex = 0;
+    for (size_t i = 0; i < edgePageTurnsModes.size(); ++i)
+    {
+        if (edgePageTurnsModes[i] == m_currentConfig.edgePageTurnsMode)
+        {
+            m_selectedEdgePageTurnsModeIndex = static_cast<int>(i);
+            break;
+        }
+    }
+    m_edgePageTurnsModeDropdownHighlightedIndex = m_selectedEdgePageTurnsModeIndex;
 
     snprintf(m_fontSizeInput, sizeof(m_fontSizeInput), "%d", m_currentConfig.fontSize);
     snprintf(m_zoomStepInput, sizeof(m_zoomStepInput), "%d", m_currentConfig.zoomStep);

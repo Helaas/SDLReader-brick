@@ -106,6 +106,7 @@ private:
 
     int m_selectedFontIndex = 0;
     int m_selectedStyleIndex = 0;
+    int m_selectedEdgePageTurnsModeIndex = 0;
     char m_fontSizeInput[16] = "12";
     char m_zoomStepInput[16] = "10";
     char m_pageJumpInput[16] = "1";
@@ -128,8 +129,8 @@ private:
         WIDGET_FILE_BROWSER_IMAGES_INFO_BUTTON,
         WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER,
         WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON,
-        WIDGET_DISABLE_AUTO_EDGE_TURNS_CHECKBOX,
-        WIDGET_DISABLE_AUTO_EDGE_TURNS_INFO_BUTTON,
+        WIDGET_EDGE_PAGE_TURNS_MODE_DROPDOWN,
+        WIDGET_EDGE_PAGE_TURNS_MODE_INFO_BUTTON,
         WIDGET_MINIMAP_CHECKBOX,
         WIDGET_MINIMAP_INFO_BUTTON,
         WIDGET_PAGE_INDICATOR_CHECKBOX,
@@ -176,6 +177,11 @@ private:
     int m_styleDropdownHighlightedIndex = 0;
     bool m_styleDropdownSelectRequested = false;
     bool m_styleDropdownCancelRequested = false;
+
+    bool m_edgePageTurnsModeDropdownOpen = false;
+    int m_edgePageTurnsModeDropdownHighlightedIndex = 0;
+    bool m_edgePageTurnsModeDropdownSelectRequested = false;
+    bool m_edgePageTurnsModeDropdownCancelRequested = false;
 
     Uint32 m_lastButtonPressTime = 0;
 #ifdef PLATFORM_MY355
