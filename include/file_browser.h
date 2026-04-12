@@ -16,7 +16,6 @@
 #include <vector>
 
 class PowerHandler;
-struct FontConfig;
 struct nk_context;
 
 struct FileBrowserLaunchOptions
@@ -265,19 +264,6 @@ private:
     void cancelThumbnailJobsForPath(const std::string& path);
     void removeThumbnailEntry(const std::string& path);
     void tryRestoreSelection(const std::string& directoryPath);
-
-    // Settings overlay
-    bool m_showSettings{false};
-    std::unique_ptr<FontConfig> m_settingsConfig;
-    int m_settingsFontIndex{0};
-    int m_settingsStyleIndex{0};
-    int m_settingsEdgeModeIndex{0};
-    std::vector<std::string> m_settingsFontNames;
-
-    void renderSettings();
-    void openSettings();
-    void closeSettings();
-    void applySettings();
 
     static bool s_lastThumbnailView;
 };
