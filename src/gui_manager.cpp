@@ -1279,6 +1279,20 @@ void GuiManager::renderFontMenu()
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
         auto edgePageTurnsModes = OptionsManager::getAllEdgePageTurnsModes();
+        for (size_t i = 0; i < edgePageTurnsModes.size(); ++i)
+        {
+            if (edgePageTurnsModes[i] == m_tempConfig.edgePageTurnsMode)
+            {
+                m_selectedEdgePageTurnsModeIndex = static_cast<int>(i);
+                if (!m_edgePageTurnsModeDropdownOpen &&
+                    !m_edgePageTurnsModeDropdownSelectRequested &&
+                    !m_edgePageTurnsModeDropdownCancelRequested)
+                {
+                    m_edgePageTurnsModeDropdownHighlightedIndex = m_selectedEdgePageTurnsModeIndex;
+                }
+                break;
+            }
+        }
         if (m_selectedEdgePageTurnsModeIndex < 0 || m_selectedEdgePageTurnsModeIndex >= (int) edgePageTurnsModes.size())
         {
             m_selectedEdgePageTurnsModeIndex = 0;
@@ -1316,6 +1330,7 @@ void GuiManager::renderFontMenu()
         rememberWidgetBounds(WIDGET_EDGE_PAGE_TURNS_MODE_DROPDOWN);
         if (edgePageTurnsComboOpened)
         {
+            m_edgePageTurnsModeDropdownOpen = true;
             ensureDropdownHighlightVisible(m_edgePageTurnsModeDropdownHighlightedIndex, static_cast<int>(edgePageTurnsModes.size()));
             nk_layout_row_dynamic(m_ctx, kDropdownItemHeight, 1);
             for (size_t i = 0; i < edgePageTurnsModes.size(); ++i)
@@ -3293,6 +3308,23 @@ bool GuiManager::handleControllerInput(const SDL_Event& event)
             {
                 m_styleDropdownHighlightedIndex = (m_styleDropdownHighlightedIndex + 1) % styleCount;
                 std::cout << "[DEBUG] Controller style dropdown DOWN - highlight: " << m_styleDropdownHighlightedIndex << std::endl;
+            }
+            return true;
+        }
+
+        if (m_edgePageTurnsModeDropdownOpen)
+        {
+            auto allModes = OptionsManager::getAllEdgePageTurnsModes();
+            int modeCount = static_cast<int>(allModes.size());
+            if (modeCount == 0)
+            {
+                m_edgePageTurnsModeDropdownHighlightedIndex = 0;
+            }
+
+            if (modeCount > 0)
+            {
+                m_edgePageTurnsModeDropdownHighlightedIndex = (m_edgePageTurnsModeDropdownHighlightedIndex + 1) % modeCount;
+                std::cout << "[DEBUG] Controller edge page turns dropdown DOWN - highlight: " << m_edgePageTurnsModeDropdownHighlightedIndex << std::endl;
             }
             return true;
         }
