@@ -78,6 +78,12 @@ This project supports multiple platforms with a unified build system.
 # Build for default platform (TG5040)
 make
 
+# Build for the current host OS (macOS/Linux)
+make native
+
+# Build and run on the current host OS
+make run-native
+
 # Build for specific platform
 make tg5040    # TG5040 embedded device (TrimUI Brick and Smart Pro)
 make tg5050    # TG5050 embedded device (TrimUI Smart Pro S)

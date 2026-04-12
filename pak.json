@@ -1,12 +1,13 @@
 {
     "name": "SDLReader",
-    "version": "v2.3.1",
+    "version": "v2.4.0",
     "type": "TOOL",
-    "description": "Read PDF, CBZ/ZIP & CBR/RAR comic archives, EPUB, MOBI, and plain text files with smooth navigation, zoom, rotation, and mirroring. SDLReader is a lightweight, cross-platform viewer optimized for TrimUI devices (Brick, Smart Pro, Smart Pro S) and the Miyoo Flip running NextUI, built on SDL2 and MuPDF.",
+    "description": "Read PDF, CBZ/ZIP & CBR/RAR comic archives, EPUB, MOBI, plain text, and standalone image files with smooth navigation, zoom, rotation, and mirroring. SDLReader is a lightweight, cross-platform viewer optimized for TrimUI devices (Brick, Smart Pro, Smart Pro S) and the Miyoo Flip running NextUI, built on SDL2 and MuPDF.",
     "author": "Helaas",
     "repo_url": "https://github.com/Helaas/SDLReader-brick",
     "release_filename": "SDLReader.pakz",
     "changelog": {
+        "v2.4.0": "Standalone image support, optional image visibility in the file browser, and new edge page-turn modes (Automatic, Double Tap, or Disable).",
         "v2.3.1": "Same as v2.3.0: Miyoo Flip support, installation size optimized, general performance improvements. Issue fixed with bundle extraction via Pak Store.",
         "v2.3.0": "Miyoo Flip support, installation size optimized, general performance improvements.",
         "v2.2.2": "Smart Pro S support, and bugfix for final ebook pages being unreachable after changing font size.",
