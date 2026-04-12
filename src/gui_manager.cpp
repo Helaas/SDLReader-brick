@@ -1140,6 +1140,87 @@ void GuiManager::renderFontMenu()
             }
         };
 
+        auto renderJumpToPageSection = [&]()
+        {
+            nk_layout_row_dynamic(m_ctx, 20, 1);
+            nk_label(m_ctx, "Jump to Page:", NK_TEXT_LEFT);
+
+            nk_layout_row_template_begin(m_ctx, 30);
+            nk_layout_row_template_push_static(m_ctx, 160);
+            nk_layout_row_template_push_static(m_ctx, 90);
+            nk_layout_row_template_push_static(m_ctx, 160);
+            nk_layout_row_template_end(m_ctx);
+
+            if (m_mainScreenFocusIndex == WIDGET_PAGE_JUMP_INPUT)
+            {
+                m_ctx->style.edit.normal = nk_style_item_color(accentColor());
+                m_ctx->style.edit.hover = nk_style_item_color(accentHoverColor());
+                m_ctx->style.edit.active = nk_style_item_color(accentActiveColor());
+            }
+
+            nk_edit_string_zero_terminated(m_ctx, NK_EDIT_FIELD | NK_EDIT_SELECTABLE, m_pageJumpInput, sizeof(m_pageJumpInput), nk_filter_decimal);
+            rememberWidgetBounds(WIDGET_PAGE_JUMP_INPUT);
+
+            m_ctx->style.edit = originalEditStyle;
+
+            bool validPageInput = false;
+            int targetPage = std::atoi(m_pageJumpInput);
+            if (targetPage >= 1 && targetPage <= m_pageCount)
+            {
+                validPageInput = true;
+            }
+
+            if (!validPageInput)
+            {
+                nk_widget_disable_begin(m_ctx);
+            }
+
+            if (m_mainScreenFocusIndex == WIDGET_GO_BUTTON)
+            {
+                m_ctx->style.button.normal = nk_style_item_color(accentColor());
+                m_ctx->style.button.hover = nk_style_item_color(accentHoverColor());
+                m_ctx->style.button.active = nk_style_item_color(accentActiveColor());
+            }
+
+            if (nk_button_label(m_ctx, "Go"))
+            {
+                if (validPageInput && m_pageJumpCallback)
+                {
+                    m_pageJumpCallback(targetPage - 1);
+                }
+            }
+            rememberWidgetBounds(WIDGET_GO_BUTTON);
+            if (!validPageInput)
+            {
+                nk_widget_disable_end(m_ctx);
+            }
+
+            m_ctx->style.button = originalButtonStyle;
+
+            if (m_mainScreenFocusIndex == WIDGET_NUMPAD_BUTTON)
+            {
+                m_ctx->style.button.normal = nk_style_item_color(accentColor());
+                m_ctx->style.button.hover = nk_style_item_color(accentHoverColor());
+                m_ctx->style.button.active = nk_style_item_color(accentActiveColor());
+            }
+
+            if (nk_button_label(m_ctx, "Number Pad"))
+            {
+                showNumberPad();
+            }
+            rememberWidgetBounds(WIDGET_NUMPAD_BUTTON);
+
+            m_ctx->style.button = originalButtonStyle;
+
+            if (!validPageInput && targetPage != 0)
+            {
+                nk_layout_row_dynamic(m_ctx, 20, 1);
+                nk_label_colored(m_ctx, "Invalid page number", NK_TEXT_LEFT, nk_rgb(255, 100, 100));
+            }
+
+            nk_layout_row_dynamic(m_ctx, 15, 1);
+        };
+
         if (m_showFileBrowserImageSettingVisible)
         {
             // === FILE BROWSER SECTION ===
@@ -1190,30 +1271,7 @@ void GuiManager::renderFontMenu()
             nk_layout_row_dynamic(m_ctx, 15, 1); // Spacing
         }
 
-        // === PAGE NAVIGATION SECTION ===
-        nk_layout_row_dynamic(m_ctx, 25, 1);
-        nk_label(m_ctx, "Page Navigation", NK_TEXT_LEFT);
-
-        // Separator line
-        nk_layout_row_dynamic(m_ctx, 1, 1);
-        bounds = nk_widget_bounds(m_ctx);
-        canvas = nk_window_get_canvas(m_ctx);
-        nk_stroke_line(canvas, bounds.x, bounds.y, bounds.x + bounds.w, bounds.y, 1.0f, nk_rgb(100, 100, 100));
-
-        // Current page display
-        char pageInfo[64];
-        if (m_pageCountEstimated)
-        {
-            snprintf(pageInfo, sizeof(pageInfo), "Current Page: %d / %d*", m_currentPage + 1, m_pageCount);
-        }
-        else
-        {
-            snprintf(pageInfo, sizeof(pageInfo), "Current Page: %d / %d", m_currentPage + 1, m_pageCount);
-        }
-        nk_layout_row_dynamic(m_ctx, 20, 1);
-        nk_label(m_ctx, pageInfo, NK_TEXT_LEFT);
-
-        nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
+        renderJumpToPageSection();
 
         nk_layout_row_dynamic(m_ctx, 20, 1);
         nk_label(m_ctx, "Panning", NK_TEXT_LEFT);
@@ -1228,13 +1286,26 @@ void GuiManager::renderFontMenu()
         const bool edgeTurnThresholdEnabled = m_tempConfig.edgePageTurnsMode == EdgePageTurnsMode::Automatic;
         char edgeTurnDurationLabel[96];
         std::snprintf(edgeTurnDurationLabel, sizeof(edgeTurnDurationLabel), "Edge Turn Threshold (%d ms)", m_tempConfig.edgeTurnHoldDurationMs);
-        nk_layout_row_dynamic(m_ctx, 20, 1);
-        nk_label(m_ctx, edgeTurnDurationLabel, NK_TEXT_LEFT);
-
-        nk_layout_row_template_begin(m_ctx, 25);
+        nk_layout_row_template_begin(m_ctx, 20);
         nk_layout_row_template_push_dynamic(m_ctx);
         nk_layout_row_template_push_static(m_ctx, 32);
         nk_layout_row_template_end(m_ctx);
+        nk_label(m_ctx, edgeTurnDurationLabel, NK_TEXT_LEFT);
+
+        struct nk_style_button edgeTurnDurationInfoStyle = m_ctx->style.button;
+        configureInfoGlyphStyle(edgeTurnDurationInfoStyle, m_mainScreenFocusIndex == WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON);
+        nk_button_label_styled(m_ctx, &edgeTurnDurationInfoStyle, "(?)");
+        bool edgeTurnDurationInfoHovered = nk_widget_is_hovered(m_ctx);
+        rememberWidgetBounds(WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON);
+        if (m_mainScreenFocusIndex == WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON || edgeTurnDurationInfoHovered)
+        {
+            showInfoTooltip(WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON,
+                            "How long to hold at a page edge before turning when\n"
+                            "Edge Page Turns Mode is Automatic.\n"
+                            "Set to 0 ms for instant edge turns.");
+        }
+
+        nk_layout_row_dynamic(m_ctx, 25, 1);
 
         if (!edgeTurnThresholdEnabled)
         {
@@ -1262,19 +1333,6 @@ void GuiManager::renderFontMenu()
             nk_widget_disable_end(m_ctx);
         }
         m_ctx->style.slider = originalSliderStyle;
-
-        struct nk_style_button edgeTurnDurationInfoStyle = m_ctx->style.button;
-        configureInfoGlyphStyle(edgeTurnDurationInfoStyle, m_mainScreenFocusIndex == WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON);
-        nk_button_label_styled(m_ctx, &edgeTurnDurationInfoStyle, "(?)");
-        bool edgeTurnDurationInfoHovered = nk_widget_is_hovered(m_ctx);
-        rememberWidgetBounds(WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON);
-        if (m_mainScreenFocusIndex == WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON || edgeTurnDurationInfoHovered)
-        {
-            showInfoTooltip(WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON,
-                            "How long to hold at a page edge before turning when\n"
-                            "Edge Page Turns Mode is Automatic.\n"
-                            "Set to 0 ms for instant edge turns.");
-        }
 
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
@@ -1465,6 +1523,29 @@ void GuiManager::renderFontMenu()
 
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
+        // === PAGE NAVIGATION SECTION ===
+        nk_layout_row_dynamic(m_ctx, 25, 1);
+        nk_label(m_ctx, "Page Navigation", NK_TEXT_LEFT);
+
+        nk_layout_row_dynamic(m_ctx, 1, 1);
+        bounds = nk_widget_bounds(m_ctx);
+        canvas = nk_window_get_canvas(m_ctx);
+        nk_stroke_line(canvas, bounds.x, bounds.y, bounds.x + bounds.w, bounds.y, 1.0f, nk_rgb(100, 100, 100));
+
+        char pageInfo[64];
+        if (m_pageCountEstimated)
+        {
+            snprintf(pageInfo, sizeof(pageInfo), "Current Page: %d / %d*", m_currentPage + 1, m_pageCount);
+        }
+        else
+        {
+            snprintf(pageInfo, sizeof(pageInfo), "Current Page: %d / %d", m_currentPage + 1, m_pageCount);
+        }
+        nk_layout_row_dynamic(m_ctx, 20, 1);
+        nk_label(m_ctx, pageInfo, NK_TEXT_LEFT);
+
+        nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
+
         // Document Minimap checkbox + info button
         nk_layout_row_template_begin(m_ctx, 25);
         nk_layout_row_template_push_dynamic(m_ctx);
@@ -1579,95 +1660,6 @@ void GuiManager::renderFontMenu()
         {
             showInfoTooltip(WIDGET_ZOOM_OVERLAY_INFO_BUTTON,
                             "Show the zoom level badge\nwhen you change scale or rotate the page.");
-        }
-
-        nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
-
-        nk_layout_row_dynamic(m_ctx, 20, 1);
-        nk_label(m_ctx, "Jump to Page:", NK_TEXT_LEFT);
-
-        // Page jump input and buttons
-        nk_layout_row_template_begin(m_ctx, 30);
-        nk_layout_row_template_push_static(m_ctx, 160);
-        nk_layout_row_template_push_static(m_ctx, 90);
-        nk_layout_row_template_push_static(m_ctx, 160);
-        nk_layout_row_template_end(m_ctx);
-
-        // Highlight page jump input if focused
-        if (m_mainScreenFocusIndex == WIDGET_PAGE_JUMP_INPUT)
-        {
-            m_ctx->style.edit.normal = nk_style_item_color(accentColor());
-            m_ctx->style.edit.hover = nk_style_item_color(accentHoverColor());
-            m_ctx->style.edit.active = nk_style_item_color(accentActiveColor());
-        }
-
-        nk_edit_string_zero_terminated(m_ctx, NK_EDIT_FIELD | NK_EDIT_SELECTABLE, m_pageJumpInput, sizeof(m_pageJumpInput), nk_filter_decimal);
-        rememberWidgetBounds(WIDGET_PAGE_JUMP_INPUT);
-
-        // Restore edit style
-        m_ctx->style.edit = originalEditStyle;
-
-        // Validate page input
-        bool validPageInput = false;
-        int targetPage = std::atoi(m_pageJumpInput);
-        if (targetPage >= 1 && targetPage <= m_pageCount)
-        {
-            validPageInput = true;
-        }
-
-        // Go button
-        if (!validPageInput)
-        {
-            nk_widget_disable_begin(m_ctx);
-        }
-
-        // Highlight Go button if focused
-        if (m_mainScreenFocusIndex == WIDGET_GO_BUTTON)
-        {
-            m_ctx->style.button.normal = nk_style_item_color(accentColor());
-            m_ctx->style.button.hover = nk_style_item_color(accentHoverColor());
-            m_ctx->style.button.active = nk_style_item_color(accentActiveColor());
-        }
-
-        if (nk_button_label(m_ctx, "Go"))
-        {
-            if (validPageInput && m_pageJumpCallback)
-            {
-                m_pageJumpCallback(targetPage - 1); // Convert to 0-based
-            }
-        }
-        rememberWidgetBounds(WIDGET_GO_BUTTON);
-        if (!validPageInput)
-        {
-            nk_widget_disable_end(m_ctx);
-        }
-
-        // Restore Go button style
-        m_ctx->style.button = originalButtonStyle;
-
-        // Highlight Number Pad button if focused
-        if (m_mainScreenFocusIndex == WIDGET_NUMPAD_BUTTON)
-        {
-            m_ctx->style.button.normal = nk_style_item_color(accentColor());
-            m_ctx->style.button.hover = nk_style_item_color(accentHoverColor());
-            m_ctx->style.button.active = nk_style_item_color(accentActiveColor());
-        }
-
-        // Number pad button
-        if (nk_button_label(m_ctx, "Number Pad"))
-        {
-            showNumberPad();
-        }
-        rememberWidgetBounds(WIDGET_NUMPAD_BUTTON);
-
-        // Restore Number Pad button style
-        m_ctx->style.button = originalButtonStyle;
-
-        // Show validation message if needed
-        if (!validPageInput && targetPage != 0)
-        {
-            nk_layout_row_dynamic(m_ctx, 20, 1);
-            nk_label_colored(m_ctx, "Invalid page number", NK_TEXT_LEFT, nk_rgb(255, 100, 100));
         }
 
         nk_layout_row_dynamic(m_ctx, 15, 1); // Spacing before action buttons
@@ -3025,18 +3017,63 @@ bool GuiManager::isWidgetVisible(MainScreenWidget widget) const
 
 int GuiManager::nextVisibleWidgetIndex(int startIndex, int direction) const
 {
-    if (direction == 0)
+    if (direction == 0 || startIndex < 0 || startIndex >= WIDGET_COUNT)
     {
         return startIndex;
     }
 
-    int index = startIndex;
-    for (int count = 0; count < WIDGET_COUNT; ++count)
+    static constexpr MainScreenWidget kWidgetOrder[] = {
+        WIDGET_FONT_DROPDOWN,
+        WIDGET_FONT_SIZE_INPUT,
+        WIDGET_FONT_SIZE_SLIDER,
+        WIDGET_READING_STYLE_DROPDOWN,
+        WIDGET_ZOOM_STEP_INPUT,
+        WIDGET_ZOOM_STEP_SLIDER,
+        WIDGET_FILE_BROWSER_IMAGES_CHECKBOX,
+        WIDGET_FILE_BROWSER_IMAGES_INFO_BUTTON,
+        WIDGET_PAGE_JUMP_INPUT,
+        WIDGET_GO_BUTTON,
+        WIDGET_NUMPAD_BUTTON,
+        WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON,
+        WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER,
+        WIDGET_EDGE_PAGE_TURNS_MODE_DROPDOWN,
+        WIDGET_EDGE_PAGE_TURNS_MODE_INFO_BUTTON,
+        WIDGET_KEEP_PANNING_CHECKBOX,
+        WIDGET_KEEP_PANNING_INFO_BUTTON,
+        WIDGET_MINIMAP_CHECKBOX,
+        WIDGET_MINIMAP_INFO_BUTTON,
+        WIDGET_PAGE_INDICATOR_CHECKBOX,
+        WIDGET_PAGE_INDICATOR_INFO_BUTTON,
+        WIDGET_ZOOM_OVERLAY_CHECKBOX,
+        WIDGET_ZOOM_OVERLAY_INFO_BUTTON,
+        WIDGET_APPLY_BUTTON,
+        WIDGET_CLOSE_BUTTON,
+        WIDGET_RESET_BUTTON};
+
+    MainScreenWidget startWidget = static_cast<MainScreenWidget>(startIndex);
+    int orderIndex = -1;
+    for (size_t i = 0; i < sizeof(kWidgetOrder) / sizeof(kWidgetOrder[0]); ++i)
     {
-        index = (index + direction + WIDGET_COUNT) % WIDGET_COUNT;
-        if (isWidgetVisible(static_cast<MainScreenWidget>(index)))
+        if (kWidgetOrder[i] == startWidget)
         {
-            return index;
+            orderIndex = static_cast<int>(i);
+            break;
+        }
+    }
+
+    if (orderIndex < 0)
+    {
+        return startIndex;
+    }
+
+    constexpr int kWidgetOrderCount = static_cast<int>(sizeof(kWidgetOrder) / sizeof(kWidgetOrder[0]));
+    for (int count = 0; count < kWidgetOrderCount; ++count)
+    {
+        orderIndex = (orderIndex + direction + kWidgetOrderCount) % kWidgetOrderCount;
+        MainScreenWidget candidate = kWidgetOrder[orderIndex];
+        if (isWidgetVisible(candidate))
+        {
+            return static_cast<int>(candidate);
         }
     }
     return startIndex;
@@ -3049,20 +3086,80 @@ bool GuiManager::stepFocusVertical(int direction)
         return false;
     }
 
-    int nextIndex = m_mainScreenFocusIndex;
+    static constexpr MainScreenWidget kVerticalOrder[] = {
+        WIDGET_FONT_DROPDOWN,
+        WIDGET_FONT_SIZE_INPUT,
+        WIDGET_FONT_SIZE_SLIDER,
+        WIDGET_READING_STYLE_DROPDOWN,
+        WIDGET_ZOOM_STEP_INPUT,
+        WIDGET_ZOOM_STEP_SLIDER,
+        WIDGET_FILE_BROWSER_IMAGES_CHECKBOX,
+        WIDGET_PAGE_JUMP_INPUT,
+        WIDGET_GO_BUTTON,
+        WIDGET_NUMPAD_BUTTON,
+        WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER,
+        WIDGET_EDGE_PAGE_TURNS_MODE_DROPDOWN,
+        WIDGET_KEEP_PANNING_CHECKBOX,
+        WIDGET_MINIMAP_CHECKBOX,
+        WIDGET_PAGE_INDICATOR_CHECKBOX,
+        WIDGET_ZOOM_OVERLAY_CHECKBOX,
+        WIDGET_APPLY_BUTTON,
+        WIDGET_CLOSE_BUTTON,
+        WIDGET_RESET_BUTTON};
+
+    auto anchorWidget = [](MainScreenWidget widget) -> MainScreenWidget
+    {
+        switch (widget)
+        {
+        case WIDGET_FILE_BROWSER_IMAGES_INFO_BUTTON:
+            return WIDGET_FILE_BROWSER_IMAGES_CHECKBOX;
+        case WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON:
+            return WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER;
+        case WIDGET_EDGE_PAGE_TURNS_MODE_INFO_BUTTON:
+            return WIDGET_EDGE_PAGE_TURNS_MODE_DROPDOWN;
+        case WIDGET_KEEP_PANNING_INFO_BUTTON:
+            return WIDGET_KEEP_PANNING_CHECKBOX;
+        case WIDGET_MINIMAP_INFO_BUTTON:
+            return WIDGET_MINIMAP_CHECKBOX;
+        case WIDGET_PAGE_INDICATOR_INFO_BUTTON:
+            return WIDGET_PAGE_INDICATOR_CHECKBOX;
+        case WIDGET_ZOOM_OVERLAY_INFO_BUTTON:
+            return WIDGET_ZOOM_OVERLAY_CHECKBOX;
+        default:
+            return widget;
+        }
+    };
+
+    MainScreenWidget current = anchorWidget(static_cast<MainScreenWidget>(m_mainScreenFocusIndex));
+    int orderIndex = -1;
+    for (size_t i = 0; i < sizeof(kVerticalOrder) / sizeof(kVerticalOrder[0]); ++i)
+    {
+        if (kVerticalOrder[i] == current)
+        {
+            orderIndex = static_cast<int>(i);
+            break;
+        }
+    }
+
+    if (orderIndex < 0)
+    {
+        return false;
+    }
+
+    constexpr int kVerticalOrderCount = static_cast<int>(sizeof(kVerticalOrder) / sizeof(kVerticalOrder[0]));
     while (true)
     {
-        nextIndex += direction;
-        if (nextIndex < 0 || nextIndex >= WIDGET_COUNT)
+        orderIndex += direction;
+        if (orderIndex < 0 || orderIndex >= kVerticalOrderCount)
         {
             return false;
         }
 
-        MainScreenWidget candidate = static_cast<MainScreenWidget>(nextIndex);
-        if (isWidgetVisible(candidate) && !isInfoWidget(candidate))
+        MainScreenWidget candidate = kVerticalOrder[orderIndex];
+        if (isWidgetVisible(candidate))
         {
             clearSliderDpadAdjustMode();
-            m_mainScreenFocusIndex = nextIndex;
+            m_mainScreenFocusIndex = static_cast<int>(candidate);
             requestFocusScroll();
             return true;
         }
@@ -3081,8 +3178,8 @@ bool GuiManager::handleHorizontalNavigation(int direction)
         WIDGET_FILE_BROWSER_IMAGES_CHECKBOX,
         WIDGET_FILE_BROWSER_IMAGES_INFO_BUTTON};
     static constexpr MainScreenWidget kEdgeTurnDurationGroup[] = {
-        WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER,
-        WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON};
+        WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON,
+        WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER};
     static constexpr MainScreenWidget kEdgePageTurnsModeGroup[] = {
         WIDGET_EDGE_PAGE_TURNS_MODE_DROPDOWN,
         WIDGET_EDGE_PAGE_TURNS_MODE_INFO_BUTTON};
