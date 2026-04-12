@@ -217,6 +217,12 @@ private:
     float m_edgeTurnCooldownUp{0.0f};
     float m_edgeTurnCooldownDown{0.0f};
     float m_edgeTurnCooldownDuration{0.5f}; // seconds to wait before allowing edge-turn again
+    // Track whether an edge turn already fired during a sustained hold at auto-zoom (max == 0).
+    // Prevents re-accumulation and progress bar flashing when the page fits in that dimension.
+    bool m_edgeTurnFiredRight{false};
+    bool m_edgeTurnFiredLeft{false};
+    bool m_edgeTurnFiredUp{false};
+    bool m_edgeTurnFiredDown{false};
     EdgeDirection m_doubleTapArmedDirection{EdgeDirection::None};
 
     // Game controller support

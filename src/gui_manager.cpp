@@ -1271,8 +1271,6 @@ void GuiManager::renderFontMenu()
             nk_layout_row_dynamic(m_ctx, 15, 1); // Spacing
         }
 
-        renderJumpToPageSection();
-
         nk_layout_row_dynamic(m_ctx, 20, 1);
         nk_label(m_ctx, "Panning", NK_TEXT_LEFT);
 
@@ -1545,6 +1543,8 @@ void GuiManager::renderFontMenu()
         nk_label(m_ctx, pageInfo, NK_TEXT_LEFT);
 
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
+
+        renderJumpToPageSection();
 
         // Document Minimap checkbox + info button
         nk_layout_row_template_begin(m_ctx, 25);
@@ -3031,15 +3031,15 @@ int GuiManager::nextVisibleWidgetIndex(int startIndex, int direction) const
         WIDGET_ZOOM_STEP_SLIDER,
         WIDGET_FILE_BROWSER_IMAGES_CHECKBOX,
         WIDGET_FILE_BROWSER_IMAGES_INFO_BUTTON,
-        WIDGET_PAGE_JUMP_INPUT,
-        WIDGET_GO_BUTTON,
-        WIDGET_NUMPAD_BUTTON,
         WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON,
         WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER,
         WIDGET_EDGE_PAGE_TURNS_MODE_DROPDOWN,
         WIDGET_EDGE_PAGE_TURNS_MODE_INFO_BUTTON,
         WIDGET_KEEP_PANNING_CHECKBOX,
         WIDGET_KEEP_PANNING_INFO_BUTTON,
+        WIDGET_PAGE_JUMP_INPUT,
+        WIDGET_GO_BUTTON,
+        WIDGET_NUMPAD_BUTTON,
         WIDGET_MINIMAP_CHECKBOX,
         WIDGET_MINIMAP_INFO_BUTTON,
         WIDGET_PAGE_INDICATOR_CHECKBOX,
@@ -3094,12 +3094,12 @@ bool GuiManager::stepFocusVertical(int direction)
         WIDGET_ZOOM_STEP_INPUT,
         WIDGET_ZOOM_STEP_SLIDER,
         WIDGET_FILE_BROWSER_IMAGES_CHECKBOX,
-        WIDGET_PAGE_JUMP_INPUT,
-        WIDGET_GO_BUTTON,
-        WIDGET_NUMPAD_BUTTON,
         WIDGET_EDGE_TURN_HOLD_DURATION_SLIDER,
         WIDGET_EDGE_PAGE_TURNS_MODE_DROPDOWN,
         WIDGET_KEEP_PANNING_CHECKBOX,
+        WIDGET_PAGE_JUMP_INPUT,
+        WIDGET_GO_BUTTON,
+        WIDGET_NUMPAD_BUTTON,
         WIDGET_MINIMAP_CHECKBOX,
         WIDGET_PAGE_INDICATOR_CHECKBOX,
         WIDGET_ZOOM_OVERLAY_CHECKBOX,

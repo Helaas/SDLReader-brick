@@ -1915,8 +1915,11 @@ bool App::updateHeldPanning(float dt)
         {
             if (m_dpadRightHeld || m_keyboardRightHeld)
             {
-                // In instant mode, set to threshold immediately, don't keep accumulating
-                if (instantPageTurns && m_edgeTurnHoldRight == 0.0f)
+                if (m_edgeTurnFiredRight)
+                {
+                    // Already fired during this hold at auto-zoom; suppress re-accumulation
+                }
+                else if (instantPageTurns && m_edgeTurnHoldRight == 0.0f)
                 {
                     m_edgeTurnHoldRight = effectiveEdgeTurnThreshold;
                 }
@@ -1928,11 +1931,15 @@ bool App::updateHeldPanning(float dt)
             else
             {
                 m_edgeTurnHoldRight = 0.0f;
+                m_edgeTurnFiredRight = false;
             }
             if (m_dpadLeftHeld || m_keyboardLeftHeld)
             {
-                // In instant mode, set to threshold immediately, don't keep accumulating
-                if (instantPageTurns && m_edgeTurnHoldLeft == 0.0f)
+                if (m_edgeTurnFiredLeft)
+                {
+                    // Already fired during this hold at auto-zoom; suppress re-accumulation
+                }
+                else if (instantPageTurns && m_edgeTurnHoldLeft == 0.0f)
                 {
                     m_edgeTurnHoldLeft = effectiveEdgeTurnThreshold;
                 }
@@ -1944,6 +1951,7 @@ bool App::updateHeldPanning(float dt)
             else
             {
                 m_edgeTurnHoldLeft = 0.0f;
+                m_edgeTurnFiredLeft = false;
             }
         }
         else
@@ -1990,11 +1998,15 @@ bool App::updateHeldPanning(float dt)
     {
         changed = performEdgeTurn(EdgeDirection::Right) || changed;
         m_edgeTurnHoldRight = 0.0f;
+        if (maxX == 0)
+            m_edgeTurnFiredRight = true;
     }
     else if (m_edgeTurnHoldLeft >= effectiveEdgeTurnThreshold)
     {
         changed = performEdgeTurn(EdgeDirection::Left) || changed;
         m_edgeTurnHoldLeft = 0.0f;
+        if (maxX == 0)
+            m_edgeTurnFiredLeft = true;
     }
 
     // --- VERTICAL edge → page turn (NEW) ---
@@ -2008,8 +2020,11 @@ bool App::updateHeldPanning(float dt)
             // Page fits vertically: treat sustained up/down as page turns
             if (m_dpadDownHeld || m_keyboardDownHeld)
             {
-                // In instant mode, set to threshold immediately on first frame, don't keep accumulating
-                if (instantPageTurns && m_edgeTurnHoldDown == 0.0f)
+                if (m_edgeTurnFiredDown)
+                {
+                    // Already fired during this hold at auto-zoom; suppress re-accumulation
+                }
+                else if (instantPageTurns && m_edgeTurnHoldDown == 0.0f)
                 {
                     m_edgeTurnHoldDown = effectiveEdgeTurnThreshold;
                 }
@@ -2021,11 +2036,15 @@ bool App::updateHeldPanning(float dt)
             else
             {
                 m_edgeTurnHoldDown = 0.0f;
+                m_edgeTurnFiredDown = false;
             }
             if (m_dpadUpHeld || m_keyboardUpHeld)
             {
-                // In instant mode, set to threshold immediately on first frame, don't keep accumulating
-                if (instantPageTurns && m_edgeTurnHoldUp == 0.0f)
+                if (m_edgeTurnFiredUp)
+                {
+                    // Already fired during this hold at auto-zoom; suppress re-accumulation
+                }
+                else if (instantPageTurns && m_edgeTurnHoldUp == 0.0f)
                 {
                     m_edgeTurnHoldUp = effectiveEdgeTurnThreshold;
                 }
@@ -2037,6 +2056,7 @@ bool App::updateHeldPanning(float dt)
             else
             {
                 m_edgeTurnHoldUp = 0.0f;
+                m_edgeTurnFiredUp = false;
             }
         }
         else
@@ -2092,11 +2112,15 @@ bool App::updateHeldPanning(float dt)
     {
         changed = performEdgeTurn(EdgeDirection::Down) || changed;
         m_edgeTurnHoldDown = 0.0f;
+        if (maxY == 0)
+            m_edgeTurnFiredDown = true;
     }
     else if (m_edgeTurnHoldUp >= effectiveEdgeTurnThreshold)
     {
         changed = performEdgeTurn(EdgeDirection::Up) || changed;
         m_edgeTurnHoldUp = 0.0f;
+        if (maxY == 0)
+            m_edgeTurnFiredUp = true;
     }
 
     // Check if any edge-turn timing values changed and mark as dirty for progress indicator updates

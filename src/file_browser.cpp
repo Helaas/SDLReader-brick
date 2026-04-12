@@ -1943,7 +1943,7 @@ std::string FileBrowser::run()
         Uint32 currentTime = SDL_GetTicks();
 
         // Handle continuous scrolling when D-pad is held
-        if ((m_dpadUpHeld || m_dpadDownHeld) && !m_entries.empty())
+        if ((m_dpadUpHeld || m_dpadDownHeld) && !m_entries.empty() && !m_showSettings)
         {
             const Uint32 elapsed = (m_lastScrollTime <= currentTime) ? (currentTime - m_lastScrollTime) : 0;
             Uint32 baseDelay = m_waitingForInitialRepeat ? PlatformConstants::INPUT_INITIAL_DELAY_MS : PlatformConstants::INPUT_REPEAT_DELAY_MS;
@@ -1968,7 +1968,7 @@ std::string FileBrowser::run()
                 m_waitingForInitialRepeat = false;
             }
         }
-        if ((m_leftHeld || m_rightHeld) && !m_entries.empty())
+        if ((m_leftHeld || m_rightHeld) && !m_entries.empty() && !m_showSettings)
         {
             const Uint32 elapsed = (m_lastHorizontalScrollTime <= currentTime)
                                        ? (currentTime - m_lastHorizontalScrollTime)
@@ -2101,10 +2101,10 @@ void FileBrowser::render()
 
         nk_layout_row_dynamic(m_ctx, helpTextHeight, 1);
 #ifdef PLATFORM_MY355
-        nk_label_colored(m_ctx, "A: Select | B: Back | X: Toggle View | Menu: Quit",
+        nk_label_colored(m_ctx, "A: Select | B: Back | X: Toggle View | Start: Settings",
                          NK_TEXT_LEFT, nk_rgb(180, 180, 180));
 #else
-        nk_label_colored(m_ctx, "D-Pad: Navigate | A: Select | B: Back | X: Toggle View | Menu: Quit",
+        nk_label_colored(m_ctx, "D-Pad: Navigate | A: Select | B: Back | X: View | Start: Settings",
                          NK_TEXT_LEFT, nk_rgb(180, 180, 180));
 #endif
 
@@ -2154,6 +2154,11 @@ void FileBrowser::render()
 #endif
     }
     nk_end(m_ctx);
+
+    if (m_showSettings)
+    {
+        renderSettings();
+    }
 
     nk_sdl_render(NK_ANTI_ALIASING_ON);
     nk_sdl_handle_grab();
@@ -2267,10 +2272,24 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         {
         case SDLK_ESCAPE:
         case SDLK_q:
-            requestThumbnailShutdown();
-            m_running = false;
+            if (m_showSettings)
+            {
+                closeSettings();
+            }
+            else
+            {
+                requestThumbnailShutdown();
+                m_running = false;
+            }
+            break;
+        case SDLK_m:
+            if (m_showSettings)
+                closeSettings();
+            else
+                openSettings();
             break;
         case SDLK_UP:
+            if (m_showSettings) break;
             if (!m_dpadUpHeld)
             {
                 moveSelectionVertical(-1);
@@ -2280,6 +2299,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             }
             break;
         case SDLK_DOWN:
+            if (m_showSettings) break;
             if (!m_dpadDownHeld)
             {
                 moveSelectionVertical(1);
@@ -2289,6 +2309,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             }
             break;
         case SDLK_LEFT:
+            if (m_showSettings) break;
             if (!m_leftHeld)
             {
                 if (m_thumbnailView)
@@ -2305,6 +2326,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             }
             break;
         case SDLK_RIGHT:
+            if (m_showSettings) break;
             if (!m_rightHeld)
             {
                 if (m_thumbnailView)
@@ -2322,12 +2344,15 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             break;
         case SDLK_RETURN:
         case SDLK_SPACE:
+            if (m_showSettings) break;
             navigateInto();
             break;
         case SDLK_BACKSPACE:
+            if (m_showSettings) break;
             navigateUp();
             break;
         case SDLK_x:
+            if (m_showSettings) break;
             toggleViewMode();
             break;
         default:
@@ -2384,6 +2409,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         switch (event.cbutton.button)
         {
         case SDL_CONTROLLER_BUTTON_DPAD_UP:
+            if (m_showSettings) break;
             m_dpadUpButtonDown = true;
             if (!m_dpadUpHeld)
             {
@@ -2394,6 +2420,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             }
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
+            if (m_showSettings) break;
             m_dpadDownButtonDown = true;
             if (!m_dpadDownHeld)
             {
@@ -2404,6 +2431,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             }
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
+            if (m_showSettings) break;
             m_leftButtonDown = true;
             if (!m_leftHeld)
             {
@@ -2421,6 +2449,7 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             }
             break;
         case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
+            if (m_showSettings) break;
             m_rightButtonDown = true;
             if (!m_rightHeld)
             {
@@ -2438,34 +2467,53 @@ void FileBrowser::handleEvent(const SDL_Event& event)
             }
             break;
         case SDL_CONTROLLER_BUTTON_RIGHTSHOULDER:
+            if (m_showSettings) break;
             jumpSelectionByLetter(1);
             break;
         case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
+            if (m_showSettings) break;
             jumpSelectionByLetter(-1);
             break;
 #ifdef TRIMUI_PLATFORM
         case kAcceptButton:
+            if (m_showSettings) break;
             navigateInto();
             break;
         case kCancelButton:
+            if (m_showSettings) break;
             navigateUp();
             break;
 #else
         case SDL_CONTROLLER_BUTTON_A:
+            if (m_showSettings) break;
             navigateInto();
             break;
         case SDL_CONTROLLER_BUTTON_B:
+            if (m_showSettings) break;
             navigateUp();
             break;
 #endif
         case kToggleViewButton:
+            if (m_showSettings) break;
             toggleViewMode();
             break;
-        case SDL_CONTROLLER_BUTTON_BACK:
         case SDL_CONTROLLER_BUTTON_START:
+            if (m_showSettings)
+                closeSettings();
+            else
+                openSettings();
+            break;
+        case SDL_CONTROLLER_BUTTON_BACK:
         case SDL_CONTROLLER_BUTTON_GUIDE:
-            requestThumbnailShutdown();
-            m_running = false;
+            if (m_showSettings)
+            {
+                closeSettings();
+            }
+            else
+            {
+                requestThumbnailShutdown();
+                m_running = false;
+            }
             break;
         default:
             break;
@@ -2700,6 +2748,278 @@ void FileBrowser::navigateInto()
         m_selectedFile = entry.fullPath;
         m_running = false;
     }
+}
+
+void FileBrowser::openSettings()
+{
+    OptionsManager optionsManager;
+    m_settingsConfig = std::make_unique<FontConfig>(optionsManager.loadConfig());
+
+    // Build font name list and find current index
+    m_settingsFontNames.clear();
+    const auto& fonts = optionsManager.getAvailableFonts();
+    m_settingsFontIndex = 0;
+    for (size_t i = 0; i < fonts.size(); ++i)
+    {
+        m_settingsFontNames.push_back(fonts[i].displayName);
+        if (fonts[i].displayName == m_settingsConfig->fontName)
+        {
+            m_settingsFontIndex = static_cast<int>(i);
+        }
+    }
+
+    // Find current reading style index
+    auto styles = OptionsManager::getAllReadingStyles();
+    m_settingsStyleIndex = 0;
+    for (size_t i = 0; i < styles.size(); ++i)
+    {
+        if (styles[i] == m_settingsConfig->readingStyle)
+        {
+            m_settingsStyleIndex = static_cast<int>(i);
+            break;
+        }
+    }
+
+    // Find current edge mode index
+    auto modes = OptionsManager::getAllEdgePageTurnsModes();
+    m_settingsEdgeModeIndex = 0;
+    for (size_t i = 0; i < modes.size(); ++i)
+    {
+        if (modes[i] == m_settingsConfig->edgePageTurnsMode)
+        {
+            m_settingsEdgeModeIndex = static_cast<int>(i);
+            break;
+        }
+    }
+
+    m_showSettings = true;
+}
+
+void FileBrowser::closeSettings()
+{
+    m_showSettings = false;
+    m_settingsConfig.reset();
+}
+
+void FileBrowser::applySettings()
+{
+    OptionsManager optionsManager;
+    const auto& fonts = optionsManager.getAvailableFonts();
+    if (m_settingsFontIndex >= 0 && m_settingsFontIndex < static_cast<int>(fonts.size()))
+    {
+        m_settingsConfig->fontName = fonts[m_settingsFontIndex].displayName;
+        m_settingsConfig->fontPath = fonts[m_settingsFontIndex].filePath;
+    }
+
+    auto styles = OptionsManager::getAllReadingStyles();
+    if (m_settingsStyleIndex >= 0 && m_settingsStyleIndex < static_cast<int>(styles.size()))
+    {
+        m_settingsConfig->readingStyle = styles[m_settingsStyleIndex];
+    }
+
+    auto modes = OptionsManager::getAllEdgePageTurnsModes();
+    if (m_settingsEdgeModeIndex >= 0 && m_settingsEdgeModeIndex < static_cast<int>(modes.size()))
+    {
+        m_settingsConfig->edgePageTurnsMode = modes[m_settingsEdgeModeIndex];
+    }
+
+    // Apply showImages change to current browser session
+    m_showImagesInFileBrowser = m_settingsConfig->showImagesInFileBrowser;
+
+    // Preserve last browse directory
+    m_settingsConfig->lastBrowseDirectory = m_currentPath;
+
+    optionsManager.saveConfig(*m_settingsConfig);
+    closeSettings();
+
+    // Rescan directory in case showImages changed
+    int savedIndex = m_selectedIndex;
+    scanDirectory(m_currentPath);
+    m_selectedIndex = std::min(savedIndex, static_cast<int>(m_entries.size()) - 1);
+    if (m_selectedIndex < 0)
+        m_selectedIndex = 0;
+}
+
+void FileBrowser::renderSettings()
+{
+    if (!m_ctx || !m_showSettings || !m_settingsConfig)
+        return;
+
+    int windowWidth = 0, windowHeight = 0;
+    SDL_GetWindowSize(m_window, &windowWidth, &windowHeight);
+
+    const float overlayWidth = std::min(static_cast<float>(windowWidth) - 40.0f, 500.0f);
+    const float overlayHeight = std::min(static_cast<float>(windowHeight) - 40.0f, 600.0f);
+    const float overlayX = (static_cast<float>(windowWidth) - overlayWidth) * 0.5f;
+    const float overlayY = (static_cast<float>(windowHeight) - overlayHeight) * 0.5f;
+
+    if (nk_begin(m_ctx, "Settings",
+                 nk_rect(overlayX, overlayY, overlayWidth, overlayHeight),
+                 NK_WINDOW_BORDER | NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR))
+    {
+        const float contentHeight = overlayHeight - 90.0f; // Leave room for title + buttons
+        nk_layout_row_dynamic(m_ctx, contentHeight, 1);
+        if (nk_group_begin(m_ctx, "SettingsContent", NK_WINDOW_BORDER))
+        {
+            // --- Font Family ---
+            nk_layout_row_dynamic(m_ctx, 20, 1);
+            nk_label(m_ctx, "Font Family:", NK_TEXT_LEFT);
+            nk_layout_row_dynamic(m_ctx, 25, 1);
+            const char* currentFont = (m_settingsFontIndex >= 0 &&
+                                       m_settingsFontIndex < static_cast<int>(m_settingsFontNames.size()))
+                                          ? m_settingsFontNames[m_settingsFontIndex].c_str()
+                                          : "Default";
+            if (nk_combo_begin_label(m_ctx, currentFont, nk_vec2(nk_widget_width(m_ctx), 200)))
+            {
+                nk_layout_row_dynamic(m_ctx, 25, 1);
+                for (int i = 0; i < static_cast<int>(m_settingsFontNames.size()); ++i)
+                {
+                    if (nk_combo_item_label(m_ctx, m_settingsFontNames[i].c_str(), NK_TEXT_LEFT))
+                    {
+                        m_settingsFontIndex = i;
+                    }
+                }
+                nk_combo_end(m_ctx);
+            }
+
+            nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
+
+            // --- Font Size ---
+            char fontSizeLabel[64];
+            snprintf(fontSizeLabel, sizeof(fontSizeLabel), "Font Size: %d", m_settingsConfig->fontSize);
+            nk_layout_row_dynamic(m_ctx, 20, 1);
+            nk_label(m_ctx, fontSizeLabel, NK_TEXT_LEFT);
+            nk_layout_row_dynamic(m_ctx, 25, 1);
+            float fontSize = static_cast<float>(m_settingsConfig->fontSize);
+            if (nk_slider_float(m_ctx, 6.0f, &fontSize, 72.0f, 1.0f))
+            {
+                m_settingsConfig->fontSize = static_cast<int>(fontSize);
+            }
+
+            nk_layout_row_dynamic(m_ctx, 10, 1);
+
+            // --- Reading Style ---
+            nk_layout_row_dynamic(m_ctx, 20, 1);
+            nk_label(m_ctx, "Reading Style:", NK_TEXT_LEFT);
+            nk_layout_row_dynamic(m_ctx, 25, 1);
+            auto styles = OptionsManager::getAllReadingStyles();
+            const char* currentStyle = (m_settingsStyleIndex >= 0 &&
+                                        m_settingsStyleIndex < static_cast<int>(styles.size()))
+                                           ? OptionsManager::getReadingStyleName(styles[m_settingsStyleIndex])
+                                           : "Default";
+            if (nk_combo_begin_label(m_ctx, currentStyle, nk_vec2(nk_widget_width(m_ctx), 200)))
+            {
+                nk_layout_row_dynamic(m_ctx, 25, 1);
+                for (size_t i = 0; i < styles.size(); ++i)
+                {
+                    if (nk_combo_item_label(m_ctx, OptionsManager::getReadingStyleName(styles[i]), NK_TEXT_LEFT))
+                    {
+                        m_settingsStyleIndex = static_cast<int>(i);
+                    }
+                }
+                nk_combo_end(m_ctx);
+            }
+
+            nk_layout_row_dynamic(m_ctx, 10, 1);
+
+            // --- Zoom Step ---
+            char zoomLabel[64];
+            snprintf(zoomLabel, sizeof(zoomLabel), "Zoom Step: %d%%", m_settingsConfig->zoomStep);
+            nk_layout_row_dynamic(m_ctx, 20, 1);
+            nk_label(m_ctx, zoomLabel, NK_TEXT_LEFT);
+            nk_layout_row_dynamic(m_ctx, 25, 1);
+            float zoomStep = static_cast<float>(m_settingsConfig->zoomStep);
+            if (nk_slider_float(m_ctx, 1.0f, &zoomStep, 50.0f, 1.0f))
+            {
+                m_settingsConfig->zoomStep = static_cast<int>(zoomStep);
+            }
+
+            nk_layout_row_dynamic(m_ctx, 10, 1);
+
+            // --- Show Images in File Browser ---
+            nk_layout_row_dynamic(m_ctx, 25, 1);
+            nk_bool showImages = m_settingsConfig->showImagesInFileBrowser ? nk_true : nk_false;
+            if (nk_checkbox_label(m_ctx, "Show Images in File Browser", &showImages))
+            {
+                m_settingsConfig->showImagesInFileBrowser = (showImages == nk_true);
+            }
+
+            nk_layout_row_dynamic(m_ctx, 10, 1);
+
+            // --- Edge Page Turns Mode ---
+            nk_layout_row_dynamic(m_ctx, 20, 1);
+            nk_label(m_ctx, "Edge Page Turns Mode:", NK_TEXT_LEFT);
+            nk_layout_row_dynamic(m_ctx, 25, 1);
+            auto modes = OptionsManager::getAllEdgePageTurnsModes();
+            const char* currentMode = (m_settingsEdgeModeIndex >= 0 &&
+                                       m_settingsEdgeModeIndex < static_cast<int>(modes.size()))
+                                          ? OptionsManager::getEdgePageTurnsModeName(modes[m_settingsEdgeModeIndex])
+                                          : "Automatic";
+            if (nk_combo_begin_label(m_ctx, currentMode, nk_vec2(nk_widget_width(m_ctx), 200)))
+            {
+                nk_layout_row_dynamic(m_ctx, 25, 1);
+                for (size_t i = 0; i < modes.size(); ++i)
+                {
+                    if (nk_combo_item_label(m_ctx, OptionsManager::getEdgePageTurnsModeName(modes[i]), NK_TEXT_LEFT))
+                    {
+                        m_settingsEdgeModeIndex = static_cast<int>(i);
+                    }
+                }
+                nk_combo_end(m_ctx);
+            }
+
+            nk_layout_row_dynamic(m_ctx, 10, 1);
+
+            // --- Edge Turn Threshold ---
+            const bool thresholdEnabled = (m_settingsEdgeModeIndex >= 0 &&
+                                           m_settingsEdgeModeIndex < static_cast<int>(modes.size()) &&
+                                           modes[m_settingsEdgeModeIndex] == EdgePageTurnsMode::Automatic);
+            char thresholdLabel[64];
+            snprintf(thresholdLabel, sizeof(thresholdLabel), "Edge Turn Threshold: %d ms",
+                     m_settingsConfig->edgeTurnHoldDurationMs);
+            nk_layout_row_dynamic(m_ctx, 20, 1);
+            nk_label(m_ctx, thresholdLabel, NK_TEXT_LEFT);
+            nk_layout_row_dynamic(m_ctx, 25, 1);
+            if (!thresholdEnabled)
+                nk_widget_disable_begin(m_ctx);
+            float threshold = static_cast<float>(m_settingsConfig->edgeTurnHoldDurationMs);
+            if (nk_slider_float(m_ctx, 0.0f, &threshold, 1000.0f, 50.0f))
+            {
+                m_settingsConfig->edgeTurnHoldDurationMs = static_cast<int>(threshold);
+            }
+            if (!thresholdEnabled)
+                nk_widget_disable_end(m_ctx);
+
+            nk_layout_row_dynamic(m_ctx, 10, 1);
+
+            // --- Keep Panning Position ---
+            nk_layout_row_dynamic(m_ctx, 25, 1);
+            nk_bool keepPanning = m_settingsConfig->keepPanningPosition ? nk_true : nk_false;
+            if (nk_checkbox_label(m_ctx, "Keep Panning Position", &keepPanning))
+            {
+                m_settingsConfig->keepPanningPosition = (keepPanning == nk_true);
+            }
+
+            nk_group_end(m_ctx);
+        }
+
+        // --- Buttons row ---
+        nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
+        nk_layout_row_dynamic(m_ctx, 35, 3);
+        if (nk_button_label(m_ctx, "Apply"))
+        {
+            applySettings();
+        }
+        if (nk_button_label(m_ctx, "Close"))
+        {
+            closeSettings();
+        }
+        if (nk_button_label(m_ctx, "Reset"))
+        {
+            openSettings(); // Re-load from disk, discarding changes
+        }
+    }
+    nk_end(m_ctx);
 }
 
 bool FileBrowser::s_lastThumbnailView = false;
