@@ -100,28 +100,19 @@ FontConfig jsonToConfig(const std::string& json)
         return json.substr(start, end - start);
     };
 
-    auto findIntValue = [&json](const std::string& key) -> int
+    auto findIntValue = [&json](const std::string& key, int fallbackValue) -> int
     {
         std::string searchKey = "\"" + key + "\": ";
         size_t start = json.find(searchKey);
         if (start == std::string::npos)
         {
-            // Return appropriate defaults for different keys
-            if (key == "fontSize")
-                return 12;
-            if (key == "zoomStep")
-                return 10;
-            return 12;
+            return fallbackValue;
         }
         start += searchKey.length();
         size_t end = json.find_first_of(",\n}", start);
         if (end == std::string::npos)
         {
-            if (key == "fontSize")
-                return 12;
-            if (key == "zoomStep")
-                return 10;
-            return 12;
+            return fallbackValue;
         }
         std::string valueStr = json.substr(start, end - start);
         try
@@ -130,11 +121,7 @@ FontConfig jsonToConfig(const std::string& json)
         }
         catch (...)
         {
-            if (key == "fontSize")
-                return 12;
-            if (key == "zoomStep")
-                return 10;
-            return 12;
+            return fallbackValue;
         }
     };
 
@@ -166,10 +153,10 @@ FontConfig jsonToConfig(const std::string& json)
 
     config.fontPath = findStringValue("fontPath");
     config.fontName = findStringValue("fontName");
-    config.fontSize = findIntValue("fontSize");
-    config.zoomStep = findIntValue("zoomStep");
+    config.fontSize = findIntValue("fontSize", 12);
+    config.zoomStep = findIntValue("zoomStep", 10);
     config.showImagesInFileBrowser = findBoolValue("showImagesInFileBrowser");
-    config.readingStyle = static_cast<ReadingStyle>(findIntValue("readingStyle"));
+    config.readingStyle = static_cast<ReadingStyle>(findIntValue("readingStyle", static_cast<int>(ReadingStyle::Default)));
 
     const bool hasEdgeTurnHoldDuration = json.find("\"edgeTurnHoldDurationMs\"") != std::string::npos;
     const bool hasEdgePageTurnsMode = json.find("\"edgePageTurnsMode\"") != std::string::npos;
@@ -178,7 +165,7 @@ FontConfig jsonToConfig(const std::string& json)
 
     if (hasEdgeTurnHoldDuration)
     {
-        config.edgeTurnHoldDurationMs = std::clamp(findIntValue("edgeTurnHoldDurationMs"), 0, 1000);
+        config.edgeTurnHoldDurationMs = std::clamp(findIntValue("edgeTurnHoldDurationMs", 300), 0, 1000);
     }
     else if (hasLegacyDisableEdgeProgressBar)
     {

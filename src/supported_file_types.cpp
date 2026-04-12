@@ -26,7 +26,9 @@ namespace SupportedFileTypes
 std::string getLowercaseExtension(const std::string& path)
 {
     const size_t dotPos = path.find_last_of('.');
-    if (dotPos == std::string::npos)
+    const size_t separatorPos = path.find_last_of("/\\");
+    const size_t fileNameStart = (separatorPos == std::string::npos) ? 0 : separatorPos + 1;
+    if (dotPos == std::string::npos || dotPos < fileNameStart)
     {
         return {};
     }

@@ -17,6 +17,7 @@ using GuiManagerType = GuiManager;
 #endif
 
 #include <SDL.h>
+#include <algorithm>
 #include <chrono>
 #include <functional>
 #include <memory>
