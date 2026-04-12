@@ -113,10 +113,11 @@ install-deps:
 
 # Setup Nuklear GUI library (header-only) if it doesn't exist
 setup-nuklear:
-	@if [ ! -d "nuklear-mac" ]; then \
+	@if [ ! -f "$(NUKLEAR_DIR)/nuklear.h" ] || [ ! -f "$(NUKLEAR_DIR)/demo/sdl_renderer/nuklear_sdl_renderer.h" ]; then \
 		echo "Setting up Nuklear GUI library (v4.12.8) for macOS..."; \
-		rm -rf nuklear-mac; \
-		git clone --depth 1 --branch 4.12.8 https://github.com/Immediate-Mode-UI/Nuklear.git nuklear-mac; \
+		rm -rf $(NUKLEAR_DIR); \
+		git clone --depth 1 --branch 4.12.8 https://github.com/Immediate-Mode-UI/Nuklear.git $(NUKLEAR_DIR) || { echo "Failed to clone Nuklear for macOS"; exit 1; }; \
+		test -f "$(NUKLEAR_DIR)/nuklear.h" && test -f "$(NUKLEAR_DIR)/demo/sdl_renderer/nuklear_sdl_renderer.h" || { echo "Nuklear checkout is incomplete for macOS"; exit 1; }; \
 		echo "Nuklear repository cloned for macOS"; \
 	else \
 		echo "Nuklear repository already present for macOS"; \

@@ -67,11 +67,17 @@ Run it from the project root with:
 ./bin/sdl_reader_cli path/to/your/comic.cbz
 # or (NEW!)
 ./bin/sdl_reader_cli path/to/your/comic.cbr
+# or
+./bin/sdl_reader_cli path/to/your/image.webp
 # or launch the integrated browser (remembers last directory)
 ./bin/sdl_reader_cli --browse
+# or force images visible in browse mode for this session
+./bin/sdl_reader_cli --browse --show-filebrowser-images
+# or open browse mode in the thumbnail grid for this session
+./bin/sdl_reader_cli --browse --filebrowser-thumbnail-view
 ```
 
-Using `--browse` opens the Nuklear file picker, restores your last-read page via `reading_history.json`, and lets you tweak fonts/themes from a controller-friendly UI. Settings live in the reader state directory (`$SDL_READER_STATE_DIR`, defaulting to `$HOME/config.json`). Set `SDL_READER_DEFAULT_DIR` to control which folder the browser opens by default. While browsing, press **X** to toggle the thumbnail grid; the viewer also supports a minimap overlay that can be disabled via `showDocumentMinimap` in `config.json`.
+Using `--browse` opens the Nuklear file picker, restores your last-read page via `reading_history.json`, and lets you tweak fonts/themes from a controller-friendly UI. Settings live in the reader state directory (`$SDL_READER_STATE_DIR`, defaulting to `$HOME/config.json`). Set `SDL_READER_DEFAULT_DIR` to control which folder the browser opens by default. While browsing, press **X** to toggle the thumbnail grid. Standalone image files are hidden in browse mode by default; enable them with `showImagesInFileBrowser`, or force them visible for the current run with `--show-filebrowser-images`. Pass `--filebrowser-thumbnail-view` if you want the browser to open in the thumbnail grid for that launch; the `X` toggle still works normally. Both flags are browse-only and require `--browse`. Edge-turn behavior is configured with `edgeTurnHoldDurationMs`, `edgePageTurnsMode`, and `showDocumentMinimap`.
 
 ### Fonts & Reading Styles
 
@@ -89,6 +95,8 @@ Place custom `.ttf` or `.otf` fonts in the root `fonts/` directory (or alongside
 - **ZIP**: ZIP archives containing images
 - **EPUB**: Electronic book format
 - **MOBI**: Kindle book format
+- **Plain Text**: `.txt` documents
+- **Standalone Images**: PNG, JPG/JPEG, GIF, BMP, TIFF, WebP
 
 ## Troubleshooting
 

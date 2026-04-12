@@ -18,6 +18,12 @@
 class PowerHandler;
 struct nk_context;
 
+struct FileBrowserLaunchOptions
+{
+    bool showImagesInFileBrowser{false};
+    bool startInThumbnailView{false};
+};
+
 /**
  * @brief Simple file browser using Nuklear
  */
@@ -32,9 +38,11 @@ public:
      * @param window SDL window
      * @param renderer SDL renderer
      * @param startPath Initial directory to browse (empty string uses default library root)
+     * @param launchOptions Runtime-only browse options for this launch
      * @return true if successful
      */
-    bool initialize(SDL_Window* window, SDL_Renderer* renderer, const std::string& startPath = std::string());
+    bool initialize(SDL_Window* window, SDL_Renderer* renderer, const std::string& startPath = std::string(),
+                    FileBrowserLaunchOptions launchOptions = {});
 
     /**
      * @brief Run the file browser main loop
@@ -96,6 +104,7 @@ private:
     bool m_running;
     std::string m_defaultRoot;
     bool m_lockToDefaultRoot{false};
+    bool m_showImagesInFileBrowser{false};
     std::string m_currentPath;
     std::vector<FileEntry> m_entries;
     int m_selectedIndex;

@@ -20,6 +20,41 @@ extern "C"
 // Simple JSON handling for config - in a real project you might use a proper JSON library
 namespace
 {
+const char* edgePageTurnsModeToConfigValue(EdgePageTurnsMode mode)
+{
+    switch (mode)
+    {
+    case EdgePageTurnsMode::Automatic:
+        return "automatic";
+    case EdgePageTurnsMode::DoubleTap:
+        return "doubleTap";
+    case EdgePageTurnsMode::Disable:
+        return "disable";
+    default:
+        return "automatic";
+    }
+}
+
+bool edgePageTurnsModeFromConfigValue(const std::string& value, EdgePageTurnsMode& mode)
+{
+    if (value == "automatic")
+    {
+        mode = EdgePageTurnsMode::Automatic;
+        return true;
+    }
+    if (value == "doubleTap")
+    {
+        mode = EdgePageTurnsMode::DoubleTap;
+        return true;
+    }
+    if (value == "disable")
+    {
+        mode = EdgePageTurnsMode::Disable;
+        return true;
+    }
+    return false;
+}
+
 /**
  * @brief Simple JSON writer for config
  */
@@ -31,8 +66,10 @@ std::string configToJson(const FontConfig& config)
     oss << "  \"fontName\": \"" << config.fontName << "\",\n";
     oss << "  \"fontSize\": " << config.fontSize << ",\n";
     oss << "  \"zoomStep\": " << config.zoomStep << ",\n";
+    oss << "  \"showImagesInFileBrowser\": " << (config.showImagesInFileBrowser ? "true" : "false") << ",\n";
     oss << "  \"readingStyle\": " << static_cast<int>(config.readingStyle) << ",\n";
-    oss << "  \"disableEdgeProgressBar\": " << (config.disableEdgeProgressBar ? "true" : "false") << ",\n";
+    oss << "  \"edgeTurnHoldDurationMs\": " << config.edgeTurnHoldDurationMs << ",\n";
+    oss << "  \"edgePageTurnsMode\": \"" << edgePageTurnsModeToConfigValue(config.edgePageTurnsMode) << "\",\n";
     oss << "  \"showDocumentMinimap\": " << (config.showDocumentMinimap ? "true" : "false") << ",\n";
     oss << "  \"keepPanningPosition\": " << (config.keepPanningPosition ? "true" : "false") << ",\n";
     oss << "  \"showPageIndicatorOverlay\": " << (config.showPageIndicatorOverlay ? "true" : "false") << ",\n";
@@ -63,28 +100,19 @@ FontConfig jsonToConfig(const std::string& json)
         return json.substr(start, end - start);
     };
 
-    auto findIntValue = [&json](const std::string& key) -> int
+    auto findIntValue = [&json](const std::string& key, int fallbackValue) -> int
     {
         std::string searchKey = "\"" + key + "\": ";
         size_t start = json.find(searchKey);
         if (start == std::string::npos)
         {
-            // Return appropriate defaults for different keys
-            if (key == "fontSize")
-                return 12;
-            if (key == "zoomStep")
-                return 10;
-            return 12;
+            return fallbackValue;
         }
         start += searchKey.length();
         size_t end = json.find_first_of(",\n}", start);
         if (end == std::string::npos)
         {
-            if (key == "fontSize")
-                return 12;
-            if (key == "zoomStep")
-                return 10;
-            return 12;
+            return fallbackValue;
         }
         std::string valueStr = json.substr(start, end - start);
         try
@@ -93,11 +121,7 @@ FontConfig jsonToConfig(const std::string& json)
         }
         catch (...)
         {
-            if (key == "fontSize")
-                return 12;
-            if (key == "zoomStep")
-                return 10;
-            return 12;
+            return fallbackValue;
         }
     };
 
@@ -129,10 +153,50 @@ FontConfig jsonToConfig(const std::string& json)
 
     config.fontPath = findStringValue("fontPath");
     config.fontName = findStringValue("fontName");
-    config.fontSize = findIntValue("fontSize");
-    config.zoomStep = findIntValue("zoomStep");
-    config.readingStyle = static_cast<ReadingStyle>(findIntValue("readingStyle"));
-    config.disableEdgeProgressBar = findBoolValue("disableEdgeProgressBar");
+    config.fontSize = findIntValue("fontSize", 12);
+    config.zoomStep = findIntValue("zoomStep", 10);
+    config.showImagesInFileBrowser = findBoolValue("showImagesInFileBrowser");
+    config.readingStyle = static_cast<ReadingStyle>(findIntValue("readingStyle", static_cast<int>(ReadingStyle::Default)));
+
+    const bool hasEdgeTurnHoldDuration = json.find("\"edgeTurnHoldDurationMs\"") != std::string::npos;
+    const bool hasEdgePageTurnsMode = json.find("\"edgePageTurnsMode\"") != std::string::npos;
+    const bool hasDisableAutomaticEdgeTurns = json.find("\"disableAutomaticEdgePageTurns\"") != std::string::npos;
+    const bool hasLegacyDisableEdgeProgressBar = json.find("\"disableEdgeProgressBar\"") != std::string::npos;
+
+    if (hasEdgeTurnHoldDuration)
+    {
+        config.edgeTurnHoldDurationMs = std::clamp(findIntValue("edgeTurnHoldDurationMs", 300), 0, 1000);
+    }
+    else if (hasLegacyDisableEdgeProgressBar)
+    {
+        config.edgeTurnHoldDurationMs = findBoolValue("disableEdgeProgressBar") ? 0 : 300;
+    }
+    else
+    {
+        config.edgeTurnHoldDurationMs = 300;
+    }
+
+    if (hasEdgePageTurnsMode)
+    {
+        EdgePageTurnsMode parsedMode = EdgePageTurnsMode::Automatic;
+        if (edgePageTurnsModeFromConfigValue(findStringValue("edgePageTurnsMode"), parsedMode))
+        {
+            config.edgePageTurnsMode = parsedMode;
+        }
+        else
+        {
+            config.edgePageTurnsMode = EdgePageTurnsMode::Automatic;
+        }
+    }
+    else if (hasDisableAutomaticEdgeTurns)
+    {
+        config.edgePageTurnsMode = findBoolValue("disableAutomaticEdgePageTurns") ? EdgePageTurnsMode::Disable : EdgePageTurnsMode::Automatic;
+    }
+    else
+    {
+        config.edgePageTurnsMode = EdgePageTurnsMode::Automatic;
+    }
+
     if (json.find("\"showDocumentMinimap\"") != std::string::npos)
     {
         config.showDocumentMinimap = findBoolValue("showDocumentMinimap");
@@ -685,6 +749,29 @@ std::vector<ReadingStyle> OptionsManager::getAllReadingStyles()
         ReadingStyle::PaperTexture,
         ReadingStyle::SoftGray,
         ReadingStyle::NightMode};
+}
+
+const char* OptionsManager::getEdgePageTurnsModeName(EdgePageTurnsMode mode)
+{
+    switch (mode)
+    {
+    case EdgePageTurnsMode::Automatic:
+        return "Automatic";
+    case EdgePageTurnsMode::DoubleTap:
+        return "Double Tap";
+    case EdgePageTurnsMode::Disable:
+        return "Disable";
+    default:
+        return "Unknown";
+    }
+}
+
+std::vector<EdgePageTurnsMode> OptionsManager::getAllEdgePageTurnsModes()
+{
+    return {
+        EdgePageTurnsMode::Automatic,
+        EdgePageTurnsMode::DoubleTap,
+        EdgePageTurnsMode::Disable};
 }
 
 void OptionsManager::getReadingStyleBackgroundColor(ReadingStyle style, uint8_t& r, uint8_t& g, uint8_t& b)

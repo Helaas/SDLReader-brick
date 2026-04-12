@@ -96,11 +96,17 @@ Run it from the project root with:
 ./bin/sdl_reader_cli path/to/your/comic.cbz
 # or (NEW!)
 ./bin/sdl_reader_cli path/to/your/comic.cbr
+# or
+./bin/sdl_reader_cli path/to/your/image.webp
 # or launch the integrated browser (remembers last directory)
 ./bin/sdl_reader_cli --browse
+# or force images visible in browse mode for this session
+./bin/sdl_reader_cli --browse --show-filebrowser-images
+# or open browse mode in the thumbnail grid for this session
+./bin/sdl_reader_cli --browse --filebrowser-thumbnail-view
 ```
 
-Launching with `--browse` opens the Nuklear-driven file picker, auto-resumes your position using `reading_history.json`, and lets you tweak fonts/themes from a controller. Preferences are saved in the reader state directory (`$SDL_READER_STATE_DIR`, defaulting to `$HOME/config.json`). Set `SDL_READER_DEFAULT_DIR` if you want the picker to start in a specific library folder. Press **X** to toggle the new thumbnail grid, and use the `showDocumentMinimap` flag in `config.json` to disable the zoom minimap if desired.
+Launching with `--browse` opens the Nuklear-driven file picker, auto-resumes your position using `reading_history.json`, and lets you tweak fonts/themes from a controller. Preferences are saved in the reader state directory (`$SDL_READER_STATE_DIR`, defaulting to `$HOME/config.json`). Set `SDL_READER_DEFAULT_DIR` if you want the picker to start in a specific library folder. Press **X** to toggle the thumbnail grid. Standalone image files are hidden in browse mode by default; enable them with `showImagesInFileBrowser`, or force them visible for the current run with `--show-filebrowser-images`. Pass `--filebrowser-thumbnail-view` if you want the browser to open in the thumbnail grid for that launch; the `X` toggle still works normally. Both flags are browse-only and require `--browse`. Edge-turn behavior is configured with `edgeTurnHoldDurationMs`, `edgePageTurnsMode`, and `showDocumentMinimap`.
 
 ### Fonts & Reading Styles
 
@@ -118,7 +124,8 @@ Every Linux build invocations (`make linux` from the root or `make` in this dire
 - **ZIP**: ZIP archives containing images
 - **EPUB**: Electronic book format
 - **MOBI**: Kindle book format
-- **WebP Images**: WebP format images within documents and archives
+- **Plain Text**: `.txt` documents
+- **Standalone Images**: PNG, JPG/JPEG, GIF, BMP, TIFF, WebP
 
 ## Troubleshooting
 

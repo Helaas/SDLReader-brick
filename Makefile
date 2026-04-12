@@ -4,6 +4,15 @@ AVAILABLE_PLATFORMS := tg5040 tg5050 my355 mac wiiu linux
 DEFAULT_PLATFORM := tg5040
 UNAME_S := $(shell uname -s 2>/dev/null || echo Unknown)
 IN_DOCKER := $(shell if [ -f /.dockerenv ]; then echo 1; elif [ -f /proc/1/cgroup ] && grep -qE '(docker|kubepods|containerd|podman)' /proc/1/cgroup; then echo 1; else echo 0; fi)
+RUN_ARGS ?= --browse
+
+ifeq ($(UNAME_S),Darwin)
+  NATIVE_PLATFORM := mac
+else ifeq ($(UNAME_S),Linux)
+  NATIVE_PLATFORM := linux
+else
+  NATIVE_PLATFORM := unsupported
+endif
 
 ifeq ($(origin PLATFORM), undefined)
   ifeq ($(IN_DOCKER),1)
@@ -23,11 +32,27 @@ endif
 
 ADB ?= adb
 
-.PHONY: all clean clean-local help list-platforms export-tg5040 export-tg5050 export-my355 export-trimui export-all \
+.PHONY: all native run-native run-mac run-linux clean clean-local help list-platforms export-tg5040 export-tg5050 export-my355 export-trimui export-all \
        export-tg5040-in-docker export-tg5050-in-docker export-my355-in-docker export-trimui-in-docker \
        deploy deploy-platform $(AVAILABLE_PLATFORMS)
 
 all: $(PLATFORM)
+
+native:
+ifeq ($(NATIVE_PLATFORM),unsupported)
+	@echo "Error: native builds are only supported on macOS and Linux hosts."
+	@exit 1
+else
+	@$(MAKE) $(NATIVE_PLATFORM)
+endif
+
+run-native:
+ifeq ($(NATIVE_PLATFORM),unsupported)
+	@echo "Error: native runs are only supported on macOS and Linux hosts."
+	@exit 1
+else
+	@$(MAKE) run-$(NATIVE_PLATFORM) RUN_ARGS='$(RUN_ARGS)'
+endif
 
 # TG5040 build targets
 tg5040:
@@ -216,6 +241,9 @@ mac:
 	@echo "Building for macOS..."
 	$(MAKE) -C ports/mac
 
+run-mac: mac
+	./bin/sdl_reader_cli $(RUN_ARGS)
+
 wiiu:
 	@echo "Building for Wii U..."
 	$(MAKE) -C ports/wiiu
@@ -223,6 +251,9 @@ wiiu:
 linux:
 	@echo "Building for Linux..."
 	$(MAKE) -C ports/linux
+
+run-linux: linux
+	./bin/sdl_reader_cli $(RUN_ARGS)
 
 clean:
 	@echo "Cleaning all platforms..."
@@ -264,9 +295,14 @@ help:
 	@echo "  make export-my355  - Build and export MY355-only bundle"
 	@echo ""
 	@echo "Native platforms:"
+	@echo "  make native     - Build for the current host OS (macOS/Linux)"
+	@echo "  make run-native - Build and run on the current host OS (default: RUN_ARGS='--browse')"
 	@echo "  make mac        - Build for macOS"
+	@echo "  make run-mac    - Build and run for macOS"
 	@echo "  make wiiu       - Build for Wii U"
 	@echo "  make linux      - Build for Linux"
+	@echo "  make run-linux  - Build and run for Linux"
+	@echo "                   Override args with RUN_ARGS='path/to/file.pdf' or RUN_ARGS='--browse --show-filebrowser-images'"
 	@echo ""
 	@echo "Deploy:"
 	@echo "  make deploy     - Detect adb device, build, and push SDLReader.pak"

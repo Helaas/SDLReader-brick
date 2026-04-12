@@ -112,7 +112,7 @@ Because the image is prebuilt, the shell target simply pulls updates and starts 
 - **Volume mapping**: The project root is mounted at `/workspace` inside the container
 - **Toolchain**: Located at `/opt/aarch64-nextui-linux-gnu` inside the container
 
-Runtime settings (`config.json`) and reading progress (`reading_history.json`) are generated inside the reader state directory (`$SDL_READER_STATE_DIR`, set by `launch.sh`). The launcher also sets `SDL_READER_DEFAULT_DIR=/mnt/SDCARD` so the browser never leaves the SD card root. Both files are ignored by Git so you can modify them freely on the device or within the container.
+Runtime settings (`config.json`) and reading progress (`reading_history.json`) are generated inside the reader state directory (`$SDL_READER_STATE_DIR`, set by `launch.sh`). The launcher also sets `SDL_READER_DEFAULT_DIR=/mnt/SDCARD` so the browser never leaves the SD card root. Both files are ignored by Git so you can modify them freely on the device or within the container. Relevant browse/navigation keys now include `showImagesInFileBrowser`, `edgeTurnHoldDurationMs`, and `edgePageTurnsMode`.
 
 ### Fonts & Reading Styles
 
@@ -127,7 +127,9 @@ Drop additional `.ttf` or `.otf` files into `ports/tg5050/pak/fonts/` (or the pr
 The TG5050 build (TrimUI Smart Pro S) includes:
 - **Nuklear UI Stack**: Built-in browser launched via `--browse`, font & reading-style menu, controller number pad, and persisted `reading_history.json`
   - Toggle the new thumbnail grid with the **X** button for cover previews rendered asynchronously.
-  - Control the zoom minimap overlay via the `showDocumentMinimap` flag in `config.json`.
+  - Standalone image files can be shown from Settings → File Browser or forced at launch with `--show-filebrowser-images`.
+  - Use `--filebrowser-thumbnail-view` to open the browser in the thumbnail grid for the current launch while still allowing `X` to switch views.
+  - Control edge-turn threshold/mode behavior and the zoom minimap overlay via `config.json`.
 - **Advanced Hardware Power Management**: NextUI-compatible power button handling (shared with TG5040)
   - Power button monitoring via `/dev/input/event1`
   - Short press: Intelligent sleep with fake sleep fallback
@@ -146,7 +148,7 @@ The TG5050 build (TrimUI Smart Pro S) includes:
   - CBR comic book archives via custom-built minimal libarchive (no ICU dependencies)
   - EPUB e-books via MuPDF native support
   - Plain text files (.txt) with configurable font size, face, and reading style
-  - **WebP images**: Enhanced WebP format support within documents and archives
+  - Standalone image files: PNG, JPG/JPEG, GIF, BMP, TIFF, WebP
 - **Platform-optimized build flags**: `-DTRIMUI_PLATFORM`
 - **Shared power handler** from `ports/tg5040/`:
   - `ports/tg5040/include/power_handler.h` - TrimUI power management interface

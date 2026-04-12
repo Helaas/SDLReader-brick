@@ -17,12 +17,18 @@ using GuiManagerType = GuiManager;
 #endif
 
 #include <SDL.h>
+#include <algorithm>
 #include <chrono>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
+
+struct AppLaunchOptions
+{
+    bool forceShowImagesInFileBrowser{false};
+};
 
 class App
 {
@@ -48,7 +54,7 @@ public:
     };
 
     // Constructor now accepts pre-initialized SDL_Window* and SDL_Renderer*
-    App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer);
+    App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer, AppLaunchOptions launchOptions = {});
     ~App();
 
     void run();
@@ -78,7 +84,7 @@ public:
     }
     float getEdgeTurnThreshold() const
     {
-        return m_edgeTurnThreshold;
+        return static_cast<float>(std::max(0, m_cachedConfig.edgeTurnHoldDurationMs)) / 1000.0f;
     }
     bool isDpadLeftHeld() const
     {
@@ -96,12 +102,22 @@ public:
     {
         return m_dpadDownHeld;
     }
-    bool isEdgeProgressBarDisabled() const
+    bool shouldShowEdgeTurnProgressBar() const
     {
-        return m_cachedConfig.disableEdgeProgressBar;
+        return m_cachedConfig.edgePageTurnsMode == EdgePageTurnsMode::Automatic &&
+               m_cachedConfig.edgeTurnHoldDurationMs > 0;
     }
 
 private:
+    enum class EdgeDirection
+    {
+        None = 0,
+        Right,
+        Left,
+        Up,
+        Down
+    };
+
     // Document Management
     void loadDocument();
     void refreshPageCountFromDocument();
@@ -123,6 +139,7 @@ private:
     // Font management
     void toggleFontMenu();
     void applyFontConfiguration(const FontConfig& config);
+    bool saveConfigWithRuntimeOverrides(const FontConfig& config);
 
     // Game controller management
     void initializeGameControllers();
@@ -133,6 +150,19 @@ private:
     void handleDpadNudgeLeft();
     void handleDpadNudgeUp();
     void handleDpadNudgeDown();
+    bool performEdgeTurn(EdgeDirection direction);
+    bool handleDoubleTapEdgePress(EdgeDirection direction);
+    bool canTurnPageInDirection(EdgeDirection direction) const;
+    bool isDirectionAtTurnEdge(EdgeDirection direction) const;
+    bool isEligibleEdgeTurnDirection(EdgeDirection direction) const;
+    void armDoubleTapEdgeTurnDirection(EdgeDirection direction);
+    void clearDoubleTapEdgeTurnState();
+    void clearDoubleTapEdgeTurnStateIfInvalid();
+    void resetEdgeTurnHolds();
+    void resetEdgeTurnProgressForDirection(EdgeDirection direction, bool startCooldown);
+    float& edgeTurnHoldForDirection(EdgeDirection direction);
+    float& edgeTurnCooldownForDirection(EdgeDirection direction);
+    const float& edgeTurnHoldForDirection(EdgeDirection direction) const;
 
     // Pan speed (pixels per second)
     float m_dpadPanSpeed{600.0f};
@@ -141,6 +171,7 @@ private:
     Uint64 m_prevTick{0};
 
     bool m_running;
+    AppLaunchOptions m_launchOptions;
 
     // Core managers
     std::unique_ptr<Document> m_document;
@@ -182,12 +213,18 @@ private:
     float m_edgeTurnHoldLeft{0.0f};
     float m_edgeTurnHoldUp{0.0f};
     float m_edgeTurnHoldDown{0.0f};
-    float m_edgeTurnThreshold{0.300f}; // seconds to hold at edge before page turn
     float m_edgeTurnCooldownRight{0.0f};
     float m_edgeTurnCooldownLeft{0.0f};
     float m_edgeTurnCooldownUp{0.0f};
     float m_edgeTurnCooldownDown{0.0f};
     float m_edgeTurnCooldownDuration{0.5f}; // seconds to wait before allowing edge-turn again
+    // Track whether an edge turn already fired during a sustained hold at auto-zoom (max == 0).
+    // Prevents re-accumulation and progress bar flashing when the page fits in that dimension.
+    bool m_edgeTurnFiredRight{false};
+    bool m_edgeTurnFiredLeft{false};
+    bool m_edgeTurnFiredUp{false};
+    bool m_edgeTurnFiredDown{false};
+    EdgeDirection m_doubleTapArmedDirection{EdgeDirection::None};
 
     // Game controller support
     SDL_GameController* m_gameController{nullptr};
@@ -218,9 +255,13 @@ private:
     void refreshCachedConfig()
     {
         m_cachedConfig = m_optionsManager->loadConfig();
+        resetEdgeTurnHolds();
+        clearDoubleTapEdgeTurnState();
         if (m_renderManager)
         {
             m_renderManager->setShowMinimap(m_cachedConfig.showDocumentMinimap);
+            m_renderManager->setShowPageIndicatorOverlay(m_cachedConfig.showPageIndicatorOverlay);
+            m_renderManager->setShowScaleOverlay(m_cachedConfig.showScaleOverlay);
         }
     }
 

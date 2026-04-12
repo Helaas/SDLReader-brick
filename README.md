@@ -1,6 +1,6 @@
 # SDL Reader
 
-SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and MuPDF. It supports viewing PDF, CBZ/ZIP & CBR/RAR comic archives, EPUB books, MOBI e-books, and plain text files with intuitive navigation, zooming, rotation, and mirroring features. Optimized for embedded devices like the TrimUI Brick, TrimUI Smart Pro, TrimUI Smart Pro S, and the Miyoo Flip running [NextUI](https://github.com/LoveRetro/NextUI). It also runs on desktop platforms including macOS, Linux, and is a work in progress as Wii U homebrew.
+SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and MuPDF. It supports viewing PDF, CBZ/ZIP & CBR/RAR comic archives, EPUB books, MOBI e-books, plain text files, and standalone image files with intuitive navigation, zooming, rotation, and mirroring features. Optimized for embedded devices like the TrimUI Brick, TrimUI Smart Pro, TrimUI Smart Pro S, and the Miyoo Flip running [NextUI](https://github.com/LoveRetro/NextUI). It also runs on desktop platforms including macOS, Linux, and is a work in progress as Wii U homebrew.
 
 ## Table of Contents
 * [Features](#features)
@@ -14,7 +14,7 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 * [Architecture](#architecture)
 
 ## Features
-* View PDF documents, comic book archives (CBZ/ZIP & CBR/RAR), EPUB books, and MOBI e-books.
+* View PDF documents, comic book archives (CBZ/ZIP & CBR/RAR), EPUB books, MOBI e-books, plain text files, and standalone images.
 * Built-in heads-up display with page, zoom, edge-turn, minimap, and error indicators — now including an optional **Document Minimap Overlay** that mirrors your zoomed-in viewport (toggleable in the font/reading style panel).
 * Integrated Nuklear-powered file browser (`--browse`) with:
   - Controller support
@@ -27,7 +27,7 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 * Custom font picker with reading style themes, MuPDF-backed CSS injection, controller-friendly navigation, hold-to-scroll, inline tooltips, info glyphs, and persistent highlights.
 * On-screen number pad for page jumps when navigating with a controller.
 * Automatic reading history tracking with resume-on-open for the last 50 documents.
-* Page navigation (next/previous page) with **Smart Edge Navigation**: when zoomed ≥100% & at a page edge, holding the D-pad for 300 ms flips pages with a progress indicator.
+* Page navigation (next/previous page) with **Smart Edge Navigation**: directional edge turns support a configurable hold duration, instant turning, double-tap turning, or a fully disabled mode to prevent accidental flips while panning.
 * Quick page jumping (±10 pages) and arbitrary page entry.
 * Zoom in/out, fit-to-width, high-maximum zoom levels, optimized downsampling paths, and improved caching for smoother zoom/pan performance (notably on TrimUI Brick/Smart Pro devices).
 * Page rotation (90° increments) and horizontal/vertical mirroring.
@@ -54,6 +54,7 @@ SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and 
 * **EPUB** (`.epub`)
 * **MOBI** (`.mobi`)
 * **Plain Text** (`.txt`)
+* **Standalone Images** (`.png`, `.jpg`, `.jpeg`, `.gif`, `.bmp`, `.tif`, `.tiff`, `.webp`)
 
 ## TrimUI Brick Control Scheme
 ![TrimUI Brick](.github/resources/tg5040%20controls.png)
@@ -79,6 +80,12 @@ This project supports multiple platforms with a unified build system.
 ```bash
 # Build for default platform (TG5040)
 make
+
+# Build for the current host OS (macOS/Linux)
+make native
+
+# Build and run on the current host OS
+make run-native
 
 # Build for specific platform
 make tg5040    # TG5040 embedded device (TrimUI Brick and Smart Pro)
@@ -215,17 +222,28 @@ After building, you can either launch straight into a document or drop into the 
 ./bin/sdl_reader_cli path/to/your_comic.cbz
 ./bin/sdl_reader_cli path/to/your_book.epub
 ./bin/sdl_reader_cli path/to/your_ebook.mobi
+./bin/sdl_reader_cli path/to/your_image.webp
 
 # Launch the controller-friendly file browser (saves last directory)
 ./bin/sdl_reader_cli --browse
+
+# Force standalone image files to appear in browse mode for this session
+./bin/sdl_reader_cli --browse --show-filebrowser-images
+
+# Start browse mode in the thumbnail grid for this session
+./bin/sdl_reader_cli --browse --filebrowser-thumbnail-view
 ```
 
 When using `--browse`, SDL Reader will remember the last directory you visited (stored in `config.json`) and automatically resume the last page you read for each document (stored in `reading_history.json`). Both files live in the reader state directory (`$SDL_READER_STATE_DIR`, defaulting to `$HOME`).
 
+Standalone image files are hidden in the file browser by default. Enable them in Settings → File Browser, set `"showImagesInFileBrowser": true` in `config.json`, or pass `--show-filebrowser-images` to force them visible for the current launch only. Pass `--filebrowser-thumbnail-view` to make browse mode start in the thumbnail grid for the current launch; you can still press `X` to switch views afterward. Both flags are browse-only and require `--browse`.
+
 ### File Browser Enhancements
 - Press `X` (or the controller `X` button) to toggle a high-performance thumbnail grid that previews covers and caches results in the background.
+- Pass `--filebrowser-thumbnail-view` if you want browse mode to open in the thumbnail grid without changing any saved preference.
 - Thumbnails are generated asynchronously so scrolling stays responsive even on large folders.
 - The browser respects `SDL_READER_DEFAULT_DIR`; set this environment variable to confine browsing to a specific root directory.
+- Standalone images use the same thumbnail pipeline as documents when image entries are enabled.
 
 ## Configuration
 
@@ -245,7 +263,9 @@ SDL Reader uses a `config.json` file (stored under `$SDL_READER_STATE_DIR`, defa
      "fontSize": 16,
      "zoomStep": 10,
      "readingStyle": 0,
-     "disableEdgeProgressBar": false,
+     "showImagesInFileBrowser": false,
+     "edgeTurnHoldDurationMs": 300,
+     "edgePageTurnsMode": "automatic",
      "showDocumentMinimap": true,
      "lastBrowseDirectory": "/path/to/library"
    }
@@ -258,10 +278,13 @@ SDL Reader uses a `config.json` file (stored under `$SDL_READER_STATE_DIR`, defa
 - **zoomStep**: Percentage increment for zoom operations and controller zoom buttons
 - **readingStyle**: Numeric identifier for the active reading theme (see table below)
 - **lastBrowseDirectory**: Directory the file browser should open by default when launched with `--browse`
-- **disableEdgeProgressBar**: When `true`, panning at page edges changes pages instantly without the 300ms delay and progress bar. When `false` (default), the edge nudge progress bar is shown.
+- **showImagesInFileBrowser**: When `true`, the file browser includes supported standalone image files. Default: `false`.
+- **edgeTurnHoldDurationMs**: Hold time in milliseconds before a directional page-edge press turns the page when `edgePageTurnsMode` is `automatic`. `0` means instant page turns. Default: `300`.
+- **edgePageTurnsMode**: Controls how directional presses behave at page edges. Use `automatic`, `doubleTap`, or `disable`. Default: `automatic`.
 - **showDocumentMinimap**: Toggle the zoomed-in minimap overlay; set to `false` to hide it.
 - **State directory override**: Set `SDL_READER_STATE_DIR` to relocate `config.json`, `reading_history.json`, and other runtime assets. Defaults to your `$HOME` directory.
 - **Environment override**: Set `SDL_READER_DEFAULT_DIR` to control the starting directory for the browser. If unset, the reader defaults to `$HOME`.
+- **CLI overrides**: `--show-filebrowser-images` forces image visibility in the file browser for the current run, hides that setting from the in-app menu, and does not write the override back to `config.json`. `--filebrowser-thumbnail-view` starts browse mode in the thumbnail grid for the current run only. Both flags require `--browse`, and users can still toggle back to list view with `X`.
 
 | `readingStyle` | Theme          | Background | Text Color |
 | :------------- | :------------- | :--------- | :--------- |
@@ -337,7 +360,7 @@ The SDL Reader supports the following keyboard, mouse, and game controller input
 | :----------------------------------------  | :-----------------------------------                 |
 | **D-Pad**                                  |                                                      |
 | `D-Pad Up/Down/Left/Right`                 | Scroll/Pan in direction                              |
-| `D-Pad (at page edge)`                     | Hold for 300ms to turn page (with progress indicator)|
+| `D-Pad (at page edge)`                     | Hold for configured duration (default 300ms) to turn page |
 | **Shoulder Buttons**                       |                                                      |
 | `L1 (Left Shoulder)`                       | Previous page                                        |
 | `R1 (Right Shoulder)`                      | Next page                                            |
@@ -397,7 +420,7 @@ The SDL Reader supports the following keyboard, mouse, and game controller input
 | :---------------------------------------- | :---------------------------------------------------- |
 | **D-Pad**                                 |                                                       |
 | `D-Pad Up/Down/Left/Right`                | Scroll/Pan in direction                               |
-| `D-Pad (zoomed ≥ 100% & at page edge)`    | Hold for 300ms to turn page (with progress indicator) |
+| `D-Pad (zoomed ≥ 100% & at page edge)`    | Hold for configured duration (default 300ms) to turn page |
 | **Shoulder Buttons**                      |                                                       |
 | `L1 (Left Shoulder)`                      | Previous page                                         |
 | `R1 (Right Shoulder)`                     | Next page                                             |
@@ -441,33 +464,36 @@ The SDL Reader supports the following keyboard, mouse, and game controller input
 
 ## Smart Edge Navigation
 
-SDL Reader includes an intelligent edge navigation system for smooth page turning with game controllers:
+SDL Reader includes an intelligent edge navigation system for smooth page turning with held directional input:
 
 ### How It Works
-- **Edge Detection**: When zoomed in ≥ 100%, using D-pad controls and reaching a page edge (left, right, top, or bottom), the system detects you're at the boundary
-- **Hold to Turn**: Continue holding the D-pad direction for 300ms to initiate page turning (configurable - see below)
+- **Edge Detection**: With a held direction, the system detects either that the page already fits fully in the window or that you've reached a scroll edge (left, right, top, or bottom)
+- **Hold to Turn**: Continue holding the D-pad direction for the configured duration (300ms by default) to initiate page turning
 - **Visual Feedback**: A progress bar appears showing:
   - Direction of pending page change (e.g., "Next Page", "Previous Page")
-  - Progress indicator that fills as you approach the 300ms threshold
+  - Progress indicator that fills as you approach the configured threshold
   - Color transitions from yellow to green as the timer progresses
-- **Immediate Cancellation**: Release the D-pad before 300ms to stay on the current page
+- **Immediate Cancellation**: Release the D-pad before the threshold to stay on the current page
 - **Seamless Transition**: After page change, you appear at the appropriate edge of the new page for continuous navigation
 
-### Instant Page Turns (No Delay)
-You can disable the 300ms delay and progress bar for instant page turns:
-- **Via Settings Menu**: Open Settings (Menu button on TG5040, `M` key on desktop) → Page Navigation section → Check "Disable Edge Progress Bar"
-- **Via config.json**: Set `"disableEdgeProgressBar": true` in your configuration file
-- When enabled, panning at page edges will change pages immediately without any delay or visual indicator
+### Edge-Turn Modes
+You can choose between three behaviors for directional presses at page edges:
+- **Automatic**: Set `edgePageTurnsMode` to `automatic`. Use `edgeTurnHoldDurationMs` above `0` to keep the delayed edge-turn behavior with a progress bar, or set it to `0` for instant page turns.
+- **Double Tap**: Set `edgePageTurnsMode` to `doubleTap` to require a second directional press at the edge before the page turns.
+- **Disable**: Set `edgePageTurnsMode` to `disable` to suppress both the progress bar and automatic page turns while panning.
+- **Via Settings Menu**: Open Settings (Menu button on TG5040, `M` key on desktop) → Page Navigation → Panning.
+- **Via config.json**: Set `"edgeTurnHoldDurationMs"` and `"edgePageTurnsMode"` in your configuration file.
 
 ### When It Activates
-- **Fully Zoomed Out**: When the page fits entirely within the window
-- **At Scroll Limits**: When zoomed in and you've reached the maximum scroll position in any direction
-- **D-pad Only**: This feature works with game controller D-pads, not keyboard arrow keys
+- **Fully Visible Page**: When the page already fits entirely within the window, holding a direction can immediately begin the edge-turn timer
+- **At Scroll Limits**: When zoomed or panned, continuing to hold the direction after reaching the maximum scroll position begins the edge-turn timer
+- **Directional Holds**: This feature responds to both game controller D-pads and keyboard arrow keys
 
 ### Benefits
 - **Prevents Accidental Page Changes**: No more accidentally flipping pages when trying to scroll
 - **Intuitive Control**: Natural feel for gaming device users
 - **Visual Clarity**: Always know when a page change is about to happen
+- **Opt-out available**: Disable automatic edge turns entirely if you only want shoulder buttons or other explicit page-turn controls
 
 ## Project Structure
 ```
