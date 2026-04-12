@@ -56,6 +56,9 @@ ports/tg5050/webp-upstream-697749.patch
 webp-upstream-697749.patch
 ports/tg5040/nuklear
 ports/tg5050/nuklear
+ports/linux/nuklear-linux
+ports/mac/nuklear-mac
+ports/my355/nuklear-my355
 reading_history.json
 test_transform.log
 ports/tg5040/nuklear-tg5040

@@ -47,7 +47,7 @@ int main(int argc, char* argv[])
     std::string documentPath;
     auto printUsage = [argv]()
     {
-        std::cerr << "Usage: " << argv[0] << " <document_file> [--show-filebrowser-images] [--filebrowser-thumbnail-view]" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " <document_file>" << std::endl;
         std::cerr << "       " << argv[0] << " --browse [--show-filebrowser-images] [--filebrowser-thumbnail-view]" << std::endl;
         std::cerr << "Supported formats: " << SupportedFileTypes::getSupportedFormatHelpText() << std::endl;
     };
@@ -85,7 +85,39 @@ int main(int argc, char* argv[])
         }
     }
 
-    if ((browseMode && !documentPath.empty()) || (!browseMode && documentPath.empty()))
+    std::string browseOnlyOptions;
+    auto appendBrowseOnlyOption = [&browseOnlyOptions](const char* option)
+    {
+        if (!browseOnlyOptions.empty())
+        {
+            browseOnlyOptions += ", ";
+        }
+        browseOnlyOptions += option;
+    };
+    if (forceShowImagesInFileBrowser)
+    {
+        appendBrowseOnlyOption("--show-filebrowser-images");
+    }
+    if (startFileBrowserInThumbnailView)
+    {
+        appendBrowseOnlyOption("--filebrowser-thumbnail-view");
+    }
+
+    if (!browseMode && !browseOnlyOptions.empty())
+    {
+        std::cerr << "The following options require --browse: " << browseOnlyOptions << std::endl;
+        printUsage();
+        return 1;
+    }
+
+    if (browseMode && !documentPath.empty())
+    {
+        std::cerr << "A document path cannot be combined with --browse." << std::endl;
+        printUsage();
+        return 1;
+    }
+
+    if (!browseMode && documentPath.empty())
     {
         printUsage();
         return 1;

@@ -230,7 +230,7 @@ After building, you can either launch straight into a document or drop into the 
 
 When using `--browse`, SDL Reader will remember the last directory you visited (stored in `config.json`) and automatically resume the last page you read for each document (stored in `reading_history.json`). Both files live in the reader state directory (`$SDL_READER_STATE_DIR`, defaulting to `$HOME`).
 
-Standalone image files are hidden in the file browser by default. Enable them in Settings → File Browser, set `"showImagesInFileBrowser": true` in `config.json`, or pass `--show-filebrowser-images` to force them visible for the current launch only. Pass `--filebrowser-thumbnail-view` to make browse mode start in the thumbnail grid for the current launch; you can still press `X` to switch views afterward.
+Standalone image files are hidden in the file browser by default. Enable them in Settings → File Browser, set `"showImagesInFileBrowser": true` in `config.json`, or pass `--show-filebrowser-images` to force them visible for the current launch only. Pass `--filebrowser-thumbnail-view` to make browse mode start in the thumbnail grid for the current launch; you can still press `X` to switch views afterward. Both flags are browse-only and require `--browse`.
 
 ### File Browser Enhancements
 - Press `X` (or the controller `X` button) to toggle a high-performance thumbnail grid that previews covers and caches results in the background.
@@ -278,7 +278,7 @@ SDL Reader uses a `config.json` file (stored under `$SDL_READER_STATE_DIR`, defa
 - **showDocumentMinimap**: Toggle the zoomed-in minimap overlay; set to `false` to hide it.
 - **State directory override**: Set `SDL_READER_STATE_DIR` to relocate `config.json`, `reading_history.json`, and other runtime assets. Defaults to your `$HOME` directory.
 - **Environment override**: Set `SDL_READER_DEFAULT_DIR` to control the starting directory for the browser. If unset, the reader defaults to `$HOME`.
-- **CLI overrides**: `--show-filebrowser-images` forces image visibility in the file browser for the current run, hides that setting from the in-app menu, and does not write the override back to `config.json`. `--filebrowser-thumbnail-view` starts browse mode in the thumbnail grid for the current run only; users can still toggle back to list view with `X`.
+- **CLI overrides**: `--show-filebrowser-images` forces image visibility in the file browser for the current run, hides that setting from the in-app menu, and does not write the override back to `config.json`. `--filebrowser-thumbnail-view` starts browse mode in the thumbnail grid for the current run only. Both flags require `--browse`, and users can still toggle back to list view with `X`.
 
 | `readingStyle` | Theme          | Background | Text Color |
 | :------------- | :------------- | :--------- | :--------- |
@@ -458,10 +458,10 @@ The SDL Reader supports the following keyboard, mouse, and game controller input
 
 ## Smart Edge Navigation
 
-SDL Reader includes an intelligent edge navigation system for smooth page turning with game controllers:
+SDL Reader includes an intelligent edge navigation system for smooth page turning with held directional input:
 
 ### How It Works
-- **Edge Detection**: When zoomed in ≥ 100%, using D-pad controls and reaching a page edge (left, right, top, or bottom), the system detects you're at the boundary
+- **Edge Detection**: With a held direction, the system detects either that the page already fits fully in the window or that you've reached a scroll edge (left, right, top, or bottom)
 - **Hold to Turn**: Continue holding the D-pad direction for the configured duration (300ms by default) to initiate page turning
 - **Visual Feedback**: A progress bar appears showing:
   - Direction of pending page change (e.g., "Next Page", "Previous Page")
@@ -479,9 +479,9 @@ You can choose between three behaviors for directional presses at page edges:
 - **Via config.json**: Set `"edgeTurnHoldDurationMs"` and `"disableAutomaticEdgePageTurns"` in your configuration file.
 
 ### When It Activates
-- **Fully Zoomed Out**: When the page fits entirely within the window
-- **At Scroll Limits**: When zoomed in and you've reached the maximum scroll position in any direction
-- **D-pad Only**: This feature works with game controller D-pads, not keyboard arrow keys
+- **Fully Visible Page**: When the page already fits entirely within the window, holding a direction can immediately begin the edge-turn timer
+- **At Scroll Limits**: When zoomed or panned, continuing to hold the direction after reaching the maximum scroll position begins the edge-turn timer
+- **Directional Holds**: This feature responds to both game controller D-pads and keyboard arrow keys
 
 ### Benefits
 - **Prevents Accidental Page Changes**: No more accidentally flipping pages when trying to scroll
