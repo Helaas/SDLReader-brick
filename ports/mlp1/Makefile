@@ -1,0 +1,417 @@
+# MLP1-specific Makefile
+# Cross-compiles SDLReader for the Miniloong Pocket 1 (MLP1) handheld.
+# Uses aarch64-buildroot-linux-gnu toolchain via Docker.
+# SDL2/SDL2_ttf come from the MLP1 Buildroot SDK sysroot via pkg-config.
+
+# Determine base path
+ifneq ($(wildcard ../../src),)
+  BASE_PATH := .
+  WORKSPACE_PATH := ../..
+else
+  BASE_PATH := ports/mlp1
+  WORKSPACE_PATH := .
+endif
+
+MLP1_PORT_PATH := $(WORKSPACE_PATH)/ports/mlp1
+
+# Toolchain configuration
+CROSS_COMPILE := aarch64-buildroot-linux-gnu-
+# The MLP1 SDK ships a sysroot-aware pkg-config wrapper at the front of PATH
+# (/opt/mlp1-toolchain/bin/pkg-config). There is no $(CROSS_COMPILE)pkg-config,
+# so use the wrapper directly for SDL2/SDL2_ttf resolution.
+PKG_CONFIG := pkg-config
+SYSROOT := /opt/mlp1-toolchain/aarch64-buildroot-linux-gnu/sysroot/usr
+
+# Compiler and flags
+CXX      ?= $(CROSS_COMPILE)g++
+MLP1_INCLUDE_DIR := $(MLP1_PORT_PATH)/include
+CXXFLAGS = -std=c++17 -Wall -Wextra -Os -DNDEBUG -DPLATFORM_MLP1 \
+            -mcpu=cortex-a55 -mtune=cortex-a55 \
+            -ffunction-sections -fdata-sections \
+            -I$(WORKSPACE_PATH)/src -I$(WORKSPACE_PATH)/include -I$(MLP1_INCLUDE_DIR) -I$(BASE_PATH)/mupdf/include \
+            -I$(BASE_PATH)/nuklear-mlp1 -I$(BASE_PATH)/nuklear-mlp1/demo/sdl_renderer \
+            -I$(LIBARCHIVE_PREFIX)/include -I$(WEBP_PREFIX)/include -D_REENTRANT \
+            $(shell $(PKG_CONFIG) --cflags sdl2 SDL2_ttf)
+
+# Source directories
+SRC_DIR = $(WORKSPACE_PATH)/src
+CLI_DIR = $(WORKSPACE_PATH)/cli
+MLP1_SRC_DIR = $(MLP1_PORT_PATH)/src
+
+# Output locations
+BIN_DIR  := $(WORKSPACE_PATH)/bin
+BUILD_DIR  := $(WORKSPACE_PATH)/build/mlp1
+TARGET   := $(BUILD_DIR)/sdl_reader_cli
+
+# Source files: Combine all .cpp files from src/ and cli/, excluding Linux-specific files
+SRC_FILES = $(filter-out $(SRC_DIR)/power_handler.cpp, $(wildcard $(SRC_DIR)/*.cpp))
+SRCS = $(SRC_FILES) $(wildcard $(CLI_DIR)/*.cpp)
+
+# All object files (will be placed in the build directory)
+OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(SRC_DIR)/%,$(SRCS))) \
+       $(patsubst $(CLI_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(filter $(CLI_DIR)/%,$(SRCS))) \
+       $(BUILD_DIR)/mlp1_power_handler.o
+
+# Path to minimal libarchive static library.
+# Installed into a workspace-relative prefix (like WEBP_PREFIX): the Buildroot
+# toolchain wrapper is compiled in paranoid mode and rejects any -I/-L path that
+# begins with /usr/local/lib — which "/usr/local/libarchive-minimal" matches.
+LIBARCHIVE_PREFIX := $(abspath $(BASE_PATH)/libarchive-install)
+LIBARCHIVE_MINIMAL := $(LIBARCHIVE_PREFIX)/lib/libarchive.a
+LIBARCHIVE_VERSION := 3.7.2
+LIBARCHIVE_SRC_DIR := libarchive-$(LIBARCHIVE_VERSION)
+LIBARCHIVE_TARBALL := libarchive-$(LIBARCHIVE_VERSION).tar.gz
+LIBARCHIVE_URL := https://www.libarchive.org/downloads/$(LIBARCHIVE_TARBALL)
+
+# Compression libraries for full libarchive format parity.
+# The MLP1 SDK sysroot ships only zlib, so bzip2/xz(lzma)/lz4/zstd are built as
+# static libs from source (like WEBP) and linked into the binary. Workspace-
+# relative prefixes keep the paranoid Buildroot wrapper happy (no /usr/local/lib*).
+BZIP2_VERSION := 1.0.8
+BZIP2_SRC_DIR := bzip2-$(BZIP2_VERSION)
+BZIP2_URL := https://sourceware.org/pub/bzip2/bzip2-$(BZIP2_VERSION).tar.gz
+BZIP2_PREFIX := $(abspath $(BASE_PATH)/bzip2-install)
+BZIP2_LIB := $(BZIP2_PREFIX)/lib/libbz2.a
+
+XZ_VERSION := 5.4.6
+XZ_SRC_DIR := xz-$(XZ_VERSION)
+XZ_URL := https://github.com/tukaani-project/xz/releases/download/v$(XZ_VERSION)/xz-$(XZ_VERSION).tar.gz
+XZ_PREFIX := $(abspath $(BASE_PATH)/xz-install)
+XZ_LIB := $(XZ_PREFIX)/lib/liblzma.a
+
+LZ4_VERSION := 1.9.4
+LZ4_SRC_DIR := lz4-$(LZ4_VERSION)
+LZ4_URL := https://github.com/lz4/lz4/releases/download/v$(LZ4_VERSION)/lz4-$(LZ4_VERSION).tar.gz
+LZ4_PREFIX := $(abspath $(BASE_PATH)/lz4-install)
+LZ4_LIB := $(LZ4_PREFIX)/lib/liblz4.a
+
+ZSTD_VERSION := 1.5.6
+ZSTD_SRC_DIR := zstd-$(ZSTD_VERSION)
+ZSTD_URL := https://github.com/facebook/zstd/releases/download/v$(ZSTD_VERSION)/zstd-$(ZSTD_VERSION).tar.gz
+ZSTD_PREFIX := $(abspath $(BASE_PATH)/zstd-install)
+ZSTD_LIB := $(ZSTD_PREFIX)/lib/libzstd.a
+
+# Aggregate flags so libarchive's configure can find all four custom prefixes.
+COMP_CPPFLAGS := -I$(BZIP2_PREFIX)/include -I$(XZ_PREFIX)/include -I$(LZ4_PREFIX)/include -I$(ZSTD_PREFIX)/include
+COMP_LDFLAGS := -L$(BZIP2_PREFIX)/lib -L$(XZ_PREFIX)/lib -L$(LZ4_PREFIX)/lib -L$(ZSTD_PREFIX)/lib
+
+# WebP (static build for MuPDF)
+WEBP_VERSION := 1.3.2
+WEBP_SRC_DIR := libwebp-$(WEBP_VERSION)
+WEBP_TARBALL := libwebp-$(WEBP_VERSION).tar.gz
+WEBP_URL := https://storage.googleapis.com/downloads.webmproject.org/releases/webp/$(WEBP_TARBALL)
+WEBP_PREFIX := $(abspath $(BASE_PATH)/webp-install)
+WEBP_LIB := $(WEBP_PREFIX)/lib/libwebp.a
+GUMBO_INCLUDE := $(abspath $(BASE_PATH)/mupdf/thirdparty/gumbo-parser/src)
+
+# Libraries (link order matters)
+# SDL2/SDL2_ttf come from sysroot via pkg-config.
+# Use pkg-config for SDL2/SDL2_ttf link flags too.
+LIBS := $(shell $(PKG_CONFIG) --libs sdl2 SDL2_ttf) \
+  -L$(BASE_PATH)/mupdf/build/release \
+  -lmupdf -lmupdf-third \
+  -L$(WEBP_PREFIX)/lib -lwebp -lwebpdemux \
+  $(LIBARCHIVE_MINIMAL) \
+  -L$(BZIP2_PREFIX)/lib -lbz2 \
+  -L$(XZ_PREFIX)/lib -llzma \
+  -L$(LZ4_PREFIX)/lib -llz4 \
+  -L$(ZSTD_PREFIX)/lib -lzstd \
+  -lz -lm -lpthread -ldl -lstdc++fs
+# bzip2/xz(lzma)/lz4/zstd are built static from source (see build-bzip2/xz/lz4/zstd)
+# and linked after libarchive, which references their symbols. Together with zlib
+# this gives MLP1 full archive-format parity with the other platforms.
+
+.PHONY: all clean export-bundle build-mupdf setup-mupdf clean-mupdf build-libarchive clean-libarchive build-webp clean-webp setup-nuklear clean-nuklear check-libarchive \
+        build-bzip2 build-xz build-lz4 build-zstd build-comp clean-comp
+
+# Default goal — MUST be the first real target so `make` (no args) builds it.
+all: setup-nuklear build-comp build-libarchive build-webp setup-mupdf build-mupdf $(TARGET)
+
+# Aggregate target for the compression libraries libarchive links against.
+build-comp: $(BZIP2_LIB) $(XZ_LIB) $(LZ4_LIB) $(ZSTD_LIB)
+
+# Verify minimal libarchive is built
+check-libarchive:
+	@if [ ! -f "$(LIBARCHIVE_MINIMAL)" ]; then \
+		echo "ERROR: Minimal libarchive not found at $(LIBARCHIVE_MINIMAL)"; \
+		echo "Run 'make build-libarchive' first or 'make all' to build everything"; \
+		exit 1; \
+	else \
+		echo "Minimal libarchive found at $(LIBARCHIVE_MINIMAL)"; \
+	fi
+
+# Setup Nuklear GUI library (header-only)
+setup-nuklear:
+	@cd $(BASE_PATH) && \
+	if [ ! -f "nuklear-mlp1/nuklear.h" ] || [ ! -f "nuklear-mlp1/demo/sdl_renderer/nuklear_sdl_renderer.h" ]; then \
+		echo "Setting up Nuklear GUI library (v4.12.8) for MLP1..."; \
+		rm -rf nuklear-mlp1; \
+		git clone --depth 1 --branch 4.12.8 https://github.com/Immediate-Mode-UI/Nuklear.git nuklear-mlp1 || { echo "Failed to clone Nuklear for MLP1"; exit 1; }; \
+		test -f "nuklear-mlp1/nuklear.h" && test -f "nuklear-mlp1/demo/sdl_renderer/nuklear_sdl_renderer.h" || { echo "Nuklear checkout is incomplete for MLP1"; exit 1; }; \
+		echo "Nuklear repository cloned for MLP1"; \
+	else \
+		echo "Nuklear repository already present for MLP1"; \
+	fi
+
+# Setup MuPDF repository
+setup-mupdf:
+	@if [ ! -d "$(BASE_PATH)/mupdf" ]; then \
+		echo "Cloning MuPDF repository (shallow clone for faster setup)..."; \
+		git clone --depth 1 --branch 1.26.7 https://github.com/ArtifexSoftware/mupdf.git $(BASE_PATH)/mupdf; \
+		echo "Downloading and applying WebP patch for enhanced image format support..."; \
+		if [ ! -f $(BASE_PATH)/webp-upstream-697749.patch ]; then \
+			if command -v curl >/dev/null 2>&1; then \
+				curl -o $(BASE_PATH)/webp-upstream-697749.patch \
+					https://raw.githubusercontent.com/koreader/koreader-base/30ddfa05d67a8db1118326141b02bb002e2e11c4/thirdparty/mupdf/webp-upstream-697749.patch; \
+			elif command -v wget >/dev/null 2>&1; then \
+				wget -O $(BASE_PATH)/webp-upstream-697749.patch \
+					https://raw.githubusercontent.com/koreader/koreader-base/30ddfa05d67a8db1118326141b02bb002e2e11c4/thirdparty/mupdf/webp-upstream-697749.patch; \
+			else \
+				echo "Error: neither curl nor wget found"; exit 1; \
+			fi; \
+		fi; \
+		cd $(BASE_PATH)/mupdf && patch -p1 < ../webp-upstream-697749.patch; \
+	fi
+	@echo "Setting up MuPDF for CBR and WebP support..."; \
+	echo "USE_LIBARCHIVE=yes" > $(BASE_PATH)/mupdf/user.make; \
+	echo "HAVE_WEBP=yes" >> $(BASE_PATH)/mupdf/user.make; \
+	echo "XCFLAGS += -DHAVE_LIBARCHIVE -I$(LIBARCHIVE_PREFIX)/include" >> $(BASE_PATH)/mupdf/user.make; \
+	echo "XCFLAGS += -DHAVE_WEBP -I$(WEBP_PREFIX)/include" >> $(BASE_PATH)/mupdf/user.make; \
+	echo "SYS_LIBARCHIVE_CFLAGS := -I$(LIBARCHIVE_PREFIX)/include" >> $(BASE_PATH)/mupdf/user.make; \
+	echo "SYS_LIBARCHIVE_LIBS := -L$(LIBARCHIVE_PREFIX)/lib -larchive" >> $(BASE_PATH)/mupdf/user.make; \
+	echo "SYS_WEBP_CFLAGS := -I$(WEBP_PREFIX)/include" >> $(BASE_PATH)/mupdf/user.make; \
+	echo "SYS_WEBP_LIBS := -L$(WEBP_PREFIX)/lib -lwebp -lwebpdemux" >> $(BASE_PATH)/mupdf/user.make
+	@echo "Initializing minimal required submodules..."; \
+	cd $(BASE_PATH)/mupdf && git submodule update --init --depth 1 thirdparty/freetype thirdparty/harfbuzz thirdparty/jbig2dec thirdparty/libjpeg thirdparty/openjpeg thirdparty/zlib thirdparty/lcms2 thirdparty/gumbo-parser
+	@echo "Applying patches to disable barcode compilation when barcode=no..."; \
+	cd $(BASE_PATH)/mupdf && sed -i 's/-std=c++20/-std=c++17/g' Makelists
+
+# Build minimal libarchive (after the compression libs it links against)
+build-libarchive: $(LIBARCHIVE_MINIMAL)
+
+$(LIBARCHIVE_MINIMAL): $(BZIP2_LIB) $(XZ_LIB) $(LZ4_LIB) $(ZSTD_LIB)
+	@echo "Building minimal libarchive without ICU dependencies..."
+	@if [ ! -f "$(LIBARCHIVE_MINIMAL)" ]; then \
+		echo "Minimal libarchive not found, building from source..."; \
+		cd $(BASE_PATH) && \
+		if [ ! -d "$(LIBARCHIVE_SRC_DIR)" ]; then \
+			echo "Downloading libarchive $(LIBARCHIVE_VERSION)..."; \
+			if command -v curl >/dev/null 2>&1; then \
+				curl -L $(LIBARCHIVE_URL) | tar -xzf -; \
+			else \
+				wget -O - $(LIBARCHIVE_URL) | tar -xzf -; \
+			fi; \
+		fi && \
+		cd $(LIBARCHIVE_SRC_DIR) && \
+		echo "Configuring minimal libarchive build (includes RAR5 support)..."; \
+		CPPFLAGS="$(COMP_CPPFLAGS)" LDFLAGS="$(COMP_LDFLAGS)" \
+		./configure --prefix=$(LIBARCHIVE_PREFIX) \
+			--disable-shared --enable-static \
+			--without-xml2 --without-expat \
+			--without-iconv --without-libiconv-prefix \
+			--without-nettle --without-openssl \
+			--disable-bsdtar --disable-bsdcat --disable-bsdcpio \
+			--disable-xattr --disable-acl \
+			--with-zlib --with-bz2lib --with-lzma --with-lz4 --with-zstd && \
+		echo "Compiling libarchive..." && \
+		make -j$(nproc) && \
+		echo "Installing to $(LIBARCHIVE_PREFIX)..." && \
+		make install && \
+		echo "Minimal libarchive built successfully at $(LIBARCHIVE_MINIMAL)"; \
+	else \
+		echo "Minimal libarchive already exists at $(LIBARCHIVE_MINIMAL)"; \
+	fi
+
+# --- Compression libraries (static, -fPIC for linking into the PIE binary) ---
+
+# bzip2 (plain Makefile build; copy the static lib + header)
+build-bzip2: $(BZIP2_LIB)
+
+$(BZIP2_LIB):
+	@echo "Building static libbz2 $(BZIP2_VERSION)..."
+	@cd $(BASE_PATH) && \
+	if [ ! -d "$(BZIP2_SRC_DIR)" ]; then \
+		echo "Downloading bzip2 $(BZIP2_VERSION)..."; \
+		curl -L $(BZIP2_URL) | tar -xzf -; \
+	fi && \
+	cd $(BZIP2_SRC_DIR) && \
+	$(MAKE) libbz2.a CC="$(CROSS_COMPILE)gcc" AR="$(CROSS_COMPILE)ar" RANLIB="$(CROSS_COMPILE)ranlib" \
+		CFLAGS="-fPIC -O2 -D_FILE_OFFSET_BITS=64" && \
+	mkdir -p $(BZIP2_PREFIX)/lib $(BZIP2_PREFIX)/include && \
+	cp -f libbz2.a $(BZIP2_PREFIX)/lib/ && \
+	cp -f bzlib.h $(BZIP2_PREFIX)/include/
+
+# xz / liblzma (autotools; static lib only, no tools)
+build-xz: $(XZ_LIB)
+
+$(XZ_LIB):
+	@echo "Building static liblzma $(XZ_VERSION)..."
+	@cd $(BASE_PATH) && \
+	if [ ! -d "$(XZ_SRC_DIR)" ]; then \
+		echo "Downloading xz $(XZ_VERSION)..."; \
+		curl -L $(XZ_URL) | tar -xzf -; \
+	fi && \
+	cd $(XZ_SRC_DIR) && \
+	./configure --host=aarch64-buildroot-linux-gnu --prefix=$(XZ_PREFIX) \
+		--disable-shared --enable-static --with-pic \
+		--disable-xz --disable-xzdec --disable-lzmadec --disable-lzmainfo \
+		--disable-lzma-links --disable-scripts --disable-doc --disable-nls \
+		CC="$(CROSS_COMPILE)gcc" CFLAGS="-fPIC -O2" && \
+	$(MAKE) -j$$(nproc) && \
+	$(MAKE) install
+
+# lz4 (Makefile build; static-only install)
+build-lz4: $(LZ4_LIB)
+
+$(LZ4_LIB):
+	@echo "Building static liblz4 $(LZ4_VERSION)..."
+	@cd $(BASE_PATH) && \
+	if [ ! -d "$(LZ4_SRC_DIR)" ]; then \
+		echo "Downloading lz4 $(LZ4_VERSION)..."; \
+		curl -L $(LZ4_URL) | tar -xzf -; \
+	fi && \
+	cd $(LZ4_SRC_DIR) && \
+	$(MAKE) -C lib install prefix=$(LZ4_PREFIX) BUILD_SHARED=no BUILD_STATIC=yes \
+		CC="$(CROSS_COMPILE)gcc" AR="$(CROSS_COMPILE)ar" CFLAGS="-O3 -fPIC"
+
+# zstd (Makefile build; static lib + headers only)
+build-zstd: $(ZSTD_LIB)
+
+$(ZSTD_LIB):
+	@echo "Building static libzstd $(ZSTD_VERSION)..."
+	@cd $(BASE_PATH) && \
+	if [ ! -d "$(ZSTD_SRC_DIR)" ]; then \
+		echo "Downloading zstd $(ZSTD_VERSION)..."; \
+		curl -L $(ZSTD_URL) | tar -xzf -; \
+	fi && \
+	cd $(ZSTD_SRC_DIR) && \
+	$(MAKE) -C lib install-static install-includes PREFIX=$(ZSTD_PREFIX) \
+		CC="$(CROSS_COMPILE)gcc" AR="$(CROSS_COMPILE)ar" CFLAGS="-O3 -fPIC"
+
+# Build static libwebp
+build-webp: $(WEBP_LIB)
+
+$(WEBP_LIB):
+	@echo "Building static libwebp $(WEBP_VERSION)..."
+	@cd $(BASE_PATH) && \
+	if [ ! -d "$(WEBP_SRC_DIR)" ]; then \
+		echo "Downloading libwebp $(WEBP_VERSION)..."; \
+		if command -v curl >/dev/null 2>&1; then \
+			curl -L $(WEBP_URL) | tar -xzf -; \
+		else \
+			wget -O - $(WEBP_URL) | tar -xzf -; \
+		fi; \
+	fi && \
+	cd $(WEBP_SRC_DIR) && \
+	./configure --prefix=$(WEBP_PREFIX) --disable-shared --enable-static \
+		--disable-png --disable-jpeg --disable-tiff --disable-gif \
+		--enable-libwebpdecoder --disable-libwebpextras \
+		CC="$(CROSS_COMPILE)gcc" CXX="$(CROSS_COMPILE)g++" && \
+	$(MAKE) -j$$(nproc) && \
+	$(MAKE) install
+
+# Build MuPDF
+build-mupdf: build-libarchive build-webp
+	@echo "Building MuPDF with custom libarchive support for CBR/CBZ files, WebP support, and HTML engine..."
+	@cd $(BASE_PATH)/mupdf && $(MAKE) libs \
+		XCFLAGS="-D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0 -DHAVE_LIBARCHIVE -DHAVE_WEBP -I$(WEBP_PREFIX)/include -I$(GUMBO_INCLUDE) -DTOFU_CJK_EXT" \
+		XCXXFLAGS="-D_GNU_SOURCE -DFZ_ENABLE_BARCODE=0 -DFZ_ENABLE_BROTLI=0 -DFZ_ENABLE_SVG=0 -DFZ_ENABLE_EXTRACT=0 -DFZ_ENABLE_DOCX_OUTPUT=0 -DFZ_ENABLE_JS=0 -DFZ_ENABLE_XPS=0 -DHAVE_LIBARCHIVE -DHAVE_WEBP -I$(WEBP_PREFIX)/include -I$(GUMBO_INCLUDE) -DTOFU_CJK_EXT" \
+		HAVE_LIBARCHIVE=yes \
+		HAVE_WEBP=yes \
+		mujs=no \
+		tesseract=no \
+		barcode=no \
+		extract=no \
+		svg=no \
+		brotli=no \
+		xps=no \
+		USE_SYSTEM_LIBS=no \
+		USE_SYSTEM_FREETYPE=no \
+		USE_SYSTEM_HARFBUZZ=no \
+		USE_SYSTEM_JBIG2DEC=no \
+		USE_SYSTEM_LIBJPEG=no \
+		USE_SYSTEM_OPENJPEG=no \
+		USE_SYSTEM_ZLIB=no \
+		USE_SYSTEM_BROTLI=no \
+		USE_ZXINGCPP=no \
+		USE_SYSTEM_LCMS2=no
+
+# Export MLP1 bundle
+export-bundle: $(TARGET)
+	@echo "Exporting MLP1 bundle..."
+	@cd $(BASE_PATH) && ./export_bundle.sh
+
+# Ensure bin/ exists
+$(BIN_DIR):
+	@mkdir -p $(BIN_DIR)
+
+# Create build directory
+$(BUILD_DIR):
+	@mkdir -p $(BUILD_DIR)
+
+# Link final binary
+$(TARGET): $(OBJS) $(LIBARCHIVE_MINIMAL) | $(BIN_DIR)
+	@echo "Linking sdl_reader_cli..."
+	$(CXX) $(OBJS) $(LIBS) -Wl,-rpath,'$$ORIGIN/../lib' -Wl,--gc-sections -o $@
+	@echo "Binary built successfully: $@"
+
+# Compile source files into object files in the build directory
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/%.o: $(CLI_DIR)/%.cpp | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Compile MLP1 power handler
+$(BUILD_DIR)/mlp1_power_handler.o: $(MLP1_SRC_DIR)/power_handler.cpp | $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Clean build artifacts
+clean:
+	@echo "Cleaning build artifacts..."
+	rm -rf $(BUILD_DIR)/*.o $(TARGET)
+
+# Clean MuPDF build
+clean-mupdf:
+	@echo "Cleaning MuPDF build..."
+	@if [ -d "$(BASE_PATH)/mupdf" ]; then \
+		cd $(BASE_PATH)/mupdf && $(MAKE) clean; \
+	fi
+
+# Clean libarchive build
+clean-libarchive:
+	@echo "Cleaning minimal libarchive..."
+	@if [ -d "$(BASE_PATH)/$(LIBARCHIVE_SRC_DIR)" ]; then \
+		cd $(BASE_PATH)/$(LIBARCHIVE_SRC_DIR) && make clean 2>/dev/null || true; \
+	fi
+	@echo "Removing libarchive installation..."
+	rm -rf $(LIBARCHIVE_PREFIX)
+
+# Clean WebP build
+clean-webp:
+	@echo "Cleaning libwebp..."
+	rm -rf $(BASE_PATH)/$(WEBP_SRC_DIR) $(WEBP_PREFIX)
+
+# Clean Nuklear checkout
+clean-nuklear:
+	@echo "Removing Nuklear checkout..."
+	rm -rf $(BASE_PATH)/nuklear-mlp1
+
+# Clean compression libraries (sources + installs)
+clean-comp:
+	@echo "Cleaning compression libraries (bzip2/xz/lz4/zstd)..."
+	rm -rf $(BZIP2_PREFIX) $(XZ_PREFIX) $(LZ4_PREFIX) $(ZSTD_PREFIX)
+	rm -rf $(BASE_PATH)/$(BZIP2_SRC_DIR) $(BASE_PATH)/$(XZ_SRC_DIR) \
+		$(BASE_PATH)/$(LZ4_SRC_DIR) $(BASE_PATH)/$(ZSTD_SRC_DIR)
+
+# Deep clean
+clean-all: clean clean-mupdf clean-libarchive clean-comp clean-webp clean-nuklear
+	@echo "Removing downloaded dependencies..."
+	rm -rf $(BASE_PATH)/$(LIBARCHIVE_SRC_DIR)
+	rm -rf $(BASE_PATH)/$(WEBP_SRC_DIR) $(WEBP_PREFIX)
+	rm -rf $(BASE_PATH)/mupdf
+	rm -f $(BASE_PATH)/webp-upstream-697749.patch
+	@echo "Deep clean completed"

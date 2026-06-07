@@ -1,6 +1,6 @@
 # SDLReader Main Makefile
 
-AVAILABLE_PLATFORMS := tg5040 tg5050 my355 mac wiiu linux
+AVAILABLE_PLATFORMS := tg5040 tg5050 my355 mlp1 mac wiiu linux
 DEFAULT_PLATFORM := tg5040
 UNAME_S := $(shell uname -s 2>/dev/null || echo Unknown)
 IN_DOCKER := $(shell if [ -f /.dockerenv ]; then echo 1; elif [ -f /proc/1/cgroup ] && grep -qE '(docker|kubepods|containerd|podman)' /proc/1/cgroup; then echo 1; else echo 0; fi)
@@ -32,9 +32,10 @@ endif
 
 ADB ?= adb
 
-.PHONY: all native run-native run-mac run-linux clean clean-local help list-platforms export-tg5040 export-tg5050 export-my355 export-trimui export-all \
-       export-tg5040-in-docker export-tg5050-in-docker export-my355-in-docker export-trimui-in-docker \
-       deploy deploy-platform $(AVAILABLE_PLATFORMS)
+.PHONY: all native run-native run-mac run-linux clean clean-local help list-platforms \
+       export-tg5040 export-tg5050 export-my355 export-mlp1 export-trimui export-all \
+       export-tg5040-in-docker export-tg5050-in-docker export-my355-in-docker export-mlp1-in-docker export-trimui-in-docker \
+       deploy deploy-platform package-mlp1 adb-stage-pak-mlp1 $(AVAILABLE_PLATFORMS)
 
 all: $(PLATFORM)
 
@@ -132,6 +133,64 @@ else
 	@$(MAKE) export-my355-in-docker
 endif
 
+# MLP1 build targets (Miniloong Pocket 1)
+mlp1:
+ifeq ($(IN_DOCKER),1)
+	@echo "Building for MLP1..."
+	$(MAKE) -f ports/mlp1/Makefile
+else
+	@echo "Building for MLP1 (in Docker)..."
+	docker run --rm -v "$(CURDIR)":/workspace ghcr.io/utility-muffin-research-kitchen/mlp1-toolchain:local \
+		make -C /workspace -f ports/mlp1/Makefile
+endif
+
+export-mlp1-in-docker:
+	@echo "Exporting MLP1 bundle in Docker..."
+	docker run --rm -v "$(CURDIR)":/workspace ghcr.io/utility-muffin-research-kitchen/mlp1-toolchain:local \
+		/bin/sh -c "cd /workspace && make -f ports/mlp1/Makefile && make -f ports/mlp1/Makefile export-bundle"
+
+export-mlp1:
+ifeq ($(IN_DOCKER),1)
+	@echo "Building MLP1..."
+	$(MAKE) -f ports/mlp1/Makefile
+	@echo "Exporting MLP1 bundle..."
+	$(MAKE) -f ports/mlp1/Makefile export-bundle
+else
+	@$(MAKE) export-mlp1-in-docker
+endif
+
+# Package MLP1 binary into SDLReader.pak directory
+package-mlp1:
+	@$(MAKE) mlp1
+	@echo "Creating MLP1 SDLReader.pak package..."
+	@PAK_DIR="build/mlp1/package/SDLReader.pak"; \
+	rm -rf "$$PAK_DIR"; \
+	mkdir -p "$$PAK_DIR/bin" "$$PAK_DIR/lib" "$$PAK_DIR/fonts" "$$PAK_DIR/res"; \
+	cp "build/mlp1/sdl_reader_cli" "$$PAK_DIR/bin/"; \
+	chmod +x "$$PAK_DIR/bin/sdl_reader_cli"; \
+	cp ports/mlp1/pak/launch.sh "$$PAK_DIR/"; \
+	chmod +x "$$PAK_DIR/launch.sh"; \
+	cp ports/mlp1/pak/pak.json "$$PAK_DIR/"; \
+	cp -a fonts/. "$$PAK_DIR/fonts/"; \
+	echo "  Bundling libraries and stripping binary via Docker..."; \
+	docker run --rm -v "$(CURDIR)":/workspace ghcr.io/utility-muffin-research-kitchen/mlp1-toolchain:local \
+		/bin/bash -c "cd /workspace && \
+		TEMP=\$$(mktemp -d) && \
+		BIN=./build/mlp1/sdl_reader_cli DEST=\$$TEMP PRUNE_LIBS=1 \
+			bash ports/mlp1/make_bundle.sh > /dev/null 2>&1 && \
+		cp -aL \$$TEMP/lib/* build/mlp1/package/SDLReader.pak/lib/ && \
+		aarch64-buildroot-linux-gnu-strip build/mlp1/package/SDLReader.pak/bin/sdl_reader_cli && \
+		aarch64-buildroot-linux-gnu-strip --strip-unneeded build/mlp1/package/SDLReader.pak/lib/*.so* 2>/dev/null; \
+		rm -rf \$$TEMP"; \
+	echo "  MLP1 PAK ready at $$PAK_DIR"
+
+# ADB stage for MLP1
+adb-stage-pak-mlp1:
+	@echo "Building and packaging MLP1..."
+	@$(MAKE) package-mlp1
+	@echo "Staging MLP1 SDLReader.pak via ADB..."
+	@bash ports/mlp1/scripts/adb-stage-pak.sh
+
 export-trimui-in-docker:
 	@echo "Building TG5040 (in Docker)..."
 	@docker run --rm -v "$(CURDIR)":/workspace ghcr.io/loveretro/tg5040-toolchain:latest \
@@ -177,7 +236,13 @@ deploy:
 		echo; \
 		uname -a 2>/dev/null' 2>/dev/null | tr '\000' '\n' | tr -d '\r'); \
 	case "$$FINGERPRINT" in \
-		*rk3566*|*miyoo-355*) PLATFORM=my355 ;; \
+		*rk3566*) \
+			if printf '%s' "$$FINGERPRINT" | grep -qi 'miyoo-355'; then \
+				PLATFORM=my355; \
+			else \
+				PLATFORM=mlp1; \
+			fi \
+			;; \
 		*allwinner,a523*|*sun55iw3*) PLATFORM=tg5050 ;; \
 		*allwinner,a133*|*sun50iw*) PLATFORM=tg5040 ;; \
 		*allwinner*) \
@@ -210,31 +275,51 @@ deploy-platform:
 	mkdir -p "$$PAK_DIR/bin" "$$PAK_DIR/lib" "$$PAK_DIR/fonts" "$$PAK_DIR/res"; \
 	cp "build/$(PLATFORM)/sdl_reader_cli" "$$PAK_DIR/bin/"; \
 	chmod +x "$$PAK_DIR/bin/sdl_reader_cli"; \
-	cp ports/trimui/pak-template/launch.sh "$$PAK_DIR/"; \
-	chmod +x "$$PAK_DIR/launch.sh"; \
-	cp pak.json "$$PAK_DIR/"; \
-	cp -a fonts/. "$$PAK_DIR/fonts/"; \
-	if [ -f ports/trimui/pak-template/res/docs.pdf ]; then \
-		cp ports/trimui/pak-template/res/docs.pdf "$$PAK_DIR/res/"; \
+	if [ "$(PLATFORM)" = "mlp1" ]; then \
+		cp ports/mlp1/pak/launch.sh "$$PAK_DIR/"; \
+		cp ports/mlp1/pak/pak.json "$$PAK_DIR/"; \
+	else \
+		cp ports/trimui/pak-template/launch.sh "$$PAK_DIR/"; \
+		cp pak.json "$$PAK_DIR/"; \
+		if [ -f ports/trimui/pak-template/res/docs.pdf ]; then \
+			cp ports/trimui/pak-template/res/docs.pdf "$$PAK_DIR/res/"; \
+		fi; \
 	fi; \
+	chmod +x "$$PAK_DIR/launch.sh"; \
+	cp -a fonts/. "$$PAK_DIR/fonts/"; \
 	echo "  Bundling libraries and stripping binary via Docker..."; \
-	TOOLCHAIN="ghcr.io/loveretro/$(PLATFORM)-toolchain:latest"; \
-	MAKEFILE=$$([ "$(PLATFORM)" = "my355" ] && echo "ports/my355/makefile" || echo "ports/$(PLATFORM)/Makefile"); \
+	if [ "$(PLATFORM)" = "mlp1" ]; then \
+		TOOLCHAIN="ghcr.io/utility-muffin-research-kitchen/mlp1-toolchain:local"; \
+		MAKEFILE="ports/mlp1/Makefile"; \
+	elif [ "$(PLATFORM)" = "my355" ]; then \
+		TOOLCHAIN="ghcr.io/loveretro/my355-toolchain:latest"; \
+		MAKEFILE="ports/my355/makefile"; \
+	else \
+		TOOLCHAIN="ghcr.io/loveretro/$(PLATFORM)-toolchain:latest"; \
+		MAKEFILE="ports/$(PLATFORM)/Makefile"; \
+	fi; \
 	docker run --rm -v "$(CURDIR)":/workspace "$$TOOLCHAIN" \
 		/bin/bash -c "cd /workspace && \
 		TEMP=\$$(mktemp -d) && \
 		BIN=./build/$(PLATFORM)/sdl_reader_cli DEST=\$$TEMP PRUNE_LIBS=1 \
 			bash ports/$(PLATFORM)/make_bundle.sh > /dev/null 2>&1 && \
 		cp -aL \$$TEMP/lib/* $$PAK_DIR/lib/ && \
-		strip $$PAK_DIR/bin/sdl_reader_cli && \
-		strip --strip-unneeded $$PAK_DIR/lib/*.so* 2>/dev/null; \
+		\$${CROSS_COMPILE:-}strip $$PAK_DIR/bin/sdl_reader_cli 2>/dev/null || strip $$PAK_DIR/bin/sdl_reader_cli || true; \
+		\$${CROSS_COMPILE:-}strip --strip-unneeded $$PAK_DIR/lib/*.so* 2>/dev/null || true; \
 		rm -rf \$$TEMP"; \
 	echo "  PAK ready at $$PAK_DIR"
 	@ADB_CMD="$(ADB) -s $(SERIAL)"; \
-	TOOLS_DIR="/mnt/SDCARD/Tools/$(PLATFORM)/SDLReader.pak"; \
-	echo "Deploying SDLReader.pak to $$TOOLS_DIR..."; \
-	$$ADB_CMD shell "rm -rf '$$TOOLS_DIR' && mkdir -p '/mnt/SDCARD/Tools/$(PLATFORM)'"; \
-	$$ADB_CMD push "build/$(PLATFORM)/SDLReader.pak" "/mnt/SDCARD/Tools/$(PLATFORM)/"; \
+	if [ "$(PLATFORM)" = "mlp1" ]; then \
+		TOOLS_DIR="/mnt/sdcard/Apps/mlp1/SDLReader.pak"; \
+		echo "Deploying SDLReader.pak to $$TOOLS_DIR..."; \
+		$$ADB_CMD shell "rm -rf '$$TOOLS_DIR' && mkdir -p '/mnt/sdcard/Apps/mlp1'"; \
+		$$ADB_CMD push "build/$(PLATFORM)/SDLReader.pak" "/mnt/sdcard/Apps/mlp1/"; \
+	else \
+		TOOLS_DIR="/mnt/SDCARD/Tools/$(PLATFORM)/SDLReader.pak"; \
+		echo "Deploying SDLReader.pak to $$TOOLS_DIR..."; \
+		$$ADB_CMD shell "rm -rf '$$TOOLS_DIR' && mkdir -p '/mnt/SDCARD/Tools/$(PLATFORM)'"; \
+		$$ADB_CMD push "build/$(PLATFORM)/SDLReader.pak" "/mnt/SDCARD/Tools/$(PLATFORM)/"; \
+	fi; \
 	echo "Deploy complete."
 
 mac:
@@ -264,17 +349,20 @@ clean:
 	-@$(MAKE) -C ports/tg5040 clean 2>/dev/null || true
 	-@$(MAKE) -C ports/tg5050 clean 2>/dev/null || true
 	-@$(MAKE) -C ports/my355 clean 2>/dev/null || true
+	-@$(MAKE) -C ports/mlp1 clean 2>/dev/null || true
 
 clean-local:
 	@echo "Cleaning build artifacts..."
 	rm -rf ./build/*.o ./bin/*
 	rm -rf lib/
+	rm -rf ./build/mlp1/
 
 list-platforms:
 	@echo "Available platforms:"
 	@echo "  - tg5040"
 	@echo "  - tg5050"
 	@echo "  - my355"
+	@echo "  - mlp1"
 	@echo "  - mac"
 	@echo "  - wiiu"
 	@echo "  - linux"
@@ -288,11 +376,15 @@ help:
 	@echo "  make tg5040     - Build for TG5040 (TrimUI Brick & Smart Pro)"
 	@echo "  make tg5050     - Build for TG5050 (TrimUI Smart Pro S)"
 	@echo "  make my355      - Build for MY355 (Miyoo Flip)"
+	@echo "  make mlp1       - Build for MLP1 (Miniloong Pocket 1)"
 	@echo "  make export-trimui - Build and export SDLReader.pakz (TG5040 + TG5050 + MY355)"
 	@echo "  make export-all - Alias for export-trimui (TG5040 + TG5050 + MY355)"
 	@echo "  make export-tg5040 - Build and export TG5040-only bundle"
 	@echo "  make export-tg5050 - Build and export TG5050-only bundle"
 	@echo "  make export-my355  - Build and export MY355-only bundle"
+	@echo "  make export-mlp1   - Build and export MLP1-only bundle"
+	@echo "  make package-mlp1  - Build and package MLP1 .pak directory"
+	@echo "  make adb-stage-pak-mlp1 - Build, package, and ADB-push for MLP1"
 	@echo ""
 	@echo "Native platforms:"
 	@echo "  make native     - Build for the current host OS (macOS/Linux)"

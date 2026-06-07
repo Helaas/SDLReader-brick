@@ -7,7 +7,7 @@ namespace PlatformConstants
 
 // Analog stick dead zone
 // Used by: App, InputManager, GuiManager, FileBrowser
-#ifdef PLATFORM_MY355
+#if defined(PLATFORM_MY355) || defined(PLATFORM_MLP1)
 inline constexpr Sint16 AXIS_DEAD_ZONE = 20000;
 #else
 inline constexpr Sint16 AXIS_DEAD_ZONE = 8000;
@@ -15,7 +15,7 @@ inline constexpr Sint16 AXIS_DEAD_ZONE = 8000;
 
 // Held-input repeat timing (D-pad / analog stick continuous scrolling/nav)
 // Used by: GuiManager (settings nav), FileBrowser (file list scrolling)
-#ifdef PLATFORM_MY355
+#if defined(PLATFORM_MY355) || defined(PLATFORM_MLP1)
 inline constexpr Uint32 INPUT_INITIAL_DELAY_MS = 220;
 inline constexpr Uint32 INPUT_REPEAT_DELAY_MS = 130;
 #else

@@ -35,6 +35,11 @@ static constexpr SDL_GameControllerButton kApplySettingsButton = SDL_CONTROLLER_
 static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_B;
 static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_A;
 static constexpr SDL_GameControllerButton kApplySettingsButton = SDL_CONTROLLER_BUTTON_X; // Physical Y
+#elif defined(PLATFORM_MLP1)
+// MLP1: Loong Gamepad uses standard Xbox 360 layout (matches SDL mapping)
+static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_A;
+static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_B;
+static constexpr SDL_GameControllerButton kApplySettingsButton = SDL_CONTROLLER_BUTTON_Y;
 #else
 static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_A;
 static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_B;

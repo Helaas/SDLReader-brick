@@ -36,6 +36,21 @@ void ButtonMapper::initializePlatformMappings()
     m_joystickButtonMap[10] = LogicalButton::Extra2; // Button 10: Toggle Menu
 
     std::cout << "ButtonMapper: Initialized TG5040 mappings (original behavior maintained)" << std::endl;
+#elif defined(PLATFORM_MLP1)
+    // MLP1: Loong Gamepad uses standard Xbox 360 layout
+    // Physical layout matches SDL mapping:
+    // - Physical "A" button (bottom) -> SDL reports as BUTTON_A
+    // - Physical "B" button (right) -> SDL reports as BUTTON_B
+
+    m_buttonMap[SDL_CONTROLLER_BUTTON_A] = LogicalButton::Accept;               // A (bottom) -> Accept
+    m_buttonMap[SDL_CONTROLLER_BUTTON_B] = LogicalButton::Cancel;               // B (right) -> Cancel
+    m_buttonMap[SDL_CONTROLLER_BUTTON_X] = LogicalButton::Alternate;            // X (left) -> Alternate
+    m_buttonMap[SDL_CONTROLLER_BUTTON_Y] = LogicalButton::Special;              // Y (top) -> Special
+    m_buttonMap[SDL_CONTROLLER_BUTTON_START] = LogicalButton::Menu;             // Start -> Menu (settings)
+    m_buttonMap[SDL_CONTROLLER_BUTTON_BACK] = LogicalButton::Options;           // Select -> Options
+    m_buttonMap[SDL_CONTROLLER_BUTTON_GUIDE] = LogicalButton::Quit;             // Guide -> Quit
+
+    std::cout << "ButtonMapper: Initialized MLP1 mappings (standard layout)" << std::endl;
 #else
     // Desktop platforms: Standard Xbox 360 controller layout
     // Physical layout matches SDL mapping:
@@ -105,6 +120,8 @@ const char* ButtonMapper::getPlatformName() const
 {
 #ifdef PLATFORM_MY355
     return "MY355";
+#elif defined(PLATFORM_MLP1)
+    return "MLP1";
 #elif defined(TRIMUI_PLATFORM)
     return "TG5040";
 #else

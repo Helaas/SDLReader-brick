@@ -32,6 +32,10 @@ int main(int argc, char* argv[])
 #ifdef PLATFORM_MY355
     constexpr int kDefaultWindowWidth = 640;
     constexpr int kDefaultWindowHeight = 480;
+#elif defined(PLATFORM_MLP1)
+    // MLP1 physical panel is 720x960 portrait; Weston transform=rotate-90 makes it 960x720 logical
+    constexpr int kDefaultWindowWidth = 960;
+    constexpr int kDefaultWindowHeight = 720;
 #elif defined(TRIMUI_PLATFORM)
     constexpr int kDefaultWindowWidth = 800;
     constexpr int kDefaultWindowHeight = 600;
