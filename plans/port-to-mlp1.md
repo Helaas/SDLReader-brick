@@ -152,9 +152,10 @@ flag needed; Leaf manages fullscreen.
 
 ### 2.2 Button Mapper (`src/button_mapper.cpp`, `include/button_mapper.h`)
 
-The MLP1 uses the **Loong Gamepad** which registers as a standard USB
-joystick/gamepad. SDL detects it via the SDL GameController API. The physical
-layout:
+The MLP1 uses the **Loong Gamepad** which registers as a USB joystick/gamepad.
+SDL detects it via the SDL GameController API, but SDL's A/B controller labels
+are swapped versus the physical shell buttons. Map by physical button, matching
+Jawaka/Catastrophe behavior:
 
 - A (bottom) → Accept
 - B (right) → Cancel
@@ -167,18 +168,24 @@ layout:
 - D-pad → navigation
 - Left stick → analog scroll (already handled by SDL axis events)
 
-This is the **standard Xbox 360 layout** — no swapping needed. But verify
-against the existing `TRIMUI_PLATFORM` code which preserves TG5040's swapped
-A/B. For MLP1, a new branch `#elif defined(PLATFORM_MLP1)` with standard
-mappings (same as the desktop branch but with the `MISC1 → Menu` mapping).
+Keep this scoped to the `#elif defined(PLATFORM_MLP1)` branch so the
+`TRIMUI_PLATFORM` / NextUI mappings remain unchanged.
 
 **Key:**
-- `m_buttonMap[SDL_CONTROLLER_BUTTON_A] = LogicalButton::Accept;`
-- `m_buttonMap[SDL_CONTROLLER_BUTTON_B] = LogicalButton::Cancel;`
+- `m_buttonMap[SDL_CONTROLLER_BUTTON_A] = LogicalButton::Cancel;`
+- `m_buttonMap[SDL_CONTROLLER_BUTTON_B] = LogicalButton::Accept;`
 - `m_buttonMap[SDL_CONTROLLER_BUTTON_START] = LogicalButton::Menu;` (open
   settings, not MirrorHorizontal like TG5040)
 - `m_buttonMap[SDL_CONTROLLER_BUTTON_BACK] = LogicalButton::Options;`
 - `m_buttonMap[SDL_CONTROLLER_BUTTON_GUIDE] = LogicalButton::Quit;`
+
+The standalone file browser has its own SDL event loop. It must mirror this
+physical A/B behavior for `PLATFORM_MLP1` without changing the existing
+`TRIMUI_PLATFORM` branch.
+
+The settings UI (`GuiManager`) also has local controller constants for dropdowns,
+menus, and the number pad. Its `PLATFORM_MLP1` branch must use the same physical
+A/B mapping.
 
 Also update `getPlatformName()` to return `"MLP1"` for the `PLATFORM_MLP1`
 case.

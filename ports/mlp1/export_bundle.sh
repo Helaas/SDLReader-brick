@@ -44,6 +44,12 @@ else
     echo "Warning: fonts/ directory not found"
 fi
 
+# Copy app icon
+if [ -f "$PROJECT_ROOT/res/icon.png" ]; then
+    echo "Copying icon..."
+    cp "$PROJECT_ROOT/res/icon.png" "$BUNDLE_DIR/res/icon.png"
+fi
+
 # Copy launch script
 if [ -f "$SCRIPT_DIR/pak/launch.sh" ]; then
     echo "Copying launch.sh..."

@@ -171,6 +171,7 @@ package-mlp1:
 	cp ports/mlp1/pak/launch.sh "$$PAK_DIR/"; \
 	chmod +x "$$PAK_DIR/launch.sh"; \
 	cp ports/mlp1/pak/pak.json "$$PAK_DIR/"; \
+	if [ -f res/icon.png ]; then cp res/icon.png "$$PAK_DIR/res/icon.png"; fi; \
 	cp -a fonts/. "$$PAK_DIR/fonts/"; \
 	echo "  Bundling libraries and stripping binary via Docker..."; \
 	docker run --rm -v "$(CURDIR)":/workspace ghcr.io/utility-muffin-research-kitchen/mlp1-toolchain:local \
@@ -278,9 +279,11 @@ deploy-platform:
 	if [ "$(PLATFORM)" = "mlp1" ]; then \
 		cp ports/mlp1/pak/launch.sh "$$PAK_DIR/"; \
 		cp ports/mlp1/pak/pak.json "$$PAK_DIR/"; \
+		if [ -f res/icon.png ]; then cp res/icon.png "$$PAK_DIR/res/icon.png"; fi; \
 	else \
 		cp ports/trimui/pak-template/launch.sh "$$PAK_DIR/"; \
 		cp pak.json "$$PAK_DIR/"; \
+		if [ -f res/icon.png ]; then cp res/icon.png "$$PAK_DIR/res/icon.png"; fi; \
 		if [ -f ports/trimui/pak-template/res/docs.pdf ]; then \
 			cp ports/trimui/pak-template/res/docs.pdf "$$PAK_DIR/res/"; \
 		fi; \

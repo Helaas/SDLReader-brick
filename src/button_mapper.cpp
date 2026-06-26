@@ -37,20 +37,17 @@ void ButtonMapper::initializePlatformMappings()
 
     std::cout << "ButtonMapper: Initialized TG5040 mappings (original behavior maintained)" << std::endl;
 #elif defined(PLATFORM_MLP1)
-    // MLP1: Loong Gamepad uses standard Xbox 360 layout
-    // Physical layout matches SDL mapping:
-    // - Physical "A" button (bottom) -> SDL reports as BUTTON_A
-    // - Physical "B" button (right) -> SDL reports as BUTTON_B
-
-    m_buttonMap[SDL_CONTROLLER_BUTTON_A] = LogicalButton::Accept;               // A (bottom) -> Accept
-    m_buttonMap[SDL_CONTROLLER_BUTTON_B] = LogicalButton::Cancel;               // B (right) -> Cancel
+    // MLP1: SDL's controller labels are swapped for the Loong Gamepad's A/B
+    // buttons. Map by physical button so Leaf users get A=accept, B=cancel.
+    m_buttonMap[SDL_CONTROLLER_BUTTON_A] = LogicalButton::Cancel;               // Physical B (right) -> Cancel
+    m_buttonMap[SDL_CONTROLLER_BUTTON_B] = LogicalButton::Accept;               // Physical A (bottom) -> Accept
     m_buttonMap[SDL_CONTROLLER_BUTTON_X] = LogicalButton::Alternate;            // X (left) -> Alternate
     m_buttonMap[SDL_CONTROLLER_BUTTON_Y] = LogicalButton::Special;              // Y (top) -> Special
     m_buttonMap[SDL_CONTROLLER_BUTTON_START] = LogicalButton::Menu;             // Start -> Menu (settings)
     m_buttonMap[SDL_CONTROLLER_BUTTON_BACK] = LogicalButton::Options;           // Select -> Options
     m_buttonMap[SDL_CONTROLLER_BUTTON_GUIDE] = LogicalButton::Quit;             // Guide -> Quit
 
-    std::cout << "ButtonMapper: Initialized MLP1 mappings (standard layout)" << std::endl;
+    std::cout << "ButtonMapper: Initialized MLP1 mappings (A/B corrected)" << std::endl;
 #else
     // Desktop platforms: Standard Xbox 360 controller layout
     // Physical layout matches SDL mapping:

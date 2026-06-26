@@ -56,9 +56,12 @@
 
 #include <mupdf/fitz.h>
 
-#ifdef TRIMUI_PLATFORM
+#if defined(TRIMUI_PLATFORM) || defined(PLATFORM_MLP1)
 static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_B;
 static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_A;
+#else
+static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_A;
+static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_B;
 #endif
 
 #ifdef TRIMUI_PLATFORM
@@ -2443,21 +2446,12 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         case SDL_CONTROLLER_BUTTON_LEFTSHOULDER:
             jumpSelectionByLetter(-1);
             break;
-#ifdef TRIMUI_PLATFORM
         case kAcceptButton:
             navigateInto();
             break;
         case kCancelButton:
             navigateUp();
             break;
-#else
-        case SDL_CONTROLLER_BUTTON_A:
-            navigateInto();
-            break;
-        case SDL_CONTROLLER_BUTTON_B:
-            navigateUp();
-            break;
-#endif
         case kToggleViewButton:
             toggleViewMode();
             break;
