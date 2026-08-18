@@ -322,7 +322,7 @@ SDL Reader keeps a lightweight `reading_history.json` file in the reader state d
 
 ## TrimUI Deployment
 
-For NextUI device deployment, use the universal export. It copies one identical executable into all four platform trees and relies on each firmware's native SDL, C++, and compression runtime.
+For NextUI device deployment, use the universal export. It builds one platform-neutral Pak Store archive and relies on each firmware's native SDL, C++, and compression runtime.
 
 ### Creating Distribution Package
 ```bash
@@ -335,22 +335,22 @@ make export-tg5050
 # MY355 (Miyoo Flip)
 make export-my355
 
-# Recommended Pakz for all platforms (TG5040 + TG5050 + MY355 + H700)
+# Recommended Pak Store archive for all platforms
 make export-all
 ```
 
 ### Bundle Contents
-The universal `SDLReader.pakz` contains one platform tree per NextUI runtime, each with:
+The universal `SDLReader.pak.zip` contains the files installed directly into `Tools/<platform>/SDLReader.pak`:
 - **bin/**: the same `sdl_reader_cli` executable
 - **fonts/**: All bundled font files ready for the runtime picker
 - **res/**: Optional resources (e.g., documentation PDFs)
 - **launch.sh**: Main launcher script that boots straight into the Nuklear file browser
-- **README.md / pak.json**: Copied for reference inside the bundle
+- **pak.json**: Package metadata
 
 ### Deployment to Device
-1. Copy the entire `ports/tg5040/pak/` (or `ports/tg5050/pak/`) directory to your TrimUI device
+1. Install `SDLReader.pak.zip` through Pak Store, or extract its contents into `Tools/<platform>/SDLReader.pak`
 2. Ensure the package has executable permissions
-3. Run via the launch script or execute binaries directly
+3. Run via the launch script or execute the binary directly
 
 The universal bundle deliberately does not include private SDL, zlib, or C++ libraries. Those libraries are supplied by each platform's NextUI runtime so GPU and codec ABI requirements cannot conflict across devices.
 

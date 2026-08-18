@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
-# Export TrimUI .pakz bundle - creates self-contained PAKs for each platform
-# Output: SDLReader.pakz containing Tools/tg5040/SDLReader.pak/ and Tools/tg5050/SDLReader.pak/
+# Export a NextUI package as either a legacy .pakz or a platform-neutral .pak.zip.
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 STAGING_DIR="$SCRIPT_DIR/staging"
 TEMPLATE_DIR="$SCRIPT_DIR/pak-template"
-OUTPUT_FILE="$PROJECT_ROOT/SDLReader.pakz"
+OUTPUT_FILE="${OUTPUT_FILE:-$PROJECT_ROOT/SDLReader.pakz}"
 
 PLATFORMS="${PLATFORMS:-tg5040 tg5050 my355}"
+PACKAGE_FORMAT="${PACKAGE_FORMAT:-pakz}"
 BINARY_PLATFORM="${BINARY_PLATFORM:-}"
 BUNDLE_PLATFORM="${BUNDLE_PLATFORM:-}"
 TOOLCHAIN_IMAGE="${TOOLCHAIN_IMAGE:-}"
 BUNDLE_LIBS="${BUNDLE_LIBS:-1}"
 
 echo "==================================================================="
-echo "Exporting TrimUI .pakz bundle..."
+echo "Exporting SDLReader .$PACKAGE_FORMAT bundle..."
 echo "==================================================================="
 echo ""
 
@@ -59,7 +59,11 @@ for platform in $PLATFORMS; do
     echo "Bundling $platform..."
     echo "-------------------------------------------------------------------"
 
-    PAK_DIR="$STAGING_DIR/Tools/$platform/SDLReader.pak"
+    if [ "$PACKAGE_FORMAT" = "pak.zip" ]; then
+        PAK_DIR="$STAGING_DIR/SDLReader.pak"
+    else
+        PAK_DIR="$STAGING_DIR/Tools/$platform/SDLReader.pak"
+    fi
     mkdir -p "$PAK_DIR/bin" "$PAK_DIR/fonts" "$PAK_DIR/res"
 
     # Binary
@@ -127,7 +131,7 @@ for platform in $PLATFORMS; do
     echo ""
 done
 
-if [ -n "$BINARY_PLATFORM" ]; then
+if [ -n "$BINARY_PLATFORM" ] && [ "$PACKAGE_FORMAT" = "pakz" ]; then
     reference="$STAGING_DIR/Tools/tg5040/SDLReader.pak/bin/sdl_reader_cli"
     for platform in $PLATFORMS; do
         cmp -s "$reference" "$STAGING_DIR/Tools/$platform/SDLReader.pak/bin/sdl_reader_cli"
@@ -136,7 +140,7 @@ if [ -n "$BINARY_PLATFORM" ]; then
 fi
 
 echo "-------------------------------------------------------------------"
-echo "Creating SDLReader.pakz..."
+echo "Creating $(basename "$OUTPUT_FILE")..."
 echo "-------------------------------------------------------------------"
 
 if ! command -v zip &> /dev/null; then
@@ -145,18 +149,26 @@ if ! command -v zip &> /dev/null; then
 fi
 
 rm -f "$OUTPUT_FILE"
-cd "$STAGING_DIR"
+if [ "$PACKAGE_FORMAT" = "pak.zip" ]; then
+    cd "$STAGING_DIR/SDLReader.pak"
+else
+    cd "$STAGING_DIR"
+fi
 zip -9 -r "$OUTPUT_FILE" . > /dev/null
 
 echo ""
 echo "==================================================================="
-echo "SDLReader.pakz exported successfully!"
+echo "$(basename "$OUTPUT_FILE") exported successfully!"
 echo "==================================================================="
 echo ""
 echo "Output: $OUTPUT_FILE"
 echo ""
 echo "Contents:"
-find "$STAGING_DIR" -type f | sort | sed "s|$STAGING_DIR/||"
+if [ "$PACKAGE_FORMAT" = "pak.zip" ]; then
+    unzip -Z1 "$OUTPUT_FILE" | sort
+else
+    find "$STAGING_DIR" -type f | sort | sed "s|$STAGING_DIR/||"
+fi
 echo ""
 
 # Clean up staging

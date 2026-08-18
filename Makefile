@@ -163,13 +163,14 @@ else
 endif
 
 export-universal: universal
-	@PLATFORMS="tg5040 tg5050 my355 h700" \
+	@PLATFORMS="universal" PACKAGE_FORMAT=pak.zip \
+		OUTPUT_FILE="$(CURDIR)/SDLReader.pak.zip" \
 		BINARY_PLATFORM=universal BUNDLE_PLATFORM=tg5040 \
 		BUNDLE_LIBS=0 \
 		TOOLCHAIN_IMAGE="$(UNIVERSAL_TOOLCHAIN)" \
 		bash ports/trimui/export_bundle.sh
 
-# Default release export: one executable copied into all platform trees.
+# Default release export: one platform-neutral Pak Store archive.
 export-all: export-universal
 
 # ADB deploy - auto-detect platform and push SDLReader.pak to device
@@ -297,7 +298,7 @@ help:
 	@echo "  make my355      - Build for MY355 (Miyoo Flip)"
 	@echo "  make universal  - Build one binary for all four NextUI platforms"
 	@echo "  make export-trimui - Build and export SDLReader.pakz (TG5040 + TG5050 + MY355)"
-	@echo "  make export-universal - Package one binary for TG5040 + TG5050 + MY355 + H700"
+	@echo "  make export-universal - Build SDLReader.pak.zip for all four NextUI platforms"
 	@echo "  make export-all - Alias for export-universal"
 	@echo "  make export-tg5040 - Build and export TG5040-only bundle"
 	@echo "  make export-tg5050 - Build and export TG5050-only bundle"
