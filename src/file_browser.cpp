@@ -3,9 +3,9 @@
 #include "path_utils.h"
 #include "mupdf_locking.h"
 #include "supported_file_types.h"
-#ifdef PLATFORM_MY355
+#include "h700_input.h"
 #include "platform_my355.h"
-#endif
+#include "platform_runtime.h"
 
 #ifndef NK_INCLUDE_FIXED_TYPES
 #define NK_INCLUDE_FIXED_TYPES
@@ -452,7 +452,11 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
 #endif
 
     // Initialize game controllers
-    for (int i = 0; i < SDL_NumJoysticks(); ++i)
+    if (isH700Platform())
+    {
+        m_gameControllerInstanceID = H700_INPUT_INSTANCE_ID;
+    }
+    for (int i = 0; !isH700Platform() && i < SDL_NumJoysticks(); ++i)
     {
         if (SDL_IsGameController(i))
         {
@@ -1896,6 +1900,7 @@ std::string FileBrowser::run()
         }
 #endif
         SDL_Event event;
+        pollH700Input();
         while (SDL_PollEvent(&event))
         {
 #ifdef TRIMUI_PLATFORM
@@ -2100,13 +2105,12 @@ void FileBrowser::render()
         m_lastContentHeight = contentHeight;
 
         nk_layout_row_dynamic(m_ctx, helpTextHeight, 1);
-#ifdef PLATFORM_MY355
-        nk_label_colored(m_ctx, "A: Select | B: Back | X: Toggle View | Menu: Quit",
-                         NK_TEXT_LEFT, nk_rgb(180, 180, 180));
-#else
-        nk_label_colored(m_ctx, "D-Pad: Navigate | A: Select | B: Back | X: Toggle View | Menu: Quit",
-                         NK_TEXT_LEFT, nk_rgb(180, 180, 180));
-#endif
+        if (isMy355Platform())
+            nk_label_colored(m_ctx, "A: Select | B: Back | X: Toggle View | Menu: Quit",
+                             NK_TEXT_LEFT, nk_rgb(180, 180, 180));
+        else
+            nk_label_colored(m_ctx, "D-Pad: Navigate | A: Select | B: Back | X: Toggle View | Menu: Quit",
+                             NK_TEXT_LEFT, nk_rgb(180, 180, 180));
 
         if (m_thumbnailView)
         {
@@ -2257,12 +2261,10 @@ void FileBrowser::handleEvent(const SDL_Event& event)
     switch (event.type)
     {
     case SDL_KEYDOWN:
-#ifdef PLATFORM_MY355
         // MY355 sends buttons as both keyboard scancodes and controller events.
         // Filter keyboard events for button scancodes to prevent double-processing.
-        if (isMy355ButtonScancode(event.key.keysym.scancode))
+        if (isMy355Platform() && isMy355ButtonScancode(event.key.keysym.scancode))
             break;
-#endif
         switch (event.key.keysym.sym)
         {
         case SDLK_ESCAPE:
@@ -2336,10 +2338,8 @@ void FileBrowser::handleEvent(const SDL_Event& event)
         break;
 
     case SDL_KEYUP:
-#ifdef PLATFORM_MY355
-        if (isMy355ButtonScancode(event.key.keysym.scancode))
+        if (isMy355Platform() && isMy355ButtonScancode(event.key.keysym.scancode))
             break;
-#endif
         switch (event.key.keysym.sym)
         {
         case SDLK_UP:

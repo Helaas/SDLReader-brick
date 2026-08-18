@@ -25,8 +25,9 @@ SDL2_INCLUDE := $(PREFIX)/include/SDL2
 
 # Compiler and flags
 CXX      ?= $(if $(CROSS_COMPILE),$(CROSS_COMPILE)g++,g++)
+PLATFORM_DEFINE ?= PLATFORM_TG5040
 TG_INCLUDE_DIR := $(BASE_PATH)/include
-CXXFLAGS = -std=c++17 -Wall -Wextra -Os -DNDEBUG -DTRIMUI_PLATFORM \
+CXXFLAGS = -std=c++17 -Wall -Wextra -Os -DNDEBUG -DTRIMUI_PLATFORM -D$(PLATFORM_DEFINE) \
             -ffunction-sections -fdata-sections \
             -I$(WORKSPACE_PATH)/src -I$(WORKSPACE_PATH)/include -I$(TG_INCLUDE_DIR) -I$(BASE_PATH)/mupdf/include \
             -I$(BASE_PATH)/nuklear-tg5040 -I$(BASE_PATH)/nuklear-tg5040/demo/sdl_renderer \
@@ -40,11 +41,15 @@ TG_SRC_DIR = $(BASE_PATH)/src
 # Output locations
 BIN_DIR  := $(WORKSPACE_PATH)/bin
 BUILD_DIR  := $(WORKSPACE_PATH)/build/tg5040
+ifdef OUTPUT_DIR
+  BUILD_DIR := $(OUTPUT_DIR)
+endif
 TARGET   := $(BUILD_DIR)/sdl_reader_cli
 
 # Source files: Combine all .cpp files from src/ and cli/, excluding Linux-specific files
 SRC_FILES = $(filter-out $(SRC_DIR)/power_handler.cpp, $(wildcard $(SRC_DIR)/*.cpp))
 SRCS = $(SRC_FILES) $(wildcard $(CLI_DIR)/*.cpp)
+HDR_FILES = $(wildcard $(WORKSPACE_PATH)/include/*.h) $(wildcard $(TG_INCLUDE_DIR)/*.h) $(BASE_PATH)/Makefile
 
 # All object files (will be placed in the build directory)
 # Transforms src/file.cpp into build/file.o and cli/file.cpp into build/file.o
@@ -245,9 +250,9 @@ $(BUILD_DIR):
 	@mkdir -p $(BUILD_DIR)
 
 # Link final binary - depends on minimal libarchive being built
-$(TARGET): $(OBJS) $(LIBARCHIVE_MINIMAL) | $(BIN_DIR)
+$(TARGET): $(OBJS) $(HDR_FILES) $(LIBARCHIVE_MINIMAL) | $(BIN_DIR)
 	@echo "Linking sdl_reader_cli with minimal libarchive..."
-	$(CXX) $(OBJS) $(LIBS) -Wl,-rpath,'$$ORIGIN/../lib' -Wl,--gc-sections -o $@
+	$(CXX) $(OBJS) $(LIBS) -Wl,--gc-sections -o $@
 	@echo "Binary built successfully: $@"
 
 # Compile source files into object files in the build directory

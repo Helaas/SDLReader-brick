@@ -7,14 +7,14 @@
 #include "renderer.h"
 #include "supported_file_types.h"
 #include "text_renderer.h"
+#include "h700_input.h"
 #ifdef TRIMUI_PLATFORM
 #include "power_handler.h"
 #include "power_events.h"
 #endif
 #include "platform_constants.h"
-#ifdef PLATFORM_MY355
 #include "platform_my355.h"
-#endif
+#include "platform_runtime.h"
 
 #include <algorithm>
 #include <cmath>
@@ -305,6 +305,7 @@ void App::run()
 
         refreshPageCountFromDocument();
 
+        pollH700Input();
         while (SDL_PollEvent(&event) != 0)
         {
 #ifdef TRIMUI_PLATFORM
@@ -459,15 +460,14 @@ void App::handlePowerMessageEvent(const SDL_Event& event)
 
 void App::handleEvent(const SDL_Event& event)
 {
-#ifdef PLATFORM_MY355
     // my355 emits physical buttons as both keyboard scancodes and controller events.
     // Ignore keyboard-side button scancodes here to prevent double-processing in UI/app layers.
-    if ((event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) &&
+    if (isMy355Platform() &&
+        (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) &&
         isMy355ButtonScancode(event.key.keysym.scancode))
     {
         return;
     }
-#endif
 
     // Let GUI handle the event first
     bool guiHandled = false;
@@ -1079,6 +1079,7 @@ void App::updateInputState(const SDL_Event& event)
     }
 
     case SDL_CONTROLLERDEVICEADDED:
+        if (isH700Platform()) break;
         if (m_gameController == nullptr)
         {
             m_gameController = SDL_GameControllerOpen(event.cdevice.which);
@@ -1452,6 +1453,12 @@ void App::printAppState()
 
 void App::initializeGameControllers()
 {
+    if (isH700Platform())
+    {
+        m_gameControllerInstanceID = H700_INPUT_INSTANCE_ID;
+        return;
+    }
+
     for (int i = 0; i < SDL_NumJoysticks(); ++i)
     {
         if (SDL_IsGameController(i))

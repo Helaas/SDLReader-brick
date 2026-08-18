@@ -4,6 +4,8 @@
 #include "path_utils.h"
 #include "renderer.h"
 #include "supported_file_types.h"
+#include "h700_input.h"
+#include "platform_runtime.h"
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <iostream>
@@ -11,6 +13,7 @@
 
 void cleanupSDL(SDL_Window* window, SDL_Renderer* renderer)
 {
+    closeH700Input();
     if (renderer)
     {
         SDL_DestroyRenderer(renderer);
@@ -25,20 +28,35 @@ void cleanupSDL(SDL_Window* window, SDL_Renderer* renderer)
 
 int main(int argc, char* argv[])
 {
+#ifdef PLATFORM_NEXTUI
+    if (!hasSupportedNextUIPlatform())
+    {
+        std::cerr << "Unsupported NextUI platform; PLATFORM must be tg5040, tg5050, my355, or h700" << std::endl;
+        return 1;
+    }
+#endif
+
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
     int returnCode = 0;
 
-#ifdef PLATFORM_MY355
-    constexpr int kDefaultWindowWidth = 640;
-    constexpr int kDefaultWindowHeight = 480;
-#elif defined(TRIMUI_PLATFORM)
-    constexpr int kDefaultWindowWidth = 800;
-    constexpr int kDefaultWindowHeight = 600;
+    int defaultWindowWidth;
+    int defaultWindowHeight;
+#ifdef TRIMUI_PLATFORM
+    if (isMy355Platform())
+    {
+        defaultWindowWidth = 640;
+        defaultWindowHeight = 480;
+    }
+    else
+    {
+        defaultWindowWidth = 800;
+        defaultWindowHeight = 600;
+    }
 #else
     // Desktop builds start at 2x the TG5040's 4:3 layout so the thumbnail grid
-    constexpr int kDefaultWindowWidth = 1280;
-    constexpr int kDefaultWindowHeight = 960;
+    defaultWindowWidth = 1280;
+    defaultWindowHeight = 960;
 #endif
 
     bool browseMode = false;
@@ -138,12 +156,23 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    if (isH700Platform())
+    {
+        SDL_DisplayMode mode{};
+        if (SDL_GetDesktopDisplayMode(0, &mode) == 0)
+        {
+            defaultWindowWidth = mode.w;
+            defaultWindowHeight = mode.h;
+        }
+        initializeH700Input();
+    }
+
     window = SDL_CreateWindow(
         "SDLReader C++",
         SDL_WINDOWPOS_UNDEFINED,
         SDL_WINDOWPOS_UNDEFINED,
-        kDefaultWindowWidth,
-        kDefaultWindowHeight,
+        defaultWindowWidth,
+        defaultWindowHeight,
         SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
     if (!window)
     {

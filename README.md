@@ -1,6 +1,6 @@
 # SDL Reader
 
-SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and MuPDF. It supports viewing PDF, CBZ/ZIP & CBR/RAR comic archives, EPUB books, MOBI e-books, plain text files, and standalone image files with intuitive navigation, zooming, rotation, and mirroring features. Optimized for embedded devices like the TrimUI Brick, TrimUI Smart Pro, TrimUI Smart Pro S, and the Miyoo Flip running [NextUI](https://github.com/LoveRetro/NextUI). It also runs on desktop platforms including macOS, Linux, and is a work in progress as Wii U homebrew.
+SDL Reader is a lightweight, cross-platform document viewer built with SDL2 and MuPDF. It supports viewing PDF, CBZ/ZIP & CBR/RAR comic archives, EPUB books, MOBI e-books, plain text files, and standalone image files with intuitive navigation, zooming, rotation, and mirroring features. It supports TG5040, TG5050, MY355, and H700 handhelds running [NextUI](https://github.com/LoveRetro/NextUI). It also runs on desktop platforms including macOS and Linux, and is a work in progress as Wii U homebrew.
 
 ## Table of Contents
 * [Features](#features)
@@ -72,6 +72,7 @@ This project supports multiple platforms with a unified build system.
 - **TG5040** - TrimUI Brick and TrimUI Smart Pro - Embedded Linux devices (default)
 - **TG5050** - TrimUI Smart Pro S - Embedded Linux device
 - **MY355** - Miyoo Flip - Embedded Linux device (640x480, same controls as Smart Pro)
+- **H700** - Anbernic H700 family - Embedded Linux devices with evdev input
 - **macOS** - Desktop development and testing
 - **Wii U** - Nintendo Wii U homebrew (requires devkitPro)
 - **Linux** - Desktop Linux distributions (tested on Ubuntu 24.04)
@@ -91,6 +92,7 @@ make run-native
 make tg5040    # TG5040 embedded device (TrimUI Brick and Smart Pro)
 make tg5050    # TG5050 embedded device (TrimUI Smart Pro S)
 make my355     # MY355 embedded device (Miyoo Flip)
+make universal # One AArch64 executable for all four NextUI platforms
 make mac       # macOS
 make wiiu      # Wii U (requires devkitPro environment)
 make linux     # Linux desktop
@@ -100,6 +102,7 @@ make export-tg5040    # Build and create complete TG5040 package
 make export-tg5050    # Build and create complete TG5050 package
 make export-my355     # Build and create complete MY355 package
 make export-trimui    # Build and create complete pakz for TG5040, TG5050, and MY355
+make export-all       # Build once and package for TG5040, TG5050, MY355, and H700
 
 # List available platforms
 make list-platforms
@@ -319,7 +322,7 @@ SDL Reader keeps a lightweight `reading_history.json` file in the reader state d
 
 ## TrimUI Deployment
 
-For TrimUI and Miyoo device deployment, use the bundle export system. All ports produce identical bundle structures.
+For NextUI device deployment, use the universal export. It copies one identical executable into all four platform trees and relies on each firmware's native SDL, C++, and compression runtime.
 
 ### Creating Distribution Package
 ```bash
@@ -332,14 +335,13 @@ make export-tg5050
 # MY355 (Miyoo Flip)
 make export-my355
 
-# Pakz for all platforms (TG5040 + TG5050 + MY355)
-make export-trimui
+# Recommended Pakz for all platforms (TG5040 + TG5050 + MY355 + H700)
+make export-all
 ```
 
 ### Bundle Contents
-The exported bundle at `ports/tg5040/pak/` (or `ports/tg5050/pak/`) contains:
-- **bin/**: `sdl_reader_cli` (legacy utilities such as `jq` and `minui-list` are preserved if you copy them in before exporting)
-- **lib/**: All shared library dependencies with proper RPATH setup
+The universal `SDLReader.pakz` contains one platform tree per NextUI runtime, each with:
+- **bin/**: the same `sdl_reader_cli` executable
 - **fonts/**: All bundled font files ready for the runtime picker
 - **res/**: Optional resources (e.g., documentation PDFs)
 - **launch.sh**: Main launcher script that boots straight into the Nuklear file browser
@@ -350,7 +352,7 @@ The exported bundle at `ports/tg5040/pak/` (or `ports/tg5050/pak/`) contains:
 2. Ensure the package has executable permissions
 3. Run via the launch script or execute binaries directly
 
-The bundle is completely self-contained and includes all necessary dependencies for the target platform.
+The universal bundle deliberately does not include private SDL, zlib, or C++ libraries. Those libraries are supplied by each platform's NextUI runtime so GPU and codec ABI requirements cannot conflict across devices.
 
 ## User Inputs
 The SDL Reader supports the following keyboard, mouse, and game controller inputs:

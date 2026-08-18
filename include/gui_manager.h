@@ -5,6 +5,7 @@
 #include "options_manager.h"
 #include "platform_constants.h"
 #include <SDL.h>
+#include "platform_runtime.h"
 #include <array>
 #include <functional>
 #include <iostream>
@@ -184,11 +185,7 @@ private:
     bool m_edgePageTurnsModeDropdownCancelRequested = false;
 
     Uint32 m_lastButtonPressTime = 0;
-#ifdef PLATFORM_MY355
-    static constexpr Uint32 BUTTON_DEBOUNCE_MS = 150;
-#else
-    static constexpr Uint32 BUTTON_DEBOUNCE_MS = 100;
-#endif
+    inline static const Uint32 BUTTON_DEBOUNCE_MS = isMy355Platform() ? 150 : 100;
 
     // Hold state for continuous navigation
     bool m_upHeld = false;

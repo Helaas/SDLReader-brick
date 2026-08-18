@@ -2,7 +2,7 @@
     "name": "SDLReader",
     "version": "v2.4.0",
     "type": "TOOL",
-    "description": "Read PDF, CBZ/ZIP & CBR/RAR comic archives, EPUB, MOBI, plain text, and standalone image files with smooth navigation, zoom, rotation, and mirroring. SDLReader is a lightweight, cross-platform viewer optimized for TrimUI devices (Brick, Smart Pro, Smart Pro S) and the Miyoo Flip running NextUI, built on SDL2 and MuPDF.",
+    "description": "Read PDF, CBZ/ZIP & CBR/RAR comic archives, EPUB, MOBI, plain text, and standalone image files with smooth navigation, zoom, rotation, and mirroring. SDLReader is a lightweight viewer for TG5040, TG5050, MY355, and H700 devices running NextUI, built on SDL2 and MuPDF.",
     "author": "Helaas",
     "repo_url": "https://github.com/Helaas/SDLReader-brick",
     "release_filename": "SDLReader.pakz",
@@ -38,6 +38,7 @@
     "platforms": [
         "tg5040",
         "tg5050",
-        "my355"
+        "my355",
+        "h700"
     ]
 }

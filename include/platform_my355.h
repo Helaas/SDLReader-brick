@@ -1,7 +1,5 @@
 #pragma once
 
-#ifdef PLATFORM_MY355
-
 #include <SDL.h>
 
 // MY355 (Miyoo Flip) sends all button presses as both keyboard HID scancodes
@@ -33,5 +31,3 @@ static inline bool isMy355ButtonScancode(SDL_Scancode sc)
         return false;
     }
 }
-
-#endif // PLATFORM_MY355

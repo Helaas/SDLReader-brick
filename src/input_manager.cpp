@@ -1,8 +1,8 @@
 #include "input_manager.h"
+#include "h700_input.h"
 #include "platform_constants.h"
-#ifdef PLATFORM_MY355
 #include "platform_my355.h"
-#endif
+#include "platform_runtime.h"
 #include <algorithm>
 #include <iostream>
 
@@ -31,20 +31,16 @@ InputActionData InputManager::processEvent(const SDL_Event& event)
         break;
 
     case SDL_KEYDOWN:
-#ifdef PLATFORM_MY355
         // MY355 sends buttons as both keyboard scancodes and controller events.
         // Filter keyboard events for button scancodes to prevent double-processing.
-        if (isMy355ButtonScancode(event.key.keysym.scancode))
+        if (isMy355Platform() && isMy355ButtonScancode(event.key.keysym.scancode))
             break;
-#endif
         actionData = processKeyDown(event);
         break;
 
     case SDL_KEYUP:
-#ifdef PLATFORM_MY355
-        if (isMy355ButtonScancode(event.key.keysym.scancode))
+        if (isMy355Platform() && isMy355ButtonScancode(event.key.keysym.scancode))
             break;
-#endif
         actionData = processKeyUp(event);
         break;
 
@@ -114,6 +110,7 @@ InputActionData InputManager::processEvent(const SDL_Event& event)
         break;
 
     case SDL_CONTROLLERDEVICEADDED:
+        if (isH700Platform()) break;
         if (m_gameController == nullptr)
         {
             m_gameController = SDL_GameControllerOpen(event.cdevice.which);
@@ -933,6 +930,12 @@ void InputManager::setScrollTimeout()
 
 void InputManager::initializeGameControllers()
 {
+    if (isH700Platform())
+    {
+        m_gameControllerInstanceID = H700_INPUT_INSTANCE_ID;
+        return;
+    }
+
     for (int i = 0; i < SDL_NumJoysticks(); ++i)
     {
         if (SDL_IsGameController(i))

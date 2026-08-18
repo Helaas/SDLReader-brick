@@ -31,8 +31,9 @@ ifeq ($(origin PLATFORM), undefined)
 endif
 
 ADB ?= adb
+UNIVERSAL_TOOLCHAIN := ghcr.io/loveretro/tg5040-toolchain@sha256:f131c6af64029a8723d0ce8d3c2682642f5f091b04714f6beedda9bec18477ab
 
-.PHONY: all native run-native run-mac run-linux clean clean-local help list-platforms export-tg5040 export-tg5050 export-my355 export-trimui export-all \
+.PHONY: all native run-native run-mac run-linux universal clean clean-local help list-platforms export-tg5040 export-tg5050 export-my355 export-trimui export-universal export-all \
        export-tg5040-in-docker export-tg5050-in-docker export-my355-in-docker export-trimui-in-docker \
        deploy deploy-platform $(AVAILABLE_PLATFORMS)
 
@@ -53,6 +54,13 @@ ifeq ($(NATIVE_PLATFORM),unsupported)
 else
 	@$(MAKE) run-$(NATIVE_PLATFORM) RUN_ARGS='$(RUN_ARGS)'
 endif
+
+universal:
+	@echo "Building one NextUI binary for tg5040, tg5050, my355, and h700..."
+	docker run --rm -v "$(CURDIR)":/workspace $(UNIVERSAL_TOOLCHAIN) \
+		make -C /workspace -f ports/tg5040/Makefile \
+			PLATFORM_DEFINE=PLATFORM_NEXTUI \
+			OUTPUT_DIR=/workspace/build/universal
 
 # TG5040 build targets
 tg5040:
@@ -154,9 +162,15 @@ else
 	@$(MAKE) export-trimui-in-docker
 endif
 
-# Alias for exporting all NextUI device bundles into SDLReader.pakz.
-export-all:
-	@$(MAKE) export-trimui
+export-universal: universal
+	@PLATFORMS="tg5040 tg5050 my355 h700" \
+		BINARY_PLATFORM=universal BUNDLE_PLATFORM=tg5040 \
+		BUNDLE_LIBS=0 \
+		TOOLCHAIN_IMAGE="$(UNIVERSAL_TOOLCHAIN)" \
+		bash ports/trimui/export_bundle.sh
+
+# Default release export: one executable copied into all platform trees.
+export-all: export-universal
 
 # ADB deploy - auto-detect platform and push SDLReader.pak to device
 deploy:
@@ -177,6 +191,7 @@ deploy:
 		echo; \
 		uname -a 2>/dev/null' 2>/dev/null | tr '\000' '\n' | tr -d '\r'); \
 	case "$$FINGERPRINT" in \
+		*sun50iw9*|*H700*|*h700*) PLATFORM=h700 ;; \
 		*rk3566*|*miyoo-355*) PLATFORM=my355 ;; \
 		*allwinner,a523*|*sun55iw3*) PLATFORM=tg5050 ;; \
 		*allwinner,a133*|*sun50iw*) PLATFORM=tg5040 ;; \
@@ -203,12 +218,12 @@ deploy-platform:
 		echo "Error: deploy-platform requires PLATFORM and SERIAL."; \
 		exit 1; \
 	fi
-	@$(MAKE) $(PLATFORM)
+	@$(MAKE) universal
 	@echo "Creating SDLReader.pak bundle for $(PLATFORM)..."
 	@PAK_DIR="build/$(PLATFORM)/SDLReader.pak"; \
 	rm -rf "$$PAK_DIR"; \
-	mkdir -p "$$PAK_DIR/bin" "$$PAK_DIR/lib" "$$PAK_DIR/fonts" "$$PAK_DIR/res"; \
-	cp "build/$(PLATFORM)/sdl_reader_cli" "$$PAK_DIR/bin/"; \
+	mkdir -p "$$PAK_DIR/bin" "$$PAK_DIR/fonts" "$$PAK_DIR/res"; \
+	cp "build/universal/sdl_reader_cli" "$$PAK_DIR/bin/"; \
 	chmod +x "$$PAK_DIR/bin/sdl_reader_cli"; \
 	cp ports/trimui/pak-template/launch.sh "$$PAK_DIR/"; \
 	chmod +x "$$PAK_DIR/launch.sh"; \
@@ -217,18 +232,9 @@ deploy-platform:
 	if [ -f ports/trimui/pak-template/res/docs.pdf ]; then \
 		cp ports/trimui/pak-template/res/docs.pdf "$$PAK_DIR/res/"; \
 	fi; \
-	echo "  Bundling libraries and stripping binary via Docker..."; \
-	TOOLCHAIN="ghcr.io/loveretro/$(PLATFORM)-toolchain:latest"; \
-	MAKEFILE=$$([ "$(PLATFORM)" = "my355" ] && echo "ports/my355/makefile" || echo "ports/$(PLATFORM)/Makefile"); \
-	docker run --rm -v "$(CURDIR)":/workspace "$$TOOLCHAIN" \
-		/bin/bash -c "cd /workspace && \
-		TEMP=\$$(mktemp -d) && \
-		BIN=./build/$(PLATFORM)/sdl_reader_cli DEST=\$$TEMP PRUNE_LIBS=1 \
-			bash ports/$(PLATFORM)/make_bundle.sh > /dev/null 2>&1 && \
-		cp -aL \$$TEMP/lib/* $$PAK_DIR/lib/ && \
-		strip $$PAK_DIR/bin/sdl_reader_cli && \
-		strip --strip-unneeded $$PAK_DIR/lib/*.so* 2>/dev/null; \
-		rm -rf \$$TEMP"; \
+	echo "  Stripping universal binary via Docker..."; \
+	docker run --rm -v "$(CURDIR)":/workspace "$(UNIVERSAL_TOOLCHAIN)" \
+		strip "/workspace/$$PAK_DIR/bin/sdl_reader_cli"; \
 	echo "  PAK ready at $$PAK_DIR"
 	@ADB_CMD="$(ADB) -s $(SERIAL)"; \
 	TOOLS_DIR="/mnt/SDCARD/Tools/$(PLATFORM)/SDLReader.pak"; \
@@ -275,6 +281,7 @@ list-platforms:
 	@echo "  - tg5040"
 	@echo "  - tg5050"
 	@echo "  - my355"
+	@echo "  - h700 (through the universal target)"
 	@echo "  - mac"
 	@echo "  - wiiu"
 	@echo "  - linux"
@@ -288,8 +295,10 @@ help:
 	@echo "  make tg5040     - Build for TG5040 (TrimUI Brick & Smart Pro)"
 	@echo "  make tg5050     - Build for TG5050 (TrimUI Smart Pro S)"
 	@echo "  make my355      - Build for MY355 (Miyoo Flip)"
+	@echo "  make universal  - Build one binary for all four NextUI platforms"
 	@echo "  make export-trimui - Build and export SDLReader.pakz (TG5040 + TG5050 + MY355)"
-	@echo "  make export-all - Alias for export-trimui (TG5040 + TG5050 + MY355)"
+	@echo "  make export-universal - Package one binary for TG5040 + TG5050 + MY355 + H700"
+	@echo "  make export-all - Alias for export-universal"
 	@echo "  make export-tg5040 - Build and export TG5040-only bundle"
 	@echo "  make export-tg5050 - Build and export TG5050-only bundle"
 	@echo "  make export-my355  - Build and export MY355-only bundle"
