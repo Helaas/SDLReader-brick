@@ -248,7 +248,15 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
     struct nk_font_atlas* atlas = nullptr;
     nk_sdl_font_stash_begin(&atlas);
     struct nk_font* uiFont = nullptr;
-    constexpr float kUiFontSize = 24.0f; // 20% larger for better readability
+    float kUiFontSize = m_optionsManager.loadConfig().uiFontSize;
+    if (kUiFontSize < 16.0f || kUiFontSize > 72.0f)
+    {
+#if defined(TRIMUI_PLATFORM) || defined(PLATFORM_TG5040)
+        kUiFontSize = 36.0f;
+#else
+        kUiFontSize = 24.0f;
+#endif
+    }
 
     if (atlas)
     {

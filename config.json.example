@@ -9,5 +9,6 @@
   "edgePageTurnsMode": "automatic",
   "showDocumentMinimap": true,
   "keepPanningPosition": false,
+  "uiFontSize": 36,
   "lastBrowseDirectory": "/path/to/library"
 }

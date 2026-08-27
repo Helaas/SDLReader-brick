@@ -74,6 +74,7 @@ std::string configToJson(const FontConfig& config)
     oss << "  \"keepPanningPosition\": " << (config.keepPanningPosition ? "true" : "false") << ",\n";
     oss << "  \"showPageIndicatorOverlay\": " << (config.showPageIndicatorOverlay ? "true" : "false") << ",\n";
     oss << "  \"showScaleOverlay\": " << (config.showScaleOverlay ? "true" : "false") << ",\n";
+    oss << "  \"uiFontSize\": " << config.uiFontSize << ",\n";
     oss << "  \"lastBrowseDirectory\": \"" << config.lastBrowseDirectory << "\"\n";
     oss << "}";
     return oss.str();
@@ -221,6 +222,31 @@ FontConfig jsonToConfig(const std::string& json)
     {
         config.showPageIndicatorOverlay = true;
     }
+    auto findFloatValue = [&json](const std::string& key, float fallbackValue) -> float
+    {
+        std::string searchKey = "\"" + key + "\": ";
+        size_t start = json.find(searchKey);
+        if (start == std::string::npos)
+        {
+            return fallbackValue;
+        }
+        start += searchKey.length();
+        size_t end = json.find_first_of(",\n}", start);
+        if (end == std::string::npos)
+        {
+            return fallbackValue;
+        }
+        std::string valueStr = json.substr(start, end - start);
+        try
+        {
+            return std::stof(valueStr);
+        }
+        catch (...)
+        {
+            return fallbackValue;
+        }
+    };
+
     if (json.find("\"showScaleOverlay\"") != std::string::npos)
     {
         config.showScaleOverlay = findBoolValue("showScaleOverlay");
@@ -229,6 +255,13 @@ FontConfig jsonToConfig(const std::string& json)
     {
         config.showScaleOverlay = true;
     }
+#if defined(TRIMUI_PLATFORM) || defined(PLATFORM_TG5040)
+    constexpr float kDefaultUiFontSize = 36.0f;
+#else
+    constexpr float kDefaultUiFontSize = 24.0f;
+#endif
+    config.uiFontSize = std::clamp(findFloatValue("uiFontSize", kDefaultUiFontSize), 16.0f, 72.0f);
+
     config.lastBrowseDirectory = findStringValue("lastBrowseDirectory");
     if (config.lastBrowseDirectory.empty())
     {

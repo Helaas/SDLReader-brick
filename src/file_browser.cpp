@@ -338,7 +338,17 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
     struct nk_font_atlas* atlas = nullptr;
     nk_sdl_font_stash_begin(&atlas);
     struct nk_font* uiFont = nullptr;
-    constexpr float kUiFontSize = 28.0f;
+    OptionsManager optionsManager;
+    FontConfig fontCfg = optionsManager.loadConfig();
+    float kUiFontSize = fontCfg.uiFontSize;
+    if (kUiFontSize < 16.0f || kUiFontSize > 72.0f)
+    {
+#if defined(TRIMUI_PLATFORM) || defined(PLATFORM_TG5040)
+        kUiFontSize = 36.0f;
+#else
+        kUiFontSize = 28.0f;
+#endif
+    }
 
     if (atlas)
     {
@@ -353,7 +363,6 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
         };
 
         // Load available fonts from options manager
-        OptionsManager optionsManager;
         const auto& availableFonts = optionsManager.getAvailableFonts();
         for (const auto& fontInfo : availableFonts)
         {
