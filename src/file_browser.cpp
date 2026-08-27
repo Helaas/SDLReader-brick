@@ -343,11 +343,7 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
     float kUiFontSize = fontCfg.uiFontSize;
     if (kUiFontSize < 16.0f || kUiFontSize > 72.0f)
     {
-#if defined(TRIMUI_PLATFORM) || defined(PLATFORM_TG5040)
-        kUiFontSize = 36.0f;
-#else
-        kUiFontSize = 28.0f;
-#endif
+        kUiFontSize = FontConfig::kDefaultUiFontSize;
     }
 
     if (atlas)

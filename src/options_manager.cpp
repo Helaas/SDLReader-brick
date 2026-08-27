@@ -255,12 +255,7 @@ FontConfig jsonToConfig(const std::string& json)
     {
         config.showScaleOverlay = true;
     }
-#if defined(TRIMUI_PLATFORM) || defined(PLATFORM_TG5040)
-    constexpr float kDefaultUiFontSize = 36.0f;
-#else
-    constexpr float kDefaultUiFontSize = 24.0f;
-#endif
-    config.uiFontSize = std::clamp(findFloatValue("uiFontSize", kDefaultUiFontSize), 16.0f, 72.0f);
+    config.uiFontSize = std::clamp(findFloatValue("uiFontSize", FontConfig::kDefaultUiFontSize), 16.0f, 72.0f);
 
     config.lastBrowseDirectory = findStringValue("lastBrowseDirectory");
     if (config.lastBrowseDirectory.empty())

@@ -58,16 +58,18 @@ struct FontConfig
     bool showPageIndicatorOverlay = true;                      // Display page indicator overlay when page changes
     bool showScaleOverlay = true;                              // Display zoom/scale overlay during zoom changes
 #if defined(TRIMUI_PLATFORM) || defined(PLATFORM_TG5040)
-    float uiFontSize = 36.0f;                                  // UI & menu font size in points (scaled for high-DPI screen)
+    static constexpr float kDefaultUiFontSize = 36.0f;         // Scaled for high-DPI screen
 #else
-    float uiFontSize = 24.0f;                                  // UI & menu font size in points
+    static constexpr float kDefaultUiFontSize = 24.0f;
 #endif
+
+    float uiFontSize = kDefaultUiFontSize;                     // UI & menu font size in points
 
     // Default constructor
     FontConfig() = default;
 
     // Constructor with parameters
-    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10, const std::string& browseDir = getDefaultLibraryRoot(), ReadingStyle style = ReadingStyle::Default, int edgeTurnHoldMs = 300, EdgePageTurnsMode edgePageTurns = EdgePageTurnsMode::Automatic, bool showMinimap = true, bool keepPanning = false, float uiSize = 36.0f)
+    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10, const std::string& browseDir = getDefaultLibraryRoot(), ReadingStyle style = ReadingStyle::Default, int edgeTurnHoldMs = 300, EdgePageTurnsMode edgePageTurns = EdgePageTurnsMode::Automatic, bool showMinimap = true, bool keepPanning = false, float uiSize = kDefaultUiFontSize)
         : fontPath(path), fontName(name), fontSize(size), zoomStep(zoom), lastBrowseDirectory(browseDir), readingStyle(style),
           edgeTurnHoldDurationMs(edgeTurnHoldMs), edgePageTurnsMode(edgePageTurns), showDocumentMinimap(showMinimap), keepPanningPosition(keepPanning), uiFontSize(uiSize)
     {
