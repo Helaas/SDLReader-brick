@@ -248,11 +248,10 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
     struct nk_font_atlas* atlas = nullptr;
     nk_sdl_font_stash_begin(&atlas);
     struct nk_font* uiFont = nullptr;
-    float kUiFontSize = m_optionsManager.loadConfig().uiFontSize;
-    if (kUiFontSize < 16.0f || kUiFontSize > 72.0f)
-    {
-        kUiFontSize = FontConfig::kDefaultUiFontSize;
-    }
+    const float rawUiFontSize = m_optionsManager.loadConfig().uiFontSize;
+    const float uiFontSize = (rawUiFontSize >= 16.0f && rawUiFontSize <= 72.0f)
+                                 ? rawUiFontSize
+                                 : FontConfig::kDefaultUiFontSize;
 
     if (atlas)
     {
@@ -271,7 +270,7 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
         {
             if (fontExists(fontInfo.filePath))
             {
-                uiFont = nk_font_atlas_add_from_file(atlas, fontInfo.filePath.c_str(), kUiFontSize, nullptr);
+                uiFont = nk_font_atlas_add_from_file(atlas, fontInfo.filePath.c_str(), uiFontSize, nullptr);
                 if (uiFont)
                 {
                     atlas->default_font = uiFont;
@@ -292,7 +291,7 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
             {
                 if (fontExists(path))
                 {
-                    uiFont = nk_font_atlas_add_from_file(atlas, path, kUiFontSize, nullptr);
+                    uiFont = nk_font_atlas_add_from_file(atlas, path, uiFontSize, nullptr);
                     if (uiFont)
                     {
                         atlas->default_font = uiFont;
@@ -305,7 +304,7 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
 
         if (!uiFont)
         {
-            uiFont = nk_font_atlas_add_default(atlas, kUiFontSize, nullptr);
+            uiFont = nk_font_atlas_add_default(atlas, uiFontSize, nullptr);
             if (uiFont)
             {
                 atlas->default_font = uiFont;
