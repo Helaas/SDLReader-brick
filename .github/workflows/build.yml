@@ -78,6 +78,14 @@ jobs:
           # The pak must sit at the archive root - Pak Store rejects a nested wrapper.
           unzip -Z1 SDLReader.pak.zip | grep -qx 'bin/sdl_reader_cli' \
             || { echo "::error::bin/sdl_reader_cli is not at the archive root"; exit 1; }
+          # export_bundle.sh copies these only if present, so a missing source file
+          # would silently ship an incomplete pak. Fail loudly instead.
+          for required in res/docs.pdf launch.sh pak.json; do
+            unzip -Z1 SDLReader.pak.zip | grep -qx "$required" \
+              || { echo "::error::$required is missing from SDLReader.pak.zip"; exit 1; }
+          done
+          unzip -Z1 SDLReader.pak.zip | grep -q '^fonts/.*\.ttf$' \
+            || { echo "::error::no fonts were bundled into SDLReader.pak.zip"; exit 1; }
 
       - name: Upload SDLReader.pak.zip
         uses: actions/upload-artifact@v4

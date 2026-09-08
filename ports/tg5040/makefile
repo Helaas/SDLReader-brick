@@ -49,7 +49,7 @@ TARGET   := $(BUILD_DIR)/sdl_reader_cli
 # Source files: Combine all .cpp files from src/ and cli/, excluding Linux-specific files
 SRC_FILES = $(filter-out $(SRC_DIR)/power_handler.cpp, $(wildcard $(SRC_DIR)/*.cpp))
 SRCS = $(SRC_FILES) $(wildcard $(CLI_DIR)/*.cpp)
-HDR_FILES = $(wildcard $(WORKSPACE_PATH)/include/*.h) $(wildcard $(TG_INCLUDE_DIR)/*.h) $(BASE_PATH)/Makefile
+HDR_FILES = $(wildcard $(WORKSPACE_PATH)/include/*.h) $(wildcard $(TG_INCLUDE_DIR)/*.h) $(BASE_PATH)/makefile
 
 # All object files (will be placed in the build directory)
 # Transforms src/file.cpp into build/file.o and cli/file.cpp into build/file.o
