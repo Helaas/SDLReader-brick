@@ -19,9 +19,12 @@ jobs:
   build:
     uses: ./.github/workflows/build.yml
 
+  leaf:
+    uses: ./.github/workflows/leaf-mlp1.yml
+
   publish:
     name: Publish release
-    needs: build
+    needs: [build, leaf]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,6 +51,12 @@ jobs:
         with:
           name: SDLReader-pak-zip
 
+      - name: Download Leaf (MLP1) package
+        if: steps.gate.outputs.release == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: SDLReader-leaf-mlp1-pak
+
       - name: Build release notes from the pak.json changelog
         if: steps.gate.outputs.release == 'true'
         env:
@@ -69,7 +78,11 @@ jobs:
           VERSION: ${{ steps.gate.outputs.version }}
         run: |
           set -euo pipefail
-          gh release create "$VERSION" SDLReader.pak.zip \
+          test -f SDLReader.pak.zip
+          test -f SDLReader.leaf-mlp1.pak.zip
+          gh release create "$VERSION" \
+            SDLReader.pak.zip \
+            SDLReader.leaf-mlp1.pak.zip \
             --target "$GITHUB_SHA" \
             --title "SDLReader $VERSION" \
             --notes-file notes.md

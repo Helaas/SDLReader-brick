@@ -8,10 +8,11 @@ name: Build Leaf (MLP1)
 # The port lives on the `mlp1` branch; this workflow is inert on branches that do
 # not carry ports/mlp1.
 on:
-  push:
-    branches: [main, mlp1]
   pull_request:
   workflow_dispatch:
+  workflow_call:
+  push:
+    branches: [mlp1]
 
 permissions:
   contents: read
