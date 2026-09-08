@@ -86,8 +86,8 @@ void handleKey(const input_event& event)
     case KEY_RIGHT:  pushButton(SDL_CONTROLLER_BUTTON_DPAD_RIGHT, pressed); break;
     case 304: pushButton(SDL_CONTROLLER_BUTTON_B, pressed); break; // A
     case 305: pushButton(SDL_CONTROLLER_BUTTON_A, pressed); break; // B
-    case 307: pushButton(SDL_CONTROLLER_BUTTON_Y, pressed); break; // X
-    case 306: pushButton(SDL_CONTROLLER_BUTTON_X, pressed); break; // Y
+    case 306: pushButton(SDL_CONTROLLER_BUTTON_Y, pressed); break; // Physical X
+    case 307: pushButton(SDL_CONTROLLER_BUTTON_X, pressed); break; // Physical Y
     case 308: pushButton(SDL_CONTROLLER_BUTTON_LEFTSHOULDER, pressed); break;
     case 309: pushButton(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, pressed); break;
     case 314: pushAxis(SDL_CONTROLLER_AXIS_TRIGGERLEFT, pressed ? 32767 : 0); break;
