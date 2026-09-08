@@ -57,9 +57,17 @@ jobs:
 
       # actions/cache restores ports/tg5040/mupdf (a git repo) owned by the
       # runner, but the toolchain container builds as root, so git refuses it
-      # with "detected dubious ownership". Hand the tree to root for the build.
-      - name: Hand workspace to root for the container build
-        run: sudo chown -R root:root .
+      # with "detected dubious ownership". Only the cached dependency trees
+      # need to be root-owned - export_bundle.sh runs on the host as the
+      # runner and must still be able to write ports/trimui/staging.
+      - name: Hand cached dependencies to root for the container build
+        run: |
+          for d in ports/tg5040/mupdf ports/tg5040/libarchive-3.7.2 \
+                   ports/tg5040/libwebp-1.3.2 ports/tg5040/webp-install \
+                   ports/tg5040/nuklear-tg5040; do
+            [ -e "$d" ] && sudo chown -R root:root "$d"
+          done
+          true
 
       - name: Build and export universal package
         run: make export-universal
