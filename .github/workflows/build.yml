@@ -1,0 +1,81 @@
+name: Build
+
+# NextUI universal build. Produces exactly one release package, SDLReader.pak.zip.
+# The legacy per-device .pakz export targets are intentionally not built here.
+on:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    outputs:
+      version:
+        description: Version string read from pak.json
+        value: ${{ jobs.universal.outputs.version }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  universal:
+    name: NextUI universal (SDLReader.pak.zip)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version from pak.json
+        id: meta
+        run: |
+          version="$(jq -er .version pak.json)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Building SDLReader $version"
+
+      # MuPDF, Nuklear, libarchive and libwebp are fetched and cross-compiled by
+      # ports/tg5040/makefile. Their versions are pinned there, so key on it.
+      - name: Cache cross-compiled dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ports/tg5040/mupdf
+            ports/tg5040/libarchive-3.7.2
+            ports/tg5040/libwebp-1.3.2
+            ports/tg5040/webp-install
+            ports/tg5040/nuklear-tg5040
+          key: tg5040-deps-${{ hashFiles('ports/tg5040/makefile') }}
+          restore-keys: tg5040-deps-
+
+      - name: Build and export universal package
+        run: make export-universal
+
+      # The toolchain container runs as root, so hand the workspace back to the
+      # runner before actions/cache and actions/upload-artifact read from it.
+      - name: Restore workspace ownership
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" .
+
+      - name: Verify package
+        run: |
+          set -euo pipefail
+          test -f SDLReader.pak.zip
+          echo "Contents:"
+          unzip -Z1 SDLReader.pak.zip | sort
+          packaged="$(unzip -p SDLReader.pak.zip pak.json | jq -er .version)"
+          if [ "$packaged" != "${{ steps.meta.outputs.version }}" ]; then
+            echo "::error::Packaged version $packaged does not match pak.json ${{ steps.meta.outputs.version }}"
+            exit 1
+          fi
+          # The pak must sit at the archive root - Pak Store rejects a nested wrapper.
+          unzip -Z1 SDLReader.pak.zip | grep -qx 'bin/sdl_reader_cli' \
+            || { echo "::error::bin/sdl_reader_cli is not at the archive root"; exit 1; }
+
+      - name: Upload SDLReader.pak.zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: SDLReader-pak-zip
+          path: SDLReader.pak.zip
+          if-no-files-found: error

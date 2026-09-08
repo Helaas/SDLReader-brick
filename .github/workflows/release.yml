@@ -1,0 +1,77 @@
+name: Release
+
+# Every push to main builds the universal package. When the version in pak.json
+# has no matching release yet, that build is published as a GitHub Release, which
+# is what Pak Store downloads (pak.json -> release_filename: SDLReader.pak.zip).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check whether this version is already released
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(jq -er .version pak.json)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if gh release view "$version" >/dev/null 2>&1; then
+            echo "Release $version already exists - nothing to publish."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Version $version is not released yet - publishing."
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download universal package
+        if: steps.gate.outputs.release == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: SDLReader-pak-zip
+
+      - name: Build release notes from the pak.json changelog
+        if: steps.gate.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.gate.outputs.version }}
+        run: |
+          set -euo pipefail
+          notes="$(jq -r --arg v "$VERSION" '.changelog[$v] // empty' pak.json)"
+          if [ -z "$notes" ]; then
+            echo "::error::pak.json has no changelog entry for $VERSION"
+            exit 1
+          fi
+          printf '%s\n' "$notes" > notes.md
+          cat notes.md
+
+      - name: Publish GitHub Release
+        if: steps.gate.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.gate.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "$VERSION" SDLReader.pak.zip \
+            --target "$GITHUB_SHA" \
+            --title "SDLReader $VERSION" \
+            --notes-file notes.md
+          echo "Published $VERSION"
+          gh release view "$VERSION" --json assets --jq '.assets[].name'

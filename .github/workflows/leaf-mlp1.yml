@@ -1,0 +1,109 @@
+name: Build Leaf (MLP1)
+
+# The Miniloong Pocket 1 / Leaf port is packaged and released SEPARATELY from the
+# NextUI universal build: it keeps its own bundled libraries and its own pak.json,
+# so it must never be folded into SDLReader.pak.zip. It ships as its own artifact,
+# SDLReader.leaf-mlp1.pak.zip.
+#
+# The port lives on the `mlp1` branch; this workflow is inert on branches that do
+# not carry ports/mlp1.
+on:
+  push:
+    branches: [mlp1]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: leaf-mlp1-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Override with the repository variable MLP1_TOOLCHAIN_IMAGE if the image moves.
+  MLP1_TOOLCHAIN_IMAGE: ${{ vars.MLP1_TOOLCHAIN_IMAGE || 'ghcr.io/utility-muffin-research-kitchen/mlp1-toolchain:local' }}
+  # Mirrored into env because the secrets context cannot be used in step `if`.
+  MLP1_TOOLCHAIN_TOKEN: ${{ secrets.MLP1_TOOLCHAIN_TOKEN }}
+
+jobs:
+  leaf:
+    name: Miniloong Pocket 1 (separate package)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check that this branch carries the MLP1 port
+        id: guard
+        run: |
+          if [ -f ports/mlp1/Makefile ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::ports/mlp1 is not present on ${{ github.ref_name }} - skipping the Leaf build."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The toolchain image is not public. Without credentials the pull fails, so
+      # say so plainly instead of dying inside make.
+      - name: Log in to GHCR
+        if: steps.guard.outputs.present == 'true' && env.MLP1_TOOLCHAIN_TOKEN != ''
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ env.MLP1_TOOLCHAIN_TOKEN }}
+
+      - name: Pull the MLP1 toolchain
+        if: steps.guard.outputs.present == 'true'
+        run: |
+          if ! docker pull "$MLP1_TOOLCHAIN_IMAGE"; then
+            echo "::error::Cannot pull $MLP1_TOOLCHAIN_IMAGE. Push the MLP1 toolchain to a registry the runner can read, then set the MLP1_TOOLCHAIN_IMAGE variable (and MLP1_TOOLCHAIN_TOKEN secret if it is private)."
+            exit 1
+          fi
+
+      - name: Cache cross-compiled dependencies
+        if: steps.guard.outputs.present == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ports/mlp1/mupdf
+            ports/mlp1/libarchive-3.7.2
+            ports/mlp1/libwebp-1.3.2
+            ports/mlp1/webp-install
+            ports/mlp1/nuklear-mlp1
+            ports/mlp1/bzip2-1.0.8
+            ports/mlp1/xz-5.4.6
+            ports/mlp1/lz4-1.9.4
+            ports/mlp1/zstd-1.5.6
+            ports/mlp1/bzip2-install
+            ports/mlp1/xz-install
+            ports/mlp1/lz4-install
+            ports/mlp1/zstd-install
+          key: mlp1-deps-${{ hashFiles('ports/mlp1/Makefile') }}
+          restore-keys: mlp1-deps-
+
+      - name: Build and package the Leaf pak
+        if: steps.guard.outputs.present == 'true'
+        run: make package-mlp1
+
+      - name: Restore workspace ownership
+        if: always() && steps.guard.outputs.present == 'true'
+        run: sudo chown -R "$(id -u):$(id -g)" .
+
+      - name: Zip the Leaf pak
+        if: steps.guard.outputs.present == 'true'
+        run: |
+          set -euo pipefail
+          test -d build/mlp1/package/SDLReader.pak
+          cd build/mlp1/package
+          zip -9 -r "$GITHUB_WORKSPACE/SDLReader.leaf-mlp1.pak.zip" SDLReader.pak
+          cd "$GITHUB_WORKSPACE"
+          unzip -Z1 SDLReader.leaf-mlp1.pak.zip | sort
+
+      - name: Upload SDLReader.leaf-mlp1.pak.zip
+        if: steps.guard.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: SDLReader-leaf-mlp1-pak
+          path: SDLReader.leaf-mlp1.pak.zip
+          if-no-files-found: error
