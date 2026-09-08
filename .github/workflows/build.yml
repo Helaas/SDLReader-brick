@@ -55,6 +55,12 @@ jobs:
           key: tg5040-deps-${{ hashFiles('ports/tg5040/makefile') }}
           restore-keys: tg5040-deps-
 
+      # actions/cache restores ports/tg5040/mupdf (a git repo) owned by the
+      # runner, but the toolchain container builds as root, so git refuses it
+      # with "detected dubious ownership". Hand the tree to root for the build.
+      - name: Hand workspace to root for the container build
+        run: sudo chown -R root:root .
+
       - name: Build and export universal package
         run: make export-universal
 

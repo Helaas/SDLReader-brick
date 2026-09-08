@@ -70,6 +70,11 @@ jobs:
           key: mlp1-deps-${{ hashFiles('ports/mlp1/Makefile') }}
           restore-keys: mlp1-deps-
 
+      # Same cache-ownership issue as the NextUI build - see build.yml.
+      - name: Hand workspace to root for the container build
+        if: steps.guard.outputs.present == 'true'
+        run: sudo chown -R root:root .
+
       - name: Build and package the Leaf pak
         if: steps.guard.outputs.present == 'true'
         run: make package-mlp1 MLP1_TOOLCHAIN="$MLP1_TOOLCHAIN_IMAGE"
