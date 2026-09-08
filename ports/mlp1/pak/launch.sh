@@ -48,8 +48,18 @@ if [ -d "/var/run" ]; then
     export SDL_VIDEODRIVER=wayland
 fi
 
+# Browser root. MLP1 takes two SD cards, mounted as /media/sdcard0 and
+# /media/sdcard1 (/mnt/sdcard is a second mount of sdcard0 - same device and
+# inode). The file browser cannot navigate above its root, so rooting at
+# $SDCARD_ROOT pins it to one card. Root at /media to reach both, plus any
+# USB storage under /media/udisk*.
+find_browse_root() {
+    [ -d /media ] && echo /media && return 0
+    echo "$SDCARD_ROOT"
+}
+
 # Leaf-aware defaults
-export SDL_READER_DEFAULT_DIR="${SDL_READER_DEFAULT_DIR:-$SDCARD_ROOT}"
+export SDL_READER_DEFAULT_DIR="${SDL_READER_DEFAULT_DIR:-$(find_browse_root)}"
 export SDL_READER_STATE_DIR="${SDL_READER_STATE_DIR:-${UMRK_APPS_DATA_PATH:-$HOME}}"
 
 # Library path
