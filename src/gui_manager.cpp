@@ -741,8 +741,8 @@ void GuiManager::renderFontMenu()
     windowHeight = static_cast<int>(std::lround(windowHeight / scale));
 
     // Center the settings window and clamp it to the current viewport.
-    // Preserve the Brick's width fraction and use the extra room on wide screens.
-    const float preferredWindowW = static_cast<float>(windowWidth) * (680.0f / 1024.0f);
+    // Keep room for tooltip text on narrower displays and retain the wide-screen layout.
+    const float preferredWindowW = std::max(900.0f, static_cast<float>(windowWidth) * (680.0f / 1024.0f));
     constexpr float kPreferredWindowH = 750.0f;
     constexpr float kWindowMargin = 12.0f;
 
@@ -2407,14 +2407,15 @@ void GuiManager::showInfoTooltip(MainScreenWidget widget, const char* text)
     float tooltipW = std::max(200.0f, maxLineWidth + padding * 2.0f);
     float tooltipH = lineCount * font->height + padding * 2.0f;
 
-    struct nk_rect windowBounds = nk_window_get_bounds(m_ctx);
+    // Tooltips share the content scissor, including the title and scrollbar insets.
+    const struct nk_rect windowBounds = canvas->clip;
     float tooltipX = bounds.x + bounds.w + 10.0f;
     if (tooltipX + tooltipW > windowBounds.x + windowBounds.w - 10.0f)
     {
         tooltipX = std::max(windowBounds.x + 10.0f, bounds.x - tooltipW - 10.0f);
     }
     float tooltipY = bounds.y - 6.0f;
-    float minY = windowBounds.y + m_ctx->style.font->height + 4.0f;
+    float minY = windowBounds.y + 4.0f;
     if (tooltipY < minY)
     {
         tooltipY = minY;

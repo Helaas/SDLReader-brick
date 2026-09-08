@@ -137,7 +137,8 @@ int main()
                         top = std::min(top, y); bottom = std::max(bottom, y);
                     }
             }
-            const float expectedWidth = dimensions[0] * (680.0f / 1024.0f);
+            const float expectedWidth = std::min(dimensions[0] - 24.0f * scale,
+                std::max(900.0f * scale, dimensions[0] * (680.0f / 1024.0f)));
             // The window border extends outside its bounds; allow pixel rounding.
             const float tolerance = 2.0f * gui.m_ctx->style.window.border * scale + 1.0f;
             assert(std::fabs(left - (dimensions[0] - expectedWidth) / 2.0f) <= tolerance);
@@ -159,6 +160,50 @@ int main()
             assert(std::fabs(gui.m_ctx->input.mouse.pos.x - 200) <= 1.0f);
             assert(std::fabs(gui.m_ctx->input.mouse.pos.y - 160) <= 1.0f);
             gui.endFrame();
+            nk_clear(gui.m_ctx);
+            for (auto widget : {GuiManager::WIDGET_FILE_BROWSER_IMAGES_INFO_BUTTON,
+                                GuiManager::WIDGET_EDGE_TURN_HOLD_DURATION_INFO_BUTTON,
+                                GuiManager::WIDGET_EDGE_PAGE_TURNS_MODE_INFO_BUTTON,
+                                GuiManager::WIDGET_KEEP_PANNING_INFO_BUTTON,
+                                GuiManager::WIDGET_MINIMAP_INFO_BUTTON,
+                                GuiManager::WIDGET_PAGE_INDICATOR_INFO_BUTTON,
+                                GuiManager::WIDGET_ZOOM_OVERLAY_INFO_BUTTON})
+            {
+                gui.m_mainScreenFocusIndex = widget;
+                for (int frame = 0; frame < 3; ++frame)
+                {
+                    gui.newFrame();
+                    gui.endFrame();
+                    gui.requestFocusScroll();
+                    gui.renderFontMenu();
+                    if (frame == 2)
+                    {
+                        struct nk_rect clip{};
+                        int tooltipLines = 0;
+                        const nk_command* command;
+                        nk_foreach(command, gui.m_ctx)
+                        {
+                            if (command->type == NK_COMMAND_SCISSOR)
+                            {
+                                const auto* scissor = reinterpret_cast<const nk_command_scissor*>(command);
+                                clip = nk_rect(scissor->x, scissor->y, scissor->w, scissor->h);
+                            }
+                            if (command->type != NK_COMMAND_TEXT) continue;
+                            const auto* text = reinterpret_cast<const nk_command_text*>(command);
+                            if (text->foreground.r != 230 || text->foreground.g != 230 || text->foreground.b != 230) continue;
+                            ++tooltipLines;
+                            const float width = text->font->width(text->font->userdata, text->height, text->string, text->length);
+                            assert(text->x >= clip.x);
+                            assert(text->x + width <= clip.x + clip.w);
+                            if (!(text->y >= clip.y && text->y + text->height <= clip.y + clip.h))
+                                std::cerr << "Clipped tooltip widget=" << widget << " text=" << std::string(text->string, text->length) << " y=" << text->y << " height=" << text->height << " clip=" << clip.y << "," << clip.h << "\n";
+                            assert(text->y >= clip.y && text->y + text->height <= clip.y + clip.h);
+                        }
+                        assert(tooltipLines > 0);
+                    }
+                    nk_clear(gui.m_ctx);
+                }
+            }
             std::cout << "Settings scaling " << dimensions[0] << "x" << dimensions[1] << ": passed\n";
         }
     }
