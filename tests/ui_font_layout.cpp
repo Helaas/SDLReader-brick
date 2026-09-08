@@ -107,6 +107,9 @@ int main()
     {
         GuiManager gui;
         assert(gui.initialize(window, renderer));
+        SDL_ScaleMode fontFiltering = SDL_ScaleModeNearest;
+        assert(SDL_GetTextureScaleMode(sdl.ogl.font_tex, &fontFiltering) == 0);
+        assert(fontFiltering == SDL_ScaleModeLinear);
         gui.toggleFontMenu();
         for (const auto dimensions : {std::array<int, 2>{1024, 768}, {640, 480}, {720, 480}, {1280, 720}})
         {
@@ -122,6 +125,8 @@ int main()
             }
             float scaleX = 0.0f, scaleY = 0.0f;
             SDL_RenderGetScale(renderer, &scaleX, &scaleY);
+            assert(SDL_GetTextureScaleMode(sdl.ogl.font_tex, &fontFiltering) == 0);
+            assert(fontFiltering == SDL_ScaleModeLinear);
             assert(scaleX == 1.0f && scaleY == 1.0f);
             auto* pixels = SDL_CreateRGBSurfaceWithFormat(0, dimensions[0], dimensions[1], 32, SDL_PIXELFORMAT_RGBA32);
             assert(pixels);

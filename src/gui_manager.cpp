@@ -356,6 +356,10 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
     }
 
     nk_sdl_font_stash_end();
+    // Configure filtering once: older GLES2 backends change the bound texture
+    // here without invalidating SDL's draw cache, breaking cached page draws.
+    if (sdl.ogl.font_tex)
+        SDL_SetTextureScaleMode(sdl.ogl.font_tex, SDL_ScaleModeLinear);
     if (uiFont)
     {
         nk_style_set_font(m_ctx, &uiFont->handle);
@@ -542,15 +546,7 @@ void GuiManager::render()
     float previousScaleX = 1.0f, previousScaleY = 1.0f;
     SDL_RenderGetScale(m_renderer, &previousScaleX, &previousScaleY);
     SDL_RenderSetScale(m_renderer, previousScaleX * scale, previousScaleY * scale);
-    SDL_ScaleMode previousFontScaleMode = SDL_ScaleModeNearest;
-    if (sdl.ogl.font_tex && scale != 1.0f)
-    {
-        SDL_GetTextureScaleMode(sdl.ogl.font_tex, &previousFontScaleMode);
-        SDL_SetTextureScaleMode(sdl.ogl.font_tex, SDL_ScaleModeLinear);
-    }
     nk_sdl_render(NK_ANTI_ALIASING_ON);
-    if (sdl.ogl.font_tex && scale != 1.0f)
-        SDL_SetTextureScaleMode(sdl.ogl.font_tex, previousFontScaleMode);
     SDL_RenderSetScale(m_renderer, previousScaleX, previousScaleY);
 
     // The backend's ungrab warp needs window pixels, not UI coordinates.
