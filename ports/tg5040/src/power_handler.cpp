@@ -115,6 +115,14 @@ void PowerHandler::threadMain()
 
     while (m_running.load())
     {
+        // Some devices (including MY355) never emit key-repeat events.
+        if (press_time != std::chrono::steady_clock::time_point{} &&
+            std::chrono::steady_clock::now() - press_time >= SHORT_PRESS_MAX)
+        {
+            press_time = std::chrono::steady_clock::time_point{};
+            requestShutdown();
+        }
+
         ssize_t bytes_read = read(m_device_fd, &ev, sizeof(ev));
 
         if (bytes_read == sizeof(ev))
@@ -212,6 +220,7 @@ void PowerHandler::handlePowerButtonEvent(const input_event& ev, std::chrono::st
         else
         {
             DEBUG_LOG("PowerHandler: Long press detected (duration >= " << SHORT_PRESS_MAX.count() << "ms)");
+            requestShutdown();
         }
     }
     else if (ev.value == 2 && press_time != std::chrono::steady_clock::time_point{})
