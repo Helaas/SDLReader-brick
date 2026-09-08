@@ -412,6 +412,11 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
     if (uiFont)
     {
         nk_style_set_font(m_ctx, &uiFont->handle);
+        if (isMy355Platform())
+        {
+            // Set once: changing filtering during a frame can disrupt SDL's GLES texture cache.
+            SDL_SetTextureScaleMode(static_cast<SDL_Texture*>(uiFont->handle.texture.ptr), SDL_ScaleModeLinear);
+        }
     }
 
     setupNuklearStyle();
@@ -2089,6 +2094,13 @@ void FileBrowser::render()
     const float windowWidthF = static_cast<float>(windowWidth);
     const float windowHeightF = static_cast<float>(windowHeight);
 
+    // Keep the file list large while fitting MY355's browser controls on its smaller screen.
+    const nk_user_font* listFont = m_ctx->style.font;
+    nk_user_font compactFont = *listFont;
+    compactFont.height *= 2.0f / 3.0f;
+    const nk_user_font* chromeFont = isMy355Platform() ? &compactFont : listFont;
+    nk_style_set_font(m_ctx, chromeFont);
+
     // Create title with current directory
     std::string windowTitle = "SDLReader - " + m_currentPath;
     if (nk_begin(m_ctx, windowTitle.c_str(), nk_rect(0.0f, 0.0f, windowWidthF, windowHeightF),
@@ -2112,6 +2124,7 @@ void FileBrowser::render()
             nk_label_colored(m_ctx, "D-Pad: Navigate | A: Select | B: Back | X: Toggle View | Menu: Quit",
                              NK_TEXT_LEFT, nk_rgb(180, 180, 180));
 
+        nk_style_set_font(m_ctx, listFont);
         if (m_thumbnailView)
         {
             renderThumbnailViewNuklear(contentHeight, windowWidth);
@@ -2121,6 +2134,8 @@ void FileBrowser::render()
             renderListViewNuklear(contentHeight, windowWidth);
             m_gridColumns = 1;
         }
+
+        nk_style_set_font(m_ctx, chromeFont);
 
         // Bottom status bar (no spacing before it) - height scales with current font
         // Center text vertically by using equal top and bottom padding
@@ -2158,6 +2173,7 @@ void FileBrowser::render()
 #endif
     }
     nk_end(m_ctx);
+    nk_style_set_font(m_ctx, listFont);
 
     nk_sdl_render(NK_ANTI_ALIASING_ON);
     nk_sdl_handle_grab();

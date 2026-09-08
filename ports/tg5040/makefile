@@ -83,6 +83,11 @@ LIBS := -L$(PREFIX)/lib -lSDL2_ttf -lSDL2 \
   $(LIBARCHIVE_MINIMAL) \
   -lbz2 -llz4 -lzstd -llzma -lz -lm -lpthread -ldl -lstdc++fs
 
+# Legacy bundles may carry private libraries; universal builds use firmware libraries.
+ifneq ($(PLATFORM_DEFINE),PLATFORM_NEXTUI)
+LIBS += -Wl,-rpath,'$$ORIGIN/../lib'
+endif
+
 .PHONY: all clean export-bundle build-mupdf setup-mupdf clean-mupdf build-libarchive clean-libarchive build-webp clean-webp setup-nuklear clean-nuklear check-libarchive
 
 # Default goal - ensures minimal libarchive and WebP are built before anything else
