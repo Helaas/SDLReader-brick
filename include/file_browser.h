@@ -3,6 +3,7 @@
 
 #include "platform_constants.h"
 #include <SDL.h>
+#include "platform_runtime.h"
 #include <cstddef>
 #include <condition_variable>
 #include <deque>
@@ -118,10 +119,8 @@ private:
     int m_gridColumns{1};
     int m_lastWindowWidth{0};
     int m_lastWindowHeight{0};
-#ifdef PLATFORM_MY355
-    static constexpr int THUMBNAIL_MAX_DIM = 120;
-#elif defined(TRIMUI_PLATFORM)
-    static constexpr int THUMBNAIL_MAX_DIM = 150;
+#ifdef TRIMUI_PLATFORM
+    inline static const int THUMBNAIL_MAX_DIM = isMy355Platform() ? 120 : 150;
 #else
     static constexpr int THUMBNAIL_MAX_DIM = 200;
 #endif

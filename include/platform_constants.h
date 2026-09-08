@@ -1,27 +1,19 @@
 #pragma once
 
 #include <SDL.h>
+#include "platform_runtime.h"
 
 namespace PlatformConstants
 {
 
 // Analog stick dead zone
 // Used by: App, InputManager, GuiManager, FileBrowser
-#ifdef PLATFORM_MY355
-inline constexpr Sint16 AXIS_DEAD_ZONE = 20000;
-#else
-inline constexpr Sint16 AXIS_DEAD_ZONE = 8000;
-#endif
+inline const Sint16 AXIS_DEAD_ZONE = isMy355Platform() ? 20000 : 8000;
 
 // Held-input repeat timing (D-pad / analog stick continuous scrolling/nav)
 // Used by: GuiManager (settings nav), FileBrowser (file list scrolling)
-#ifdef PLATFORM_MY355
-inline constexpr Uint32 INPUT_INITIAL_DELAY_MS = 220;
-inline constexpr Uint32 INPUT_REPEAT_DELAY_MS = 130;
-#else
-inline constexpr Uint32 INPUT_INITIAL_DELAY_MS = 100;
-inline constexpr Uint32 INPUT_REPEAT_DELAY_MS = 50;
-#endif
+inline const Uint32 INPUT_INITIAL_DELAY_MS = isMy355Platform() ? 220 : 100;
+inline const Uint32 INPUT_REPEAT_DELAY_MS = isMy355Platform() ? 130 : 50;
 
 // Page jump digit entry timeout
 inline constexpr Uint32 PAGE_JUMP_TIMEOUT = 5000;

@@ -1,6 +1,8 @@
 #include "power_handler.h"
+#include "platform_runtime.h"
 #include <cerrno>
 #include <chrono>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
@@ -19,6 +21,31 @@ PowerHandler::~PowerHandler()
     stop();
 }
 
+int PowerHandler::findPowerDevice()
+{
+    unsigned char key_bits[(KEY_MAX + 1) / 8];
+
+    for (int i = 0; i < 16; ++i)
+    {
+        char path[32];
+        snprintf(path, sizeof(path), "/dev/input/event%d", i);
+        int fd = open(path, O_RDONLY | O_NONBLOCK);
+        if (fd < 0) continue;
+
+        memset(key_bits, 0, sizeof(key_bits));
+        if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(key_bits)), key_bits) >= 0 &&
+            (key_bits[KEY_POWER / 8] & (1 << (KEY_POWER % 8))))
+        {
+            DEBUG_LOG("Power handler: Found KEY_POWER capability on " << path);
+            return fd;
+        }
+        close(fd);
+    }
+
+    DEBUG_ERR("Power handler: No device with KEY_POWER capability found");
+    return -1;
+}
+
 bool PowerHandler::start()
 {
     if (m_running.load())
@@ -26,14 +53,14 @@ bool PowerHandler::start()
         return true;
     }
 
-    m_device_fd = open(DEVICE_PATH, O_RDONLY | O_NONBLOCK);
+    m_device_fd = findPowerDevice();
     if (m_device_fd < 0)
     {
-        DEBUG_ERR("Failed to open input device: " << DEVICE_PATH);
+        DEBUG_ERR("Failed to find power input device");
         return false;
     }
 
-    DEBUG_LOG("Power handler started on device: " << DEVICE_PATH);
+    DEBUG_LOG("Power handler started (dynamic device discovery)");
     flushEvents();
 
     m_running.store(true);
@@ -88,12 +115,21 @@ void PowerHandler::threadMain()
 
     while (m_running.load())
     {
+        // Some devices (including MY355) never emit key-repeat events.
+        if (press_time != std::chrono::steady_clock::time_point{} &&
+            std::chrono::steady_clock::now() - press_time >= SHORT_PRESS_MAX)
+        {
+            press_time = std::chrono::steady_clock::time_point{};
+            requestShutdown();
+        }
+
         ssize_t bytes_read = read(m_device_fd, &ev, sizeof(ev));
 
         if (bytes_read == sizeof(ev))
         {
             // Only process power button events
-            if (ev.type == EV_KEY && ev.code == POWER_KEY_CODE)
+            if (ev.type == EV_KEY &&
+                (ev.code == POWER_KEY_CODE || (isMy355Platform() && ev.code == 102)))
             {
                 handlePowerButtonEvent(ev, press_time);
             }
@@ -184,6 +220,7 @@ void PowerHandler::handlePowerButtonEvent(const input_event& ev, std::chrono::st
         else
         {
             DEBUG_LOG("PowerHandler: Long press detected (duration >= " << SHORT_PRESS_MAX.count() << "ms)");
+            requestShutdown();
         }
     }
     else if (ev.value == 2 && press_time != std::chrono::steady_clock::time_point{})
@@ -369,7 +406,15 @@ bool PowerHandler::requestSleep()
     };
 
     // Method 1: Platform suspend script (preferred to match NextUI behavior)
-    if (tryPlatformSuspend(PLATFORM_SUSPEND_PATH_PRIMARY) || tryPlatformSuspend(PLATFORM_SUSPEND_PATH_SECONDARY))
+    bool platformSuspend = false;
+    const char* systemPath = getenv("SYSTEM_PATH");
+    if (systemPath && systemPath[0])
+    {
+        std::string suspendPath = std::string(systemPath) + "/bin/suspend";
+        platformSuspend = tryPlatformSuspend(suspendPath.c_str());
+    }
+    if (platformSuspend || tryPlatformSuspend(PLATFORM_SUSPEND_PATH_PRIMARY) ||
+        tryPlatformSuspend(PLATFORM_SUSPEND_PATH_SECONDARY))
     {
         return true;
     }
@@ -460,14 +505,14 @@ bool PowerHandler::reopenDevice()
     }
 
     // Try to reopen the device
-    m_device_fd = open(DEVICE_PATH, O_RDONLY | O_NONBLOCK);
+    m_device_fd = findPowerDevice();
     if (m_device_fd < 0)
     {
-        DEBUG_ERR("Failed to reopen input device: " << DEVICE_PATH << " - " << strerror(errno));
+        DEBUG_ERR("Failed to reopen power input device");
         return false;
     }
 
-    DEBUG_LOG("Power handler device reopened successfully: " << DEVICE_PATH);
+    DEBUG_LOG("Power handler device reopened successfully (dynamic discovery)");
     flushEvents(); // Use the simplified flush function
 
     return true;

@@ -1,4 +1,5 @@
 #include "gui_manager.h"
+#include "platform_runtime.h"
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -22,16 +23,7 @@
 // Include the SDL renderer implementation
 #include "demo/sdl_renderer/nuklear_sdl_renderer.h"
 
-#if defined(PLATFORM_MY355)
-// my355 reports face buttons in swapped order (same behavior as other NextUI devices).
-// Keep GUI semantics aligned with physical labels:
-// - Physical A -> SDL_CONTROLLER_BUTTON_B
-// - Physical B -> SDL_CONTROLLER_BUTTON_A
-// - Physical Y -> SDL_CONTROLLER_BUTTON_X
-static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_B;
-static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_A;
-static constexpr SDL_GameControllerButton kApplySettingsButton = SDL_CONTROLLER_BUTTON_X;
-#elif defined(TRIMUI_PLATFORM)
+#ifdef TRIMUI_PLATFORM
 static constexpr SDL_GameControllerButton kAcceptButton = SDL_CONTROLLER_BUTTON_B;
 static constexpr SDL_GameControllerButton kCancelButton = SDL_CONTROLLER_BUTTON_A;
 static constexpr SDL_GameControllerButton kApplySettingsButton = SDL_CONTROLLER_BUTTON_X; // Physical Y
@@ -693,11 +685,10 @@ void GuiManager::renderFontMenu()
 
         // Controller hints at the top of the window for quick reference
         nk_layout_row_dynamic(m_ctx, 20, 1);
-#ifdef PLATFORM_MY355
-        nk_label_colored(m_ctx, "A: Select | B: Close | Y: Apply | Menu: Cancel", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
-#else
-        nk_label_colored(m_ctx, "D-Pad: Navigate | A: Select | B: Close | Y: Apply | Menu: Cancel", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
-#endif
+        if (isMy355Platform())
+            nk_label_colored(m_ctx, "A: Select | B: Close | Y: Apply | Menu: Cancel", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+        else
+            nk_label_colored(m_ctx, "D-Pad: Navigate | A: Select | B: Close | Y: Apply | Menu: Cancel", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
         nk_layout_row_dynamic(m_ctx, 10, 1);
 
         // Store original styles for highlighting focused widgets

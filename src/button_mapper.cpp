@@ -1,4 +1,5 @@
 #include "button_mapper.h"
+#include "platform_runtime.h"
 #include <iostream>
 
 ButtonMapper::ButtonMapper()
@@ -31,11 +32,20 @@ void ButtonMapper::initializePlatformMappings()
     m_buttonMap[SDL_CONTROLLER_BUTTON_Y] = LogicalButton::Special;              // Y button
     m_buttonMap[SDL_CONTROLLER_BUTTON_START] = LogicalButton::MirrorHorizontal; // TG5040: Start toggles mirror
 
+    if (isH700Platform())
+    {
+        // The evdev bridge presents physical labels using the same swapped
+        // controller layout expected by the existing NextUI UI code.
+        m_buttonMap[SDL_CONTROLLER_BUTTON_B] = LogicalButton::Accept;
+        m_buttonMap[SDL_CONTROLLER_BUTTON_A] = LogicalButton::Cancel;
+    }
+
     // TG5040-specific extra buttons (not part of standard SDL GameController API)
     m_joystickButtonMap[9] = LogicalButton::Extra1;  // Button 9: Reset View
     m_joystickButtonMap[10] = LogicalButton::Extra2; // Button 10: Toggle Menu
 
-    std::cout << "ButtonMapper: Initialized TG5040 mappings (original behavior maintained)" << std::endl;
+    std::cout << "ButtonMapper: Initialized NextUI mappings ("
+              << getNextUIPlatform() << ")" << std::endl;
 #else
     // Desktop platforms: Standard Xbox 360 controller layout
     // Physical layout matches SDL mapping:
@@ -103,10 +113,8 @@ LogicalButton ButtonMapper::mapJoystickButton(int joystickButton) const
 
 const char* ButtonMapper::getPlatformName() const
 {
-#ifdef PLATFORM_MY355
-    return "MY355";
-#elif defined(TRIMUI_PLATFORM)
-    return "TG5040";
+#ifdef TRIMUI_PLATFORM
+    return getNextUIPlatform();
 #else
     return "Desktop";
 #endif
