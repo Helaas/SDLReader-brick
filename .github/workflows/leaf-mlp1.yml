@@ -9,7 +9,8 @@ name: Build Leaf (MLP1)
 # not carry ports/mlp1.
 on:
   push:
-    branches: [mlp1]
+    branches: [main, mlp1]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -47,14 +48,6 @@ jobs:
         run: |
           set -euo pipefail
           docker pull "$MLP1_TOOLCHAIN_IMAGE"
-          # package-mlp1 on the mlp1 branch hardcodes the :local tag, which only
-          # ever existed on the maintainer's machine. Alias it to the published
-          # image so the target works unmodified. Drop this once that Makefile
-          # refers to :latest.
-          if grep -q 'mlp1-toolchain:local' Makefile; then
-            echo "Makefile still refers to :local - aliasing it to $MLP1_TOOLCHAIN_IMAGE"
-            docker tag "$MLP1_TOOLCHAIN_IMAGE" ghcr.io/utility-muffin-research-kitchen/mlp1-toolchain:local
-          fi
 
       - name: Cache cross-compiled dependencies
         if: steps.guard.outputs.present == 'true'
@@ -79,7 +72,7 @@ jobs:
 
       - name: Build and package the Leaf pak
         if: steps.guard.outputs.present == 'true'
-        run: make package-mlp1
+        run: make package-mlp1 MLP1_TOOLCHAIN="$MLP1_TOOLCHAIN_IMAGE"
 
       - name: Restore workspace ownership
         if: always() && steps.guard.outputs.present == 'true'

@@ -1,12 +1,13 @@
 {
     "name": "SDLReader",
-    "version": "v2.5.0",
+    "version": "v2.5.1",
     "type": "TOOL",
     "description": "Read PDF, CBZ/ZIP & CBR/RAR comic archives, EPUB, MOBI, plain text, and standalone image files with smooth navigation, zoom, rotation, and mirroring. SDLReader is a lightweight viewer for TG5040, TG5050, MY355, and H700 devices running NextUI, built on SDL2 and MuPDF.",
     "author": "Helaas",
     "repo_url": "https://github.com/Helaas/SDLReader-brick",
     "release_filename": "SDLReader.pak.zip",
     "changelog": {
+        "v2.5.1": "Adds the Miniloong Pocket 1 (Leaf) port to the main build line. NextUI devices are unaffected — the tg5040, tg5050, my355, and h700 binary is byte-for-byte identical to v2.5.0.",
         "v2.5.0": "H700 support (Anbernic RG35XX family) and a single universal binary shared by every NextUI device, plus a configurable UI menu font size for more readable menus and file browsing on high-DPI screens.",
         "v2.4.0": "Standalone image support, optional image visibility in the file browser, and new edge page-turn modes (Automatic, Double Tap, or Disable).",
         "v2.3.1": "Same as v2.3.0: Miyoo Flip support, installation size optimized, general performance improvements. Issue fixed with bundle extraction via Pak Store.",
