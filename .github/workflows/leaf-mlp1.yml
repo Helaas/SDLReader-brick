@@ -82,9 +82,12 @@ jobs:
           done
           true
 
+      # package-mlp1 builds in the container (as root, so build/mlp1 ends up
+      # root-owned) and then assembles the pak on the host. Run it as root so
+      # the host half can write into that tree; the next step hands it back.
       - name: Build and package the Leaf pak
         if: steps.guard.outputs.present == 'true'
-        run: make package-mlp1 MLP1_TOOLCHAIN="$MLP1_TOOLCHAIN_IMAGE"
+        run: sudo -E make package-mlp1 MLP1_TOOLCHAIN="$MLP1_TOOLCHAIN_IMAGE"
 
       - name: Restore workspace ownership
         if: always() && steps.guard.outputs.present == 'true'
@@ -94,7 +97,11 @@ jobs:
         if: steps.guard.outputs.present == 'true'
         run: |
           set -euo pipefail
-          test -d build/mlp1/package/SDLReader.pak
+          if [ ! -d build/mlp1/package/SDLReader.pak ]; then
+            echo "::error::package-mlp1 did not produce build/mlp1/package/SDLReader.pak"
+            ls -la build/mlp1 2>/dev/null || true
+            exit 1
+          fi
           cd build/mlp1/package
           zip -9 -r "$GITHUB_WORKSPACE/SDLReader.leaf-mlp1.pak.zip" SDLReader.pak
           cd "$GITHUB_WORKSPACE"

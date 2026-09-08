@@ -173,7 +173,8 @@ endif
 package-mlp1:
 	@$(MAKE) mlp1
 	@echo "Creating MLP1 SDLReader.pak package..."
-	@PAK_DIR="build/mlp1/package/SDLReader.pak"; \
+	@set -e; \
+	PAK_DIR="build/mlp1/package/SDLReader.pak"; \
 	rm -rf "$$PAK_DIR"; \
 	mkdir -p "$$PAK_DIR/bin" "$$PAK_DIR/lib" "$$PAK_DIR/fonts" "$$PAK_DIR/res"; \
 	cp "build/mlp1/sdl_reader_cli" "$$PAK_DIR/bin/"; \
