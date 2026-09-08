@@ -35,6 +35,44 @@ static constexpr SDL_GameControllerButton kApplySettingsButton = SDL_CONTROLLER_
 
 namespace
 {
+static float settingsScale(SDL_Window* window)
+{
+#ifdef TRIMUI_PLATFORM
+    int width = 0, height = 0;
+    SDL_GetWindowSize(window, &width, &height);
+    // The Brick's 1024x768 screen is the reference for UI font sizes/layout.
+    if (width > 0 && height > 0)
+        return static_cast<float>(std::min(width, height)) / 768.0f;
+#else
+    (void)window;
+#endif
+    return 1.0f;
+}
+
+static void wrappedLabel(struct nk_context* ctx, const char* text, struct nk_color color)
+{
+    const auto* font = ctx->style.font;
+    const float width = nk_window_get_content_region(ctx).w - 2.0f * ctx->style.text.padding.x;
+    int remaining = nk_strlen(text);
+    const char* cursor = text;
+    int lines = 0;
+    nk_rune separator = ' ';
+    while (remaining > 0)
+    {
+        int glyphs = 0;
+        float textWidth = 0.0f;
+        const int count = nk_text_clamp(font, cursor, remaining, width, &glyphs,
+                                        &textWidth, &separator, 1);
+        if (count <= 0) break;
+        cursor += count;
+        remaining -= count;
+        ++lines;
+    }
+    nk_layout_row_dynamic(ctx, std::max(1, lines) * font->height +
+                         2.0f * ctx->style.text.padding.y + 1.0f, 1);
+    nk_label_colored_wrap(ctx, text, color);
+}
+
 static nk_color accentColor()
 {
     return nk_rgb(74, 100, 168);
@@ -240,7 +278,7 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
     struct nk_font_atlas* atlas = nullptr;
     nk_sdl_font_stash_begin(&atlas);
     struct nk_font* uiFont = nullptr;
-    constexpr float kUiFontSize = 24.0f; // 20% larger for better readability
+    const float uiFontSize = m_optionsManager.loadConfig().uiFontSize;
 
     if (atlas)
     {
@@ -259,7 +297,7 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
         {
             if (fontExists(fontInfo.filePath))
             {
-                uiFont = nk_font_atlas_add_from_file(atlas, fontInfo.filePath.c_str(), kUiFontSize, nullptr);
+                uiFont = nk_font_atlas_add_from_file(atlas, fontInfo.filePath.c_str(), uiFontSize, nullptr);
                 if (uiFont)
                 {
                     atlas->default_font = uiFont;
@@ -280,7 +318,7 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
             {
                 if (fontExists(path))
                 {
-                    uiFont = nk_font_atlas_add_from_file(atlas, path, kUiFontSize, nullptr);
+                    uiFont = nk_font_atlas_add_from_file(atlas, path, uiFontSize, nullptr);
                     if (uiFont)
                     {
                         atlas->default_font = uiFont;
@@ -293,7 +331,7 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
 
         if (!uiFont)
         {
-            uiFont = nk_font_atlas_add_default(atlas, kUiFontSize, nullptr);
+            uiFont = nk_font_atlas_add_default(atlas, uiFontSize, nullptr);
             if (uiFont)
             {
                 atlas->default_font = uiFont;
@@ -307,6 +345,10 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
     }
 
     nk_sdl_font_stash_end();
+    // Configure filtering once: older GLES2 backends change the bound texture
+    // here without invalidating SDL's draw cache, breaking cached page draws.
+    if (sdl.ogl.font_tex)
+        SDL_SetTextureScaleMode(sdl.ogl.font_tex, SDL_ScaleModeLinear);
     if (uiFont)
     {
         nk_style_set_font(m_ctx, &uiFont->handle);
@@ -379,7 +421,21 @@ bool GuiManager::handleEvent(const SDL_Event& event)
     }
 
     // Menu is visible - let Nuklear handle the event
-    bool nuklearHandled = nk_sdl_handle_event(const_cast<SDL_Event*>(&event));
+    SDL_Event uiEvent = event;
+    const float scale = settingsScale(m_window);
+    if (uiEvent.type == SDL_MOUSEMOTION)
+    {
+        uiEvent.motion.x = static_cast<int>(std::lround(uiEvent.motion.x / scale));
+        uiEvent.motion.y = static_cast<int>(std::lround(uiEvent.motion.y / scale));
+        uiEvent.motion.xrel = static_cast<int>(std::lround(uiEvent.motion.xrel / scale));
+        uiEvent.motion.yrel = static_cast<int>(std::lround(uiEvent.motion.yrel / scale));
+    }
+    else if (uiEvent.type == SDL_MOUSEBUTTONDOWN || uiEvent.type == SDL_MOUSEBUTTONUP)
+    {
+        uiEvent.button.x = static_cast<int>(std::lround(uiEvent.button.x / scale));
+        uiEvent.button.y = static_cast<int>(std::lround(uiEvent.button.y / scale));
+    }
+    bool nuklearHandled = nk_sdl_handle_event(&uiEvent);
     return nuklearHandled;
 }
 
@@ -474,11 +530,20 @@ void GuiManager::render()
         renderNumberPad();
     }
 
-    // Render Nuklear with proper anti-aliasing
+    // Scale only the settings overlay; document rendering keeps its own scale.
+    const float scale = settingsScale(m_window);
+    float previousScaleX = 1.0f, previousScaleY = 1.0f;
+    SDL_RenderGetScale(m_renderer, &previousScaleX, &previousScaleY);
+    SDL_RenderSetScale(m_renderer, previousScaleX * scale, previousScaleY * scale);
     nk_sdl_render(NK_ANTI_ALIASING_ON);
+    SDL_RenderSetScale(m_renderer, previousScaleX, previousScaleY);
 
-    // Handle mouse grab state
+    // The backend's ungrab warp needs window pixels, not UI coordinates.
+    const struct nk_vec2 previousMouse = m_ctx->input.mouse.prev;
+    if (m_ctx->input.mouse.ungrab)
+        m_ctx->input.mouse.prev = nk_vec2(previousMouse.x * scale, previousMouse.y * scale);
     nk_sdl_handle_grab();
+    m_ctx->input.mouse.prev = previousMouse;
 }
 
 bool GuiManager::isFontMenuVisible() const
@@ -593,7 +658,10 @@ void GuiManager::renderFontMenu()
 
     m_pendingTooltips.clear();
 
-    constexpr float kDropdownItemHeight = 20.0f;
+    // Zero-height rows use Nuklear's font/padding minimum instead of fixed pixels.
+    // Match that height when scrolling dropdowns with the controller.
+    const float kDropdownItemHeight = m_ctx->style.font->height +
+        2.0f * (m_ctx->style.text.padding.y + m_ctx->style.window.min_row_height_padding);
     // Keep highlighted dropdown items in view when navigating without a mouse
     auto ensureDropdownHighlightVisible = [&](int highlightedIndex, int itemCount)
     {
@@ -653,15 +721,19 @@ void GuiManager::renderFontMenu()
 
     int windowWidth, windowHeight;
     SDL_GetWindowSize(m_window, &windowWidth, &windowHeight);
+    const float scale = settingsScale(m_window);
+    windowWidth = static_cast<int>(std::lround(windowWidth / scale));
+    windowHeight = static_cast<int>(std::lround(windowHeight / scale));
 
     // Center the settings window and clamp it to the current viewport.
-    constexpr float kPreferredWindowW = 680.0f;
+    // Keep room for tooltip text on narrower displays and retain the wide-screen layout.
+    const float preferredWindowW = std::max(900.0f, static_cast<float>(windowWidth) * (680.0f / 1024.0f));
     constexpr float kPreferredWindowH = 750.0f;
     constexpr float kWindowMargin = 12.0f;
 
     const float availableW = std::max(1.0f, static_cast<float>(windowWidth) - (2.0f * kWindowMargin));
     const float availableH = std::max(1.0f, static_cast<float>(windowHeight) - (2.0f * kWindowMargin));
-    const float windowW = std::min(kPreferredWindowW, availableW);
+    const float windowW = std::min(preferredWindowW, availableW);
     const float windowH = std::min(kPreferredWindowH, availableH);
     const float windowX = std::max(0.0f, (static_cast<float>(windowWidth) - windowW) * 0.5f);
     const float windowY = std::max(0.0f, (static_cast<float>(windowHeight) - windowH) * 0.5f);
@@ -684,11 +756,10 @@ void GuiManager::renderFontMenu()
         }
 
         // Controller hints at the top of the window for quick reference
-        nk_layout_row_dynamic(m_ctx, 20, 1);
         if (isMy355Platform())
-            nk_label_colored(m_ctx, "A: Select | B: Close | Y: Apply | Menu: Cancel", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+            wrappedLabel(m_ctx, "A: Select | B: Close | Y: Apply | Menu: Cancel", nk_rgb(150, 150, 150));
         else
-            nk_label_colored(m_ctx, "D-Pad: Navigate | A: Select | B: Close | Y: Apply | Menu: Cancel", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+            wrappedLabel(m_ctx, "D-Pad: Navigate | A: Select | B: Close | Y: Apply | Menu: Cancel", nk_rgb(150, 150, 150));
         nk_layout_row_dynamic(m_ctx, 10, 1);
 
         // Store original styles for highlighting focused widgets
@@ -699,10 +770,9 @@ void GuiManager::renderFontMenu()
         struct nk_style_selectable originalSelectableStyle = m_ctx->style.selectable;
 
         // === FONT SETTINGS SECTION ===
-        nk_layout_row_dynamic(m_ctx, 25, 1);
+        nk_layout_row_dynamic(m_ctx, 0, 1);
         nk_label(m_ctx, "Font Settings", NK_TEXT_LEFT);
-        nk_layout_row_dynamic(m_ctx, 35, 1);
-        nk_label_colored_wrap(m_ctx, "Font controls for EPUB/MOBI/TXT; others use embedded fonts.", nk_rgba(180, 200, 255, 255));
+        wrappedLabel(m_ctx, "Font controls for EPUB/MOBI/TXT; others use embedded fonts.", nk_rgba(180, 200, 255, 255));
 
         // Separator line
         nk_layout_row_dynamic(m_ctx, 1, 1);
@@ -713,14 +783,14 @@ void GuiManager::renderFontMenu()
         const auto& fonts = m_optionsManager.getAvailableFonts();
         if (fonts.empty())
         {
-            nk_layout_row_dynamic(m_ctx, 60, 1);
+            nk_layout_row_dynamic(m_ctx, 0, 1);
             nk_label_colored(m_ctx, "No fonts found in /fonts directory", NK_TEXT_CENTERED, nk_rgb(255, 255, 0));
             nk_label(m_ctx, "Please add .ttf or .otf files to the fonts folder", NK_TEXT_CENTERED);
         }
         else
         {
             // Font Family Dropdown
-            nk_layout_row_dynamic(m_ctx, 20, 1);
+            nk_layout_row_dynamic(m_ctx, 0, 1);
             nk_label(m_ctx, "Font Family:", NK_TEXT_LEFT);
 
             // Ensure selected index is valid
@@ -730,7 +800,7 @@ void GuiManager::renderFontMenu()
             }
 
             // Create dropdown
-            nk_layout_row_dynamic(m_ctx, 25, 1);
+            nk_layout_row_dynamic(m_ctx, 0, 1);
 
             // Highlight font dropdown if focused
             if (m_mainScreenFocusIndex == WIDGET_FONT_DROPDOWN)
@@ -831,11 +901,11 @@ void GuiManager::renderFontMenu()
             nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
             // Font Size Section
-            nk_layout_row_dynamic(m_ctx, 20, 1);
+            nk_layout_row_dynamic(m_ctx, 0, 1);
             nk_label(m_ctx, "Font Size (pt):", NK_TEXT_LEFT);
 
             // Font size input field
-            nk_layout_row_dynamic(m_ctx, 25, 1);
+            nk_layout_row_dynamic(m_ctx, 0, 1);
 
             // Highlight font size input if focused
             if (m_mainScreenFocusIndex == WIDGET_FONT_SIZE_INPUT)
@@ -879,7 +949,7 @@ void GuiManager::renderFontMenu()
             }
 
             // Font size slider
-            nk_layout_row_dynamic(m_ctx, 20, 1);
+            nk_layout_row_dynamic(m_ctx, 0, 1);
 
             // Highlight font size slider if focused
             if (m_mainScreenFocusIndex == WIDGET_FONT_SIZE_SLIDER)
@@ -906,7 +976,7 @@ void GuiManager::renderFontMenu()
         }
 
         // === READING STYLE SECTION ===
-        nk_layout_row_dynamic(m_ctx, 25, 1);
+        nk_layout_row_dynamic(m_ctx, 0, 1);
         nk_label(m_ctx, "Reading Style", NK_TEXT_LEFT);
 
         // Separator line
@@ -916,10 +986,9 @@ void GuiManager::renderFontMenu()
         nk_stroke_line(canvas, bounds.x, bounds.y, bounds.x + bounds.w, bounds.y, 1.0f, nk_rgb(100, 100, 100));
 
         // Informational notice
-        nk_layout_row_dynamic(m_ctx, 35, 1);
-        nk_label_colored_wrap(m_ctx, "Select theme for comfortable reading. Applies to EPUB/MOBI/TXT.", nk_rgba(180, 200, 255, 255));
+        wrappedLabel(m_ctx, "Select theme for comfortable reading. Applies to EPUB/MOBI/TXT.", nk_rgba(180, 200, 255, 255));
 
-        nk_layout_row_dynamic(m_ctx, 20, 1);
+        nk_layout_row_dynamic(m_ctx, 0, 1);
         nk_label(m_ctx, "Color Theme:", NK_TEXT_LEFT);
 
         // Get all available reading styles
@@ -932,7 +1001,7 @@ void GuiManager::renderFontMenu()
         }
 
         // Create dropdown
-        nk_layout_row_dynamic(m_ctx, 25, 1);
+        nk_layout_row_dynamic(m_ctx, 0, 1);
 
         // Highlight reading style dropdown if focused
         if (m_mainScreenFocusIndex == WIDGET_READING_STYLE_DROPDOWN)
@@ -1032,7 +1101,7 @@ void GuiManager::renderFontMenu()
         nk_layout_row_dynamic(m_ctx, 15, 1); // Spacing
 
         // === ZOOM SETTINGS SECTION ===
-        nk_layout_row_dynamic(m_ctx, 25, 1);
+        nk_layout_row_dynamic(m_ctx, 0, 1);
         nk_label(m_ctx, "Zoom Settings", NK_TEXT_LEFT);
 
         // Separator line
@@ -1041,11 +1110,10 @@ void GuiManager::renderFontMenu()
         canvas = nk_window_get_canvas(m_ctx);
         nk_stroke_line(canvas, bounds.x, bounds.y, bounds.x + bounds.w, bounds.y, 1.0f, nk_rgb(100, 100, 100));
 
-        nk_layout_row_dynamic(m_ctx, 20, 1);
-        nk_label(m_ctx, "Zoom Step (%) - Amount to zoom in/out with +/- keys:", NK_TEXT_LEFT);
+        wrappedLabel(m_ctx, "Zoom Step (%) - Amount to zoom in/out with +/- keys:", m_ctx->style.text.color);
 
         // Zoom step input
-        nk_layout_row_dynamic(m_ctx, 25, 1);
+        nk_layout_row_dynamic(m_ctx, 0, 1);
 
         // Highlight zoom step input if focused
         if (m_mainScreenFocusIndex == WIDGET_ZOOM_STEP_INPUT)
@@ -1080,7 +1148,7 @@ void GuiManager::renderFontMenu()
         }
 
         // Zoom step slider
-        nk_layout_row_dynamic(m_ctx, 20, 1);
+        nk_layout_row_dynamic(m_ctx, 0, 1);
 
         // Highlight zoom step slider if focused
         if (m_mainScreenFocusIndex == WIDGET_ZOOM_STEP_SLIDER)
@@ -1133,14 +1201,10 @@ void GuiManager::renderFontMenu()
 
         auto renderJumpToPageSection = [&]()
         {
-            nk_layout_row_dynamic(m_ctx, 20, 1);
+            nk_layout_row_dynamic(m_ctx, 0, 1);
             nk_label(m_ctx, "Jump to Page:", NK_TEXT_LEFT);
 
-            nk_layout_row_template_begin(m_ctx, 30);
-            nk_layout_row_template_push_static(m_ctx, 160);
-            nk_layout_row_template_push_static(m_ctx, 90);
-            nk_layout_row_template_push_static(m_ctx, 160);
-            nk_layout_row_template_end(m_ctx);
+            nk_layout_row_dynamic(m_ctx, 0, 1);
 
             if (m_mainScreenFocusIndex == WIDGET_PAGE_JUMP_INPUT)
             {
@@ -1205,7 +1269,7 @@ void GuiManager::renderFontMenu()
 
             if (!validPageInput && targetPage != 0)
             {
-                nk_layout_row_dynamic(m_ctx, 20, 1);
+                nk_layout_row_dynamic(m_ctx, 0, 1);
                 nk_label_colored(m_ctx, "Invalid page number", NK_TEXT_LEFT, nk_rgb(255, 100, 100));
             }
 
@@ -1215,7 +1279,7 @@ void GuiManager::renderFontMenu()
         if (m_showFileBrowserImageSettingVisible)
         {
             // === FILE BROWSER SECTION ===
-            nk_layout_row_dynamic(m_ctx, 25, 1);
+            nk_layout_row_dynamic(m_ctx, 0, 1);
             nk_label(m_ctx, "File Browser", NK_TEXT_LEFT);
 
             nk_layout_row_dynamic(m_ctx, 1, 1);
@@ -1223,9 +1287,9 @@ void GuiManager::renderFontMenu()
             canvas = nk_window_get_canvas(m_ctx);
             nk_stroke_line(canvas, bounds.x, bounds.y, bounds.x + bounds.w, bounds.y, 1.0f, nk_rgb(100, 100, 100));
 
-            nk_layout_row_template_begin(m_ctx, 25);
+            nk_layout_row_template_begin(m_ctx, 0);
             nk_layout_row_template_push_dynamic(m_ctx);
-            nk_layout_row_template_push_static(m_ctx, 32);
+            nk_layout_row_template_push_static(m_ctx, kDropdownItemHeight);
             nk_layout_row_template_end(m_ctx);
 
             if (m_mainScreenFocusIndex == WIDGET_FILE_BROWSER_IMAGES_CHECKBOX)
@@ -1262,7 +1326,7 @@ void GuiManager::renderFontMenu()
             nk_layout_row_dynamic(m_ctx, 15, 1); // Spacing
         }
 
-        nk_layout_row_dynamic(m_ctx, 20, 1);
+        nk_layout_row_dynamic(m_ctx, 0, 1);
         nk_label(m_ctx, "Panning", NK_TEXT_LEFT);
 
         nk_layout_row_dynamic(m_ctx, 1, 1);
@@ -1275,9 +1339,9 @@ void GuiManager::renderFontMenu()
         const bool edgeTurnThresholdEnabled = m_tempConfig.edgePageTurnsMode == EdgePageTurnsMode::Automatic;
         char edgeTurnDurationLabel[96];
         std::snprintf(edgeTurnDurationLabel, sizeof(edgeTurnDurationLabel), "Edge Turn Threshold (%d ms)", m_tempConfig.edgeTurnHoldDurationMs);
-        nk_layout_row_template_begin(m_ctx, 20);
+        nk_layout_row_template_begin(m_ctx, 0);
         nk_layout_row_template_push_dynamic(m_ctx);
-        nk_layout_row_template_push_static(m_ctx, 32);
+        nk_layout_row_template_push_static(m_ctx, kDropdownItemHeight);
         nk_layout_row_template_end(m_ctx);
         nk_label(m_ctx, edgeTurnDurationLabel, NK_TEXT_LEFT);
 
@@ -1294,7 +1358,7 @@ void GuiManager::renderFontMenu()
                             "Set to 0 ms for instant edge turns.");
         }
 
-        nk_layout_row_dynamic(m_ctx, 25, 1);
+        nk_layout_row_dynamic(m_ctx, 0, 1);
 
         if (!edgeTurnThresholdEnabled)
         {
@@ -1345,12 +1409,12 @@ void GuiManager::renderFontMenu()
             m_selectedEdgePageTurnsModeIndex = 0;
         }
 
-        nk_layout_row_dynamic(m_ctx, 20, 1);
+        nk_layout_row_dynamic(m_ctx, 0, 1);
         nk_label(m_ctx, "Edge Page Turns Mode:", NK_TEXT_LEFT);
 
-        nk_layout_row_template_begin(m_ctx, 25);
+        nk_layout_row_template_begin(m_ctx, 0);
         nk_layout_row_template_push_dynamic(m_ctx);
-        nk_layout_row_template_push_static(m_ctx, 32);
+        nk_layout_row_template_push_static(m_ctx, kDropdownItemHeight);
         nk_layout_row_template_end(m_ctx);
 
         if (m_mainScreenFocusIndex == WIDGET_EDGE_PAGE_TURNS_MODE_DROPDOWN)
@@ -1474,9 +1538,9 @@ void GuiManager::renderFontMenu()
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
         // Keep Panning Position checkbox + info button
-        nk_layout_row_template_begin(m_ctx, 25);
+        nk_layout_row_template_begin(m_ctx, 0);
         nk_layout_row_template_push_dynamic(m_ctx);
-        nk_layout_row_template_push_static(m_ctx, 32);
+        nk_layout_row_template_push_static(m_ctx, kDropdownItemHeight);
         nk_layout_row_template_end(m_ctx);
 
         if (m_mainScreenFocusIndex == WIDGET_KEEP_PANNING_CHECKBOX)
@@ -1513,7 +1577,7 @@ void GuiManager::renderFontMenu()
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
         // === PAGE NAVIGATION SECTION ===
-        nk_layout_row_dynamic(m_ctx, 25, 1);
+        nk_layout_row_dynamic(m_ctx, 0, 1);
         nk_label(m_ctx, "Page Navigation", NK_TEXT_LEFT);
 
         nk_layout_row_dynamic(m_ctx, 1, 1);
@@ -1530,7 +1594,7 @@ void GuiManager::renderFontMenu()
         {
             snprintf(pageInfo, sizeof(pageInfo), "Current Page: %d / %d", m_currentPage + 1, m_pageCount);
         }
-        nk_layout_row_dynamic(m_ctx, 20, 1);
+        nk_layout_row_dynamic(m_ctx, 0, 1);
         nk_label(m_ctx, pageInfo, NK_TEXT_LEFT);
 
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
@@ -1538,9 +1602,9 @@ void GuiManager::renderFontMenu()
         renderJumpToPageSection();
 
         // Document Minimap checkbox + info button
-        nk_layout_row_template_begin(m_ctx, 25);
+        nk_layout_row_template_begin(m_ctx, 0);
         nk_layout_row_template_push_dynamic(m_ctx);
-        nk_layout_row_template_push_static(m_ctx, 32);
+        nk_layout_row_template_push_static(m_ctx, kDropdownItemHeight);
         nk_layout_row_template_end(m_ctx);
 
         // Highlight checkbox if focused
@@ -1580,9 +1644,9 @@ void GuiManager::renderFontMenu()
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
         // Page indicator checkbox + info button
-        nk_layout_row_template_begin(m_ctx, 25);
+        nk_layout_row_template_begin(m_ctx, 0);
         nk_layout_row_template_push_dynamic(m_ctx);
-        nk_layout_row_template_push_static(m_ctx, 32);
+        nk_layout_row_template_push_static(m_ctx, kDropdownItemHeight);
         nk_layout_row_template_end(m_ctx);
 
         if (m_mainScreenFocusIndex == WIDGET_PAGE_INDICATOR_CHECKBOX)
@@ -1618,9 +1682,9 @@ void GuiManager::renderFontMenu()
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
         // Zoom/scale overlay checkbox + info button
-        nk_layout_row_template_begin(m_ctx, 25);
+        nk_layout_row_template_begin(m_ctx, 0);
         nk_layout_row_template_push_dynamic(m_ctx);
-        nk_layout_row_template_push_static(m_ctx, 32);
+        nk_layout_row_template_push_static(m_ctx, kDropdownItemHeight);
         nk_layout_row_template_end(m_ctx);
 
         if (m_mainScreenFocusIndex == WIDGET_ZOOM_OVERLAY_CHECKBOX)
@@ -1666,13 +1730,7 @@ void GuiManager::renderFontMenu()
 
         bool hasValidFont = !fonts.empty() && m_selectedFontIndex >= 0 && m_selectedFontIndex < (int) fonts.size();
 
-        nk_layout_row_template_begin(m_ctx, 35);
-        nk_layout_row_template_push_static(m_ctx, 120); // Apply button width
-        nk_layout_row_template_push_static(m_ctx, 20);
-        nk_layout_row_template_push_static(m_ctx, 120); // Close button width
-        nk_layout_row_template_push_static(m_ctx, 20);
-        nk_layout_row_template_push_static(m_ctx, 190); // Reset to default button width
-        nk_layout_row_template_end(m_ctx);
+        nk_layout_row_dynamic(m_ctx, 0, 1);
 
         // Apply button
         if (!hasValidFont)
@@ -1708,8 +1766,6 @@ void GuiManager::renderFontMenu()
             nk_widget_disable_end(m_ctx);
         }
 
-        nk_spacing(m_ctx, 1); // Empty column
-
         // Close button
         if (m_mainScreenFocusIndex == WIDGET_CLOSE_BUTTON)
         {
@@ -1723,8 +1779,6 @@ void GuiManager::renderFontMenu()
         }
         rememberWidgetBounds(WIDGET_CLOSE_BUTTON);
         m_ctx->style.button = originalButtonStyle;
-
-        nk_spacing(m_ctx, 1); // Empty column
 
         // Reset to Default button
         if (m_mainScreenFocusIndex == WIDGET_RESET_BUTTON)
@@ -1777,23 +1831,27 @@ void GuiManager::renderNumberPad()
 
     int windowWidth, windowHeight;
     SDL_GetWindowSize(m_window, &windowWidth, &windowHeight);
+    const float scale = settingsScale(m_window);
+    windowWidth = static_cast<int>(std::lround(windowWidth / scale));
+    windowHeight = static_cast<int>(std::lround(windowHeight / scale));
 
     // Center the number pad window
     float centerX = windowWidth * 0.5f;
     float centerY = windowHeight * 0.5f;
-    float windowW = 390.0f;
-    float windowH = 520.0f;
+    float windowW = std::min(std::max(390.0f, m_ctx->style.font->height * 16.0f),
+                             std::max(1.0f, windowWidth - 24.0f));
+    float windowH = std::min(520.0f * std::max(1.0f, m_ctx->style.font->height / 24.0f),
+                             std::max(1.0f, windowHeight - 24.0f));
+    struct nk_rect selectedBounds{};
 
     if (nk_begin(m_ctx, "Number Pad", nk_rect(centerX - windowW / 2, centerY - windowH / 2, windowW, windowH),
-                 NK_WINDOW_BORDER | NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR))
+                 NK_WINDOW_BORDER | NK_WINDOW_TITLE))
     {
-        nk_layout_row_dynamic(m_ctx, 18, 1);
-        nk_label_colored(m_ctx, "D-Pad: Navigate | A: Select", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
-        nk_layout_row_dynamic(m_ctx, 18, 1);
-        nk_label_colored(m_ctx, "B: Quit | Menu: Go", NK_TEXT_CENTERED, nk_rgb(150, 150, 150));
+        wrappedLabel(m_ctx, "D-Pad: Navigate | A: Select", nk_rgb(150, 150, 150));
+        wrappedLabel(m_ctx, "B: Quit | Menu: Go", nk_rgb(150, 150, 150));
         nk_layout_row_dynamic(m_ctx, 6, 1);
 
-        nk_layout_row_dynamic(m_ctx, 20, 1);
+        nk_layout_row_dynamic(m_ctx, 0, 1);
         nk_label(m_ctx, "Enter Page Number:", NK_TEXT_CENTERED);
 
         // Separator line
@@ -1805,7 +1863,7 @@ void GuiManager::renderNumberPad()
         // Display current input
         char displayText[32];
         snprintf(displayText, sizeof(displayText), "Page: %s", strlen(m_pageJumpInput) > 0 ? m_pageJumpInput : "_");
-        nk_layout_row_dynamic(m_ctx, 30, 1);
+        nk_layout_row_dynamic(m_ctx, 0, 1);
         nk_label(m_ctx, displayText, NK_TEXT_CENTERED);
 
         // Separator line
@@ -1828,7 +1886,7 @@ void GuiManager::renderNumberPad()
 
         for (int row = 0; row < 4; row++)
         {
-            nk_layout_row_dynamic(m_ctx, 50, 3);
+            nk_layout_row_dynamic(m_ctx, 0, 3);
             for (int col = 0; col < 3; col++)
             {
                 const char* buttonText = numberGrid[row][col];
@@ -1844,6 +1902,7 @@ void GuiManager::renderNumberPad()
                     m_ctx->style.button.active = nk_style_item_color(nk_rgb(60, 85, 145));
                 }
 
+                if (isSelected) selectedBounds = nk_widget_bounds(m_ctx);
                 if (nk_button_label(m_ctx, buttonText))
                 {
                     if (strcmp(buttonText, "Clear") == 0)
@@ -1883,7 +1942,7 @@ void GuiManager::renderNumberPad()
         nk_layout_row_dynamic(m_ctx, 10, 1); // Spacing
 
         // Action buttons
-        nk_layout_row_dynamic(m_ctx, 40, 2);
+        nk_layout_row_dynamic(m_ctx, 0, 2);
 
         // Go button
         int targetPage = strlen(m_pageJumpInput) > 0 ? std::atoi(m_pageJumpInput) : 0;
@@ -1903,6 +1962,7 @@ void GuiManager::renderNumberPad()
         {
             nk_widget_disable_begin(m_ctx);
         }
+        if (goSelected) selectedBounds = nk_widget_bounds(m_ctx);
         if (nk_button_label(m_ctx, "Go"))
         {
             if (validPage)
@@ -1935,6 +1995,7 @@ void GuiManager::renderNumberPad()
         }
 
         // Cancel button
+        if (cancelSelected) selectedBounds = nk_widget_bounds(m_ctx);
         if (nk_button_label(m_ctx, "Cancel"))
         {
             hideNumberPad();
@@ -1949,9 +2010,19 @@ void GuiManager::renderNumberPad()
         // Show validation message if needed
         if (targetPage != 0 && !validPage)
         {
-            nk_layout_row_dynamic(m_ctx, 20, 1);
+            nk_layout_row_dynamic(m_ctx, 0, 1);
             nk_label_colored(m_ctx, "Invalid page number", NK_TEXT_CENTERED, nk_rgb(255, 100, 100));
         }
+        // Keep controller selection visible when the keypad exceeds the screen.
+        const struct nk_rect clip = nk_window_get_content_region(m_ctx);
+        nk_uint scrollX = 0, scrollY = 0;
+        nk_window_get_scroll(m_ctx, &scrollX, &scrollY);
+        if (selectedBounds.y < clip.y)
+            nk_window_set_scroll(m_ctx, scrollX, static_cast<nk_uint>(std::max(0.0f,
+                scrollY + selectedBounds.y - clip.y)));
+        else if (selectedBounds.y + selectedBounds.h > clip.y + clip.h)
+            nk_window_set_scroll(m_ctx, scrollX, static_cast<nk_uint>(
+                scrollY + selectedBounds.y + selectedBounds.h - clip.y - clip.h));
     }
     nk_end(m_ctx);
 }
@@ -2320,14 +2391,15 @@ void GuiManager::showInfoTooltip(MainScreenWidget widget, const char* text)
     float tooltipW = std::max(200.0f, maxLineWidth + padding * 2.0f);
     float tooltipH = lineCount * font->height + padding * 2.0f;
 
-    struct nk_rect windowBounds = nk_window_get_bounds(m_ctx);
+    // Tooltips share the content scissor, including the title and scrollbar insets.
+    const struct nk_rect windowBounds = canvas->clip;
     float tooltipX = bounds.x + bounds.w + 10.0f;
     if (tooltipX + tooltipW > windowBounds.x + windowBounds.w - 10.0f)
     {
         tooltipX = std::max(windowBounds.x + 10.0f, bounds.x - tooltipW - 10.0f);
     }
     float tooltipY = bounds.y - 6.0f;
-    float minY = windowBounds.y + m_ctx->style.font->height + 4.0f;
+    float minY = windowBounds.y + 4.0f;
     if (tooltipY < minY)
     {
         tooltipY = minY;

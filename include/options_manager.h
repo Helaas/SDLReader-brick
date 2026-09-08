@@ -57,14 +57,21 @@ struct FontConfig
     bool keepPanningPosition = false;                          // Keep panning position when changing pages (vs. align to top)
     bool showPageIndicatorOverlay = true;                      // Display page indicator overlay when page changes
     bool showScaleOverlay = true;                              // Display zoom/scale overlay during zoom changes
+#ifdef TRIMUI_PLATFORM
+    static constexpr float kDefaultUiFontSize = 36.0f;         // Scaled for high-DPI screen
+#else
+    static constexpr float kDefaultUiFontSize = 24.0f;
+#endif
+
+    float uiFontSize = kDefaultUiFontSize;                     // UI & menu font size in points
 
     // Default constructor
     FontConfig() = default;
 
     // Constructor with parameters
-    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10, const std::string& browseDir = getDefaultLibraryRoot(), ReadingStyle style = ReadingStyle::Default, int edgeTurnHoldMs = 300, EdgePageTurnsMode edgePageTurns = EdgePageTurnsMode::Automatic, bool showMinimap = true, bool keepPanning = false)
+    FontConfig(const std::string& path, const std::string& name, int size, int zoom = 10, const std::string& browseDir = getDefaultLibraryRoot(), ReadingStyle style = ReadingStyle::Default, int edgeTurnHoldMs = 300, EdgePageTurnsMode edgePageTurns = EdgePageTurnsMode::Automatic, bool showMinimap = true, bool keepPanning = false, float uiSize = kDefaultUiFontSize)
         : fontPath(path), fontName(name), fontSize(size), zoomStep(zoom), lastBrowseDirectory(browseDir), readingStyle(style),
-          edgeTurnHoldDurationMs(edgeTurnHoldMs), edgePageTurnsMode(edgePageTurns), showDocumentMinimap(showMinimap), keepPanningPosition(keepPanning)
+          edgeTurnHoldDurationMs(edgeTurnHoldMs), edgePageTurnsMode(edgePageTurns), showDocumentMinimap(showMinimap), keepPanningPosition(keepPanning), uiFontSize(uiSize)
     {
     }
 };

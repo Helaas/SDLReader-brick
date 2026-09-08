@@ -338,7 +338,12 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
     struct nk_font_atlas* atlas = nullptr;
     nk_sdl_font_stash_begin(&atlas);
     struct nk_font* uiFont = nullptr;
-    constexpr float kUiFontSize = 28.0f;
+    OptionsManager optionsManager;
+    float uiFontSize = optionsManager.loadConfig().uiFontSize;
+#ifndef TRIMUI_PLATFORM
+    // Preserve the desktop browser's 28-point baseline relative to the 24-point menus.
+    uiFontSize *= 28.0f / FontConfig::kDefaultUiFontSize;
+#endif
 
     if (atlas)
     {
@@ -353,13 +358,12 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
         };
 
         // Load available fonts from options manager
-        OptionsManager optionsManager;
         const auto& availableFonts = optionsManager.getAvailableFonts();
         for (const auto& fontInfo : availableFonts)
         {
             if (fontExists(fontInfo.filePath))
             {
-                uiFont = nk_font_atlas_add_from_file(atlas, fontInfo.filePath.c_str(), kUiFontSize, nullptr);
+                uiFont = nk_font_atlas_add_from_file(atlas, fontInfo.filePath.c_str(), uiFontSize, nullptr);
                 if (uiFont)
                 {
                     atlas->default_font = uiFont;
@@ -381,7 +385,7 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
             {
                 if (fontExists(path))
                 {
-                    uiFont = nk_font_atlas_add_from_file(atlas, path, kUiFontSize, nullptr);
+                    uiFont = nk_font_atlas_add_from_file(atlas, path, uiFontSize, nullptr);
                     if (uiFont)
                     {
                         atlas->default_font = uiFont;
@@ -395,7 +399,7 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
         // Use Nuklear default font as last resort
         if (!uiFont)
         {
-            uiFont = nk_font_atlas_add_default(atlas, kUiFontSize, nullptr);
+            uiFont = nk_font_atlas_add_default(atlas, uiFontSize, nullptr);
             if (uiFont)
             {
                 atlas->default_font = uiFont;
