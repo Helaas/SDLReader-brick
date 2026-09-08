@@ -94,6 +94,10 @@ jobs:
         if: always() && steps.guard.outputs.present == 'true'
         run: sudo chown -R "$(id -u):$(id -g)" .
 
+      - name: Check the Leaf release metadata agrees on the version
+        if: steps.guard.outputs.present == 'true'
+        run: bash ports/mlp1/scripts/check-leaf-release.sh
+
       - name: Zip the Leaf pak
         if: steps.guard.outputs.present == 'true'
         run: |

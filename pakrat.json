@@ -14,8 +14,8 @@
     "packages": [
       {
         "platform": "mlp1",
-        "version": "2.4.0",
-        "artifact_name": "SDLReader.mlp1.pak.zip",
+        "version": "2.5.2",
+        "artifact_name": "SDLReader.leaf-mlp1.pak.zip",
         "install_name": "SDLReader.pak",
         "runtime_manifest_path": "pak.json",
         "package_dir": "build/mlp1/package/SDLReader.pak",

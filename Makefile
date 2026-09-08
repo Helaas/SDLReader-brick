@@ -181,7 +181,7 @@ package-mlp1:
 	chmod +x "$$PAK_DIR/bin/sdl_reader_cli"; \
 	cp ports/mlp1/pak/launch.sh "$$PAK_DIR/"; \
 	chmod +x "$$PAK_DIR/launch.sh"; \
-	cp ports/mlp1/pak/pak.json "$$PAK_DIR/"; \
+	bash ports/mlp1/scripts/write-pak-json.sh "$$PAK_DIR/pak.json"; \
 	if [ -f res/icon.png ]; then cp res/icon.png "$$PAK_DIR/res/icon.png"; fi; \
 	cp -a fonts/. "$$PAK_DIR/fonts/"; \
 	echo "  Bundling libraries and stripping binary via Docker..."; \
@@ -297,7 +297,7 @@ deploy-platform:
 	chmod +x "$$PAK_DIR/bin/sdl_reader_cli"; \
 	if [ "$(PLATFORM)" = "mlp1" ]; then \
 		cp ports/mlp1/pak/launch.sh "$$PAK_DIR/"; \
-		cp ports/mlp1/pak/pak.json "$$PAK_DIR/"; \
+		bash ports/mlp1/scripts/write-pak-json.sh "$$PAK_DIR/pak.json"; \
 		if [ -f res/icon.png ]; then cp res/icon.png "$$PAK_DIR/res/icon.png"; fi; \
 	else \
 		cp ports/trimui/pak-template/launch.sh "$$PAK_DIR/"; \

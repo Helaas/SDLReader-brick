@@ -57,11 +57,9 @@ if [ -f "$SCRIPT_DIR/pak/launch.sh" ]; then
     chmod +x "$BUNDLE_DIR/launch.sh"
 fi
 
-# Copy MLP1-specific pak.json
-if [ -f "$SCRIPT_DIR/pak/pak.json" ]; then
-    echo "Copying pak.json..."
-    cp "$SCRIPT_DIR/pak/pak.json" "$BUNDLE_DIR/"
-fi
+# Stamp the MLP1-specific pak.json with the release version
+echo "Writing pak.json..."
+bash "$SCRIPT_DIR/scripts/write-pak-json.sh" "$BUNDLE_DIR/pak.json"
 
 # Make all binaries executable
 chmod +x "$BUNDLE_DIR/bin"/* 2>/dev/null || true
