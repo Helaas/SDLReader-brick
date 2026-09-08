@@ -100,6 +100,68 @@ int main()
         }
         std::cout << "UI font size " << size << ": passed\n";
     }
+    // Resize the same window/GUI: proportions must follow the Brick reference.
+    FontConfig referenceConfig;
+    referenceConfig.uiFontSize = 36.0f;
+    assert(OptionsManager().saveConfig(referenceConfig));
+    {
+        GuiManager gui;
+        assert(gui.initialize(window, renderer));
+        gui.toggleFontMenu();
+        for (const auto dimensions : {std::array<int, 2>{1024, 768}, {640, 480}, {720, 480}, {1280, 720}})
+        {
+            SDL_SetWindowSize(window, dimensions[0], dimensions[1]);
+            const float scale = settingsScale(window);
+            assert(std::fabs(scale - std::min(dimensions[0], dimensions[1]) / 768.0f) < 0.001f);
+            for (int frame = 0; frame < 3; ++frame)
+            {
+                gui.newFrame();
+                SDL_SetRenderDrawColor(renderer, 12, 12, 12, 255);
+                SDL_RenderClear(renderer);
+                gui.render();
+            }
+            float scaleX = 0.0f, scaleY = 0.0f;
+            SDL_RenderGetScale(renderer, &scaleX, &scaleY);
+            assert(scaleX == 1.0f && scaleY == 1.0f);
+            auto* pixels = SDL_CreateRGBSurfaceWithFormat(0, dimensions[0], dimensions[1], 32, SDL_PIXELFORMAT_RGBA32);
+            assert(pixels);
+            assert(SDL_RenderReadPixels(renderer, nullptr, pixels->format->format, pixels->pixels, pixels->pitch) == 0);
+            int left = dimensions[0], right = -1, top = dimensions[1], bottom = -1;
+            for (int y = 0; y < dimensions[1]; ++y)
+            {
+                const auto* row = static_cast<const unsigned char*>(pixels->pixels) + y * pixels->pitch;
+                for (int x = 0; x < dimensions[0]; ++x)
+                    if (row[x * 4] != 12 || row[x * 4 + 1] != 12 || row[x * 4 + 2] != 12)
+                    {
+                        left = std::min(left, x); right = std::max(right, x);
+                        top = std::min(top, y); bottom = std::max(bottom, y);
+                    }
+            }
+            const float expectedWidth = dimensions[0] * (680.0f / 1024.0f);
+            // The window border extends outside its bounds; allow pixel rounding.
+            const float tolerance = 2.0f * gui.m_ctx->style.window.border * scale + 1.0f;
+            assert(std::fabs(left - (dimensions[0] - expectedWidth) / 2.0f) <= tolerance);
+            assert(std::fabs((right - left + 1) - expectedWidth) <= tolerance);
+            assert(std::fabs(top - 12.0f * scale) <= tolerance);
+            assert(std::fabs((bottom - top + 1) - 744.0f * scale) <= tolerance);
+            if (const char* output = std::getenv("SDL_READER_TEST_CAPTURES"))
+            {
+                const std::string path = std::string(output) + "/settings-" + std::to_string(dimensions[0]) + "x" + std::to_string(dimensions[1]) + ".bmp";
+                assert(SDL_SaveBMP(pixels, path.c_str()) == 0);
+            }
+            SDL_FreeSurface(pixels);
+            gui.newFrame();
+            SDL_Event motion{};
+            motion.type = SDL_MOUSEMOTION;
+            motion.motion.x = static_cast<int>(200 * scale);
+            motion.motion.y = static_cast<int>(160 * scale);
+            gui.handleEvent(motion);
+            assert(std::fabs(gui.m_ctx->input.mouse.pos.x - 200) <= 1.0f);
+            assert(std::fabs(gui.m_ctx->input.mouse.pos.y - 160) <= 1.0f);
+            gui.endFrame();
+            std::cout << "Settings scaling " << dimensions[0] << "x" << dimensions[1] << ": passed\n";
+        }
+    }
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();

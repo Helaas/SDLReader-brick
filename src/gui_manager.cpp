@@ -43,6 +43,20 @@ static constexpr SDL_GameControllerButton kApplySettingsButton = SDL_CONTROLLER_
 
 namespace
 {
+static float settingsScale(SDL_Window* window)
+{
+#ifdef TRIMUI_PLATFORM
+    int width = 0, height = 0;
+    SDL_GetWindowSize(window, &width, &height);
+    // The Brick's 1024x768 screen is the reference for UI font sizes/layout.
+    if (width > 0 && height > 0)
+        return static_cast<float>(std::min(width, height)) / 768.0f;
+#else
+    (void)window;
+#endif
+    return 1.0f;
+}
+
 static void wrappedLabel(struct nk_context* ctx, const char* text, struct nk_color color)
 {
     const auto* font = ctx->style.font;
@@ -414,7 +428,21 @@ bool GuiManager::handleEvent(const SDL_Event& event)
     }
 
     // Menu is visible - let Nuklear handle the event
-    bool nuklearHandled = nk_sdl_handle_event(const_cast<SDL_Event*>(&event));
+    SDL_Event uiEvent = event;
+    const float scale = settingsScale(m_window);
+    if (uiEvent.type == SDL_MOUSEMOTION)
+    {
+        uiEvent.motion.x = static_cast<int>(std::lround(uiEvent.motion.x / scale));
+        uiEvent.motion.y = static_cast<int>(std::lround(uiEvent.motion.y / scale));
+        uiEvent.motion.xrel = static_cast<int>(std::lround(uiEvent.motion.xrel / scale));
+        uiEvent.motion.yrel = static_cast<int>(std::lround(uiEvent.motion.yrel / scale));
+    }
+    else if (uiEvent.type == SDL_MOUSEBUTTONDOWN || uiEvent.type == SDL_MOUSEBUTTONUP)
+    {
+        uiEvent.button.x = static_cast<int>(std::lround(uiEvent.button.x / scale));
+        uiEvent.button.y = static_cast<int>(std::lround(uiEvent.button.y / scale));
+    }
+    bool nuklearHandled = nk_sdl_handle_event(&uiEvent);
     return nuklearHandled;
 }
 
@@ -509,11 +537,28 @@ void GuiManager::render()
         renderNumberPad();
     }
 
-    // Render Nuklear with proper anti-aliasing
+    // Scale only the settings overlay; document rendering keeps its own scale.
+    const float scale = settingsScale(m_window);
+    float previousScaleX = 1.0f, previousScaleY = 1.0f;
+    SDL_RenderGetScale(m_renderer, &previousScaleX, &previousScaleY);
+    SDL_RenderSetScale(m_renderer, previousScaleX * scale, previousScaleY * scale);
+    SDL_ScaleMode previousFontScaleMode = SDL_ScaleModeNearest;
+    if (sdl.ogl.font_tex && scale != 1.0f)
+    {
+        SDL_GetTextureScaleMode(sdl.ogl.font_tex, &previousFontScaleMode);
+        SDL_SetTextureScaleMode(sdl.ogl.font_tex, SDL_ScaleModeLinear);
+    }
     nk_sdl_render(NK_ANTI_ALIASING_ON);
+    if (sdl.ogl.font_tex && scale != 1.0f)
+        SDL_SetTextureScaleMode(sdl.ogl.font_tex, previousFontScaleMode);
+    SDL_RenderSetScale(m_renderer, previousScaleX, previousScaleY);
 
-    // Handle mouse grab state
+    // The backend's ungrab warp needs window pixels, not UI coordinates.
+    const struct nk_vec2 previousMouse = m_ctx->input.mouse.prev;
+    if (m_ctx->input.mouse.ungrab)
+        m_ctx->input.mouse.prev = nk_vec2(previousMouse.x * scale, previousMouse.y * scale);
     nk_sdl_handle_grab();
+    m_ctx->input.mouse.prev = previousMouse;
 }
 
 bool GuiManager::isFontMenuVisible() const
@@ -691,15 +736,19 @@ void GuiManager::renderFontMenu()
 
     int windowWidth, windowHeight;
     SDL_GetWindowSize(m_window, &windowWidth, &windowHeight);
+    const float scale = settingsScale(m_window);
+    windowWidth = static_cast<int>(std::lround(windowWidth / scale));
+    windowHeight = static_cast<int>(std::lround(windowHeight / scale));
 
     // Center the settings window and clamp it to the current viewport.
-    constexpr float kPreferredWindowW = 680.0f;
+    // Preserve the Brick's width fraction and use the extra room on wide screens.
+    const float preferredWindowW = static_cast<float>(windowWidth) * (680.0f / 1024.0f);
     constexpr float kPreferredWindowH = 750.0f;
     constexpr float kWindowMargin = 12.0f;
 
     const float availableW = std::max(1.0f, static_cast<float>(windowWidth) - (2.0f * kWindowMargin));
     const float availableH = std::max(1.0f, static_cast<float>(windowHeight) - (2.0f * kWindowMargin));
-    const float windowW = std::min(kPreferredWindowW, availableW);
+    const float windowW = std::min(preferredWindowW, availableW);
     const float windowH = std::min(kPreferredWindowH, availableH);
     const float windowX = std::max(0.0f, (static_cast<float>(windowWidth) - windowW) * 0.5f);
     const float windowY = std::max(0.0f, (static_cast<float>(windowHeight) - windowH) * 0.5f);
@@ -1798,6 +1847,9 @@ void GuiManager::renderNumberPad()
 
     int windowWidth, windowHeight;
     SDL_GetWindowSize(m_window, &windowWidth, &windowHeight);
+    const float scale = settingsScale(m_window);
+    windowWidth = static_cast<int>(std::lround(windowWidth / scale));
+    windowHeight = static_cast<int>(std::lround(windowHeight / scale));
 
     // Center the number pad window
     float centerX = windowWidth * 0.5f;
