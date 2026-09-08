@@ -286,10 +286,7 @@ bool GuiManager::initialize(SDL_Window* window, SDL_Renderer* renderer)
     struct nk_font_atlas* atlas = nullptr;
     nk_sdl_font_stash_begin(&atlas);
     struct nk_font* uiFont = nullptr;
-    const float rawUiFontSize = m_optionsManager.loadConfig().uiFontSize;
-    const float uiFontSize = (rawUiFontSize >= 16.0f && rawUiFontSize <= 72.0f)
-                                 ? rawUiFontSize
-                                 : FontConfig::kDefaultUiFontSize;
+    const float uiFontSize = m_optionsManager.loadConfig().uiFontSize;
 
     if (atlas)
     {

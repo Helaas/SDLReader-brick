@@ -1,5 +1,6 @@
 #include "options_manager.h"
 #include <algorithm>
+#include <cmath>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
@@ -239,7 +240,8 @@ FontConfig jsonToConfig(const std::string& json)
         std::string valueStr = json.substr(start, end - start);
         try
         {
-            return std::stof(valueStr);
+            const float value = std::stof(valueStr);
+            return std::isfinite(value) ? value : fallbackValue;
         }
         catch (...)
         {

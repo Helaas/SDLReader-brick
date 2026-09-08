@@ -339,10 +339,11 @@ bool FileBrowser::initialize(SDL_Window* window, SDL_Renderer* renderer, const s
     nk_sdl_font_stash_begin(&atlas);
     struct nk_font* uiFont = nullptr;
     OptionsManager optionsManager;
-    const float rawUiFontSize = optionsManager.loadConfig().uiFontSize;
-    const float uiFontSize = (rawUiFontSize >= 16.0f && rawUiFontSize <= 72.0f)
-                                 ? rawUiFontSize
-                                 : FontConfig::kDefaultUiFontSize;
+    float uiFontSize = optionsManager.loadConfig().uiFontSize;
+#ifndef TRIMUI_PLATFORM
+    // Preserve the desktop browser's 28-point baseline relative to the 24-point menus.
+    uiFontSize *= 28.0f / FontConfig::kDefaultUiFontSize;
+#endif
 
     if (atlas)
     {

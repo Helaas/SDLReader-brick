@@ -57,7 +57,7 @@ struct FontConfig
     bool keepPanningPosition = false;                          // Keep panning position when changing pages (vs. align to top)
     bool showPageIndicatorOverlay = true;                      // Display page indicator overlay when page changes
     bool showScaleOverlay = true;                              // Display zoom/scale overlay during zoom changes
-#if defined(TRIMUI_PLATFORM) || defined(PLATFORM_TG5040)
+#ifdef TRIMUI_PLATFORM
     static constexpr float kDefaultUiFontSize = 36.0f;         // Scaled for high-DPI screen
 #else
     static constexpr float kDefaultUiFontSize = 24.0f;

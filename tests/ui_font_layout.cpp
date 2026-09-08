@@ -12,6 +12,7 @@
 #include "platform_constants.h"
 #include <array>
 #include <functional>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -39,6 +40,17 @@ int main()
         ("sdlreader-ui-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     assert(std::filesystem::create_directory(stateDir));
     setenv("SDL_READER_STATE_DIR", stateDir.c_str(), 1);
+    const auto configPath = stateDir / "invalid-font.json";
+    for (const auto& sample : std::vector<std::pair<std::string, float>>{
+             {"1", 16.0f}, {"100", 72.0f}, {"28.5", 28.5f},
+             {"nan", FontConfig::kDefaultUiFontSize},
+             {"inf", FontConfig::kDefaultUiFontSize},
+             {"-inf", FontConfig::kDefaultUiFontSize},
+             {"invalid", FontConfig::kDefaultUiFontSize}})
+    {
+        std::ofstream(configPath) << "{\"uiFontSize\": " << sample.first << "}";
+        assert(OptionsManager().loadConfig(configPath.string()).uiFontSize == sample.second);
+    }
     setenv("SDL_VIDEODRIVER", "dummy", 1);
     assert(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) == 0);
     auto* window = SDL_CreateWindow("UI check", 0, 0, 640, 480, SDL_WINDOW_HIDDEN);
