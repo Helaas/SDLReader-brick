@@ -58,7 +58,7 @@ endif
 universal:
 	@echo "Building one NextUI binary for tg5040, tg5050, my355, and h700..."
 	docker run --rm -v "$(CURDIR)":/workspace $(UNIVERSAL_TOOLCHAIN) \
-		make -C /workspace -f ports/tg5040/Makefile \
+		make -C /workspace -f ports/tg5040/makefile \
 			PLATFORM_DEFINE=PLATFORM_NEXTUI \
 			OUTPUT_DIR=/workspace/build/universal
 
@@ -66,24 +66,24 @@ universal:
 tg5040:
 ifeq ($(IN_DOCKER),1)
 	@echo "Building for TG5040..."
-	$(MAKE) -f ports/tg5040/Makefile
+	$(MAKE) -f ports/tg5040/makefile
 else
 	@echo "Building for TG5040 (in Docker)..."
 	docker run --rm -v "$(CURDIR)":/workspace ghcr.io/loveretro/tg5040-toolchain:latest \
-		make -C /workspace -f ports/tg5040/Makefile
+		make -C /workspace -f ports/tg5040/makefile
 endif
 
 export-tg5040-in-docker:
 	@echo "Exporting TG5040 bundle in Docker..."
 	docker run --rm -v "$(CURDIR)":/workspace ghcr.io/loveretro/tg5040-toolchain:latest \
-		/bin/sh -c "cd /workspace && make -f ports/tg5040/Makefile && make -f ports/tg5040/Makefile export-bundle"
+		/bin/sh -c "cd /workspace && make -f ports/tg5040/makefile && make -f ports/tg5040/makefile export-bundle"
 
 export-tg5040:
 ifeq ($(IN_DOCKER),1)
 	@echo "Building TG5040..."
-	$(MAKE) -f ports/tg5040/Makefile
+	$(MAKE) -f ports/tg5040/makefile
 	@echo "Exporting TG5040 bundle..."
-	$(MAKE) -f ports/tg5040/Makefile export-bundle
+	$(MAKE) -f ports/tg5040/makefile export-bundle
 else
 	@$(MAKE) export-tg5040-in-docker
 endif
@@ -92,24 +92,24 @@ endif
 tg5050:
 ifeq ($(IN_DOCKER),1)
 	@echo "Building for TG5050..."
-	$(MAKE) -f ports/tg5050/Makefile
+	$(MAKE) -f ports/tg5050/makefile
 else
 	@echo "Building for TG5050 (in Docker)..."
 	docker run --rm -v "$(CURDIR)":/workspace ghcr.io/loveretro/tg5050-toolchain:latest \
-		make -C /workspace -f ports/tg5050/Makefile
+		make -C /workspace -f ports/tg5050/makefile
 endif
 
 export-tg5050-in-docker:
 	@echo "Exporting TG5050 bundle in Docker..."
 	docker run --rm -v "$(CURDIR)":/workspace ghcr.io/loveretro/tg5050-toolchain:latest \
-		/bin/sh -c "cd /workspace && make -f ports/tg5050/Makefile && make -f ports/tg5050/Makefile export-bundle"
+		/bin/sh -c "cd /workspace && make -f ports/tg5050/makefile && make -f ports/tg5050/makefile export-bundle"
 
 export-tg5050:
 ifeq ($(IN_DOCKER),1)
 	@echo "Building TG5050..."
-	$(MAKE) -f ports/tg5050/Makefile
+	$(MAKE) -f ports/tg5050/makefile
 	@echo "Exporting TG5050 bundle..."
-	$(MAKE) -f ports/tg5050/Makefile export-bundle
+	$(MAKE) -f ports/tg5050/makefile export-bundle
 else
 	@$(MAKE) export-tg5050-in-docker
 endif
@@ -143,10 +143,10 @@ endif
 export-trimui-in-docker:
 	@echo "Building TG5040 (in Docker)..."
 	@docker run --rm -v "$(CURDIR)":/workspace ghcr.io/loveretro/tg5040-toolchain:latest \
-		make -C /workspace -f ports/tg5040/Makefile
+		make -C /workspace -f ports/tg5040/makefile
 	@echo "Building TG5050 (in Docker)..."
 	@docker run --rm -v "$(CURDIR)":/workspace ghcr.io/loveretro/tg5050-toolchain:latest \
-		make -C /workspace -f ports/tg5050/Makefile
+		make -C /workspace -f ports/tg5050/makefile
 	@echo "Building MY355 (in Docker)..."
 	@docker run --rm -v "$(CURDIR)":/workspace ghcr.io/loveretro/my355-toolchain:latest \
 		make -C /workspace -f ports/my355/makefile
@@ -154,8 +154,8 @@ export-trimui-in-docker:
 
 export-trimui:
 ifeq ($(IN_DOCKER),1)
-	@$(MAKE) -f ports/tg5040/Makefile
-	@$(MAKE) -f ports/tg5050/Makefile
+	@$(MAKE) -f ports/tg5040/makefile
+	@$(MAKE) -f ports/tg5050/makefile
 	@$(MAKE) -f ports/my355/makefile
 	@bash ports/trimui/export_bundle.sh
 else

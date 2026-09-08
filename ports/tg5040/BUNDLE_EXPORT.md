@@ -114,5 +114,5 @@ The TG5040 Makefile clean target now also removes:
 - Temporary library directory (`lib/`)
 
 ```bash
-make -f ports/tg5040/Makefile clean
+make -f ports/tg5040/makefile clean
 ```
