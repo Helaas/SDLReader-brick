@@ -200,7 +200,7 @@ public:
     bool shouldShowZoomProcessingIndicator() const;
 
     // Timing constants
-#ifdef TRIMUI_PLATFORM
+#if defined(TRIMUI_PLATFORM) || defined(PLATFORM_MLP1)
     static constexpr int ZOOM_DEBOUNCE_MS = 250;
 #else
     static constexpr int ZOOM_DEBOUNCE_MS = 75;

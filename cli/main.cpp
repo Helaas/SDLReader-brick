@@ -42,7 +42,11 @@ int main(int argc, char* argv[])
 
     int defaultWindowWidth;
     int defaultWindowHeight;
-#ifdef TRIMUI_PLATFORM
+#ifdef PLATFORM_MLP1
+    // MLP1 physical panel is 720x960 portrait; Weston transform=rotate-90 makes it 960x720 logical
+    defaultWindowWidth = 960;
+    defaultWindowHeight = 720;
+#elif defined(TRIMUI_PLATFORM)
     if (isMy355Platform())
     {
         defaultWindowWidth = 640;

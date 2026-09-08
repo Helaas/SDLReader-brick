@@ -46,6 +46,18 @@ void ButtonMapper::initializePlatformMappings()
 
     std::cout << "ButtonMapper: Initialized NextUI mappings ("
               << getNextUIPlatform() << ")" << std::endl;
+#elif defined(PLATFORM_MLP1)
+    // MLP1: SDL's controller labels are swapped for the Loong Gamepad's A/B
+    // buttons. Map by physical button so Leaf users get A=accept, B=cancel.
+    m_buttonMap[SDL_CONTROLLER_BUTTON_A] = LogicalButton::Cancel;               // Physical B (right) -> Cancel
+    m_buttonMap[SDL_CONTROLLER_BUTTON_B] = LogicalButton::Accept;               // Physical A (bottom) -> Accept
+    m_buttonMap[SDL_CONTROLLER_BUTTON_X] = LogicalButton::Alternate;            // X (left) -> Alternate
+    m_buttonMap[SDL_CONTROLLER_BUTTON_Y] = LogicalButton::Special;              // Y (top) -> Special
+    m_buttonMap[SDL_CONTROLLER_BUTTON_START] = LogicalButton::Menu;             // Start -> Menu (settings)
+    m_buttonMap[SDL_CONTROLLER_BUTTON_BACK] = LogicalButton::Options;           // Select -> Options
+    m_buttonMap[SDL_CONTROLLER_BUTTON_GUIDE] = LogicalButton::Quit;             // Guide -> Quit
+
+    std::cout << "ButtonMapper: Initialized MLP1 mappings (A/B corrected)" << std::endl;
 #else
     // Desktop platforms: Standard Xbox 360 controller layout
     // Physical layout matches SDL mapping:
@@ -113,7 +125,9 @@ LogicalButton ButtonMapper::mapJoystickButton(int joystickButton) const
 
 const char* ButtonMapper::getPlatformName() const
 {
-#ifdef TRIMUI_PLATFORM
+#ifdef PLATFORM_MLP1
+    return "MLP1";
+#elif defined(TRIMUI_PLATFORM)
     return getNextUIPlatform();
 #else
     return "Desktop";

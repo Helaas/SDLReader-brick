@@ -8,7 +8,7 @@
 #include "supported_file_types.h"
 #include "text_renderer.h"
 #include "h700_input.h"
-#ifdef TRIMUI_PLATFORM
+#if defined(TRIMUI_PLATFORM) || defined(PLATFORM_MLP1)
 #include "power_handler.h"
 #include "power_events.h"
 #endif
@@ -32,7 +32,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
     SDL_Window* localWindow = window;
     SDL_Renderer* localSDLRenderer = renderer;
 
-#ifdef TRIMUI_PLATFORM
+#if defined(TRIMUI_PLATFORM)
     // Initialize power handler
     m_powerHandler = std::make_unique<PowerHandler>();
 
@@ -78,6 +78,37 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
                 markDirty(); // Mark dirty so fake sleep black screen gets rendered
             }
             return anyClosed;
+        }
+        return false; });
+#elif defined(PLATFORM_MLP1)
+    // Initialize MLP1 power handler (read-only observer mode)
+    // On MLP1, loong_power daemon owns the power button. SDLReader's handler
+    // watches for long-press shutdown only. Short-press suspend is delegated.
+    m_powerHandler = std::make_unique<PowerHandler>();
+
+    m_powerMessageEventType = getPowerMessageEventType();
+
+    m_powerHandler->setErrorCallback([this](const std::string& message)
+                                     {
+        SDL_Event event;
+        SDL_zero(event);
+        event.type = m_powerMessageEventType;
+        event.user.code = 0;
+        event.user.data1 = new std::string(message);
+        event.user.data2 = nullptr;
+        if (SDL_PushEvent(&event) < 0)
+        {
+            delete static_cast<std::string*>(event.user.data1);
+            std::cerr << "App: Failed to push power message event: " << SDL_GetError() << std::endl;
+        } });
+
+    // MLP1: no fake sleep mode; loong_power handles screen blanking
+    m_powerHandler->setSleepModeCallback([this](bool) {});
+
+    m_powerHandler->setPreSleepCallback([this]() -> bool
+                                        {
+        if (m_guiManager) {
+            return m_guiManager->closeAllUIWindows();
         }
         return false; });
 #endif
@@ -266,7 +297,7 @@ App::App(const std::string& filename, SDL_Window* window, SDL_Renderer* renderer
 
 App::~App()
 {
-#ifdef TRIMUI_PLATFORM
+#if defined(TRIMUI_PLATFORM) || defined(PLATFORM_MLP1)
     if (m_powerHandler)
     {
         m_powerHandler->stop();
@@ -285,7 +316,7 @@ void App::run()
 {
     m_prevTick = SDL_GetTicks();
 
-#ifdef TRIMUI_PLATFORM
+#if defined(TRIMUI_PLATFORM) || defined(PLATFORM_MLP1)
     // Start power button monitoring
     if (!m_powerHandler->start())
     {
@@ -308,7 +339,7 @@ void App::run()
         pollH700Input();
         while (SDL_PollEvent(&event) != 0)
         {
-#ifdef TRIMUI_PLATFORM
+#if defined(TRIMUI_PLATFORM) || defined(PLATFORM_MLP1)
             if (m_powerMessageEventType != 0 && event.type == m_powerMessageEventType)
             {
                 handlePowerMessageEvent(event);
@@ -440,7 +471,7 @@ void App::run()
     }
 }
 
-#ifdef TRIMUI_PLATFORM
+#if defined(TRIMUI_PLATFORM) || defined(PLATFORM_MLP1)
 void App::handlePowerMessageEvent(const SDL_Event& event)
 {
     std::unique_ptr<std::string> message(static_cast<std::string*>(event.user.data1));

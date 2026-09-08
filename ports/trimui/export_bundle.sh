@@ -122,6 +122,12 @@ for platform in $PLATFORMS; do
         echo "  Copied fonts"
     fi
 
+    # App icon
+    if [ -f "$PROJECT_ROOT/res/icon.png" ]; then
+        cp "$PROJECT_ROOT/res/icon.png" "$PAK_DIR/res/icon.png"
+        echo "  Copied res/icon.png"
+    fi
+
     # docs.pdf (for first-run experience)
     if [ -f "$TEMPLATE_DIR/res/docs.pdf" ]; then
         cp "$TEMPLATE_DIR/res/docs.pdf" "$PAK_DIR/res/"
