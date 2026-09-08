@@ -17,8 +17,8 @@ int main()
     for (auto mapping : std::array<Mapping, 4>{{
              {304, SDL_CONTROLLER_BUTTON_B, LogicalButton::Accept},
              {305, SDL_CONTROLLER_BUTTON_A, LogicalButton::Cancel},
-             {306, SDL_CONTROLLER_BUTTON_Y, LogicalButton::Alternate}, // Physical X: rotate
-             {307, SDL_CONTROLLER_BUTTON_X, LogicalButton::Special}}}) // Physical Y: zoom/apply
+             {307, SDL_CONTROLLER_BUTTON_Y, LogicalButton::Special}, // Physical X: zoom / browser toggle
+             {306, SDL_CONTROLLER_BUTTON_X, LogicalButton::Alternate}}}) // Physical Y: rotate / settings apply
     {
         for (int value : {1, 0, 2})
         {

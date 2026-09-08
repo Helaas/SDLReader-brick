@@ -38,8 +38,6 @@ void ButtonMapper::initializePlatformMappings()
         // controller layout expected by the existing NextUI UI code.
         m_buttonMap[SDL_CONTROLLER_BUTTON_B] = LogicalButton::Accept;
         m_buttonMap[SDL_CONTROLLER_BUTTON_A] = LogicalButton::Cancel;
-        m_buttonMap[SDL_CONTROLLER_BUTTON_Y] = LogicalButton::Alternate;
-        m_buttonMap[SDL_CONTROLLER_BUTTON_X] = LogicalButton::Special;
     }
 
     // TG5040-specific extra buttons (not part of standard SDL GameController API)
