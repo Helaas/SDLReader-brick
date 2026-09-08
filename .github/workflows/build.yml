@@ -21,7 +21,13 @@ concurrency:
 jobs:
   universal:
     name: NextUI universal (SDLReader.pak.zip)
-    runs-on: ubuntu-latest
+    # arm64, deliberately. The toolchain image is multi-arch, and on an aarch64
+    # host the aarch64 binaries that libarchive's and libwebp's configure scripts
+    # compile can actually be run, so those autotools builds succeed the same way
+    # they do on the maintainer's Apple Silicon Mac. On an x86_64 runner the same
+    # configure fails ("cannot run C compiled programs") because neither passes
+    # --host. Free for public repositories.
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
     outputs:
       version: ${{ steps.meta.outputs.version }}

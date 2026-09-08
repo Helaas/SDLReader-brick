@@ -20,15 +20,14 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Override with the repository variable MLP1_TOOLCHAIN_IMAGE if the image moves.
-  MLP1_TOOLCHAIN_IMAGE: ${{ vars.MLP1_TOOLCHAIN_IMAGE || 'ghcr.io/utility-muffin-research-kitchen/mlp1-toolchain:local' }}
-  # Mirrored into env because the secrets context cannot be used in step `if`.
-  MLP1_TOOLCHAIN_TOKEN: ${{ secrets.MLP1_TOOLCHAIN_TOKEN }}
+  # Public multi-arch image. Override with the repository variable if it moves.
+  MLP1_TOOLCHAIN_IMAGE: ${{ vars.MLP1_TOOLCHAIN_IMAGE || 'ghcr.io/utility-muffin-research-kitchen/mlp1-toolchain:latest' }}
 
 jobs:
   leaf:
     name: Miniloong Pocket 1 (separate package)
-    runs-on: ubuntu-latest
+    # arm64 for the same reason as the NextUI build - see build.yml.
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
@@ -43,22 +42,18 @@ jobs:
             echo "present=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # The toolchain image is not public. Without credentials the pull fails, so
-      # say so plainly instead of dying inside make.
-      - name: Log in to GHCR
-        if: steps.guard.outputs.present == 'true' && env.MLP1_TOOLCHAIN_TOKEN != ''
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ env.MLP1_TOOLCHAIN_TOKEN }}
-
       - name: Pull the MLP1 toolchain
         if: steps.guard.outputs.present == 'true'
         run: |
-          if ! docker pull "$MLP1_TOOLCHAIN_IMAGE"; then
-            echo "::error::Cannot pull $MLP1_TOOLCHAIN_IMAGE. Push the MLP1 toolchain to a registry the runner can read, then set the MLP1_TOOLCHAIN_IMAGE variable (and MLP1_TOOLCHAIN_TOKEN secret if it is private)."
-            exit 1
+          set -euo pipefail
+          docker pull "$MLP1_TOOLCHAIN_IMAGE"
+          # package-mlp1 on the mlp1 branch hardcodes the :local tag, which only
+          # ever existed on the maintainer's machine. Alias it to the published
+          # image so the target works unmodified. Drop this once that Makefile
+          # refers to :latest.
+          if grep -q 'mlp1-toolchain:local' Makefile; then
+            echo "Makefile still refers to :local - aliasing it to $MLP1_TOOLCHAIN_IMAGE"
+            docker tag "$MLP1_TOOLCHAIN_IMAGE" ghcr.io/utility-muffin-research-kitchen/mlp1-toolchain:local
           fi
 
       - name: Cache cross-compiled dependencies
