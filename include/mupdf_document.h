@@ -111,17 +111,7 @@ private:
     {
         void operator()(fz_context* ctx) const
         {
-            if (ctx)
-            {
-                std::cout.flush();
-                // NOTE: We do NOT call fz_drop_context() here because:
-                // 1. MuPDF's fz_drop_context() can call exit() if there are accumulated errors/warnings
-                // 2. This causes the entire process to terminate unexpectedly when returning to file browser
-                // 3. Contexts will be cleaned up when the process exits
-                // 4. This is safe because MuPDF contexts are designed to persist for the app lifetime
-                std::cout.flush();
-                // fz_drop_context(ctx); // COMMENTED OUT - causes exit() in browse mode
-            }
+            fz_drop_context(ctx);
         }
     };
     struct DocumentDeleter
@@ -135,8 +125,7 @@ private:
         {
             if (doc && ctx)
             {
-                // Intentionally skip dropping the MuPDF document to avoid shutdown-time double frees.
-                // The process lifetime holds these allocations, so leaking them is acceptable.
+                fz_drop_document(ctx, doc);
             }
         }
     };
@@ -227,6 +216,8 @@ private:
 
     // Helpers
     void ensureDisplayList(int pageNumber);
+    void evictDistantDisplayListsLocked(int keepPage);
+    void trimRgbCacheLocked(int keepPage);
     PageScaleInfo computePageScaleInfoLocked(int pageNumber, int zoom);
     void resetDisplayCache();
     void joinAsyncRenderThread();

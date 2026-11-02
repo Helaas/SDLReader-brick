@@ -25,13 +25,28 @@ struct MuPdfDocument::PageScaleInfo
 
 namespace
 {
+// The handhelds have about 600MB free once the reader is running, so the budget has to cover
+// both stores, the page caches and everything else the process holds.
+#if defined(TRIMUI_PLATFORM) || defined(PLATFORM_MLP1)
+constexpr size_t MAIN_STORE_BYTES = 128u << 20;
+constexpr size_t PRERENDER_STORE_BYTES = 64u << 20;
+constexpr size_t MAX_RGB_CACHE_ENTRIES = 6;
+#else
+constexpr size_t MAIN_STORE_BYTES = 256u << 20;
+constexpr size_t PRERENDER_STORE_BYTES = 256u << 20;
+constexpr size_t MAX_RGB_CACHE_ENTRIES = 20;
+#endif
+
+// A display list keeps its page's compressed images in memory, so retaining one per page would
+// pin the whole document.
+constexpr int MAX_DISPLAY_LISTS = 8;
 } // namespace
 
 MuPdfDocument::MuPdfDocument()
     : Document()
 {
     // Initialize MuPDF context with limited store size to prevent corruption
-    m_ctx = std::unique_ptr<fz_context, ContextDeleter>(fz_new_context(nullptr, getSharedMuPdfLocks(), 256 << 20)); // 256MB
+    m_ctx = std::unique_ptr<fz_context, ContextDeleter>(fz_new_context(nullptr, getSharedMuPdfLocks(), MAIN_STORE_BYTES));
 }
 
 MuPdfDocument::~MuPdfDocument()
@@ -50,15 +65,14 @@ MuPdfDocument::~MuPdfDocument()
         m_dimensionCache.clear();
     }
 
+    // Display lists are dropped through m_ctx, so they have to go before the contexts.
+    m_pageCount.store(0);
     resetDisplayCache();
 
-    // Allow process teardown to leak MuPDF allocations instead of risking double-free during shutdown.
-    // These contexts/documents live for the process lifetime; skipping destruction here avoids crashes
-    // observed in macOS malloc guard.
-    m_doc.release();
-    m_prerenderDoc.release();
-    m_ctx.release();
-    m_prerenderCtx.release();
+    m_doc.reset();
+    m_prerenderDoc.reset();
+    m_ctx.reset();
+    m_prerenderCtx.reset();
 
     std::cout.flush();
 }
@@ -111,7 +125,7 @@ bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
     fz_context* ctx = nullptr;
     if (!reuseContexts || !m_ctx)
     {
-        ctx = fz_new_context(nullptr, getSharedMuPdfLocks(), 256 << 20); // 256MB
+        ctx = fz_new_context(nullptr, getSharedMuPdfLocks(), MAIN_STORE_BYTES);
         if (!ctx)
         {
             std::cerr << "Cannot create MuPDF context\n";
@@ -144,7 +158,7 @@ bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
     fz_var(prerenderCtx);
     if (!reuseContexts || !m_prerenderCtx)
     {
-        prerenderCtx = fz_new_context(nullptr, getSharedMuPdfLocks(), 256 << 20); // 256MB
+        prerenderCtx = fz_new_context(nullptr, getSharedMuPdfLocks(), PRERENDER_STORE_BYTES);
         if (!prerenderCtx)
         {
             std::cerr << "Cannot create prerender MuPDF context\n";
@@ -363,6 +377,9 @@ void MuPdfDocument::startAsyncPageCount()
             finalizePageCount(resolvedCount);
         }
 
+        fz_drop_document(localCtx, localDoc);
+        fz_drop_context(localCtx);
+
         m_pageCountThreadActive.store(false); });
 }
 
@@ -419,6 +436,7 @@ bool MuPdfDocument::reopenWithCSS(const std::string& css)
     }
 
     // Close existing documents but keep contexts alive to avoid TG5040 crash
+    resetDisplayCache();
     m_doc.reset();
     m_prerenderDoc.reset();
 
@@ -997,11 +1015,6 @@ void MuPdfDocument::close()
     stopPageCountThread();
     joinAsyncRenderThread();
 
-    m_doc.reset();
-    m_ctx.reset();
-    m_prerenderDoc.reset();
-    m_prerenderCtx.reset();
-
     {
         std::lock_guard<std::mutex> lock(m_cacheMutex);
         m_cache.clear();
@@ -1019,7 +1032,14 @@ void MuPdfDocument::close()
     m_pageCountThreadActive.store(false);
     m_isPdfDocument = false;
     m_isReflowableDocument = false;
+
+    // Display lists are dropped through m_ctx, so they have to go before the contexts.
     resetDisplayCache();
+
+    m_doc.reset();
+    m_prerenderDoc.reset();
+    m_ctx.reset();
+    m_prerenderCtx.reset();
 }
 
 void MuPdfDocument::clearCache()
@@ -1210,6 +1230,58 @@ void MuPdfDocument::ensureDisplayList(int pageNumber)
             entry.bounds = bounds;
         }
         // If another thread already populated the entry, listPtr will fall out of scope and release resources.
+
+        evictDistantDisplayListsLocked(pageNumber);
+    }
+}
+
+void MuPdfDocument::evictDistantDisplayListsLocked(int keepPage)
+{
+    int retained = 0;
+    for (const auto& entry : m_pageDisplayData)
+    {
+        if (entry.displayList)
+        {
+            ++retained;
+        }
+    }
+
+    while (retained > MAX_DISPLAY_LISTS)
+    {
+        int farthestPage = -1;
+        int farthestDistance = -1;
+        for (int page = 0; page < static_cast<int>(m_pageDisplayData.size()); ++page)
+        {
+            int distance = std::abs(page - keepPage);
+            if (m_pageDisplayData[page].displayList && distance > farthestDistance)
+            {
+                farthestPage = page;
+                farthestDistance = distance;
+            }
+        }
+
+        m_pageDisplayData[farthestPage].displayList.reset();
+        --retained;
+    }
+}
+
+void MuPdfDocument::trimRgbCacheLocked(int keepPage)
+{
+    while (m_cache.size() > MAX_RGB_CACHE_ENTRIES)
+    {
+        auto farthest = m_cache.begin();
+        int farthestDistance = -1;
+        for (auto it = m_cache.begin(); it != m_cache.end(); ++it)
+        {
+            int distance = std::abs(it->first.first - keepPage);
+            if (distance > farthestDistance)
+            {
+                farthest = it;
+                farthestDistance = distance;
+            }
+        }
+
+        m_cache.erase(farthest);
     }
 }
 
@@ -1681,6 +1753,7 @@ void MuPdfDocument::prerenderPageInternal(int pageNumber, int scale, uint64_t ge
             {
                 std::lock_guard<std::mutex> lock(m_cacheMutex);
                 m_cache[key] = std::make_tuple(buffer, w, h);
+                trimRgbCacheLocked(pageNumber);
             }
         }
         fz_catch(ctx)

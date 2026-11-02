@@ -451,19 +451,20 @@ bool OptionsManager::installFontLoader(void* ctx)
 
     std::cout << "Installing custom font loader in MuPDF context" << std::endl;
 
+    bool installed = false;
+    fz_var(installed);
     fz_try(fz_ctx)
     {
         // Install our custom font loader
         fz_install_load_system_font_funcs(fz_ctx, customFontLoader, nullptr, nullptr);
         std::cout << "Custom font loader installed successfully" << std::endl;
-        return true;
+        installed = true;
     }
     fz_catch(fz_ctx)
     {
         std::cerr << "Failed to install custom font loader: " << fz_caught_message(fz_ctx) << std::endl;
-        return false;
     }
-    return false; // Should never reach here, but needed to satisfy compiler
+    return installed;
 }
 
 std::string OptionsManager::generateCSS(const FontConfig& config) const
