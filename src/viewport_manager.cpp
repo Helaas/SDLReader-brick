@@ -691,9 +691,12 @@ void ViewportManager::updatePageDimensions(Document* document, int currentPage)
             // setMaxRenderSize internally checks if the size changed and skips if not
             muPdfDoc->setMaxRenderSize(requiredWidth, requiredHeight);
 
-            // Query effective dimensions from MuPDF to capture exact rounding
+            // Query effective dimensions from MuPDF to capture exact rounding. A render capped by the
+            // handheld memory budget comes back smaller than the zoom asks for; keep the zoomed
+            // size then, so the page still grows and the renderer stretches the buffer.
             auto dims = muPdfDoc->getPageDimensionsEffective(currentPage, m_state.currentScale);
-            if (dims.first > 0 && dims.second > 0)
+            bool capped = dims.first + 2 < targetWidth || dims.second + 2 < targetHeight;
+            if (dims.first > 0 && dims.second > 0 && !capped)
             {
                 m_state.pageWidth = dims.first;
                 m_state.pageHeight = dims.second;

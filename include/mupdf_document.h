@@ -217,7 +217,7 @@ private:
     // Helpers
     void ensureDisplayList(int pageNumber);
     void evictDistantDisplayListsLocked(int keepPage);
-    void trimRgbCacheLocked(int keepPage);
+    void trimRgbCacheLocked(int keepPage, int keepScale);
     PageScaleInfo computePageScaleInfoLocked(int pageNumber, int zoom);
     void resetDisplayCache();
     void joinAsyncRenderThread();

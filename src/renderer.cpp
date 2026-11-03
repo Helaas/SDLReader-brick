@@ -153,12 +153,18 @@ void Renderer::renderPageExARGB(const std::vector<uint32_t>& argbData,
     }
 
     bool textureResized = false;
-    if (!m_texture || srcWidth > m_currentTexWidth || srcHeight > m_currentTexHeight)
+    // A texture left over from a higher zoom keeps a full-size staging buffer, so shrink it once
+    // it is well over twice what the current page needs.
+    int neededWidth = roundUpTextureDimension(srcWidth);
+    int neededHeight = roundUpTextureDimension(srcHeight);
+    bool oversized = m_texture && static_cast<long long>(m_currentTexWidth) * m_currentTexHeight >
+                                      2LL * neededWidth * neededHeight;
+    if (!m_texture || srcWidth > m_currentTexWidth || srcHeight > m_currentTexHeight || oversized)
     {
         if (m_texture)
             m_texture.reset();
-        int allocWidth = roundUpTextureDimension(std::max(srcWidth, m_currentTexWidth));
-        int allocHeight = roundUpTextureDimension(std::max(srcHeight, m_currentTexHeight));
+        int allocWidth = oversized ? neededWidth : roundUpTextureDimension(std::max(srcWidth, m_currentTexWidth));
+        int allocHeight = oversized ? neededHeight : roundUpTextureDimension(std::max(srcHeight, m_currentTexHeight));
         m_texture.reset(SDL_CreateTexture(m_renderer,
                                           SDL_PIXELFORMAT_ARGB8888,
                                           SDL_TEXTUREACCESS_STREAMING,
@@ -210,6 +216,13 @@ void Renderer::renderPageExARGB(const std::vector<uint32_t>& argbData,
         m_lastBufferWidth = srcWidth;
         m_lastBufferHeight = srcHeight;
     }
+
+#if SDL_VERSION_ATLEAST(2, 0, 12)
+    // Nearest-neighbour keeps 1:1 pages sharp, but a capped render stretched to the zoomed size
+    // would turn blocky with it.
+    bool stretched = std::abs(destWidth - srcWidth) > 2.0f || std::abs(destHeight - srcHeight) > 2.0f;
+    SDL_SetTextureScaleMode(m_texture.get(), stretched ? SDL_ScaleModeLinear : SDL_ScaleModeNearest);
+#endif
 
     SDL_Rect srcRect = {0, 0, srcWidth, srcHeight};
 #if SDL_VERSION_ATLEAST(2, 0, 10)
