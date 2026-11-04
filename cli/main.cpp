@@ -11,6 +11,11 @@
 #include <iostream>
 #include <memory>
 
+#if (defined(TRIMUI_PLATFORM) || defined(PLATFORM_MLP1)) && defined(__GLIBC__)
+#include <malloc.h>
+#define PIN_MMAP_THRESHOLD 1
+#endif
+
 void cleanupSDL(SDL_Window* window, SDL_Renderer* renderer)
 {
     closeH700Input();
@@ -28,6 +33,14 @@ void cleanupSDL(SDL_Window* window, SDL_Renderer* renderer)
 
 int main(int argc, char* argv[])
 {
+#ifdef PIN_MMAP_THRESHOLD
+    // Page buffers run to tens of MB. glibc raises its mmap threshold to 32MB once the first one
+    // is freed, moving later buffers onto the heap, where freed space stays resident and the
+    // reader creeps toward the OOM killer. A fixed threshold keeps them mmapped, so freeing a
+    // buffer gives the memory back.
+    mallopt(M_MMAP_THRESHOLD, 1024 * 1024);
+#endif
+
 #ifdef PLATFORM_NEXTUI
     if (!hasSupportedNextUIPlatform())
     {

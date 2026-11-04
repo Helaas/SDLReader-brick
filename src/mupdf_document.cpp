@@ -7,6 +7,7 @@
 #include <cstring>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <cstdlib>
 #include <chrono>
@@ -25,13 +26,85 @@ struct MuPdfDocument::PageScaleInfo
 
 namespace
 {
+// The handhelds have about 600MB free once the reader is running, so the budget has to cover
+// both stores, the page caches and everything else the process holds.
+#if defined(TRIMUI_PLATFORM) || defined(PLATFORM_MLP1)
+constexpr size_t MAIN_STORE_BYTES = 128u << 20;
+constexpr size_t PRERENDER_STORE_BYTES = 64u << 20;
+constexpr size_t MAX_RGB_CACHE_ENTRIES = 6;
+constexpr size_t RGB_CACHE_BUDGET_BYTES = 64u << 20;
+
+// ScreenScraper manuals use 1440x1080pt pages, so 350% zoom asks for a 5040x3780 render: 76MB as
+// ARGB, with several such buffers alive at once across the caches, the async render and the
+// texture. Renders are capped at 32MB and the renderer stretches them to the zoomed size. The
+// scans behind these pages are around 70ppi, so the cap costs no real detail.
+constexpr int MAX_RENDER_DIMENSION = 4096;
+constexpr double MAX_RENDER_PIXELS = 8.0 * 1024 * 1024;
+
+// Prerendered neighbours only pay off at reading sizes. At high zoom each one is a full page
+// buffer that the next page turn resets anyway.
+constexpr double MAX_PRERENDER_PIXELS = 4.0 * 1024 * 1024;
+#else
+constexpr size_t MAIN_STORE_BYTES = 256u << 20;
+constexpr size_t PRERENDER_STORE_BYTES = 256u << 20;
+constexpr size_t MAX_RGB_CACHE_ENTRIES = 20;
+constexpr size_t RGB_CACHE_BUDGET_BYTES = 512u << 20;
+
+// Zero leaves render size limited only by the max render size.
+constexpr int MAX_RENDER_DIMENSION = 0;
+constexpr double MAX_RENDER_PIXELS = 0;
+constexpr double MAX_PRERENDER_PIXELS = 0;
+#endif
+
+// A display list keeps its page's compressed images in memory, so retaining one per page would
+// pin the whole document.
+constexpr int MAX_DISPLAY_LISTS = 8;
+
+// Factor (at most 1) that shrinks a render of scaledWidth x scaledHeight to fit the max render
+// size and the platform's render budget.
+float computeDownsampleScale(int scaledWidth, int scaledHeight, float baseScale, int maxWidth, int maxHeight)
+{
+    float downsampleScale = 1.0f;
+    if (scaledWidth > maxWidth || scaledHeight > maxHeight)
+    {
+        float scaleX = static_cast<float>(maxWidth) / std::max(scaledWidth, 1);
+        float scaleY = static_cast<float>(maxHeight) / std::max(scaledHeight, 1);
+        downsampleScale = std::min(scaleX, scaleY);
+
+        if (baseScale > 1.5f)
+        {
+            float extraDetail = std::min(baseScale - 1.5f, 0.5f) * 0.1f;
+            downsampleScale = std::min(downsampleScale * (1.0f + extraDetail), 1.0f);
+        }
+    }
+
+    if (MAX_RENDER_DIMENSION > 0)
+    {
+        float longestSide = std::max(scaledWidth, scaledHeight) * downsampleScale;
+        if (longestSide > MAX_RENDER_DIMENSION)
+        {
+            downsampleScale *= MAX_RENDER_DIMENSION / longestSide;
+        }
+    }
+
+    if (MAX_RENDER_PIXELS > 0)
+    {
+        double pixels = static_cast<double>(scaledWidth) * scaledHeight * downsampleScale * downsampleScale;
+        if (pixels > MAX_RENDER_PIXELS)
+        {
+            downsampleScale *= static_cast<float>(std::sqrt(MAX_RENDER_PIXELS / pixels));
+        }
+    }
+
+    return downsampleScale;
+}
 } // namespace
 
 MuPdfDocument::MuPdfDocument()
     : Document()
 {
     // Initialize MuPDF context with limited store size to prevent corruption
-    m_ctx = std::unique_ptr<fz_context, ContextDeleter>(fz_new_context(nullptr, getSharedMuPdfLocks(), 256 << 20)); // 256MB
+    m_ctx = std::unique_ptr<fz_context, ContextDeleter>(fz_new_context(nullptr, getSharedMuPdfLocks(), MAIN_STORE_BYTES));
 }
 
 MuPdfDocument::~MuPdfDocument()
@@ -50,15 +123,14 @@ MuPdfDocument::~MuPdfDocument()
         m_dimensionCache.clear();
     }
 
+    // Display lists are dropped through m_ctx, so they have to go before the contexts.
+    m_pageCount.store(0);
     resetDisplayCache();
 
-    // Allow process teardown to leak MuPDF allocations instead of risking double-free during shutdown.
-    // These contexts/documents live for the process lifetime; skipping destruction here avoids crashes
-    // observed in macOS malloc guard.
-    m_doc.release();
-    m_prerenderDoc.release();
-    m_ctx.release();
-    m_prerenderCtx.release();
+    m_doc.reset();
+    m_prerenderDoc.reset();
+    m_ctx.reset();
+    m_prerenderCtx.reset();
 
     std::cout.flush();
 }
@@ -111,7 +183,7 @@ bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
     fz_context* ctx = nullptr;
     if (!reuseContexts || !m_ctx)
     {
-        ctx = fz_new_context(nullptr, getSharedMuPdfLocks(), 256 << 20); // 256MB
+        ctx = fz_new_context(nullptr, getSharedMuPdfLocks(), MAIN_STORE_BYTES);
         if (!ctx)
         {
             std::cerr << "Cannot create MuPDF context\n";
@@ -144,7 +216,7 @@ bool MuPdfDocument::open(const std::string& filePath, bool reuseContexts)
     fz_var(prerenderCtx);
     if (!reuseContexts || !m_prerenderCtx)
     {
-        prerenderCtx = fz_new_context(nullptr, getSharedMuPdfLocks(), 256 << 20); // 256MB
+        prerenderCtx = fz_new_context(nullptr, getSharedMuPdfLocks(), PRERENDER_STORE_BYTES);
         if (!prerenderCtx)
         {
             std::cerr << "Cannot create prerender MuPDF context\n";
@@ -363,6 +435,9 @@ void MuPdfDocument::startAsyncPageCount()
             finalizePageCount(resolvedCount);
         }
 
+        fz_drop_document(localCtx, localDoc);
+        fz_drop_context(localCtx);
+
         m_pageCountThreadActive.store(false); });
 }
 
@@ -419,6 +494,7 @@ bool MuPdfDocument::reopenWithCSS(const std::string& css)
     }
 
     // Close existing documents but keep contexts alive to avoid TG5040 crash
+    resetDisplayCache();
     m_doc.reset();
     m_prerenderDoc.reset();
 
@@ -513,21 +589,8 @@ std::vector<unsigned char> MuPdfDocument::renderPage(int pageNumber, int& width,
 
     {
         std::lock_guard<std::mutex> cacheLock(m_cacheMutex);
-
-        if (zoom > 200 && m_cache.size() > 10)
-        {
-            auto it = m_cache.begin();
-            std::advance(it, static_cast<long>(m_cache.size() - 5));
-            m_cache.erase(m_cache.begin(), it);
-        }
-        else if (m_cache.size() > 20)
-        {
-            auto it = m_cache.begin();
-            std::advance(it, static_cast<long>(m_cache.size() - 15));
-            m_cache.erase(m_cache.begin(), it);
-        }
-
         m_cache[key] = std::make_tuple(rgbBuffer, width, height);
+        trimRgbCacheLocked(pageNumber, zoom);
     }
 
     return rgbBuffer;
@@ -997,11 +1060,6 @@ void MuPdfDocument::close()
     stopPageCountThread();
     joinAsyncRenderThread();
 
-    m_doc.reset();
-    m_ctx.reset();
-    m_prerenderDoc.reset();
-    m_prerenderCtx.reset();
-
     {
         std::lock_guard<std::mutex> lock(m_cacheMutex);
         m_cache.clear();
@@ -1019,7 +1077,14 @@ void MuPdfDocument::close()
     m_pageCountThreadActive.store(false);
     m_isPdfDocument = false;
     m_isReflowableDocument = false;
+
+    // Display lists are dropped through m_ctx, so they have to go before the contexts.
     resetDisplayCache();
+
+    m_doc.reset();
+    m_prerenderDoc.reset();
+    m_ctx.reset();
+    m_prerenderCtx.reset();
 }
 
 void MuPdfDocument::clearCache()
@@ -1210,6 +1275,71 @@ void MuPdfDocument::ensureDisplayList(int pageNumber)
             entry.bounds = bounds;
         }
         // If another thread already populated the entry, listPtr will fall out of scope and release resources.
+
+        evictDistantDisplayListsLocked(pageNumber);
+    }
+}
+
+void MuPdfDocument::evictDistantDisplayListsLocked(int keepPage)
+{
+    int retained = 0;
+    for (const auto& entry : m_pageDisplayData)
+    {
+        if (entry.displayList)
+        {
+            ++retained;
+        }
+    }
+
+    while (retained > MAX_DISPLAY_LISTS)
+    {
+        int farthestPage = -1;
+        int farthestDistance = -1;
+        for (int page = 0; page < static_cast<int>(m_pageDisplayData.size()); ++page)
+        {
+            int distance = std::abs(page - keepPage);
+            if (m_pageDisplayData[page].displayList && distance > farthestDistance)
+            {
+                farthestPage = page;
+                farthestDistance = distance;
+            }
+        }
+
+        m_pageDisplayData[farthestPage].displayList.reset();
+        --retained;
+    }
+}
+
+void MuPdfDocument::trimRgbCacheLocked(int keepPage, int keepScale)
+{
+    size_t cachedBytes = 0;
+    for (const auto& entry : m_cache)
+    {
+        cachedBytes += std::get<0>(entry.second).size();
+    }
+
+    while (!m_cache.empty() && (m_cache.size() > MAX_RGB_CACHE_ENTRIES || cachedBytes > RGB_CACHE_BUDGET_BYTES))
+    {
+        // Every zoom step caches under a new scale, so renders at other scales go before
+        // distant pages at the current one.
+        auto farthest = m_cache.begin();
+        int farthestDistance = -1;
+        for (auto it = m_cache.begin(); it != m_cache.end(); ++it)
+        {
+            int distance = std::abs(it->first.first - keepPage);
+            if (it->first.second != keepScale)
+            {
+                distance += std::numeric_limits<int>::max() / 2;
+            }
+            if (distance > farthestDistance)
+            {
+                farthest = it;
+                farthestDistance = distance;
+            }
+        }
+
+        cachedBytes -= std::get<0>(farthest->second).size();
+        m_cache.erase(farthest);
     }
 }
 
@@ -1242,19 +1372,7 @@ MuPdfDocument::PageScaleInfo MuPdfDocument::computePageScaleInfoLocked(int pageN
     int scaledWidth = static_cast<int>(std::round(nativeWidth * info.baseScale));
     int scaledHeight = static_cast<int>(std::round(nativeHeight * info.baseScale));
 
-    info.downsampleScale = 1.0f;
-    if (scaledWidth > m_maxWidth || scaledHeight > m_maxHeight)
-    {
-        float scaleX = static_cast<float>(m_maxWidth) / std::max(scaledWidth, 1);
-        float scaleY = static_cast<float>(m_maxHeight) / std::max(scaledHeight, 1);
-        info.downsampleScale = std::min(scaleX, scaleY);
-
-        if (info.baseScale > 1.5f)
-        {
-            float extraDetail = std::min(info.baseScale - 1.5f, 0.5f) * 0.1f;
-            info.downsampleScale = std::min(info.downsampleScale * (1.0f + extraDetail), 1.0f);
-        }
-    }
+    info.downsampleScale = computeDownsampleScale(scaledWidth, scaledHeight, info.baseScale, m_maxWidth, m_maxHeight);
 
     float finalScale = info.baseScale * info.downsampleScale;
     info.transform = fz_scale(finalScale, finalScale);
@@ -1342,19 +1460,7 @@ bool MuPdfDocument::renderPageARGBWithPrerenderContext(int pageNumber, int zoom,
         int scaledWidth = std::max(1, static_cast<int>(std::round(nativeWidth * baseScale)));
         int scaledHeight = std::max(1, static_cast<int>(std::round(nativeHeight * baseScale)));
 
-        float downsampleScale = 1.0f;
-        if (scaledWidth > m_maxWidth || scaledHeight > m_maxHeight)
-        {
-            float scaleX = static_cast<float>(m_maxWidth) / std::max(scaledWidth, 1);
-            float scaleY = static_cast<float>(m_maxHeight) / std::max(scaledHeight, 1);
-            downsampleScale = std::min(scaleX, scaleY);
-
-            if (baseScale > 1.5f)
-            {
-                float extraDetail = std::min(baseScale - 1.5f, 0.5f) * 0.1f;
-                downsampleScale = std::min(downsampleScale * (1.0f + extraDetail), 1.0f);
-            }
-        }
+        float downsampleScale = computeDownsampleScale(scaledWidth, scaledHeight, baseScale, m_maxWidth, m_maxHeight);
 
         float finalScale = baseScale * downsampleScale;
         fz_matrix transform = fz_scale(finalScale, finalScale);
@@ -1580,6 +1686,8 @@ void MuPdfDocument::prerenderPageInternal(int pageNumber, int scale, uint64_t ge
         float baseScale = scale / 100.0f;
         float downsampleScale = 1.0f;
         fz_var(downsampleScale);
+        double renderPixels = 0;
+        fz_var(renderPixels);
 
         fz_page* tempPage = nullptr;
         fz_var(tempPage);
@@ -1605,18 +1713,8 @@ void MuPdfDocument::prerenderPageInternal(int pageNumber, int scale, uint64_t ge
             int nativeWidth = static_cast<int>((bounds.x1 - bounds.x0) * baseScale);
             int nativeHeight = static_cast<int>((bounds.y1 - bounds.y0) * baseScale);
 
-            if (nativeWidth > m_maxWidth || nativeHeight > m_maxHeight)
-            {
-                float scaleX = static_cast<float>(m_maxWidth) / std::max(nativeWidth, 1);
-                float scaleY = static_cast<float>(m_maxHeight) / std::max(nativeHeight, 1);
-                downsampleScale = std::min(scaleX, scaleY);
-
-                if (baseScale > 1.5f)
-                {
-                    float extraDetail = std::min(baseScale - 1.5f, 0.5f) * 0.1f;
-                    downsampleScale = std::min(downsampleScale * (1.0f + extraDetail), 1.0f);
-                }
-            }
+            downsampleScale = computeDownsampleScale(nativeWidth, nativeHeight, baseScale, m_maxWidth, m_maxHeight);
+            renderPixels = static_cast<double>(nativeWidth) * nativeHeight * downsampleScale * downsampleScale;
             fz_drop_page(ctx, tempPage);
             tempPage = nullptr;
         }
@@ -1628,6 +1726,11 @@ void MuPdfDocument::prerenderPageInternal(int pageNumber, int scale, uint64_t ge
         }
 
         if (prerenderBoundsError || isPrerenderRequestStale(generationToken))
+        {
+            return;
+        }
+
+        if (MAX_PRERENDER_PIXELS > 0 && renderPixels > MAX_PRERENDER_PIXELS)
         {
             return;
         }
@@ -1681,6 +1784,7 @@ void MuPdfDocument::prerenderPageInternal(int pageNumber, int scale, uint64_t ge
             {
                 std::lock_guard<std::mutex> lock(m_cacheMutex);
                 m_cache[key] = std::make_tuple(buffer, w, h);
+                trimRgbCacheLocked(pageNumber, scale);
             }
         }
         fz_catch(ctx)

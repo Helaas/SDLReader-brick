@@ -206,6 +206,14 @@ void RenderManager::renderCurrentPage(Document* document, NavigationManager* nav
         renderWidth = srcW;
         renderHeight = srcH;
 
+        // A render at the current zoom that the memory budget capped is smaller than the page;
+        // stretch it to the unrotated page size so it covers the area the viewport pans over.
+        if (!usedPreview && (srcW + 2 < pageRect.h || srcH + 2 < pageRect.w))
+        {
+            renderWidth = pageRect.h;
+            renderHeight = pageRect.w;
+        }
+
         // Keep the rotated content centered at the intended page position.
         float centerX = static_cast<float>(pageRect.x) + static_cast<float>(pageRect.w) * 0.5f;
         float centerY = static_cast<float>(pageRect.y) + static_cast<float>(pageRect.h) * 0.5f;
